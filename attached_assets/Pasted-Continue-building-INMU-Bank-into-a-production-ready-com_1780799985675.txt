@@ -1,0 +1,188 @@
+Continue building INMU Bank into a production-ready community banking platform.
+
+IMPORTANT:
+- Do NOT remove existing features.
+- Do NOT change the current UI design, colors, layout, or branding.
+- Keep Japanese as default language and English toggle support.
+- Keep mobile-first design.
+- Keep current dashboard structure.
+- Maintain compatibility with Vercel deployment.
+
+────────────────────
+
+PHASE 1 — Database Integration
+
+Replace all placeholder values with real database-backed data.
+
+Each user must have:
+
+- balance
+- total_received
+- total_sent
+- savings_balance
+- monthly_points
+- created_at
+- updated_at
+
+Dashboard cards must display real values.
+
+────────────────────
+
+PHASE 2 — Admin Panel
+
+Create a secure Admin Panel.
+
+Requirements:
+
+- Admin-only access
+- User search
+- User details page
+- Edit balance
+- Add INMU
+- Remove INMU
+- Manual deposit
+- Manual withdrawal
+- View transaction history
+- View savings history
+- View points history
+- Audit log of all admin actions
+
+Admin actions must be recorded.
+
+────────────────────
+
+PHASE 3 — Transaction System
+
+Add complete INMU transaction system.
+
+Requirements:
+
+- Transfer INMU between users
+- Balance validation
+- Transaction history
+- Deposit records
+- Withdrawal records
+- Atomic balance updates
+- Transaction timestamps
+
+────────────────────
+
+PHASE 4 — Savings Box
+
+Implement Savings Box.
+
+Requirements:
+
+- Move INMU from wallet to savings
+- Move INMU from savings back to wallet
+- Savings history
+- Savings goals
+- Goal progress percentage
+- Dashboard integration
+
+────────────────────
+
+PHASE 5 — INMU Points System
+
+Implement community reward points.
+
+Requirements:
+
+- Daily login bonus
+- Monthly point tracking
+- Monthly leaderboard
+- Point history
+- Admin point adjustment
+- INMU Day support (16th of every month)
+
+Database-backed.
+
+────────────────────
+
+PHASE 6 — User Profiles
+
+Add profile management.
+
+Requirements:
+
+- Display name
+- Avatar
+- Discord username
+- X username
+- Join date
+- User statistics
+
+────────────────────
+
+PHASE 7 — Discord Integration
+
+Add Discord OAuth.
+
+Requirements:
+
+- Discord login
+- Link Discord account
+- Store Discord ID
+- Store Discord username
+- Profile integration
+
+────────────────────
+
+PHASE 8 — Security
+
+Requirements:
+
+- Session management
+- Protected routes
+- Admin route protection
+- Input validation
+- Rate limiting
+- Audit logging
+
+────────────────────
+
+PHASE 9 — Community Features
+
+Add:
+
+- Notifications
+- Activity feed
+- User leaderboard
+- Top holders leaderboard
+- Monthly points leaderboard
+
+Leaderboard display rules:
+
+- Username hidden by default
+- Display masked username
+- Display balances and rankings only
+
+────────────────────
+
+PHASE 10 — Future Ready Structure
+
+Prepare architecture for:
+
+- Real blockchain wallet integration
+- INMU token deposits
+- INMU token withdrawals
+- Airdrop distribution system
+
+Do NOT implement blockchain transactions yet.
+Only prepare scalable architecture.
+
+────────────────────
+
+Final Goal:
+
+Transform INMU Bank from a demo dashboard into a fully functional community banking platform with:
+
+- Wallet balances
+- Savings accounts
+- Transfers
+- Points
+- Rankings
+- Admin management
+- Discord integration
+
+while preserving the existing INMU Bank design.
