@@ -15,4 +15,4 @@ The INMU token mint `4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump` is owned by t
 
 Backend raw RPC (`getTokenAccountsByOwner` with `{ mint }` filter) works for Token-2022 without extra params — the RPC node handles program routing automatically.
 
-Fixed in: `artifacts/inmu-bank/src/pages/admin-profile-page.tsx` — commit bf68408 on ryha25/inmu-bank-lx
+Applied in: `artifacts/inmu-bank/src/pages/admin-profile-page.tsx` and `artifacts/inmu-bank/src/components/admin-panel.tsx`
