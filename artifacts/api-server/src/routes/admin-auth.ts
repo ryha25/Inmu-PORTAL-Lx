@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { timingSafeEqual } from "crypto";
 import { ADMIN_SESSION_COOKIE, makeAdminSessionValue } from "../middlewares/session";
+import { pool } from "@workspace/db";
 
 const router = Router();
 
@@ -18,7 +19,21 @@ function safeEqual(a: string, b: string): boolean {
   }
 }
 
-router.post("/auth/admin-sign-in", (req, res): void => {
+async function getEffectiveAdminCode(): Promise<string | null> {
+  try {
+    const result = await pool.query(
+      "SELECT value FROM app_settings WHERE key = 'admin_code_override' LIMIT 1",
+    );
+    if (result.rows.length > 0 && result.rows[0].value) {
+      return result.rows[0].value as string;
+    }
+  } catch {
+    // DB unavailable — fall back to env var
+  }
+  return process.env.ADMIN_CODE ?? null;
+}
+
+router.post("/auth/admin-sign-in", async (req, res): Promise<void> => {
   const { code } = req.body as { code?: string };
 
   if (!code) {
@@ -26,7 +41,7 @@ router.post("/auth/admin-sign-in", (req, res): void => {
     return;
   }
 
-  const adminCode = process.env.ADMIN_CODE;
+  const adminCode = await getEffectiveAdminCode();
 
   if (!adminCode) {
     console.error("[AdminAuth] ADMIN_CODE secret not set");
@@ -61,7 +76,7 @@ router.get("/auth/admin-session", (req, res): void => {
   res.json({ isAdmin: !!req.isAdminSession });
 });
 
-router.post("/auth/admin-code-login", (req, res): void => {
+router.post("/auth/admin-code-login", async (req, res): Promise<void> => {
   const { code } = req.body as { code?: string };
 
   if (!code) {
@@ -69,7 +84,7 @@ router.post("/auth/admin-code-login", (req, res): void => {
     return;
   }
 
-  const adminCode = process.env.ADMIN_CODE;
+  const adminCode = await getEffectiveAdminCode();
   if (!adminCode) {
     res.status(503).json({ error: "Admin credentials not configured" });
     return;

@@ -78,6 +78,8 @@ export function ProfileView({
   const [xId, setXId] = useState(profile.xId || '')
   const [discordId, setDiscordId] = useState(profile.discordId || '')
   const [solWallet, setSolWallet] = useState(profile.solWallet || '')
+  const [manualSolInput, setManualSolInput] = useState(profile.solWallet || '')
+  const [manualSolSaving, setManualSolSaving] = useState(false)
 
   async function handleSave() {
     setLoading(true)
@@ -111,6 +113,25 @@ export function ProfileView({
       body: JSON.stringify({ solWallet: address }),
     })
     if (!res.ok) throw new Error('Failed to save wallet')
+  }
+
+  async function handleSaveManualSol() {
+    const addr = manualSolInput.trim()
+    if (!addr) {
+      toast.error('SOLアドレスを入力してください')
+      return
+    }
+    setManualSolSaving(true)
+    try {
+      await saveWallet(addr)
+      setSolWallet(addr)
+      toast.success('SOLアドレスを保存しました（送金先として利用可能）')
+      onRefresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('error'))
+    } finally {
+      setManualSolSaving(false)
+    }
   }
 
   async function handleLogout() {
@@ -240,7 +261,7 @@ export function ProfileView({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <WalletCards className="size-4 text-primary" />
-            <h3 className="font-semibold text-sm">Phantom Wallet</h3>
+            <h3 className="font-semibold text-sm">SOL ウォレット</h3>
           </div>
           {solWallet && (
             <a
@@ -254,59 +275,84 @@ export function ProfileView({
           )}
         </div>
 
-        {solWallet ? (
-          <div className="flex flex-col gap-2">
-            {/* 接続状態 */}
-            <div className="flex items-center gap-2">
-              <span className="inline-flex size-2 rounded-full bg-green-500" />
-              <span className="text-xs font-medium text-green-600">接続中</span>
-            </div>
-            {/* SOLアドレス短縮表示 */}
+        <div className="flex flex-col gap-3">
+          {/* 現在のアドレス表示 */}
+          {solWallet && (
             <div className="rounded-md bg-secondary/50 p-2.5">
-              <p className="text-[10px] text-muted-foreground mb-1">SOL アドレス</p>
+              <p className="text-[10px] text-muted-foreground mb-1">設定済みアドレス</p>
               <p className="font-mono text-xs text-foreground break-all">{solWallet}</p>
               <p className="font-mono text-xs text-muted-foreground mt-0.5">
                 ({solWallet.slice(0, 6)}…{solWallet.slice(-6)})
               </p>
+              <p className="text-[10px] text-muted-foreground mt-1">{t('wallet_private')}</p>
             </div>
-            <p className="text-[11px] text-muted-foreground">{t('wallet_private')}</p>
+          )}
+
+          {/* 手入力 */}
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs font-medium text-muted-foreground">SOLアドレス手入力</p>
             <div className="flex gap-2">
+              <Input
+                value={manualSolInput}
+                onChange={e => setManualSolInput(e.target.value)}
+                placeholder="Solanaアドレスを貼り付け"
+                className="min-h-10 flex-1 font-mono text-xs"
+              />
               <Button
                 variant="outline"
-                onClick={connectPhantom}
-                disabled={phantomLoading}
-                className="min-h-9 flex-1 text-xs"
+                onClick={handleSaveManualSol}
+                disabled={manualSolSaving || !manualSolInput.trim()}
+                className="min-h-10 text-xs shrink-0"
               >
-                {t('connect_phantom')}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={disconnectPhantom}
-                disabled={phantomLoading}
-                className="min-h-9 text-destructive gap-1.5 text-xs"
-              >
-                <WalletDisconnect className="size-3" />
-                切断
+                {manualSolSaving ? '保存中…' : '保存'}
               </Button>
             </div>
+            <p className="text-[10px] text-muted-foreground">
+              ※ 手入力アドレスは送金先として利用可能。オンチェーン残高取得にはPhantom接続が必要。
+            </p>
           </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <Button
-              onClick={connectPhantom}
-              disabled={phantomLoading}
-              className="min-h-11 w-full gap-2"
-            >
-              <WalletCards className="size-4" />
-              {phantomLoading ? t('loading') : t('connect_phantom')}
-            </Button>
+
+          {/* Phantom接続 */}
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Phantom接続</p>
+            {solWallet ? (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={connectPhantom}
+                  disabled={phantomLoading}
+                  className="min-h-9 flex-1 text-xs gap-1.5"
+                >
+                  <WalletCards className="size-3.5" />
+                  {phantomLoading ? t('loading') : t('connect_phantom')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={disconnectPhantom}
+                  disabled={phantomLoading}
+                  className="min-h-9 text-destructive gap-1.5 text-xs"
+                >
+                  <WalletDisconnect className="size-3" />
+                  切断
+                </Button>
+              </div>
+            ) : (
+              <Button
+                onClick={connectPhantom}
+                disabled={phantomLoading}
+                className="min-h-10 w-full gap-2"
+              >
+                <WalletCards className="size-4" />
+                {phantomLoading ? t('loading') : t('connect_phantom')}
+              </Button>
+            )}
             {isMobile() && (
               <p className="text-[11px] text-center text-muted-foreground">
                 iPhoneの場合はPhantomアプリが起動します
               </p>
             )}
           </div>
-        )}
+        </div>
       </Card>
 
       {/* ── ログアウト ── */}

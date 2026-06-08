@@ -134,11 +134,15 @@ const TX_INCOME_TYPES = ['deposit', 'receive', 'reward', 'airdrop']
 function UserDetailDialog({
   user,
   users,
+  adminWallet,
+  onSendInmu,
   onClose,
   onRefresh,
 }: {
   user: UserRow
   users: UserRow[]
+  adminWallet?: string | null
+  onSendInmu?: (targets: { userId: string; solWallet: string; amount: number }[], memo: string) => Promise<string>
   onClose: () => void
   onRefresh: () => void
 }) {
@@ -147,7 +151,9 @@ function UserDetailDialog({
   const [loading, setLoading] = useState(false)
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
-  const [txType, setTxType] = useState('deposit')
+  const [txType, setTxType] = useState('reward')
+  const [inmuAmount, setInmuAmount] = useState('')
+  const [inmuSending, setInmuSending] = useState(false)
 
   useEffect(() => {
     setTxLoading(true)
@@ -169,6 +175,32 @@ function UserDetailDialog({
       toast.error(e instanceof Error ? e.message : 'エラー')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleSendInmuIndividual() {
+    if (!user.solWallet || !adminWallet || !onSendInmu) return
+    const amt = Number(inmuAmount)
+    if (isNaN(amt) || amt <= 0) { toast.error('送金量を入力してください'); return }
+    setInmuSending(true)
+    try {
+      const txSig = await onSendInmu(
+        [{ userId: user.userId, solWallet: user.solWallet, amount: amt }],
+        'INMU送金',
+      )
+      await api('/admin/record-sol-transfer', 'POST', {
+        targetUserId: user.userId,
+        amount: amt,
+        txSignature: txSig,
+        targetWallet: user.solWallet,
+      })
+      toast.success(`${formatInmu(amt)} INMU を ${user.displayName} に送金完了`)
+      setInmuAmount('')
+      onRefresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'エラー')
+    } finally {
+      setInmuSending(false)
     }
   }
 
@@ -220,17 +252,56 @@ function UserDetailDialog({
         <div className="flex flex-col gap-3 border-t border-border pt-3">
           <p className="text-xs font-semibold text-muted-foreground">操作</p>
 
+          {/* INMU送金 */}
+          {adminWallet && onSendInmu ? (
+            user.solWallet ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium flex items-center gap-1">
+                  <Coins className="size-3 text-primary" /> INMU送金
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="送金量 (INMU)"
+                    value={inmuAmount}
+                    onChange={e => setInmuAmount(e.target.value)}
+                    className="min-h-10 flex-1"
+                  />
+                  <Button
+                    onClick={handleSendInmuIndividual}
+                    disabled={loading || inmuSending || !inmuAmount}
+                    className="min-h-10 gap-1.5"
+                  >
+                    <Send className="size-3.5" />
+                    {inmuSending ? '処理中…' : '送金'}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  送信先: {user.solWallet.slice(0, 8)}…{user.solWallet.slice(-6)}
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground rounded-lg bg-secondary/30 p-2.5 flex items-center gap-1.5">
+                <WalletCards className="size-3.5 shrink-0" />
+                SOLアドレス未設定のためINMU送金不可
+              </p>
+            )
+          ) : null}
+
+          {/* ポイント付与 */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium">入出金登録</p>
+            <p className="text-xs font-medium flex items-center gap-1">
+              <Star className="size-3 text-chart-5" /> ポイント付与
+            </p>
             <select
               value={txType}
               onChange={e => setTxType(e.target.value)}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="deposit">入金</option>
-              <option value="withdraw">出金</option>
               <option value="reward">報酬</option>
               <option value="airdrop">エアドロップ</option>
+              <option value="deposit">入金</option>
+              <option value="withdraw">出金</option>
             </select>
             <div className="flex gap-2">
               <Input
@@ -589,7 +660,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Coins className="size-3" /> 全員エアドロ（INMU配布）
+                <Coins className="size-3" /> 全員へINMU配布
               </p>
               <div className="flex gap-2">
                 <Input
@@ -623,7 +694,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                       memo: airdropAllMemo || 'エアドロップ',
                       type: 'airdrop',
                     }) as { count: number }
-                    toast.success(`${d.count}名に実INMU送金完了 tx: ${txSig.slice(0, 12)}…`)
+                    toast.success(`${d.count}名にINMU送金完了 tx: ${txSig.slice(0, 12)}…`)
                     setAirdropAllAmount('')
                     setAirdropAllMemo('')
                   })}
@@ -689,7 +760,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Coins className="size-3" /> INMU配布（選択ユーザー）
+                  <Coins className="size-3" /> 選択ユーザーへINMU送金
                 </p>
                 <div className="flex gap-2">
                   <Input
@@ -721,7 +792,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                         memo: bulkReason || 'INMU配布',
                         type: 'airdrop',
                       }) as { count: number }
-                      toast.success(`${d.count}名に実INMU配布完了 tx: ${txSig.slice(0, 12)}…`)
+                      toast.success(`${d.count}名にINMU配布完了 tx: ${txSig.slice(0, 12)}…`)
                       setBulkAmount('')
                     })}
                     disabled={loading || !bulkAmount}
@@ -876,6 +947,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           <UserDetailDialog
             user={detailUser}
             users={users}
+            adminWallet={adminWallet}
+            onSendInmu={adminWallet ? (targets, memo) => sendBatchInmu(adminWallet, targets, memo) : undefined}
             onClose={() => setDetailUser(null)}
             onRefresh={() => { onRefresh(); setDetailUser(null) }}
           />

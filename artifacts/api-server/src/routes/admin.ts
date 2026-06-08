@@ -804,4 +804,62 @@ router.post("/admin/set-role", requireAdmin, async (req, res): Promise<void> => 
   }
 });
 
+// ── 管理コード変更 ──
+router.post("/admin/change-admin-code", requireAdmin, async (req, res): Promise<void> => {
+  const { currentCode, newCode } = req.body as { currentCode?: string; newCode?: string };
+
+  if (!currentCode || !newCode) {
+    res.status(400).json({ error: "currentCode と newCode は必須です" });
+    return;
+  }
+  if (newCode.length < 4) {
+    res.status(400).json({ error: "新コードは4文字以上にしてください" });
+    return;
+  }
+
+  try {
+    // 現在の有効コードを取得（DB上書き → env var の順）
+    const overrideRow = await pool.query(
+      "SELECT value FROM app_settings WHERE key = 'admin_code_override' LIMIT 1",
+    );
+    const effectiveCode =
+      (overrideRow.rows.length > 0 ? overrideRow.rows[0].value : null) ??
+      process.env.ADMIN_CODE ??
+      "";
+
+    if (!effectiveCode) {
+      res.status(503).json({ error: "管理コードが設定されていません" });
+      return;
+    }
+
+    // タイミング攻撃対策の比較
+    const { timingSafeEqual } = await import("crypto");
+    const a = Buffer.from(currentCode);
+    const b = Buffer.from(effectiveCode);
+    let match = false;
+    if (a.length === b.length) {
+      match = timingSafeEqual(a, b);
+    } else {
+      timingSafeEqual(a, a);
+    }
+    if (!match) {
+      res.status(401).json({ error: "現在のコードが正しくありません" });
+      return;
+    }
+
+    // DB に新コードを upsert
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('admin_code_override', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [newCode],
+    );
+
+    console.info("[AdminAuth] Admin code changed via UI");
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[AdminAuth] change-admin-code error", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 export default router;
