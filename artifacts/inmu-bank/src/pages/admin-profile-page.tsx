@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Shield, WalletCards, ExternalLink, LogOut, Coins,
-  Send, RefreshCw, User, AlertTriangle, CheckCircle2, Info,
+  Send, RefreshCw, User, AlertTriangle, CheckCircle2, Info, History,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatInmu } from '@/lib/format'
@@ -85,6 +85,11 @@ export function AdminProfilePage() {
   const [inmuBalance, setInmuBalance] = useState<number | null>(null)
   const [balanceLoading, setBalanceLoading] = useState(false)
   const [connectLoading, setConnectLoading] = useState(false)
+  const [recentHistory, setRecentHistory] = useState<Array<{
+    id: number; action: string; createdAt: string;
+    details: Record<string, unknown> | null;
+  }>>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   // 送金ダイアログ
   const [users, setUsers] = useState<UserRow[]>([])
@@ -157,6 +162,19 @@ export function AdminProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── 送金履歴取得（監査ログから） ──
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch('/api/admin/sol-transfer-history', { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json() as unknown[]
+        setRecentHistory(Array.isArray(data) ? (data as typeof recentHistory) : [])
+      }
+    } catch {}
+    finally { setHistoryLoading(false) }
+  }, [])
+
   // ── ユーザー一覧 ──
   useEffect(() => {
     if (!isAdmin) return
@@ -208,6 +226,7 @@ export function AdminProfilePage() {
         }).catch(() => {})
         toast.success('Phantom ウォレットを接続しました')
         fetchBalanceFor(addr)
+        void fetchHistory()
         return
       }
       // モバイル: Phantomアプリへディープリンク
@@ -317,7 +336,7 @@ export function AdminProfilePage() {
       tx.add(...instructions)
       tx.feePayer = fromPubkey
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
       tx.recentBlockhash = blockhash
 
       // signTransaction → sendRawTransaction (Phantom推奨方式)
@@ -334,14 +353,47 @@ export function AdminProfilePage() {
       toast.dismiss('sending')
 
       toast.loading('トランザクション確認中…', { id: 'confirming' })
-      const result = await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        'confirmed',
-      )
-      toast.dismiss('confirming')
-
-      if (result.value.err) {
-        throw new Error(`トランザクションが失敗しました: ${JSON.stringify(result.value.err)}`)
+      try {
+        const result = await connection.confirmTransaction(
+          { signature, blockhash, lastValidBlockHeight },
+          'confirmed',
+        )
+        toast.dismiss('confirming')
+        if (result.value.err) {
+          throw new Error(`トランザクションが失敗しました: ${JSON.stringify(result.value.err)}`)
+        }
+      } catch (confirmE: unknown) {
+        toast.dismiss('confirming')
+        const isExpired =
+          confirmE instanceof Error &&
+          (confirmE.message.includes('block height exceeded') ||
+           confirmE.message.includes('BlockheightExceeded'))
+        if (isExpired) {
+          // ブロック高超過 → シグネチャステータスでポーリング（txは着地している場合が多い）
+          toast.loading('ブロック高超過 — 到達確認中…', { id: 'poll' })
+          let landed = false
+          for (let i = 0; i < 12; i++) {
+            await new Promise(r => setTimeout(r, 2500))
+            const statusResp = await connection.getSignatureStatuses([signature])
+            const s = statusResp.value[0]
+            if (s?.err) {
+              toast.dismiss('poll')
+              throw new Error(`トランザクション失敗: ${JSON.stringify(s.err)}`)
+            }
+            if (s?.confirmationStatus === 'confirmed' || s?.confirmationStatus === 'finalized') {
+              landed = true
+              break
+            }
+          }
+          toast.dismiss('poll')
+          if (!landed) {
+            throw new Error(
+              `確認タイムアウト。Solscanで確認を:\nhttps://solscan.io/tx/${signature}`,
+            )
+          }
+        } else {
+          throw confirmE
+        }
       }
 
       // バックエンドに履歴記録
@@ -362,10 +414,12 @@ export function AdminProfilePage() {
       setSendAmount('1')
       setSendTarget(null)
       fetchBalanceFor(savedWallet)
+      void fetchHistory()
     } catch (e: unknown) {
       toast.dismiss('signing')
       toast.dismiss('sending')
       toast.dismiss('confirming')
+      toast.dismiss('poll')
       if (e instanceof Error && e.message !== 'User rejected the request.') {
         toast.error(`送金失敗: ${e.message}`)
       }
@@ -478,6 +532,65 @@ export function AdminProfilePage() {
                   </p>
                 ) : (
                   <p className="font-mono text-sm text-muted-foreground">取得できませんでした</p>
+                )}
+              </Card>
+
+              {/* ── 最近のINMU送金履歴 ── */}
+              <Card className="border-border bg-secondary/20 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <History className="size-3.5 text-muted-foreground" />
+                    <p className="text-xs font-medium text-muted-foreground">送金履歴</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={fetchHistory}
+                    disabled={historyLoading}
+                    className="size-7 p-0"
+                  >
+                    <RefreshCw className={`size-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+                {recentHistory.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground text-center py-1">
+                    {historyLoading ? '取得中…' : '↑ ボタンで履歴を取得'}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto">
+                    {recentHistory.map(h => {
+                      const d = h.details ?? {}
+                      const isBatch = h.action === 'adminBatchInmuTransfer'
+                      const txSig = (d.txSignature ?? d.txSig) as string | undefined
+                      return (
+                        <div key={h.id} className="flex items-center justify-between rounded-md bg-secondary/40 px-2.5 py-1.5">
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="text-[11px] font-medium text-primary">
+                              {isBatch ? `一括送金 (${d.count ?? '?'}名)` : '実INMU送金'}
+                            </span>
+                            {txSig && (
+                              <a
+                                href={`https://solscan.io/tx/${txSig}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-[9px] text-primary/70 hover:underline truncate"
+                              >
+                                {txSig.slice(0, 20)}…
+                              </a>
+                            )}
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(h.createdAt).toLocaleString('ja-JP')}
+                            </span>
+                          </div>
+                          {(d.amount as number | undefined) !== undefined && (
+                            <span className="font-mono text-xs font-bold text-primary shrink-0 ml-2">
+                              {formatInmu(String(d.amount))} INMU
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
               </Card>
 

@@ -53,6 +53,7 @@ export const transactionsTable = pgTable("transactions", {
   counterparty: text("counterparty"),
   counterpartyId: text("counterpartyId"),
   memo: text("memo"),
+  txHash: text("txHash"),
   jarId: integer("jarId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
