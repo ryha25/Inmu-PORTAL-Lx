@@ -1,5 +1,5 @@
 - [Block height exceeded fix](block-height-fix.md) — use 'confirmed' for getLatestBlockhash + poll getSignatureStatuses on expiry
 - [Drizzle push non-interactive](drizzle-push.md) — drizzle-kit push fails in non-TTY; use direct SQL ALTER TABLE instead
 - [INMU Token-2022 batch transfer](inmu-batch-transfer.md) — single Transaction with multiple createTransferInstruction calls; one Phantom signature for N users
-- [Workspace vs GitHub sync](workspace-vs-github.md) — workspace is AHEAD of ryha25/inmu-bank-lx fc50b2b; never overwrite workspace with repo clone without diffing first.
-- [Verified features](verified-features.md) — 4 core features confirmed working; admin wallet 86RYwxo1… persists in app_settings KV; on-chain INMU reads via /api/admin/solana/inmu-balance.
+- [INMU admin wallet persistence](inmu-admin-wallet.md) — admin wallet stored in app_settings raw-SQL table (not Drizzle schema); created with CREATE TABLE IF NOT EXISTS on each request
+- [INMU Replit import](inmu-replit-import.md) — importing real GitHub repo: Python shutil.copytree preserves .replit-artifact; rsync not available; copy artifact.toml from repo then drizzle push-force

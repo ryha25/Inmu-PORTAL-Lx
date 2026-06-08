@@ -1,27 +1,18 @@
 ---
-name: INMU Replit import/preview setup
-description: How the real ryha25/inmu-bank-lx repo is run inside the Replit workspace preview
+name: INMU Replit import
+description: How to import/sync the real GitHub repo into this Replit workspace
 ---
 
-The published INMU PORTAL lives in the GitHub repo `ryha25/inmu-bank-lx` (pnpm monorepo:
-`artifacts/{inmu-bank,api-server,mockup-sandbox}`, `lib/{db,api-spec,api-zod,api-client-react}`).
-The Replit workspace runs that same code; to refresh from GitHub, sync repo dirs over the
-workspace but preserve the Replit-owned bits.
+**Rule:** When syncing ryha25/inmu-bank-lx into the Replit workspace, `rsync` is not available. Use Python `shutil.copytree` instead. Always exclude `.replit-artifact`, `.agents`, `.local`, `node_modules`, `dist`.
 
-**Rule:** never copy `.replit` or `.replitignore` from the clone — they are Replit-managed and
-the copy is hard-blocked. Preserve each artifact's `.replit-artifact/artifact.toml`
-(the registration) — wipe artifact contents with `find <art> -mindepth 1 -maxdepth 1 ! -name .replit-artifact -exec rm -rf {} +` then `cp -a repo/<art>/. <art>/`.
+**Why:** rsync not installed in Nix sandbox. shutil works but deletes destination first — this removes `.replit-artifact` directories from each artifact. After sync, restore them from the repo (the repo carries its own `.replit-artifact/artifact.toml` files).
 
-**Why:** the workspace is a registered-artifact environment; artifact.toml + `.replit` define
-ports/workflows/preview routing. Overwriting them breaks the preview; the repo clone doesn't
-even contain `.replit-artifact` (gitignored).
+**How to apply:**
+1. Clone repo to /tmp/<name>
+2. Use Python shutil.copytree with ignore_patterns('.replit-artifact', 'node_modules', '.git', 'dist')
+3. Copy artifact.toml back from /tmp/<name>/artifacts/<slug>/.replit-artifact/artifact.toml for each slug
+4. pnpm install
+5. drizzle-kit push-force (stale columns that don't exist in new schema cause interactive prompts; --force skips them)
+6. Restart all workflows
 
-**How to apply (preview bring-up):**
-1. Frontend artifact = react-vite, slug `inmu-bank`, previewPath `/`. API artifact serves `/api`.
-2. `pnpm install`; `ADMIN_CODE` must be set as an env var (admin-auth returns 503 without it).
-   `SESSION_SECRET` + `DATABASE_URL` already present as secrets.
-3. `pnpm --filter @workspace/db run push` (drizzle) to create the 12 tables in the fresh preview DB.
-4. Restart both workflows. The preview DB starts empty (no seeded users) — that is expected,
-   not a bug; the real users live in the deployed app's own production DB.
-
-`rsync` is NOT installed in this environment — use `cp -a` / `tar`.
+**Critical:** app_settings table is not in Drizzle schema — it's created via raw SQL in admin.ts on each request. Drizzle push-force may drop it; that's fine. The table is recreated on first admin wallet request.

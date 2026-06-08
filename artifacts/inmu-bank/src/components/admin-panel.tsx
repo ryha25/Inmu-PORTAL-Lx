@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { useState, useEffect } from 'react'
 import {
   Search, Download, Shield, User, Trash2,
-  CheckSquare, Square, Send, Star, MinusCircle, Coins,
+  CheckSquare, Square, Send, Star, Coins,
   WalletCards, History, X as XIcon,
 } from 'lucide-react'
 
@@ -206,30 +206,6 @@ function UserDetailDialog({
             </Button>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => withLoading(() =>
-                api('/admin/reset-user', 'POST', { targetUserId: user.userId, resetType: 'balance' })
-              )}
-              disabled={loading}
-              className="flex-1 min-h-9 text-xs"
-            >
-              残高リセット
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => withLoading(() =>
-                api('/admin/reset-user', 'POST', { targetUserId: user.userId, resetType: 'all' })
-              )}
-              disabled={loading}
-              className="flex-1 min-h-9 text-xs"
-            >
-              全リセット
-            </Button>
-          </div>
         </div>
 
         {/* ── 入出金履歴 ── */}
@@ -281,7 +257,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [detailUser, setDetailUser] = useState<UserRow | null>(null)
 
   const [bulkAmount, setBulkAmount] = useState('')
-  const [bulkDeductAmount, setBulkDeductAmount] = useState('')
+
   const [bulkReason, setBulkReason] = useState('')
   const [notifTitle, setNotifTitle] = useState('')
   const [notifMsg, setNotifMsg] = useState('')
@@ -570,38 +546,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <MinusCircle className="size-3 text-destructive" /> INMU減算（選択ユーザー）
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="減算量"
-                    value={bulkDeductAmount}
-                    onChange={e => setBulkDeductAmount(e.target.value)}
-                    className="min-h-10 flex-1"
-                  />
-                  <Button
-                    variant="destructive"
-                    onClick={() => withLoading(async () => {
-                      for (const uid of selectedIds) {
-                        await api('/admin/deduct-balance', 'POST', {
-                          targetUserId: uid,
-                          amount: Number(bulkDeductAmount),
-                          reason: bulkReason || '管理者による減算',
-                        })
-                      }
-                      toast.success(`${selectedIds.length}名から減算完了`)
-                      setBulkDeductAmount('')
-                    })}
-                    disabled={loading || !bulkDeductAmount}
-                    className="min-h-10"
-                  >
-                    減算
-                  </Button>
-                </div>
-              </div>
 
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
