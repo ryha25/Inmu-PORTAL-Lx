@@ -4,7 +4,7 @@ import { TxTypeBadge, isOutgoing } from '@/components/tx-type-badge'
 import { useI18n } from '@/lib/i18n/context'
 import { formatDate, formatInmu } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { ArrowDownLeft, ArrowUpRight, Coins, PiggyBank, Target, Wallet, Award, Sparkles } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Coins, PiggyBank, Target, TrendingUp, Wallet, Award, Sparkles, WalletCards } from 'lucide-react'
 import { Link } from 'wouter'
 
 type Tx = { id: number; type: string; amount: string; counterparty: string | null; memo: string | null; createdAt: string | Date }
@@ -19,6 +19,7 @@ export function DashboardView({
   walletInmu?: number | null
 }) {
   const { t, locale } = useI18n()
+  const totalHoldings = data.balance + data.jarTotal
 
   return (
     <div className="flex flex-col gap-5">
@@ -29,13 +30,13 @@ export function DashboardView({
         </p>
       </div>
 
-      {/* ── 現在のINMU残高カード ── */}
+      {/* ── Main balance card ── */}
       <Card className="relative overflow-hidden border-border bg-card p-6">
         <div className="pointer-events-none absolute -right-12 -top-12 size-48 rounded-full opacity-20 blur-3xl" style={{ background: 'oklch(0.82 0.13 85)' }} aria-hidden="true" />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Wallet className="size-4 text-primary" />
-            <p className="text-sm font-medium text-muted-foreground">現在のINMU残高</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('current_balance')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Award className="size-4 text-chart-5" />
@@ -43,17 +44,33 @@ export function DashboardView({
           </div>
         </div>
 
-        {walletInmu !== null && walletInmu !== undefined ? (
-          <p className="mt-3 font-mono text-4xl font-bold tracking-tight gold-text lg:text-5xl">
-            {walletInmu.toLocaleString()}
-            <span className="ml-2 text-lg font-medium text-muted-foreground">INMU</span>
-          </p>
-        ) : (
-          <div className="mt-3">
-            <p className="font-mono text-4xl font-bold tracking-tight text-muted-foreground/40 lg:text-5xl">---</p>
-            <p className="mt-1 text-xs text-muted-foreground">Phantomを接続するとINMU残高が表示されます</p>
+        {/* Internal bank balance */}
+        <p className="mt-3 font-mono text-4xl font-bold tracking-tight gold-text lg:text-5xl">
+          {formatInmu(data.balance)}
+          <span className="ml-2 text-lg font-medium text-muted-foreground">INMU</span>
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{t('total_holding')}: {formatInmu(totalHoldings)} INMU</p>
+
+        {/* Phantom wallet INMU balance (on-chain, SOLなし) */}
+        {walletInmu !== null && walletInmu !== undefined && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+            <WalletCards className="size-4 shrink-0 text-primary" />
+            <div className="flex flex-1 items-center justify-between gap-2">
+              <span className="text-xs font-medium text-muted-foreground">{t('inmu_wallet_balance')}</span>
+              <span className="font-mono text-sm font-bold gold-text tabular-nums">
+                {walletInmu.toLocaleString()} INMU
+              </span>
+            </div>
           </div>
         )}
+
+        <div className="mt-4 flex items-center gap-2 text-sm">
+          <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium', data.monthlyChange >= 0 ? 'bg-chart-5/15 text-chart-5' : 'bg-destructive/15 text-destructive')}>
+            <TrendingUp className="size-3.5" />
+            {data.monthlyChange >= 0 ? '+' : ''}{formatInmu(data.monthlyChange)}
+          </span>
+          <span className="text-muted-foreground">{t('monthly_change')}</span>
+        </div>
       </Card>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -12,64 +12,6 @@ import {
   CheckSquare, Square, Send, Star, MinusCircle, Coins,
   WalletCards, History, X as XIcon,
 } from 'lucide-react'
-import { Connection, PublicKey, Transaction } from '@solana/web3.js'
-import {
-  getAssociatedTokenAddress,
-  createTransferInstruction,
-  getAccount,
-  createAssociatedTokenAccountInstruction,
-  TOKEN_2022_PROGRAM_ID,
-} from '@solana/spl-token'
-
-const INMU_MINT = new PublicKey('4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump')
-const INMU_DECIMALS = 6
-
-interface PhantomProvider {
-  isPhantom: boolean
-  publicKey?: { toString(): string } | null
-  connect(opts?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>
-  signTransaction(tx: Transaction): Promise<Transaction>
-}
-
-function getPanelPhantom(): PhantomProvider | null {
-  const win = window as { phantom?: { solana?: PhantomProvider }; solana?: PhantomProvider }
-  if (win.phantom?.solana?.isPhantom) return win.phantom.solana
-  if (win.solana?.isPhantom) return win.solana
-  return null
-}
-
-function getPanelRpcUrl() {
-  return `${window.location.origin}/api/solana/rpc-proxy`
-}
-
-async function confirmWithFallback(
-  connection: Connection,
-  signature: string,
-  blockhash: string,
-  lastValidBlockHeight: number,
-): Promise<void> {
-  try {
-    const result = await connection.confirmTransaction(
-      { signature, blockhash, lastValidBlockHeight },
-      'confirmed',
-    )
-    if (result.value.err) throw new Error(`TX失敗: ${JSON.stringify(result.value.err)}`)
-  } catch (err: unknown) {
-    const isExpired =
-      err instanceof Error &&
-      (err.message.includes('block height exceeded') ||
-       err.message.includes('BlockheightExceeded'))
-    if (!isExpired) throw err
-    for (let i = 0; i < 12; i++) {
-      await new Promise(r => setTimeout(r, 2500))
-      const resp = await connection.getSignatureStatuses([signature])
-      const s = resp.value[0]
-      if (s?.err) throw new Error(`TX失敗: ${JSON.stringify(s.err)}`)
-      if (s?.confirmationStatus === 'confirmed' || s?.confirmationStatus === 'finalized') return
-    }
-    throw new Error(`確認タイムアウト。Solscanで確認: https://solscan.io/tx/${signature}`)
-  }
-}
 
 type UserRow = {
   userId: string
@@ -134,15 +76,11 @@ const TX_INCOME_TYPES = ['deposit', 'receive', 'reward', 'airdrop']
 function UserDetailDialog({
   user,
   users,
-  adminWallet,
-  onSendInmu,
   onClose,
   onRefresh,
 }: {
   user: UserRow
   users: UserRow[]
-  adminWallet?: string | null
-  onSendInmu?: (targets: { userId: string; solWallet: string; amount: number }[], memo: string) => Promise<string>
   onClose: () => void
   onRefresh: () => void
 }) {
@@ -151,9 +89,7 @@ function UserDetailDialog({
   const [loading, setLoading] = useState(false)
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
-  const [txType, setTxType] = useState('reward')
-  const [inmuAmount, setInmuAmount] = useState('')
-  const [inmuSending, setInmuSending] = useState(false)
+  const [txType, setTxType] = useState('deposit')
 
   useEffect(() => {
     setTxLoading(true)
@@ -175,32 +111,6 @@ function UserDetailDialog({
       toast.error(e instanceof Error ? e.message : 'エラー')
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function handleSendInmuIndividual() {
-    if (!user.solWallet || !adminWallet || !onSendInmu) return
-    const amt = Number(inmuAmount)
-    if (isNaN(amt) || amt <= 0) { toast.error('送金量を入力してください'); return }
-    setInmuSending(true)
-    try {
-      const txSig = await onSendInmu(
-        [{ userId: user.userId, solWallet: user.solWallet, amount: amt }],
-        'INMU送金',
-      )
-      await api('/admin/record-sol-transfer', 'POST', {
-        targetUserId: user.userId,
-        amount: amt,
-        txSignature: txSig,
-        targetWallet: user.solWallet,
-      })
-      toast.success(`${formatInmu(amt)} INMU を ${user.displayName} に送金完了`)
-      setInmuAmount('')
-      onRefresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'エラー')
-    } finally {
-      setInmuSending(false)
     }
   }
 
@@ -252,56 +162,17 @@ function UserDetailDialog({
         <div className="flex flex-col gap-3 border-t border-border pt-3">
           <p className="text-xs font-semibold text-muted-foreground">操作</p>
 
-          {/* INMU送金 */}
-          {adminWallet && onSendInmu ? (
-            user.solWallet ? (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium flex items-center gap-1">
-                  <Coins className="size-3 text-primary" /> INMU送金
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="送金量 (INMU)"
-                    value={inmuAmount}
-                    onChange={e => setInmuAmount(e.target.value)}
-                    className="min-h-10 flex-1"
-                  />
-                  <Button
-                    onClick={handleSendInmuIndividual}
-                    disabled={loading || inmuSending || !inmuAmount}
-                    className="min-h-10 gap-1.5"
-                  >
-                    <Send className="size-3.5" />
-                    {inmuSending ? '処理中…' : '送金'}
-                  </Button>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  送信先: {user.solWallet.slice(0, 8)}…{user.solWallet.slice(-6)}
-                </p>
-              </div>
-            ) : (
-              <p className="text-[11px] text-muted-foreground rounded-lg bg-secondary/30 p-2.5 flex items-center gap-1.5">
-                <WalletCards className="size-3.5 shrink-0" />
-                SOLアドレス未設定のためINMU送金不可
-              </p>
-            )
-          ) : null}
-
-          {/* ポイント付与 */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium flex items-center gap-1">
-              <Star className="size-3 text-chart-5" /> ポイント付与
-            </p>
+            <p className="text-xs font-medium">入出金登録</p>
             <select
               value={txType}
               onChange={e => setTxType(e.target.value)}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="reward">報酬</option>
-              <option value="airdrop">エアドロップ</option>
               <option value="deposit">入金</option>
               <option value="withdraw">出金</option>
+              <option value="reward">報酬</option>
+              <option value="airdrop">エアドロップ</option>
             </select>
             <div className="flex gap-2">
               <Input
@@ -419,14 +290,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
   const [airdropAllMemo, setAirdropAllMemo] = useState('')
   const [pointsAllAmount, setPointsAllAmount] = useState('')
-  const [adminWallet, setAdminWallet] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch('/api/admin/wallet', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then((d: { wallet: string | null } | null) => { if (d?.wallet) setAdminWallet(d.wallet) })
-      .catch(() => {})
-  }, [])
   const [pointsAllReason, setPointsAllReason] = useState('')
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
@@ -491,67 +354,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     } catch {
       toast.error(t('error'))
     }
-  }
-
-  async function sendBatchInmu(
-    fromWallet: string,
-    targets: { userId: string; solWallet: string; amount: number }[],
-    memo: string,
-  ): Promise<string> {
-    const phantom = getPanelPhantom()
-    if (!phantom) throw new Error('Phantom が見つかりません。インストールしてください。')
-
-    toast.loading('Phantom に接続中…', { id: 'ph-batch' })
-    const resp = await phantom.connect()
-    toast.dismiss('ph-batch')
-    if (resp.publicKey.toString() !== fromWallet) {
-      throw new Error(`接続ウォレットが異なります (${resp.publicKey.toString().slice(0, 8)}…)`)
-    }
-
-    const connection = new Connection(getPanelRpcUrl(), 'confirmed')
-    const fromPubkey = new PublicKey(fromWallet)
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
-
-    const tx = new Transaction()
-    tx.feePayer = fromPubkey
-    tx.recentBlockhash = blockhash
-
-    for (const target of targets) {
-      const toPubkey = new PublicKey(target.solWallet)
-      const fromATA = await getAssociatedTokenAddress(INMU_MINT, fromPubkey, false, TOKEN_2022_PROGRAM_ID)
-      const toATA = await getAssociatedTokenAddress(INMU_MINT, toPubkey, false, TOKEN_2022_PROGRAM_ID)
-      try {
-        await getAccount(connection, toATA, 'confirmed', TOKEN_2022_PROGRAM_ID)
-      } catch {
-        tx.add(createAssociatedTokenAccountInstruction(
-          fromPubkey, toATA, toPubkey, INMU_MINT, TOKEN_2022_PROGRAM_ID,
-        ))
-      }
-      const rawAmount = Math.floor(target.amount * Math.pow(10, INMU_DECIMALS))
-      tx.add(createTransferInstruction(fromATA, toATA, fromPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID))
-    }
-
-    toast.loading('Phantom で署名してください…', { id: 'ph-sign' })
-    const signedTx = await phantom.signTransaction(tx)
-    toast.dismiss('ph-sign')
-
-    toast.loading('Solanaへ送信中…', { id: 'ph-send' })
-    const rawTx = signedTx.serialize()
-    const signature = await connection.sendRawTransaction(rawTx, {
-      skipPreflight: false,
-      preflightCommitment: 'confirmed',
-    })
-    toast.dismiss('ph-send')
-
-    toast.loading('確認中…', { id: 'ph-confirm' })
-    try {
-      await confirmWithFallback(connection, signature, blockhash, lastValidBlockHeight)
-    } finally {
-      toast.dismiss('ph-confirm')
-    }
-
-    void memo
-    return signature
   }
 
   return (
@@ -660,7 +462,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Coins className="size-3" /> 全員へINMU配布
+                <Coins className="size-3" /> 全員エアドロ（INMU配布）
               </p>
               <div className="flex gap-2">
                 <Input
@@ -672,29 +474,11 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 />
                 <Button
                   onClick={() => withLoading(async () => {
-                    if (!adminWallet) {
-                      toast.error('管理ウォレット未接続。/admin/profile でPhantomを接続してください。')
-                      return
-                    }
-                    const eligibleUsers = users.filter(u => u.solWallet)
-                    if (!eligibleUsers.length) {
-                      toast.error('SOLアドレス登録済みのユーザーがいません')
-                      return
-                    }
-                    const amt = Number(airdropAllAmount)
-                    const targets = eligibleUsers.map(u => ({
-                      userId: u.userId,
-                      solWallet: u.solWallet!,
-                      amount: amt,
-                    }))
-                    const txSig = await sendBatchInmu(adminWallet, targets, airdropAllMemo || 'エアドロップ')
-                    const d = await api('/admin/record-batch-inmu-transfer', 'POST', {
-                      txSignature: txSig,
-                      transfers: targets,
+                    const d = await api('/admin/distribute-airdrop-all', 'POST', {
+                      amount: Number(airdropAllAmount),
                       memo: airdropAllMemo || 'エアドロップ',
-                      type: 'airdrop',
                     }) as { count: number }
-                    toast.success(`${d.count}名にINMU送金完了 tx: ${txSig.slice(0, 12)}…`)
+                    toast.success(`${d.count}名にエアドロップ配布完了`)
                     setAirdropAllAmount('')
                     setAirdropAllMemo('')
                   })}
@@ -760,7 +544,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Coins className="size-3" /> 選択ユーザーへINMU送金
+                  <Coins className="size-3" /> INMU配布（選択ユーザー）
                 </p>
                 <div className="flex gap-2">
                   <Input
@@ -771,30 +555,13 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     className="min-h-10 flex-1"
                   />
                   <Button
-                    onClick={() => withLoading(async () => {
-                      if (!adminWallet) {
-                        toast.error('管理ウォレット未接続。/admin/profile でPhantomを接続してください。')
-                        return
-                      }
-                      const validTargets = users
-                        .filter(u => selected.has(u.userId) && u.solWallet)
-                        .map(u => ({ userId: u.userId, solWallet: u.solWallet!, amount: Number(bulkAmount) }))
-                      if (!validTargets.length) {
-                        toast.error('選択ユーザーにSOLアドレス登録済みのユーザーがいません')
-                        return
-                      }
-                      const skipped = selectedIds.length - validTargets.length
-                      if (skipped > 0) toast.info(`SOLアドレス未設定の${skipped}名はスキップします`)
-                      const txSig = await sendBatchInmu(adminWallet, validTargets, bulkReason || 'INMU配布')
-                      const d = await api('/admin/record-batch-inmu-transfer', 'POST', {
-                        txSignature: txSig,
-                        transfers: validTargets,
+                    onClick={() => withLoading(() =>
+                      api('/admin/distribute-airdrop', 'POST', {
+                        targetUserIds: selectedIds,
+                        amount: Number(bulkAmount),
                         memo: bulkReason || 'INMU配布',
-                        type: 'airdrop',
-                      }) as { count: number }
-                      toast.success(`${d.count}名にINMU配布完了 tx: ${txSig.slice(0, 12)}…`)
-                      setBulkAmount('')
-                    })}
+                      })
+                    )}
                     disabled={loading || !bulkAmount}
                     className="min-h-10"
                   >
@@ -947,8 +714,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           <UserDetailDialog
             user={detailUser}
             users={users}
-            adminWallet={adminWallet}
-            onSendInmu={adminWallet ? (targets, memo) => sendBatchInmu(adminWallet, targets, memo) : undefined}
             onClose={() => setDetailUser(null)}
             onRefresh={() => { onRefresh(); setDetailUser(null) }}
           />

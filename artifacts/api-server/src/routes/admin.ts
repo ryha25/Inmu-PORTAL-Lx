@@ -178,7 +178,6 @@ router.post("/admin/record-sol-transfer", requireAdmin, async (req, res): Promis
       amount: String(amount),
       memo: `実INMU送金 (tx: ${txSignature.slice(0, 12)}…)`,
       counterparty: "管理者ウォレット",
-      txHash: txSignature,
     });
     // 残高更新
     await db
@@ -299,12 +298,11 @@ router.post(
   requireAdmin,
   async (req, res): Promise<void> => {
     const adminId = req.userId ?? "admin";
-    const { targetUserId, rewardType, amount, memo, txSignature } = req.body as {
+    const { targetUserId, rewardType, amount, memo } = req.body as {
       targetUserId?: string;
       rewardType?: string;
       amount?: number;
       memo?: string;
-      txSignature?: string;
     };
     if (!targetUserId || !rewardType || !amount) {
       res.status(400).json({ error: "targetUserId, rewardType, amount required" });
@@ -323,7 +321,6 @@ router.post(
         amount: String(amount),
         category: rewardType,
         memo,
-        txHash: txSignature ?? null,
       });
       await db
         .update(profileTable)
@@ -355,11 +352,10 @@ router.post(
   requireAdmin,
   async (req, res): Promise<void> => {
     const adminId = req.userId ?? "admin";
-    const { targetUserIds, amount, memo, txSignature } = req.body as {
+    const { targetUserIds, amount, memo } = req.body as {
       targetUserIds?: string[];
       amount?: number;
       memo?: string;
-      txSignature?: string;
     };
     if (!targetUserIds?.length || !amount) {
       res.status(400).json({ error: "targetUserIds and amount required" });
@@ -372,7 +368,6 @@ router.post(
           type: "airdrop",
           amount: String(amount),
           memo,
-          txHash: txSignature ?? null,
         });
         await db
           .update(profileTable)
@@ -691,7 +686,7 @@ router.post("/admin/grant-points-all", requireAdmin, async (req, res): Promise<v
 
 router.post("/admin/distribute-airdrop-all", requireAdmin, async (req, res): Promise<void> => {
   const adminId = req.userId ?? "admin";
-  const { amount, memo, txSignature } = req.body as { amount?: number; memo?: string; txSignature?: string };
+  const { amount, memo } = req.body as { amount?: number; memo?: string };
   if (!amount || amount <= 0) {
     res.status(400).json({ error: "amount required" });
     return;
@@ -699,84 +694,15 @@ router.post("/admin/distribute-airdrop-all", requireAdmin, async (req, res): Pro
   try {
     const allUsers = await db.select({ userId: profileTable.userId }).from(profileTable);
     for (const u of allUsers) {
-      await db.insert(transactionsTable).values({
-        userId: u.userId,
-        type: "airdrop",
-        amount: String(amount),
-        memo,
-        txHash: txSignature ?? null,
-      });
+      await db.insert(transactionsTable).values({ userId: u.userId, type: "airdrop", amount: String(amount), memo });
       await db
         .update(profileTable)
         .set({ balance: sql`${profileTable.balance} + ${amount}`, participationCount: sql`${profileTable.participationCount} + 1`, updatedAt: new Date() })
         .where(eq(profileTable.userId, u.userId));
       await notify(u.userId, "airdrop", "エアドロップを受け取りました", `${amount} INMU`);
     }
-    await logAudit(adminId, "adminDistributeAirdropAll", undefined, { count: allUsers.length, amount, txSignature });
+    await logAudit(adminId, "adminDistributeAirdropAll", undefined, { count: allUsers.length, amount });
     res.json({ ok: true, count: allUsers.length });
-  } catch {
-    res.status(500).json({ error: "Internal error" });
-  }
-});
-
-// ── バッチINMU送金記録（フロントから一括送金後に呼ぶ） ──
-router.post("/admin/record-batch-inmu-transfer", requireAdmin, async (req, res): Promise<void> => {
-  const adminId = req.userId ?? "admin";
-  const { txSignature, transfers, memo, type = "airdrop" } = req.body as {
-    txSignature?: string;
-    transfers?: Array<{ userId: string; amount: number; solWallet?: string }>;
-    memo?: string;
-    type?: string;
-  };
-  if (!txSignature || !transfers?.length) {
-    res.status(400).json({ error: "txSignature and transfers required" });
-    return;
-  }
-  try {
-    for (const transfer of transfers) {
-      await db.insert(transactionsTable).values({
-        userId: transfer.userId,
-        type,
-        amount: String(transfer.amount),
-        memo: memo ?? `実INMU送金 (tx: ${txSignature.slice(0, 12)}…)`,
-        counterparty: "管理者ウォレット",
-        txHash: txSignature,
-      });
-      const updateData: Record<string, unknown> = {
-        balance: sql`${profileTable.balance} + ${transfer.amount}`,
-        totalReceived: sql`${profileTable.totalReceived} + ${transfer.amount}`,
-        updatedAt: new Date(),
-      };
-      if (type === "airdrop") {
-        updateData.participationCount = sql`${profileTable.participationCount} + 1`;
-      }
-      await db.update(profileTable).set(updateData).where(eq(profileTable.userId, transfer.userId));
-      await notify(transfer.userId, type, `${transfer.amount} INMU を受け取りました`,
-        `実INMU送金 (tx: ${txSignature.slice(0, 12)}…)`);
-    }
-    await logAudit(adminId, "adminBatchInmuTransfer", undefined, {
-      txSignature,
-      count: transfers.length,
-      type,
-      memo,
-    });
-    res.json({ ok: true, count: transfers.length });
-  } catch (e) {
-    console.error("[Admin] record-batch-inmu-transfer error:", e);
-    res.status(500).json({ error: "Internal error" });
-  }
-});
-
-// ── 管理者送金履歴（監査ログから取得） ──
-router.get("/admin/sol-transfer-history", requireAdmin, async (_req, res): Promise<void> => {
-  try {
-    const rows = await db
-      .select()
-      .from(auditLogTable)
-      .where(sql`${auditLogTable.action} IN ('adminSolTransfer', 'adminBatchInmuTransfer')`)
-      .orderBy(sql`${auditLogTable.createdAt} DESC`)
-      .limit(30);
-    res.json(rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -800,64 +726,6 @@ router.post("/admin/set-role", requireAdmin, async (req, res): Promise<void> => 
     await logAudit(adminId, "adminSetRole", targetUserId, { role });
     res.json({ ok: true });
   } catch {
-    res.status(500).json({ error: "Internal error" });
-  }
-});
-
-// ── 管理コード変更 ──
-router.post("/admin/change-admin-code", requireAdmin, async (req, res): Promise<void> => {
-  const { currentCode, newCode } = req.body as { currentCode?: string; newCode?: string };
-
-  if (!currentCode || !newCode) {
-    res.status(400).json({ error: "currentCode と newCode は必須です" });
-    return;
-  }
-  if (newCode.length < 4) {
-    res.status(400).json({ error: "新コードは4文字以上にしてください" });
-    return;
-  }
-
-  try {
-    // 現在の有効コードを取得（DB上書き → env var の順）
-    const overrideRow = await pool.query(
-      "SELECT value FROM app_settings WHERE key = 'admin_code_override' LIMIT 1",
-    );
-    const effectiveCode =
-      (overrideRow.rows.length > 0 ? overrideRow.rows[0].value : null) ??
-      process.env.ADMIN_CODE ??
-      "";
-
-    if (!effectiveCode) {
-      res.status(503).json({ error: "管理コードが設定されていません" });
-      return;
-    }
-
-    // タイミング攻撃対策の比較
-    const { timingSafeEqual } = await import("crypto");
-    const a = Buffer.from(currentCode);
-    const b = Buffer.from(effectiveCode);
-    let match = false;
-    if (a.length === b.length) {
-      match = timingSafeEqual(a, b);
-    } else {
-      timingSafeEqual(a, a);
-    }
-    if (!match) {
-      res.status(401).json({ error: "現在のコードが正しくありません" });
-      return;
-    }
-
-    // DB に新コードを upsert
-    await pool.query(
-      `INSERT INTO app_settings (key, value) VALUES ('admin_code_override', $1)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [newCode],
-    );
-
-    console.info("[AdminAuth] Admin code changed via UI");
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("[AdminAuth] change-admin-code error", e);
     res.status(500).json({ error: "Internal error" });
   }
 });
