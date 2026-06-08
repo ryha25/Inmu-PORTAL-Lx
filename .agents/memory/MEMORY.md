@@ -1,0 +1,1 @@
+- [INMU Token-2022](inmu-token2022.md) — INMU mint is Token-2022, not standard Token; all spl-token calls need TOKEN_2022_PROGRAM_ID
