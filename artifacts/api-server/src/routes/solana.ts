@@ -37,6 +37,8 @@ async function rpcFetch(body: unknown): Promise<Response> {
   throw lastErr;
 }
 
+const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+
 async function fetchInmuBalance(wallet: string): Promise<number> {
   const res = await rpcFetch({
     jsonrpc: "2.0",
@@ -45,7 +47,7 @@ async function fetchInmuBalance(wallet: string): Promise<number> {
     params: [
       wallet,
       { mint: INMU_TOKEN_MINT },
-      { encoding: "jsonParsed" },
+      { encoding: "jsonParsed", programId: TOKEN_2022_PROGRAM_ID },
     ],
   });
 
