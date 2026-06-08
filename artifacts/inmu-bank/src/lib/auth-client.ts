@@ -1,5 +1,5 @@
 export const signIn = {
-  email: async (params: { email: string; password: string }) => {
+  username: async (params: { name: string; password: string }) => {
     try {
       const res = await fetch('/api/auth/sign-in', {
         method: 'POST',
@@ -16,10 +16,13 @@ export const signIn = {
       return { data: null, error: { message: 'Network error' } }
     }
   },
+  email: async (params: { email: string; password: string }) => {
+    return signIn.username({ name: params.email, password: params.password })
+  },
 }
 
 export const signUp = {
-  email: async (params: { email: string; password: string; name: string }) => {
+  username: async (params: { name: string; password: string; passcode: string }) => {
     try {
       const res = await fetch('/api/auth/sign-up', {
         method: 'POST',
@@ -35,6 +38,9 @@ export const signUp = {
     } catch {
       return { data: null, error: { message: 'Network error' } }
     }
+  },
+  email: async (params: { email: string; password: string; name: string }) => {
+    return signUp.username({ name: params.name, password: params.password, passcode: '' })
   },
 }
 

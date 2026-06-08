@@ -3,3 +3,5 @@
 - [INMU Token-2022 batch transfer](inmu-batch-transfer.md) — single Transaction with multiple createTransferInstruction calls; one Phantom signature for N users
 - [INMU admin wallet persistence](inmu-admin-wallet.md) — admin wallet stored in app_settings raw-SQL table (not Drizzle schema); created with CREATE TABLE IF NOT EXISTS on each request
 - [INMU Replit import](inmu-replit-import.md) — importing real GitHub repo: Python shutil.copytree preserves .replit-artifact; rsync not available; copy artifact.toml from repo then drizzle push-force
+- [INMU auth: username-only](inmu-auth.md) — sign-up uses username+password+passcode; synthetic email {name}@inmu.local stored; sign-in tries synthetic email then raw email (compat)
+- [INMU requireAdmin source](inmu-admin-middleware.md) — requireAdmin/requireAuth both exported from middlewares/session.ts, NOT from routes/admin-auth.ts

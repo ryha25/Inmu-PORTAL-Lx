@@ -150,3 +150,19 @@ export const activityFeedTable = pgTable("activityFeed", {
   message: text("message"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
+
+// ── INMU Bank: missions ──
+export const missionsTable = pgTable("missions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type").notNull().default("daily"),
+  points: integer("points").notNull().default(0),
+  startAt: timestamp("startAt"),
+  endAt: timestamp("endAt"),
+  linkUrl: text("linkUrl"),
+  isActive: boolean("isActive").notNull().default(true),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type Mission = typeof missionsTable.$inferSelect;

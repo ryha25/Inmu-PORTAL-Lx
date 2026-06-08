@@ -3,7 +3,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LangToggle } from '@/components/lang-toggle'
 import { Logo } from '@/components/logo'
-import { signIn, signUp } from '@/lib/auth-client'
 import { useI18n } from '@/lib/i18n/context'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -12,9 +11,9 @@ import { Link, useLocation } from 'wouter'
 export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const { t } = useI18n()
   const [, navigate] = useLocation()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [password, setPassword] = useState('')
+  const [passcode, setPasscode] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -22,11 +21,27 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
     setLoading(true)
     try {
       if (mode === 'sign-up') {
-        const { error } = await signUp.email({ email, password, name })
-        if (error) throw new Error(error.message)
+        const res = await fetch('/api/auth/sign-up', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ name, password, passcode }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({})) as { error?: string }
+          throw new Error(d.error ?? '登録に失敗しました')
+        }
       } else {
-        const { error } = await signIn.email({ email, password })
-        if (error) throw new Error(error.message)
+        const res = await fetch('/api/auth/sign-in', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ name, password }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({})) as { error?: string }
+          throw new Error(d.error ?? 'ログインに失敗しました')
+        }
       }
       navigate('/')
     } catch (err) {
@@ -60,32 +75,59 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
           <p className="mb-4 text-center text-[11px] text-muted-foreground">{t('demo_notice')}</p>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {mode === 'sign-up' && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="name">{t('displayName')}</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required className="min-h-11 text-base" />
-              </div>
-            )}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email">{t('email')}</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" className="min-h-11 text-base" />
+              <Label htmlFor="name">ユーザー名</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                autoComplete="username"
+                className="min-h-11 text-base"
+                placeholder="例: taro"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="password">{t('password')}</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete={mode === 'sign-up' ? 'new-password' : 'current-password'} className="min-h-11 text-base" />
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete={mode === 'sign-up' ? 'new-password' : 'current-password'}
+                className="min-h-11 text-base"
+              />
             </div>
+            {mode === 'sign-up' && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="passcode">パスコード</Label>
+                <Input
+                  id="passcode"
+                  type="password"
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  required
+                  autoComplete="off"
+                  className="min-h-11 text-base"
+                  placeholder="招待パスコードを入力"
+                />
+              </div>
+            )}
             <Button type="submit" disabled={loading} className="min-h-11 w-full font-semibold">
               {loading ? t('loading') : mode === 'sign-up' ? t('signup') : t('signin')}
             </Button>
           </form>
-        </div>
 
-        <p className="mt-5 text-center text-sm text-muted-foreground">
-          {mode === 'sign-up' ? t('have_account') : t('no_account')}{' '}
-          <Link href={mode === 'sign-up' ? '/sign-in' : '/sign-up'} className="font-medium text-primary hover:underline">
-            {mode === 'sign-up' ? t('signin') : t('signup')}
-          </Link>
-        </p>
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            {mode === 'sign-in' ? (
+              <>アカウントがありませんか？{' '}<Link href="/sign-up" className="font-medium text-primary hover:underline">{t('signup')}</Link></>
+            ) : (
+              <>すでにアカウントをお持ちですか？{' '}<Link href="/sign-in" className="font-medium text-primary hover:underline">{t('signin')}</Link></>
+            )}
+          </p>
+        </div>
       </div>
     </div>
   )
