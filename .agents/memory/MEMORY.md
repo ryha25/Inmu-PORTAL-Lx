@@ -1,1 +1,2 @@
 - [INMU Token-2022](inmu-token2022.md) — INMU mint is Token-2022, not standard Token; all spl-token calls need TOKEN_2022_PROGRAM_ID
+- [INMU admin wallet](inmu-admin-wallet.md) — admin wallet stored server-side (app_settings KV), server is authoritative; agent cannot sign transfers / fabricate TxHash
