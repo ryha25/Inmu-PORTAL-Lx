@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "INMU Bank"
+version = "1.0.0"
+id = "artifacts/inmu-bank"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26083
+
+[services.development]
+run = "pnpm --filter @workspace/inmu-bank run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/inmu-bank", "run", "build" ]
+publicDir = "artifacts/inmu-bank/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26083"
+BASE_PATH = "/"
