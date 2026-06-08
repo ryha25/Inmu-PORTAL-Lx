@@ -38,7 +38,6 @@ externalPort = 3001
 [userenv]
 
 [userenv.shared]
-ADMIN_CODE = "INMU2026"
 
 [nix]
 channel = "stable-25_05"
