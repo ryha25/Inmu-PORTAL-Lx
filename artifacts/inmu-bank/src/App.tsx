@@ -6,7 +6,6 @@ import { I18nProvider } from "@/lib/i18n/context";
 import { AuthForm } from "@/components/auth-form";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { HistoryPage } from "@/pages/history-page";
-import { BalancePage } from "@/pages/balance-page";
 import { AchievementsPage } from "@/pages/achievements-page";
 import { NotificationsPage } from "@/pages/notifications-page";
 import { ProfilePage } from "@/pages/profile-page";
@@ -34,9 +33,12 @@ function Router() {
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/points" component={PointsPage} />
-      <Route path="/admin" component={AdminPage} />
-      <Route path="/admin/profile" component={AdminProfilePage} />
-      <Route path="/admin-login" component={AdminLoginPage} />
+      <Route path="/inmu1919" component={AdminPage} />
+      <Route path="/inmu1919/profile" component={AdminProfilePage} />
+      <Route path="/inmu1919-login" component={AdminLoginPage} />
+      <Route path="/admin"><Redirect to="/" /></Route>
+      <Route path="/admin/profile"><Redirect to="/" /></Route>
+      <Route path="/admin-login"><Redirect to="/inmu1919-login" /></Route>
       <Route path="/dev-login" component={DevLoginPage} />
       <Route path="/sign-in">
         <AuthForm mode="sign-in" />

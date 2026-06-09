@@ -4,6 +4,9 @@ import { createHmac, timingSafeEqual } from "crypto";
 export const SESSION_COOKIE = "inmu-session";
 export const ADMIN_SESSION_COOKIE = "inmu-admin-session";
 
+const USER_SESSION_MS = 30 * 60 * 1000;
+const ADMIN_SESSION_MS = 5 * 60 * 1000;
+
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
@@ -25,6 +28,7 @@ declare global {
       userEmail?: string;
       userName?: string;
       isAdminSession?: boolean;
+      sessionExpired?: boolean;
     }
   }
 }
@@ -34,7 +38,7 @@ function sign(payload: string): string {
 }
 
 function makeToken(userId: string, email: string, name: string): string {
-  const payload = Buffer.from(JSON.stringify({ userId, email, name })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ userId, email, name, ts: Date.now() })).toString("base64url");
   const sig = sign(payload);
   return `${payload}.${sig}`;
 }
@@ -54,9 +58,10 @@ function parseToken(token: string): { userId: string; email: string; name: strin
 
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
-      userId?: string; email?: string; name?: string;
+      userId?: string; email?: string; name?: string; ts?: number;
     };
     if (!data.userId) return null;
+    if (typeof data.ts === "number" && Date.now() - data.ts > USER_SESSION_MS) return null;
     return { userId: data.userId, email: data.email ?? "", name: data.name ?? "" };
   } catch {
     return null;
@@ -80,14 +85,13 @@ function verifyAdminToken(token: string): boolean {
   } catch {
     return false;
   }
-  // Verify payload claims: must have admin:true and must not be expired (8h)
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
       admin?: boolean;
       ts?: number;
     };
     if (data.admin !== true) return false;
-    if (typeof data.ts === "number" && Date.now() - data.ts > 8 * 60 * 60 * 1000) return false;
+    if (typeof data.ts === "number" && Date.now() - data.ts > ADMIN_SESSION_MS) return false;
     return true;
   } catch {
     return false;
@@ -100,7 +104,7 @@ export function makeSessionValue(userId: string, email: string, name: string): s
 
 export function sessionMiddleware(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): void {
   const cookie = req.cookies?.[SESSION_COOKIE];
@@ -110,12 +114,18 @@ export function sessionMiddleware(
       req.userId = parsed.userId;
       req.userEmail = parsed.email;
       req.userName = parsed.name;
+    } else {
+      res.clearCookie(SESSION_COOKIE, { path: "/" });
+      req.sessionExpired = true;
     }
   }
 
   const adminCookie = req.cookies?.[ADMIN_SESSION_COOKIE];
   if (adminCookie && typeof adminCookie === "string") {
     req.isAdminSession = verifyAdminToken(adminCookie);
+    if (!req.isAdminSession) {
+      res.clearCookie(ADMIN_SESSION_COOKIE, { path: "/" });
+    }
   }
 
   next();
@@ -127,7 +137,11 @@ export function requireAuth(
   next: NextFunction,
 ): void {
   if (!req.userId) {
-    res.status(401).json({ error: "Unauthorized" });
+    if (req.sessionExpired) {
+      res.status(401).json({ error: "セッションの有効期限が切れました。再度ログインしてください。", expired: true });
+    } else {
+      res.status(401).json({ error: "Unauthorized" });
+    }
     return;
   }
   next();
@@ -139,7 +153,11 @@ export function requireAdmin(
   next: NextFunction,
 ): void {
   if (!req.isAdminSession) {
-    res.status(403).json({ error: "Forbidden" });
+    if (req.cookies?.[ADMIN_SESSION_COOKIE]) {
+      res.status(403).json({ error: "管理セッションの有効期限が切れました。再度ログインしてください。", expired: true });
+    } else {
+      res.status(403).json({ error: "Forbidden" });
+    }
     return;
   }
   next();

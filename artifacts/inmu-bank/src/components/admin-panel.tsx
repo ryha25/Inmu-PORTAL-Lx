@@ -82,28 +82,23 @@ const TX_TYPE_LABEL: Record<string, string> = {
   send: '送金',
   receive: '受取',
   reward: '報酬',
-  airdrop: 'エアドロ',
+  airdrop: 'エアドロップ',
+  inmu_send: 'INMU送金',
+  points_send: 'ポイント送金',
+  points_deduct: 'ポイント減算',
 }
 
-const TX_INCOME_TYPES = ['deposit', 'receive', 'reward', 'airdrop']
+const TX_INCOME_TYPES = ['deposit', 'receive', 'reward', 'airdrop', 'inmu_send', 'points_send']
 
 function UserDetailDialog({
   user,
-  users,
   onClose,
-  onRefresh,
 }: {
   user: UserRow
-  users: UserRow[]
   onClose: () => void
-  onRefresh: () => void
 }) {
   const [txs, setTxs] = useState<TxRow[]>([])
   const [txLoading, setTxLoading] = useState(true)
-  const [loading, setLoading] = useState(false)
-  const [amount, setAmount] = useState('')
-  const [reason, setReason] = useState('')
-  const [txType, setTxType] = useState('deposit')
 
   useEffect(() => {
     setTxLoading(true)
@@ -115,18 +110,6 @@ function UserDetailDialog({
       .catch(() => setTxs([]))
       .finally(() => setTxLoading(false))
   }, [user.userId])
-
-  async function withLoading(fn: () => Promise<void>) {
-    setLoading(true)
-    try {
-      await fn()
-      onRefresh()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'エラー')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   return (
     <DialogContent className="max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
@@ -170,56 +153,6 @@ function UserDetailDialog({
           ) : (
             <p className="text-xs text-muted-foreground">未設定</p>
           )}
-        </div>
-
-        {/* ── 個別操作 ── */}
-        <div className="flex flex-col gap-3 border-t border-border pt-3">
-          <p className="text-xs font-semibold text-muted-foreground">操作</p>
-
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium">入出金登録</p>
-            <select
-              value={txType}
-              onChange={e => setTxType(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="deposit">入金</option>
-              <option value="withdraw">出金</option>
-              <option value="reward">報酬</option>
-              <option value="airdrop">エアドロップ</option>
-            </select>
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                placeholder="金額"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                className="min-h-10 flex-1"
-              />
-              <Input
-                placeholder="メモ"
-                value={reason}
-                onChange={e => setReason(e.target.value)}
-                className="min-h-10 flex-1"
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => withLoading(() =>
-                api('/admin/register-tx', 'POST', {
-                  targetUserId: user.userId,
-                  type: txType,
-                  amount: Number(amount),
-                  memo: reason,
-                })
-              )}
-              disabled={loading || !amount}
-              className="min-h-10"
-            >
-              登録
-            </Button>
-          </div>
-
         </div>
 
         {/* ── 入出金履歴 ── */}
@@ -288,6 +221,29 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [confirmOp, setConfirmOp] = useState<{ label: string; fn: () => Promise<void> } | null>(null)
+  const [passcodeInput, setPasscodeInput] = useState('')
+  const [passcodeLoading, setPasscodeLoading] = useState(false)
+
+  async function handleConfirmPasscode() {
+    if (!confirmOp || !passcodeInput) return
+    setPasscodeLoading(true)
+    try {
+      await api('/admin/verify-code', 'POST', { code: passcodeInput })
+      setPasscodeInput('')
+      setConfirmOp(null)
+      await confirmOp.fn()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'パスコードが違います')
+    } finally {
+      setPasscodeLoading(false)
+    }
+  }
+
+  function withConfirm(label: string, fn: () => Promise<void>) {
+    setPasscodeInput('')
+    setConfirmOp({ label, fn })
+  }
 
   const filtered = users.filter(u =>
     u.displayName.toLowerCase().includes(search.toLowerCase()) ||
@@ -484,7 +440,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Coins className="size-3" /> 全員エアドロ（INMU配布）
+                <Coins className="size-3" /> 全員INMU送金
               </p>
               <div className="flex gap-2">
                 <Input
@@ -495,19 +451,19 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                   className="min-h-10 flex-1"
                 />
                 <Button
-                  onClick={() => withLoading(async () => {
+                  onClick={() => withConfirm('全員INMU送金', () => withLoading(async () => {
                     const d = await api('/admin/distribute-airdrop-all', 'POST', {
                       amount: Number(airdropAllAmount),
-                      memo: airdropAllMemo || 'エアドロップ',
+                      memo: airdropAllMemo || 'INMU送金',
                     }) as { count: number }
-                    toast.success(`${d.count}名にエアドロップ配布完了`)
+                    toast.success(`${d.count}名にINMU送金完了`)
                     setAirdropAllAmount('')
                     setAirdropAllMemo('')
-                  })}
+                  }))}
                   disabled={loading || !airdropAllAmount}
                   className="min-h-10"
                 >
-                  配布
+                  送金
                 </Button>
               </div>
               <Input
@@ -520,7 +476,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Star className="size-3" /> 全員ポイント付与
+                <Star className="size-3" /> 全員ポイント送金
               </p>
               <div className="flex gap-2">
                 <Input
@@ -532,19 +488,19 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 />
                 <Button
                   variant="outline"
-                  onClick={() => withLoading(async () => {
+                  onClick={() => withConfirm('全員ポイント送金', () => withLoading(async () => {
                     const d = await api('/admin/grant-points-all', 'POST', {
                       amount: Number(pointsAllAmount),
-                      reason: pointsAllReason || 'ポイント付与',
+                      reason: pointsAllReason || 'ポイント送金',
                     }) as { count: number }
-                    toast.success(`${d.count}名にポイント付与完了`)
+                    toast.success(`${d.count}名にポイント送金完了`)
                     setPointsAllAmount('')
                     setPointsAllReason('')
-                  })}
+                  }))}
                   disabled={loading || !pointsAllAmount}
                   className="min-h-10"
                 >
-                  付与
+                  送金
                 </Button>
               </div>
               <Input
@@ -566,7 +522,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Coins className="size-3" /> INMU配布（選択ユーザー）
+                  <Coins className="size-3" /> INMU送金（選択ユーザー）
                 </p>
                 <div className="flex gap-2">
                   <Input
@@ -577,17 +533,17 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     className="min-h-10 flex-1"
                   />
                   <Button
-                    onClick={() => withLoading(() =>
+                    onClick={() => withConfirm('INMU送金', () => withLoading(() =>
                       api('/admin/distribute-airdrop', 'POST', {
                         targetUserIds: selectedIds,
                         amount: Number(bulkAmount),
-                        memo: bulkReason || 'INMU配布',
+                        memo: bulkReason || 'INMU送金',
                       })
-                    )}
+                    ))}
                     disabled={loading || !bulkAmount}
                     className="min-h-10"
                   >
-                    配布
+                    送金
                   </Button>
                 </div>
               </div>
@@ -595,7 +551,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Star className="size-3" /> ポイント付与（選択ユーザー）
+                  <Star className="size-3" /> ポイント送金（選択ユーザー）
                 </p>
                 <div className="flex gap-2">
                   <Input
@@ -607,17 +563,17 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                   />
                   <Button
                     variant="outline"
-                    onClick={() => withLoading(() =>
+                    onClick={() => withConfirm('ポイント送金', () => withLoading(() =>
                       api('/admin/grant-points', 'POST', {
                         targetUserIds: selectedIds,
                         amount: Number(pointsAmount),
-                        reason: bulkReason || 'ポイント付与',
+                        reason: bulkReason || 'ポイント送金',
                       })
-                    )}
+                    ))}
                     disabled={loading || !pointsAmount}
                     className="min-h-10"
                   >
-                    付与
+                    送金
                   </Button>
                 </div>
               </div>
@@ -636,7 +592,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                   />
                   <Button
                     variant="destructive"
-                    onClick={() => withLoading(async () => {
+                    onClick={() => withConfirm('ポイント減算', () => withLoading(async () => {
                       await api('/admin/deduct-points', 'POST', {
                         targetUserIds: selectedIds,
                         amount: Number(deductPointsAmount),
@@ -644,7 +600,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                       })
                       toast.success(`${selectedIds.length}名からポイント減算完了`)
                       setDeductPointsAmount('')
-                    })}
+                    }))}
                     disabled={loading || !deductPointsAmount}
                     className="min-h-10"
                   >
@@ -891,11 +847,51 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         {detailUser && (
           <UserDetailDialog
             user={detailUser}
-            users={users}
             onClose={() => setDetailUser(null)}
-            onRefresh={() => { onRefresh(); setDetailUser(null) }}
           />
         )}
+      </Dialog>
+
+      {/* ── パスコード確認ダイアログ ── */}
+      <Dialog open={!!confirmOp} onOpenChange={open => { if (!open) { setConfirmOp(null); setPasscodeInput('') } }}>
+        <DialogContent className="max-w-sm mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Shield className="size-4 text-primary" />
+              操作の確認
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-1">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{confirmOp?.label}</span> を実行するには管理コードを入力してください。
+            </p>
+            <Input
+              type="password"
+              placeholder="管理コードを入力"
+              value={passcodeInput}
+              onChange={e => setPasscodeInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleConfirmPasscode() }}
+              className="min-h-11 text-base"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 min-h-10"
+                onClick={() => { setConfirmOp(null); setPasscodeInput('') }}
+              >
+                キャンセル
+              </Button>
+              <Button
+                className="flex-1 min-h-10"
+                disabled={!passcodeInput || passcodeLoading}
+                onClick={handleConfirmPasscode}
+              >
+                {passcodeLoading ? '確認中…' : '実行'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
       </Dialog>
     </div>
   )

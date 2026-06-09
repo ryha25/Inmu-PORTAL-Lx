@@ -18,6 +18,10 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (mode === 'sign-up' && passcode.length === 0) {
+      toast.error('パスコードを入力してください')
+      return
+    }
     setLoading(true)
     try {
       if (mode === 'sign-up') {
@@ -111,8 +115,11 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
                   required
                   autoComplete="off"
                   className="min-h-11 text-base"
-                  placeholder="招待パスコードを入力"
+                  placeholder="6桁の暗号を入力してください"
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  ※送金する際に使用するパスコードです。
+                </p>
               </div>
             )}
             <Button type="submit" disabled={loading} className="min-h-11 w-full font-semibold">

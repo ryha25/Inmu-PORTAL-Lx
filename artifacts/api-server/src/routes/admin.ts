@@ -17,6 +17,30 @@ import { requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
+// ── Rate limiting: admin passcode verify (5 fails → 30 min lock) ──
+interface FailRecord { count: number; lockedUntil: number }
+const passcodeFailMap = new Map<string, FailRecord>();
+
+function checkPasscodeLock(): { locked: boolean; remainingMs: number } {
+  const rec = passcodeFailMap.get("admin_verify");
+  if (!rec) return { locked: false, remainingMs: 0 };
+  if (rec.lockedUntil > Date.now()) return { locked: true, remainingMs: rec.lockedUntil - Date.now() };
+  return { locked: false, remainingMs: 0 };
+}
+function recordPasscodeFail(): boolean {
+  const rec = passcodeFailMap.get("admin_verify") ?? { count: 0, lockedUntil: 0 };
+  rec.count++;
+  if (rec.count >= 5) {
+    rec.lockedUntil = Date.now() + 30 * 60 * 1000;
+    rec.count = 0;
+    passcodeFailMap.set("admin_verify", rec);
+    return true;
+  }
+  passcodeFailMap.set("admin_verify", rec);
+  return false;
+}
+function clearPasscodeFail() { passcodeFailMap.delete("admin_verify"); }
+
 async function logAudit(
   adminId: string,
   action: string,
@@ -365,7 +389,7 @@ router.post(
       for (const uid of targetUserIds) {
         await db.insert(transactionsTable).values({
           userId: uid,
-          type: "airdrop",
+          type: "inmu_send",
           amount: String(amount),
           memo,
         });
@@ -559,12 +583,37 @@ router.get(
 
 router.post("/admin/verify-code", requireAdmin, async (req, res): Promise<void> => {
   const { code } = req.body as { code?: string };
-  const adminCode = process.env.ADMIN_CODE ?? "0000";
-  if (!code || code !== adminCode) {
-    res.status(403).json({ error: "Invalid admin code" });
+  if (!code) { res.status(400).json({ error: "Code required" }); return; }
+
+  const lock = checkPasscodeLock();
+  if (lock.locked) {
+    const mins = Math.ceil(lock.remainingMs / 60000);
+    res.status(429).json({ error: `パスコードがロックされています。${mins}分後に再試行してください。` });
     return;
   }
-  res.json({ ok: true });
+
+  const adminCode = process.env.ADMIN_CODE;
+  if (!adminCode) { res.status(503).json({ error: "Admin credentials not configured" }); return; }
+
+  try {
+    const { timingSafeEqual } = await import("crypto");
+    const a = Buffer.from(code);
+    const b = Buffer.from(adminCode);
+    const match = a.length === b.length && timingSafeEqual(a, b);
+    if (!match) {
+      const locked = recordPasscodeFail();
+      if (locked) {
+        res.status(429).json({ error: "5回失敗しました。30分間ロックされます。" });
+      } else {
+        res.status(403).json({ error: "パスコードが違います" });
+      }
+      return;
+    }
+    clearPasscodeFail();
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 router.post("/admin/grant-points", requireAdmin, async (req, res): Promise<void> => {
@@ -587,6 +636,12 @@ router.post("/admin/grant-points", requireAdmin, async (req, res): Promise<void>
           updatedAt: new Date(),
         })
         .where(eq(profileTable.userId, uid));
+      await db.insert(transactionsTable).values({
+        userId: uid,
+        type: "points_send",
+        amount: String(amount),
+        memo: reason ?? "ポイント送金",
+      });
       await notify(uid, "points", `${amount}ポイントが付与されました`, reason ?? `${amount} pts`);
     }
     await logAudit(adminId, "adminGrantPoints", undefined, { targetUserIds, amount, reason });
@@ -675,6 +730,12 @@ router.post("/admin/grant-points-all", requireAdmin, async (req, res): Promise<v
         .update(profileTable)
         .set({ monthlyPoints: sql`${profileTable.monthlyPoints} + ${amount}`, updatedAt: new Date() })
         .where(eq(profileTable.userId, u.userId));
+      await db.insert(transactionsTable).values({
+        userId: u.userId,
+        type: "points_send",
+        amount: String(amount),
+        memo: reason ?? "全員ポイント送金",
+      });
       await notify(u.userId, "points", `${amount}ポイントが付与されました`, reason ?? `${amount} pts`);
     }
     await logAudit(adminId, "adminGrantPointsAll", undefined, { count: allUsers.length, amount, reason });
@@ -694,7 +755,7 @@ router.post("/admin/distribute-airdrop-all", requireAdmin, async (req, res): Pro
   try {
     const allUsers = await db.select({ userId: profileTable.userId }).from(profileTable);
     for (const u of allUsers) {
-      await db.insert(transactionsTable).values({ userId: u.userId, type: "airdrop", amount: String(amount), memo });
+      await db.insert(transactionsTable).values({ userId: u.userId, type: "inmu_send", amount: String(amount), memo });
       await db
         .update(profileTable)
         .set({ balance: sql`${profileTable.balance} + ${amount}`, participationCount: sql`${profileTable.participationCount} + 1`, updatedAt: new Date() })

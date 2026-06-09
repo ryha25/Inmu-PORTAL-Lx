@@ -1,8 +1,10 @@
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/lib/i18n/context'
 import { formatDate } from '@/lib/format'
-import { Award, Flame, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Award, Flame, ChevronDown, ChevronUp, ExternalLink, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 
 type PointsData = {
   totalPoints: number
@@ -22,16 +24,18 @@ type Mission = {
   endAt: string | null
   linkUrl: string | null
   isActive: boolean
+  completed: boolean
 }
 
-export function PointsView({ data }: { data: PointsData; onRefresh: () => void }) {
-  const { t, locale } = useI18n()
+export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: () => void }) {
+  const { locale } = useI18n()
   const [dailyOpen, setDailyOpen] = useState(true)
   const [weeklyOpen, setWeeklyOpen] = useState(true)
   const [dailyMissions, setDailyMissions] = useState<Mission[]>([])
   const [weeklyMissions, setWeeklyMissions] = useState<Mission[]>([])
+  const [completing, setCompleting] = useState<number | null>(null)
 
-  useEffect(() => {
+  const loadMissions = useCallback(() => {
     fetch('/api/missions', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
@@ -43,13 +47,81 @@ export function PointsView({ data }: { data: PointsData; onRefresh: () => void }
       .catch(() => {})
   }, [])
 
+  useEffect(() => { loadMissions() }, [loadMissions])
+
+  async function completeMission(mission: Mission) {
+    if (mission.completed) return
+    setCompleting(mission.id)
+    try {
+      const res = await fetch(`/api/missions/${mission.id}/complete`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        if (d.error === 'already_completed') {
+          toast.info('このミッションは既に達成済みです')
+        } else {
+          toast.error(d.error ?? 'エラーが発生しました')
+        }
+      } else {
+        toast.success(`+${d.points} ポイント獲得！`)
+        loadMissions()
+        onRefresh()
+      }
+    } catch {
+      toast.error('通信エラーが発生しました')
+    } finally {
+      setCompleting(null)
+    }
+  }
+
+  function MissionItem({ m }: { m: Mission }) {
+    const isCompleting = completing === m.id
+    return (
+      <li className="px-4 py-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-medium truncate">{m.title}</p>
+              {m.linkUrl && (
+                <a href={m.linkUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                  <ExternalLink className="size-3 text-primary" />
+                </a>
+              )}
+            </div>
+            {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="font-mono text-sm font-bold text-chart-5">+{m.points} pts</span>
+            {m.completed ? (
+              <div className="flex items-center gap-1 rounded-full bg-chart-5/15 px-2 py-1">
+                <CheckCircle2 className="size-3 text-chart-5" />
+                <span className="text-[10px] font-medium text-chart-5">受取済み</span>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={isCompleting}
+                onClick={() => completeMission(m)}
+              >
+                {isCompleting ? '処理中…' : m.linkUrl ? 'ポイントを受け取る' : '達成する'}
+              </Button>
+            )}
+          </div>
+        </div>
+      </li>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3">
         <Card className="border-border bg-card p-4">
           <div className="flex items-center gap-2">
             <Award className="size-4 text-primary" />
-            <p className="text-xs font-medium text-muted-foreground">{t('points_title')}</p>
+            <p className="text-xs font-medium text-muted-foreground">累計ポイント</p>
           </div>
           <p className="mt-2 font-mono text-2xl font-bold tabular-nums gold-text">{data.totalPoints}</p>
         </Card>
@@ -79,24 +151,7 @@ export function PointsView({ data }: { data: PointsData; onRefresh: () => void }
             ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">現在ミッションはありません</p>
             : (
               <ul className="divide-y divide-border">
-                {dailyMissions.map(m => (
-                  <li key={m.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium truncate">{m.title}</p>
-                          {m.linkUrl && (
-                            <a href={m.linkUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                              <ExternalLink className="size-3 text-primary" />
-                            </a>
-                          )}
-                        </div>
-                        {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
-                      </div>
-                      <span className="shrink-0 font-mono text-sm font-bold text-chart-5">+{m.points} pts</span>
-                    </div>
-                  </li>
-                ))}
+                {dailyMissions.map(m => <MissionItem key={m.id} m={m} />)}
               </ul>
             )
         )}
@@ -119,24 +174,7 @@ export function PointsView({ data }: { data: PointsData; onRefresh: () => void }
             ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">現在ミッションはありません</p>
             : (
               <ul className="divide-y divide-border">
-                {weeklyMissions.map(m => (
-                  <li key={m.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium truncate">{m.title}</p>
-                          {m.linkUrl && (
-                            <a href={m.linkUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                              <ExternalLink className="size-3 text-primary" />
-                            </a>
-                          )}
-                        </div>
-                        {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
-                      </div>
-                      <span className="shrink-0 font-mono text-sm font-bold text-chart-5">+{m.points} pts</span>
-                    </div>
-                  </li>
-                ))}
+                {weeklyMissions.map(m => <MissionItem key={m.id} m={m} />)}
               </ul>
             )
         )}
@@ -145,10 +183,10 @@ export function PointsView({ data }: { data: PointsData; onRefresh: () => void }
       {/* ── ポイント履歴 ── */}
       <Card className="border-border bg-card">
         <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold">{t('points_history')}</h2>
+          <h2 className="text-sm font-semibold">ポイント履歴</h2>
         </div>
         {data.history.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-muted-foreground">{t('no_data')}</p>
+          <p className="px-4 py-10 text-center text-sm text-muted-foreground">データがありません</p>
         ) : (
           <ul className="divide-y divide-border">
             {data.history.slice(0, 20).map((h) => (

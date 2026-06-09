@@ -6,17 +6,25 @@ import { TxTypeBadge, isOutgoing } from '@/components/tx-type-badge'
 import { downloadCsv } from '@/lib/csv'
 import { formatDate, formatInmu } from '@/lib/format'
 import { useI18n } from '@/lib/i18n/context'
-import { dict } from '@/lib/i18n/dict'
 import { cn } from '@/lib/utils'
 import { Download, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 export type TxRow = { id: number; type: string; amount: string; category: string | null; counterparty: string | null; memo: string | null; createdAt: string }
 
-const TYPE_OPTIONS = ['all', 'reward', 'airdrop']
+const TYPE_OPTIONS = ['all', 'reward', 'airdrop', 'inmu_send', 'points_send', 'points_deduct']
+
+const TYPE_LABEL: Record<string, string> = {
+  all:           'すべて',
+  reward:        '報酬',
+  airdrop:       'エアドロップ',
+  inmu_send:     'INMU送金',
+  points_send:   'ポイント送金',
+  points_deduct: 'ポイント減算',
+}
 
 export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu-transactions.csv' }: { rows: TxRow[]; showTypeFilter?: boolean; filename?: string }) {
-  const { t, locale } = useI18n()
+  const { locale } = useI18n()
   const [search, setSearch] = useState('')
   const [type, setType] = useState('all')
 
@@ -31,10 +39,10 @@ export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu
   }, [rows, search, type])
 
   function handleExport() {
-    const header = [dict[locale].date, dict[locale].type, dict[locale].amount, dict[locale].counterparty, dict[locale].memo]
+    const header = ['日付', '種別', '金額', '相手先', 'メモ']
     const body = filtered.map((x) => [
       formatDate(x.createdAt, locale),
-      dict[locale][`type_${x.type}` as keyof (typeof dict)['ja']] ?? x.type,
+      TYPE_LABEL[x.type] ?? x.type,
       `${isOutgoing(x.type) ? '-' : '+'}${x.amount}`,
       x.counterparty ?? '',
       x.memo ?? '',
@@ -47,17 +55,17 @@ export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search')} className="min-h-11 pl-9 text-base" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="検索" className="min-h-11 pl-9 text-base" />
         </div>
         {showTypeFilter && (
           <Select value={type} onValueChange={(v) => setType(v ?? 'all')}>
-            <SelectTrigger className="min-h-11 sm:w-40">
-              <SelectValue placeholder={t('filter')} />
+            <SelectTrigger className="min-h-11 sm:w-44">
+              <SelectValue placeholder="絞り込み" />
             </SelectTrigger>
             <SelectContent>
               {TYPE_OPTIONS.map((opt) => (
                 <SelectItem key={opt} value={opt}>
-                  {opt === 'all' ? t('all') : t(`type_${opt}` as keyof (typeof dict)['ja'])}
+                  {TYPE_LABEL[opt] ?? opt}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -65,12 +73,12 @@ export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu
         )}
         <Button variant="outline" onClick={handleExport} className="min-h-11 gap-2">
           <Download className="size-4" />
-          {t('export_csv')}
+          CSV出力
         </Button>
       </div>
       <Card className="border-border bg-card">
         {filtered.length === 0 ? (
-          <p className="px-4 py-12 text-center text-sm text-muted-foreground">{t('no_data')}</p>
+          <p className="px-4 py-12 text-center text-sm text-muted-foreground">データがありません</p>
         ) : (
           <ul className="divide-y divide-border">
             {filtered.map((tx) => {
@@ -95,7 +103,7 @@ export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu
           </ul>
         )}
       </Card>
-      <p className="text-center text-[11px] text-muted-foreground">{filtered.length} {locale === 'ja' ? '件' : 'records'}</p>
+      <p className="text-center text-[11px] text-muted-foreground">{filtered.length} 件</p>
     </div>
   )
 }

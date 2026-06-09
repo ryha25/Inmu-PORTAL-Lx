@@ -37,6 +37,7 @@ export const profileTable = pgTable("profile", {
   totalSent: numeric("totalSent").notNull().default("0"),
   monthlyPoints: numeric("monthlyPoints").notNull().default("0"),
   participationCount: integer("participationCount").notNull().default(0),
+  passcodeHash: text("passcodeHash"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
@@ -140,6 +141,19 @@ export const auditLogTable = pgTable("auditLog", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 
+// ── INMU Bank: security log (rate limit / lock events) ──
+export const securityLogTable = pgTable("securityLog", {
+  id: serial("id").primaryKey(),
+  userId: text("userId"),
+  event: text("event").notNull(),
+  loginFailCount: integer("loginFailCount").notNull().default(0),
+  passcodeFailCount: integer("passcodeFailCount").notNull().default(0),
+  adminCodeFailCount: integer("adminCodeFailCount").notNull().default(0),
+  lockStart: timestamp("lockStart"),
+  lockUntil: timestamp("lockUntil"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
 // ── INMU Bank: activity feed ──
 export const activityFeedTable = pgTable("activityFeed", {
   id: serial("id").primaryKey(),
@@ -166,3 +180,12 @@ export const missionsTable = pgTable("missions", {
 });
 
 export type Mission = typeof missionsTable.$inferSelect;
+
+// ── INMU Bank: mission completions ──
+export const missionCompletionsTable = pgTable("missionCompletions", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  missionId: integer("missionId").notNull(),
+  period: text("period").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});

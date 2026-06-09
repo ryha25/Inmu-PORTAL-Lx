@@ -12,10 +12,43 @@ import {
   pointsTable,
   activityFeedTable,
 } from "@workspace/db/schema";
-import { eq, lt, and, isNull, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { SESSION_COOKIE, makeSessionValue } from "../middlewares/session";
 
 const router = Router();
+
+const USER_SESSION_MS = 30 * 60 * 1000;
+const LOGIN_LOCK_MS = 10 * 60 * 1000;
+const LOGIN_MAX_FAILS = 5;
+
+interface FailRecord { count: number; lockedUntil: number }
+const loginFailMap = new Map<string, FailRecord>();
+
+function checkLock(key: string): { locked: boolean; remainingMs: number } {
+  const rec = loginFailMap.get(key);
+  if (!rec) return { locked: false, remainingMs: 0 };
+  if (rec.lockedUntil > Date.now()) {
+    return { locked: true, remainingMs: rec.lockedUntil - Date.now() };
+  }
+  return { locked: false, remainingMs: 0 };
+}
+
+function recordFail(key: string, maxFails: number, lockMs: number): boolean {
+  const rec = loginFailMap.get(key) ?? { count: 0, lockedUntil: 0 };
+  rec.count++;
+  if (rec.count >= maxFails) {
+    rec.lockedUntil = Date.now() + lockMs;
+    rec.count = 0;
+    loginFailMap.set(key, rec);
+    return true;
+  }
+  loginFailMap.set(key, rec);
+  return false;
+}
+
+function recordSuccess(key: string) {
+  loginFailMap.delete(key);
+}
 
 function makeEmail(name: string): string {
   return `${name.toLowerCase().replace(/[^a-z0-9]/g, "_")}@inmu.local`;
@@ -23,7 +56,11 @@ function makeEmail(name: string): string {
 
 router.get("/session", (req, res): void => {
   if (!req.userId) {
-    res.status(401).json({ user: null });
+    if (req.sessionExpired) {
+      res.status(401).json({ user: null, expired: true });
+    } else {
+      res.status(401).json({ user: null });
+    }
     return;
   }
   res.json({
@@ -46,6 +83,15 @@ router.post("/sign-in", async (req, res): Promise<void> => {
     res.status(400).json({ error: "ユーザー名とパスワードが必要です" });
     return;
   }
+
+  const lockKey = `login:${identifier.toLowerCase()}`;
+  const lock = checkLock(lockKey);
+  if (lock.locked) {
+    const mins = Math.ceil(lock.remainingMs / 60000);
+    res.status(429).json({ error: `ログインがロックされています。${mins}分後に再試行してください。` });
+    return;
+  }
+
   try {
     const syntheticEmail = makeEmail(identifier);
     let user = await db
@@ -63,22 +109,29 @@ router.post("/sign-in", async (req, res): Promise<void> => {
     }
 
     if (!user || !user.passwordHash) {
+      recordFail(lockKey, LOGIN_MAX_FAILS, LOGIN_LOCK_MS);
       res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません" });
       return;
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
-      res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません" });
+      const locked = recordFail(lockKey, LOGIN_MAX_FAILS, LOGIN_LOCK_MS);
+      if (locked) {
+        res.status(429).json({ error: "5回失敗しました。10分間ロックされます。" });
+      } else {
+        res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません" });
+      }
       return;
     }
 
+    recordSuccess(lockKey);
     await ensureProfile(user.id, user.name);
 
     res.cookie(SESSION_COOKIE, makeSessionValue(user.id, user.email, user.name ?? ""), {
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
+      maxAge: USER_SESSION_MS,
       path: "/",
     });
     res.json({ user: { id: user.id, email: user.email, name: user.name } });
@@ -101,9 +154,8 @@ router.post("/sign-up", async (req, res): Promise<void> => {
     res.status(400).json({ error: "パスワードは8文字以上にしてください" });
     return;
   }
-  const adminCode = process.env.ADMIN_CODE;
-  if (adminCode && passcode !== adminCode) {
-    res.status(400).json({ error: "パスコードが正しくありません" });
+  if (!passcode || passcode.length < 1) {
+    res.status(400).json({ error: "パスコードを入力してください" });
     return;
   }
 
@@ -122,6 +174,7 @@ router.post("/sign-up", async (req, res): Promise<void> => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+    const passcodeHash = await bcrypt.hash(passcode, 12);
     const userId = `user-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     await db.insert(userTable).values({
@@ -131,12 +184,12 @@ router.post("/sign-up", async (req, res): Promise<void> => {
       passwordHash,
       emailVerified: false,
     });
-    await ensureProfile(userId, trimmedName);
+    await ensureProfile(userId, trimmedName, passcodeHash);
 
     res.cookie(SESSION_COOKIE, makeSessionValue(userId, email, trimmedName), {
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
+      maxAge: USER_SESSION_MS,
       path: "/",
     });
     res.status(201).json({ user: { id: userId, email, name: trimmedName } });
@@ -150,14 +203,16 @@ router.post("/sign-out", (_req, res): void => {
   res.json({ ok: true });
 });
 
-async function ensureProfile(userId: string, displayName: string) {
+async function ensureProfile(userId: string, displayName: string, passcodeHash?: string) {
   const existing = await db
     .select()
     .from(profileTable)
     .where(eq(profileTable.userId, userId))
     .then((r) => r[0]);
   if (!existing) {
-    await db.insert(profileTable).values({ userId, displayName });
+    await db.insert(profileTable).values({ userId, displayName, passcodeHash });
+  } else if (passcodeHash && !existing.passcodeHash) {
+    await db.update(profileTable).set({ passcodeHash }).where(eq(profileTable.userId, userId));
   }
 }
 

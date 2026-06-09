@@ -1,12 +1,31 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { missionsTable } from "@workspace/db/schema";
-import { eq, and, or, isNull, gte, lte, sql } from "drizzle-orm";
+import {
+  missionsTable,
+  missionCompletionsTable,
+  profileTable,
+  pointsTable,
+  notificationsTable,
+} from "@workspace/db/schema";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
-router.get("/missions", requireAuth, async (_req, res): Promise<void> => {
+function getPeriod(type: string): string {
+  const now = new Date();
+  if (type === "weekly") {
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    const startOfYear = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const week = Math.ceil(((d.getTime() - startOfYear.getTime()) / 86400000 + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+  }
+  return now.toISOString().slice(0, 10);
+}
+
+router.get("/missions", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
   try {
     const now = new Date();
     const missions = await db
@@ -19,10 +38,109 @@ router.get("/missions", requireAuth, async (_req, res): Promise<void> => {
       return true;
     });
 
-    const daily = active.filter((m) => m.type === "daily");
-    const weekly = active.filter((m) => m.type === "weekly");
+    const dailyPeriod = getPeriod("daily");
+    const weeklyPeriod = getPeriod("weekly");
+
+    const completions = await db
+      .select({
+        missionId: missionCompletionsTable.missionId,
+        period: missionCompletionsTable.period,
+      })
+      .from(missionCompletionsTable)
+      .where(eq(missionCompletionsTable.userId, userId));
+
+    const completedSet = new Set(completions.map((c) => `${c.missionId}:${c.period}`));
+
+    const daily = active
+      .filter((m) => m.type === "daily")
+      .map((m) => ({ ...m, completed: completedSet.has(`${m.id}:${dailyPeriod}`) }));
+
+    const weekly = active
+      .filter((m) => m.type === "weekly")
+      .map((m) => ({ ...m, completed: completedSet.has(`${m.id}:${weeklyPeriod}`) }));
 
     res.json({ daily, weekly });
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/missions/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const missionId = Number(req.params.id);
+  if (isNaN(missionId)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  try {
+    const mission = await db
+      .select()
+      .from(missionsTable)
+      .where(eq(missionsTable.id, missionId))
+      .then((r) => r[0]);
+
+    if (!mission || !mission.isActive) {
+      res.status(404).json({ error: "ミッションが見つかりません" });
+      return;
+    }
+
+    const now = new Date();
+    if (mission.endAt && mission.endAt < now) {
+      res.status(400).json({ error: "このミッションは終了しています" });
+      return;
+    }
+
+    const period = getPeriod(mission.type);
+
+    const already = await db
+      .select()
+      .from(missionCompletionsTable)
+      .where(
+        and(
+          eq(missionCompletionsTable.userId, userId),
+          eq(missionCompletionsTable.missionId, missionId),
+          eq(missionCompletionsTable.period, period),
+        ),
+      )
+      .then((r) => r[0]);
+
+    if (already) {
+      res.status(409).json({
+        error: "already_completed",
+        message: "このミッションは既に達成済みです",
+      });
+      return;
+    }
+
+    await db.insert(missionCompletionsTable).values({ userId, missionId, period });
+
+    if (mission.points > 0) {
+      const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      await db.insert(pointsTable).values({
+        userId,
+        amount: String(mission.points),
+        type: "mission",
+        source: mission.title,
+        month,
+      });
+      await db
+        .update(profileTable)
+        .set({
+          monthlyPoints: sql`${profileTable.monthlyPoints} + ${mission.points}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(profileTable.userId, userId));
+    }
+
+    await db.insert(notificationsTable).values({
+      userId,
+      type: "mission",
+      title: `ミッション達成！`,
+      message: `「${mission.title}」を達成して ${mission.points} ポイントを獲得しました`,
+    });
+
+    res.json({ ok: true, points: mission.points });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -78,7 +196,10 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
 
 router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
   const { title, description, type, points, startAt, endAt, linkUrl, isActive } =
     req.body as {
       title?: string;
@@ -112,7 +233,10 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
 
 router.delete("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
   try {
     await db.delete(missionsTable).where(eq(missionsTable.id, id));
     res.json({ ok: true });
