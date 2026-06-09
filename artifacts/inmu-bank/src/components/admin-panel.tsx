@@ -43,7 +43,21 @@ function getPhantom(): PhantomProvider | null {
   if (window.solana?.isPhantom) return window.solana
   return null
 }
+function isMobile() { return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) }
+function isIOS() { return /iPhone|iPad|iPod/i.test(navigator.userAgent) }
+function openPhantomBrowser() {
+  const url = encodeURIComponent(window.location.href)
+  const ref = encodeURIComponent(window.location.origin)
+  const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
+  if (isIOS()) {
+    window.location.href = phantomUrl
+  } else {
+    window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+  }
+}
 function getAdminRpcUrl() { return `${window.location.origin}/api/solana/rpc-proxy` }
+
+const PHANTOM_PENDING_KEY = 'inmu_admin_pending_purchase_review'
 
 type AuditRow = {
   id: number
@@ -65,15 +79,19 @@ type TradeTxRow = {
 }
 
 const CONDITION_TYPE_OPTIONS = [
-  { value: 'none',               label: '条件なし' },
-  { value: 'link_visit',         label: 'リンク訪問' },
-  { value: 'inmu_balance',       label: 'INMU保有枚数' },
-  { value: 'login_streak',       label: '連続ログイン日数' },
-  { value: 'login_total',        label: '累計ログイン日数' },
-  { value: 'buy_daily',          label: 'デイリー購入枚数' },
-  { value: 'buy_weekly',         label: 'ウィークリー購入枚数' },
-  { value: 'buy_total',          label: '累計購入枚数' },
-  { value: 'daily_weekly_count', label: 'デイリーミッション週間クリア数' },
+  { value: 'none',                    label: '条件なし' },
+  { value: 'link_visit',              label: 'リンク訪問' },
+  { value: 'inmu_balance',            label: 'INMU保有枚数' },
+  { value: 'login_streak',            label: '連続ログイン日数' },
+  { value: 'login_total',             label: '累計ログイン日数' },
+  { value: 'buy_daily',               label: 'デイリー購入枚数' },
+  { value: 'buy_weekly',              label: 'ウィークリー購入枚数' },
+  { value: 'buy_total',               label: '累計購入枚数' },
+  { value: 'daily_weekly_count',      label: 'デイリーミッション週間クリア数' },
+  { value: 'total_clears',            label: 'ミッションクリア回数（全種合計）' },
+  { value: 'daily_clears_total',      label: 'デイリーミッションクリア累計' },
+  { value: 'weekly_clears_total',     label: 'ウィークリーミッションクリア累計' },
+  { value: 'achievement_clears_total',label: 'アチーブメント達成数' },
 ]
 
 type MissionRow = {
@@ -89,6 +107,7 @@ type MissionRow = {
   createdAt: string
   conditionType: string | null
   conditionValue: string | null
+  prerequisiteMissionId: number | null
 }
 
 type TxRow = {
@@ -303,7 +322,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [pointsAmount, setPointsAmount] = useState('')
   const [deductPointsAmount, setDeductPointsAmount] = useState('')
   const [missions, setMissions] = useState<MissionRow[]>([])
-  const [missionForm, setMissionForm] = useState({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' })
+  const [missionForm, setMissionForm] = useState({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '', prerequisiteMissionId: '' })
   const [editingMissionId, setEditingMissionId] = useState<number | null>(null)
 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
@@ -331,6 +350,23 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [prRebateRate, setPrRebateRate] = useState('')
   const [prAdminNote, setPrAdminNote] = useState('')
   const [prSaving, setPrSaving] = useState(false)
+
+  // Phantomブラウザへのリダイレクト後にフォーム状態を復元
+  useEffect(() => {
+    if (!getPhantom()) return
+    try {
+      const raw = sessionStorage.getItem(PHANTOM_PENDING_KEY)
+      if (!raw) return
+      sessionStorage.removeItem(PHANTOM_PENDING_KEY)
+      const saved = JSON.parse(raw) as { id: number; status: string; rebateAmount: string; rebateRate: string; adminNote: string }
+      setPrEditId(saved.id)
+      setPrStatus(saved.status ?? 'approved')
+      setPrRebateAmount(saved.rebateAmount ?? '')
+      setPrRebateRate(saved.rebateRate ?? '')
+      setPrAdminNote(saved.adminNote ?? '')
+      toast.info('Phantomブラウザで再開しました。「保存」を押して署名してください。', { duration: 6000 })
+    } catch { /* ignore */ }
+  }, [])
 
   // ── システム設定 ──
   const [systemSettings, setSystemSettings] = useState<SystemSettingRow[]>([])
@@ -487,8 +523,29 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         }
         const phantom = getPhantom()
         if (!phantom) {
-          toast.error('Phantom ウォレットが見つかりません。管理者ブラウザにPhantomをインストールしてください。')
+          // Save form state so it can be restored after Phantom redirect
+          try {
+            sessionStorage.setItem(PHANTOM_PENDING_KEY, JSON.stringify({
+              id,
+              status: prStatus,
+              rebateAmount: prRebateAmount,
+              rebateRate: prRebateRate,
+              adminNote: prAdminNote,
+            }))
+          } catch { /* ignore */ }
           setPrSaving(false)
+          if (isMobile()) {
+            toast.info('Phantomアプリに切り替えています…')
+            setTimeout(() => openPhantomBrowser(), 600)
+          } else {
+            toast.error('Phantom ウォレットが見つかりません。Phantom拡張機能をインストールしてください。', {
+              action: {
+                label: 'Phantomをインストール',
+                onClick: () => window.open('https://phantom.app/', '_blank'),
+              },
+              duration: 8000,
+            })
+          }
           return
         }
         try {
@@ -1391,6 +1448,31 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
                     {isEditing && (
                       <div className="border-t border-border pt-2 flex flex-col gap-2">
+                        {/* Phantom案内バナー */}
+                        {prStatus === 'approved' && prRebateAmount && Number(prRebateAmount) > 0 && !getPhantom() && (
+                          <div className="flex items-start gap-2 rounded-lg border border-blue-400/30 bg-blue-50/10 px-3 py-2">
+                            <span className="text-blue-400 text-base leading-none mt-0.5">⟐</span>
+                            <div className="flex-1 min-w-0">
+                              {isMobile() ? (
+                                <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed">
+                                  「保存」を押すとPhantomアプリが起動し、INMUを送金できます。
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed">
+                                  Phantom拡張機能が必要です。
+                                  <button
+                                    type="button"
+                                    className="underline ml-1"
+                                    onClick={() => window.open('https://phantom.app/', '_blank')}
+                                  >
+                                    インストール
+                                  </button>
+                                  するか、スマホのPhantomブラウザで開いてください。
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <select
                             value={prStatus}
@@ -1418,7 +1500,11 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                         <Input placeholder="管理メモ（任意）" value={prAdminNote}
                           onChange={e => setPrAdminNote(e.target.value)} className="min-h-9" />
                         <Button className="min-h-9" disabled={prSaving} onClick={() => savePurchaseReview(pr.id)}>
-                          {prSaving ? '保存中…' : '保存'}
+                          {prSaving ? '保存中…' : (
+                            prStatus === 'approved' && prRebateAmount && Number(prRebateAmount) > 0 && !getPhantom() && isMobile()
+                              ? '保存 → Phantomで署名'
+                              : '保存'
+                          )}
                         </Button>
                       </div>
                     )}

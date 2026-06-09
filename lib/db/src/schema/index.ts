@@ -198,6 +198,7 @@ export const missionsTable = pgTable("missions", {
   isActive: boolean("isActive").notNull().default(true),
   conditionType: text("conditionType"),
   conditionValue: numeric("conditionValue"),
+  prerequisiteMissionId: integer("prerequisiteMissionId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 

@@ -6,7 +6,7 @@ import { useI18n } from '@/lib/i18n/context'
 import { formatDate } from '@/lib/format'
 import {
   Award, Flame, ChevronDown, ChevronUp, ExternalLink,
-  CheckCircle2, ShoppingCart, Clock, XCircle, Star, Zap,
+  CheckCircle2, ShoppingCart, Clock, XCircle, Star, Zap, Lock,
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
@@ -34,6 +34,8 @@ type Mission = {
   conditionValue: string | null
   conditionMet: boolean | null
   conditionCurrent: number | null
+  locked: boolean
+  prerequisiteMissionTitle: string | null
 }
 
 type PurchaseRequest = {
@@ -70,9 +72,10 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
   const [busy, setBusy] = useState<number | null>(null)
 
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([])
-  const [adminLimit,       setAdminLimit]       = useState<number>(1000000)
-  const [userPurchased,    setUserPurchased]    = useState<number>(0)
-  const [effectiveLimit,   setEffectiveLimit]   = useState<number>(1000000)
+  const [adminLimit,     setAdminLimit]     = useState<number>(1000000)
+  const [totalBought,    setTotalBought]    = useState<number>(0)
+  const [totalApplied,   setTotalApplied]   = useState<number>(0)
+  const [effectiveLimit, setEffectiveLimit] = useState<number>(1000000)
   const [prAmount,  setPrAmount]  = useState('')
   const [prTxHash,  setPrTxHash]  = useState('')
   const [prComment, setPrComment] = useState('')
@@ -99,7 +102,8 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         if (d) {
           setPurchaseRequests(d.requests ?? [])
           setAdminLimit(d.adminLimit ?? 1000000)
-          setUserPurchased(d.userPurchased ?? 0)
+          setTotalBought(d.totalBought ?? 0)
+          setTotalApplied(d.totalApplied ?? 0)
           setEffectiveLimit(d.effectiveLimit ?? d.adminLimit ?? 1000000)
         }
       })
