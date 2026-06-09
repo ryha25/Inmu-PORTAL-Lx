@@ -846,8 +846,16 @@ router.get("/admin/emergency-auth", requireAdmin, async (_req, res): Promise<voi
 router.get("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Promise<void> => {
   try {
     const { userId } = req.params;
-    const [row] = await db.select().from(emergencyAuthTable).where(eq(emergencyAuthTable.userId, userId));
-    res.json(row ?? { userId, passwordEnabled: false, passcodeEnabled: false, emergencyPasswordHash: null, emergencyPasscodeHash: null });
+    const [row] = await db.select({
+      userId: emergencyAuthTable.userId,
+      passwordEnabled: emergencyAuthTable.passwordEnabled,
+      passcodeEnabled: emergencyAuthTable.passcodeEnabled,
+      hasPassword: sql<boolean>`(${emergencyAuthTable.emergencyPasswordHash} IS NOT NULL)`,
+      hasPasscode: sql<boolean>`(${emergencyAuthTable.emergencyPasscodeHash} IS NOT NULL)`,
+      setByAdminId: emergencyAuthTable.setByAdminId,
+      updatedAt: emergencyAuthTable.updatedAt,
+    }).from(emergencyAuthTable).where(eq(emergencyAuthTable.userId, userId));
+    res.json(row ?? { userId, passwordEnabled: false, passcodeEnabled: false, hasPassword: false, hasPasscode: false });
   } catch { res.status(500).json({ error: "Internal error" }); }
 });
 
