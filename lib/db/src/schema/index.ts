@@ -199,6 +199,8 @@ export const missionsTable = pgTable("missions", {
   conditionType: text("conditionType"),
   conditionValue: numeric("conditionValue"),
   prerequisiteMissionId: integer("prerequisiteMissionId"),
+  prerequisiteConditionType: text("prerequisiteConditionType"),
+  prerequisiteConditionValue: numeric("prerequisiteConditionValue"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 

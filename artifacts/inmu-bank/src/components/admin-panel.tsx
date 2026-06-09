@@ -78,6 +78,20 @@ type TradeTxRow = {
   tradedAt: string
 }
 
+const PREREQUISITE_TYPE_OPTIONS = [
+  { value: 'none',                     label: '前提条件なし' },
+  { value: 'mission',                  label: '特定ミッション完了' },
+  { value: 'total_clears',             label: 'ミッションクリア回数（全種合計）' },
+  { value: 'daily_clears_total',       label: 'デイリークリア累計' },
+  { value: 'weekly_clears_total',      label: 'ウィークリークリア累計' },
+  { value: 'achievement_clears_total', label: 'アチーブメント達成数' },
+  { value: 'login_total',              label: '累計ログイン日数' },
+  { value: 'login_streak',             label: '連続ログイン日数' },
+  { value: 'inmu_balance',             label: 'INMU保有枚数' },
+  { value: 'buy_total',                label: '累計購入枚数' },
+  { value: 'monthly_points',           label: 'ポイント保有数' },
+]
+
 const CONDITION_TYPE_OPTIONS = [
   { value: 'none',                    label: '条件なし' },
   { value: 'link_visit',              label: 'リンク訪問' },
@@ -108,6 +122,8 @@ type MissionRow = {
   conditionType: string | null
   conditionValue: string | null
   prerequisiteMissionId: number | null
+  prerequisiteConditionType: string | null
+  prerequisiteConditionValue: string | null
 }
 
 type TxRow = {
@@ -322,7 +338,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [pointsAmount, setPointsAmount] = useState('')
   const [deductPointsAmount, setDeductPointsAmount] = useState('')
   const [missions, setMissions] = useState<MissionRow[]>([])
-  const [missionForm, setMissionForm] = useState({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '', prerequisiteMissionId: '' })
+  const [missionForm, setMissionForm] = useState({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '', prerequisiteType: 'none', prerequisiteValue: '' })
   const [editingMissionId, setEditingMissionId] = useState<number | null>(null)
 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
@@ -635,14 +651,20 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   }
 
   async function saveMission() {
-    const { title, description, type, points, startAt, endAt, linkUrl, conditionType, conditionValue } = missionForm
+    const { title, description, type, points, startAt, endAt, linkUrl, conditionType, conditionValue, prerequisiteType, prerequisiteValue } = missionForm
     if (!title.trim()) { toast.error('タイトルが必要です'); return }
     const condTypeVal = conditionType === 'none' ? null : conditionType
     const condValueVal = condTypeVal && conditionValue ? Number(conditionValue) : null
+    const prereqMissionId = prerequisiteType === 'mission' ? (Number(prerequisiteValue) || null) : null
+    const prereqCondType = (prerequisiteType !== 'none' && prerequisiteType !== 'mission') ? prerequisiteType : null
+    const prereqCondValue = prereqCondType && prerequisiteValue ? Number(prerequisiteValue) : null
     const payload = {
       title, description, type, points: Number(points) || 0,
       startAt: startAt || null, endAt: endAt || null, linkUrl: linkUrl || null,
       conditionType: condTypeVal, conditionValue: condValueVal,
+      prerequisiteMissionId: prereqMissionId,
+      prerequisiteConditionType: prereqCondType,
+      prerequisiteConditionValue: prereqCondValue,
     }
     try {
       if (editingMissionId !== null) {
@@ -650,7 +672,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       } else {
         await api('/admin/missions', 'POST', payload)
       }
-      setMissionForm({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' })
+      setMissionForm({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '', prerequisiteType: 'none', prerequisiteValue: '' })
       setEditingMissionId(null)
       await loadMissions()
       toast.success('保存しました')
@@ -1065,6 +1087,41 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                   />
                 )}
               </div>
+              {/* 段階解放（前提条件） */}
+              <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-secondary/10 p-3">
+                <Label className="text-xs text-muted-foreground font-semibold">🔒 段階解放（前提条件）</Label>
+                <select
+                  value={missionForm.prerequisiteType}
+                  onChange={e => setMissionForm(f => ({ ...f, prerequisiteType: e.target.value, prerequisiteValue: '' }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {PREREQUISITE_TYPE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                {missionForm.prerequisiteType === 'mission' && (
+                  <select
+                    value={missionForm.prerequisiteValue}
+                    onChange={e => setMissionForm(f => ({ ...f, prerequisiteValue: e.target.value }))}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">前提ミッションを選択</option>
+                    {missions.filter(m => editingMissionId === null || m.id !== editingMissionId).map(m => (
+                      <option key={m.id} value={String(m.id)}>{m.title}</option>
+                    ))}
+                  </select>
+                )}
+                {missionForm.prerequisiteType !== 'none' && missionForm.prerequisiteType !== 'mission' && (
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="しきい値（この数値以上で解放）"
+                    value={missionForm.prerequisiteValue}
+                    onChange={e => setMissionForm(f => ({ ...f, prerequisiteValue: e.target.value }))}
+                    className="min-h-10"
+                  />
+                )}
+              </div>
               <div className="flex gap-2">
                 <div className="flex flex-col gap-1 flex-1">
                   <Label className="text-xs text-muted-foreground">開始日時</Label>
@@ -1094,7 +1151,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     variant="outline"
                     onClick={() => {
                       setEditingMissionId(null)
-                      setMissionForm({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' })
+                      setMissionForm({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '', prerequisiteType: 'none', prerequisiteValue: '' })
                     }}
                     className="min-h-10"
                   >
@@ -1130,6 +1187,14 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                           {m.conditionValue && m.conditionType !== 'link_visit' ? ` — ${Number(m.conditionValue).toLocaleString()}` : ''}
                         </p>
                       )}
+                      {(m.prerequisiteMissionId || m.prerequisiteConditionType) && (
+                        <p className="text-[10px] text-yellow-600 dark:text-yellow-400 mt-0.5 ml-6">
+                          🔒 解放条件: {m.prerequisiteMissionId
+                            ? `ミッション完了 #${m.prerequisiteMissionId}`
+                            : `${PREREQUISITE_TYPE_OPTIONS.find(o => o.value === m.prerequisiteConditionType)?.label ?? m.prerequisiteConditionType} ≥ ${Number(m.prerequisiteConditionValue).toLocaleString()}`
+                          }
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-1 shrink-0">
                       <Button
@@ -1138,6 +1203,12 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                         className="size-8 p-0"
                         onClick={() => {
                           setEditingMissionId(m.id)
+                          const preType = m.prerequisiteMissionId
+                            ? 'mission'
+                            : m.prerequisiteConditionType ?? 'none'
+                          const preValue = m.prerequisiteMissionId
+                            ? String(m.prerequisiteMissionId)
+                            : m.prerequisiteConditionValue ?? ''
                           setMissionForm({
                             title: m.title,
                             description: m.description ?? '',
@@ -1148,6 +1219,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                             linkUrl: m.linkUrl ?? '',
                             conditionType: m.conditionType ?? 'none',
                             conditionValue: m.conditionValue ?? '',
+                            prerequisiteType: preType,
+                            prerequisiteValue: preValue,
                           })
                         }}
                       >

@@ -91,9 +91,22 @@ const CONDITION_TYPES_NEEDING_VALUE = new Set([
   "buy_daily", "buy_weekly", "buy_total",
   "daily_weekly_count", "total_clears",
   "daily_clears_total", "weekly_clears_total", "achievement_clears_total",
+  "monthly_points",
 ]);
 
 const VALID_MISSION_TYPES = new Set(["daily", "weekly", "achievement", "event"]);
+
+const PREREQ_LABEL_MAP: Record<string, string> = {
+  total_clears:             "全ミッションクリア回数",
+  daily_clears_total:       "デイリークリア累計",
+  weekly_clears_total:      "ウィークリークリア累計",
+  achievement_clears_total: "アチーブメント達成数",
+  login_total:              "累計ログイン日数",
+  login_streak:             "連続ログイン日数",
+  inmu_balance:             "INMU保有枚数",
+  buy_total:                "累計購入枚数",
+  monthly_points:           "ポイント保有数",
+};
 
 router.get("/missions", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
@@ -108,7 +121,9 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
     const weekStart    = getWeekStart();
 
     // Check if any mission needs real on-chain INMU balance
-    const needsInmuBalance = active.some(m => m.conditionType === "inmu_balance");
+    const needsInmuBalance = active.some(m =>
+      m.conditionType === "inmu_balance" || m.prerequisiteConditionType === "inmu_balance"
+    );
 
     const [
       participations,
@@ -196,13 +211,28 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
     }
 
     function isLocked(mission: typeof missions[0]): boolean {
-      if (!mission.prerequisiteMissionId) return false;
-      return !rewardedMissionIds.has(mission.prerequisiteMissionId);
+      if (mission.prerequisiteMissionId) {
+        if (!rewardedMissionIds.has(mission.prerequisiteMissionId)) return true;
+      }
+      if (mission.prerequisiteConditionType && mission.prerequisiteConditionValue) {
+        const { conditionMet } = getConditionStatus(
+          mission.prerequisiteConditionType,
+          mission.prerequisiteConditionValue,
+        );
+        if (!conditionMet) return true;
+      }
+      return false;
     }
 
     function getPrereqTitle(mission: typeof missions[0]): string | null {
-      if (!mission.prerequisiteMissionId) return null;
-      return missions.find(m => m.id === mission.prerequisiteMissionId)?.title ?? null;
+      if (mission.prerequisiteMissionId) {
+        return missions.find(m => m.id === mission.prerequisiteMissionId)?.title ?? null;
+      }
+      if (mission.prerequisiteConditionType && mission.prerequisiteConditionValue) {
+        const label = PREREQ_LABEL_MAP[mission.prerequisiteConditionType] ?? mission.prerequisiteConditionType;
+        return `${label}: ${Number(mission.prerequisiteConditionValue).toLocaleString()}以上`;
+      }
+      return null;
     }
 
     function getConditionStatus(condType: string | null, condVal: string | null) {
@@ -235,6 +265,8 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         current = Number(weeklyClearsRow?.cnt ?? 0);
       } else if (condType === "achievement_clears_total") {
         current = Number(achievementClearsRow?.cnt ?? 0);
+      } else if (condType === "monthly_points") {
+        current = Number(profile?.monthlyPoints ?? 0);
       }
 
       if (current === null) return { conditionMet: null as boolean | null, conditionCurrent: null as number | null };
@@ -274,7 +306,7 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
     const now = new Date();
     if (mission.endAt && mission.endAt < now) { res.status(400).json({ error: "このミッションは終了しています" }); return; }
 
-    // Check prerequisite
+    // Check mission-id prerequisite
     if (mission.prerequisiteMissionId) {
       const prereq = await db.select({ status: missionParticipationsTable.status })
         .from(missionParticipationsTable)
@@ -283,6 +315,16 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
       if (!prereq) {
         const prereqMission = await db.select({ title: missionsTable.title }).from(missionsTable).where(eq(missionsTable.id, mission.prerequisiteMissionId)).then(r => r[0]);
         res.status(400).json({ error: `「${prereqMission?.title ?? "前のミッション"}」を先に達成してください` });
+        return;
+      }
+    }
+    // Check count-based prerequisite
+    if (mission.prerequisiteConditionType && mission.prerequisiteConditionValue) {
+      const profile = await db.select().from(profileTable).where(eq(profileTable.userId, userId)).then(r => r[0]);
+      const result = await checkPrerequisiteCondition(userId, mission.prerequisiteConditionType, Number(mission.prerequisiteConditionValue), profile ?? null);
+      if (!result.met) {
+        const label = PREREQ_LABEL_MAP[mission.prerequisiteConditionType] ?? mission.prerequisiteConditionType;
+        res.status(400).json({ error: `段階解放条件未達成: ${label} ${Number(mission.prerequisiteConditionValue).toLocaleString()}以上が必要です` });
         return;
       }
     }
@@ -310,8 +352,8 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
 
 async function checkCondition(
   userId: string,
-  mission: { conditionType: string | null; conditionValue: string | null; prerequisiteMissionId: number | null },
-  profile: { solWallet: string | null; totalBought: string | null; totalSold: string | null } | null
+  mission: { conditionType: string | null; conditionValue: string | null; prerequisiteMissionId?: number | null },
+  profile: { solWallet?: string | null; totalBought?: string | null; totalSold?: string | null; monthlyPoints?: string | null } | null
 ): Promise<{ met: boolean; errorMsg?: string }> {
   const condType = mission.conditionType;
   const condVal = mission.conditionValue ? Number(mission.conditionValue) : null;
@@ -387,9 +429,16 @@ async function checkCondition(
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "achievement")));
     const cur = Number(row?.cnt ?? 0);
     if (cur < condVal) return { met: false, errorMsg: `アチーブメント達成数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+  } else if (condType === "monthly_points") {
+    const cur = Number(profile?.monthlyPoints ?? 0);
+    if (cur < condVal) return { met: false, errorMsg: `ポイント保有数が不足しています（必要: ${condVal.toLocaleString()}pt、現在: ${cur.toLocaleString()}pt）` };
   }
 
   return { met: true };
+}
+
+async function checkPrerequisiteCondition(userId: string, condType: string, threshold: number, profile: { solWallet?: string | null; totalBought?: string | null; totalSold?: string | null; monthlyPoints?: string | null } | null): Promise<{ met: boolean; errorMsg?: string }> {
+  return checkCondition(userId, { conditionType: condType, conditionValue: String(threshold) }, profile);
 }
 
 router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void> => {
@@ -409,7 +458,7 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
     if (existing.status === "rewarded") { res.status(409).json({ error: "already_completed" }); return; }
     if (existing.status === "achieved") { res.json({ ok: true, status: "achieved" }); return; }
 
-    // Check prerequisite
+    // Check mission-id prerequisite
     if (mission.prerequisiteMissionId) {
       const prereq = await db.select({ status: missionParticipationsTable.status })
         .from(missionParticipationsTable)
@@ -422,6 +471,17 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
     }
 
     const profile = await db.select().from(profileTable).where(eq(profileTable.userId, userId)).then(r => r[0]);
+
+    // Check count-based prerequisite
+    if (mission.prerequisiteConditionType && mission.prerequisiteConditionValue) {
+      const prereqResult = await checkPrerequisiteCondition(userId, mission.prerequisiteConditionType, Number(mission.prerequisiteConditionValue), profile ?? null);
+      if (!prereqResult.met) {
+        const label = PREREQ_LABEL_MAP[mission.prerequisiteConditionType] ?? mission.prerequisiteConditionType;
+        res.status(400).json({ error: `段階解放条件未達成: ${label} ${Number(mission.prerequisiteConditionValue).toLocaleString()}以上が必要です` });
+        return;
+      }
+    }
+
     const result = await checkCondition(userId, mission, profile ?? null);
     if (!result.met) {
       res.status(400).json({ error: result.errorMsg ?? "条件を満たしていません" });
@@ -491,7 +551,9 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
 
 router.get("/admin/missions", requireAdmin, async (_req, res): Promise<void> => {
   try {
-    const missions = await db.select().from(missionsTable).orderBy(sql`${missionsTable.createdAt} DESC`);
+    const missions = await db.select().from(missionsTable)
+      .where(eq(missionsTable.isActive, true))
+      .orderBy(sql`${missionsTable.createdAt} DESC`);
     res.json(missions);
   } catch {
     res.status(500).json({ error: "Internal error" });
@@ -499,8 +561,8 @@ router.get("/admin/missions", requireAdmin, async (_req, res): Promise<void> => 
 });
 
 router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => {
-  const { title, description, type, points, startAt, endAt, linkUrl, isActive, conditionType, conditionValue, prerequisiteMissionId } =
-    req.body as { title?: string; description?: string; type?: string; points?: number; startAt?: string; endAt?: string; linkUrl?: string; isActive?: boolean; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null };
+  const { title, description, type, points, startAt, endAt, linkUrl, isActive, conditionType, conditionValue, prerequisiteMissionId, prerequisiteConditionType, prerequisiteConditionValue } =
+    req.body as { title?: string; description?: string; type?: string; points?: number; startAt?: string; endAt?: string; linkUrl?: string; isActive?: boolean; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; prerequisiteConditionType?: string | null; prerequisiteConditionValue?: number | null };
   if (!title?.trim() || !type) { res.status(400).json({ error: "title and type required" }); return; }
   const validType = VALID_MISSION_TYPES.has(type) ? type : "daily";
   try {
@@ -516,6 +578,8 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
       conditionType: conditionType || null,
       conditionValue: conditionValue != null ? String(conditionValue) : null,
       prerequisiteMissionId: prerequisiteMissionId ?? null,
+      prerequisiteConditionType: prerequisiteConditionType ?? null,
+      prerequisiteConditionValue: prerequisiteConditionValue != null ? String(prerequisiteConditionValue) : null,
     }).returning();
     res.status(201).json(mission);
   } catch {
@@ -526,8 +590,8 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
 router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { title, description, type, points, startAt, endAt, linkUrl, isActive, conditionType, conditionValue, prerequisiteMissionId } =
-    req.body as { title?: string; description?: string; type?: string; points?: number; startAt?: string | null; endAt?: string | null; linkUrl?: string | null; isActive?: boolean; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null };
+  const { title, description, type, points, startAt, endAt, linkUrl, isActive, conditionType, conditionValue, prerequisiteMissionId, prerequisiteConditionType, prerequisiteConditionValue } =
+    req.body as { title?: string; description?: string; type?: string; points?: number; startAt?: string | null; endAt?: string | null; linkUrl?: string | null; isActive?: boolean; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; prerequisiteConditionType?: string | null; prerequisiteConditionValue?: number | null };
   try {
     await db.update(missionsTable).set({
       ...(title !== undefined && { title: title.trim() }),
@@ -541,6 +605,8 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
       ...(conditionType !== undefined && { conditionType: conditionType || null }),
       ...(conditionValue !== undefined && { conditionValue: conditionValue != null ? String(conditionValue) : null }),
       ...(prerequisiteMissionId !== undefined && { prerequisiteMissionId: prerequisiteMissionId ?? null }),
+      ...(prerequisiteConditionType !== undefined && { prerequisiteConditionType: prerequisiteConditionType ?? null }),
+      ...(prerequisiteConditionValue !== undefined && { prerequisiteConditionValue: prerequisiteConditionValue != null ? String(prerequisiteConditionValue) : null }),
     }).where(eq(missionsTable.id, id));
     res.json({ ok: true });
   } catch {
