@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { profileTable, tradeHistoryTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
@@ -28,7 +28,6 @@ const DEX_LABELS: Record<string, string> = {
 const RPC_ENDPOINTS = [
   "https://api.mainnet-beta.solana.com",
   "https://solana-api.projectserum.com",
-  "https://rpc.hellomoon.io/public",
 ];
 
 async function rpcFetch(body: unknown): Promise<Response> {
@@ -88,12 +87,14 @@ async function fetchTokenAccountAddresses(wallet: string): Promise<string[]> {
   return (data.result?.value ?? []).map((a) => a.pubkey);
 }
 
-async function fetchSignatures(tokenAccountAddr: string, limit = 50) {
+async function fetchSignatures(tokenAccountAddr: string, limit = 50, until?: string) {
+  const opts: Record<string, unknown> = { limit };
+  if (until) opts.until = until;
   const res = await rpcFetch({
     jsonrpc: "2.0",
     id: 1,
     method: "getSignaturesForAddress",
-    params: [tokenAccountAddr, { limit }],
+    params: [tokenAccountAddr, opts],
   });
   const data = await res.json() as {
     result?: Array<{ signature: string; blockTime: number | null; err: unknown }>;
@@ -128,100 +129,134 @@ async function fetchTransaction(sig: string) {
   return data.result ?? null;
 }
 
-async function doScanTrades(userId: string, walletAddress: string): Promise<{ added: number; total: number }> {
-  const existing = await db
-    .select({ txSignature: tradeHistoryTable.txSignature })
-    .from(tradeHistoryTable)
-    .where(eq(tradeHistoryTable.userId, userId));
-  const existingSet = new Set(existing.map((e) => e.txSignature));
+// 並列TX取得のバッチサイズ
+const TX_FETCH_CONCURRENCY = 5;
 
-  const tokenAccounts = await fetchTokenAccountAddresses(walletAddress);
-  if (tokenAccounts.length === 0) return { added: 0, total: 0 };
+async function doScanTrades(userId: string, walletAddress: string): Promise<{ added: number; total: number; differential: boolean }> {
+  const t0 = Date.now();
+
+  // ① 既存シグネチャ一覧 と トークンアカウント を並列取得
+  const [existingRows, tokenAccounts] = await Promise.all([
+    db.select({ txSignature: tradeHistoryTable.txSignature, tradedAt: tradeHistoryTable.tradedAt })
+      .from(tradeHistoryTable)
+      .where(eq(tradeHistoryTable.userId, userId)),
+    fetchTokenAccountAddresses(walletAddress),
+  ]);
+
+  const existingSet = new Set(existingRows.map((e) => e.txSignature));
+  if (tokenAccounts.length === 0) return { added: 0, total: existingSet.size, differential: false };
+
+  // ② 差分取得のアンカー: 最新既知シグネチャを "until" に使う
+  //    → 次回スキャンでその署名以前は読まなくて済む
+  const latestKnown = existingRows.sort((a, b) => b.tradedAt.getTime() - a.tradedAt.getTime())[0];
+  const untilSig = latestKnown?.txSignature;
+  const differential = !!untilSig;
 
   let added = 0;
 
   for (const tokenAccount of tokenAccounts) {
     let signatures: Awaited<ReturnType<typeof fetchSignatures>>;
     try {
-      signatures = await fetchSignatures(tokenAccount, 100);
+      // "until" を渡すと、その署名より新しいものだけを返す（差分取得）
+      signatures = await fetchSignatures(tokenAccount, 100, untilSig);
     } catch (e) {
       console.warn("[Scan] fetchSignatures failed:", e);
       continue;
     }
 
-    const newSigs = signatures
-      .filter((s) => s.err === null && s.blockTime !== null && !existingSet.has(s.signature))
-      .slice(0, 30);
+    const newSigs = signatures.filter(
+      (s) => s.err === null && s.blockTime !== null && !existingSet.has(s.signature),
+    );
 
-    for (const sigInfo of newSigs) {
-      const tx = await fetchTransaction(sigInfo.signature).catch(() => null);
-      if (!tx || tx.meta?.err !== null) continue;
+    if (newSigs.length === 0) continue;
 
-      const accountKeys: string[] = tx.transaction?.message?.accountKeys ?? [];
-      const matchedDex = accountKeys.find((k) => DEX_PROGRAMS.has(k));
-      if (!matchedDex) continue;
+    // ③ TX を並列バッチ取得（直列30回 → 並列5本ずつ）
+    for (let i = 0; i < newSigs.length; i += TX_FETCH_CONCURRENCY) {
+      const batch = newSigs.slice(i, i + TX_FETCH_CONCURRENCY);
+      const txResults = await Promise.allSettled(batch.map((s) => fetchTransaction(s.signature)));
 
-      const tokenIdx = accountKeys.indexOf(tokenAccount);
-      if (tokenIdx === -1) continue;
+      for (let j = 0; j < batch.length; j++) {
+        const sigInfo = batch[j];
+        const result = txResults[j];
+        const tx = result.status === "fulfilled" ? result.value : null;
+        if (!tx || tx.meta?.err !== null) continue;
 
-      const preBal = (tx.meta.preTokenBalances ?? []).find(
-        (b) => b.accountIndex === tokenIdx && b.mint === INMU_TOKEN_MINT,
-      );
-      const postBal = (tx.meta.postTokenBalances ?? []).find(
-        (b) => b.accountIndex === tokenIdx && b.mint === INMU_TOKEN_MINT,
-      );
+        const accountKeys: string[] = tx.transaction?.message?.accountKeys ?? [];
+        const matchedDex = accountKeys.find((k) => DEX_PROGRAMS.has(k));
+        if (!matchedDex) continue;
 
-      const preRaw = preBal ? Number(preBal.uiTokenAmount.amount) : 0;
-      const postRaw = postBal ? Number(postBal.uiTokenAmount.amount) : 0;
-      const diffRaw = postRaw - preRaw;
-      if (diffRaw === 0) continue;
+        const tokenIdx = accountKeys.indexOf(tokenAccount);
+        if (tokenIdx === -1) continue;
 
-      const type = diffRaw > 0 ? "buy" : "sell";
-      const tokenAmount = (Math.abs(diffRaw) / Math.pow(10, INMU_DECIMALS)).toString();
+        const preBal = (tx.meta.preTokenBalances ?? []).find(
+          (b) => b.accountIndex === tokenIdx && b.mint === INMU_TOKEN_MINT,
+        );
+        const postBal = (tx.meta.postTokenBalances ?? []).find(
+          (b) => b.accountIndex === tokenIdx && b.mint === INMU_TOKEN_MINT,
+        );
 
-      try {
-        await db.insert(tradeHistoryTable).values({
-          userId,
-          walletAddress,
-          type,
-          tokenAmount,
-          txSignature: sigInfo.signature,
-          dex: DEX_LABELS[matchedDex] ?? "DEX",
-          tradedAt: new Date(sigInfo.blockTime! * 1000),
-        });
-        existingSet.add(sigInfo.signature);
-        added++;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (!msg.includes("unique") && !msg.includes("duplicate")) {
-          console.warn("[Scan] insert error:", e);
+        const preRaw = preBal ? Number(preBal.uiTokenAmount.amount) : 0;
+        const postRaw = postBal ? Number(postBal.uiTokenAmount.amount) : 0;
+        const diffRaw = postRaw - preRaw;
+        if (diffRaw === 0) continue;
+
+        const type = diffRaw > 0 ? "buy" : "sell";
+        const tokenAmount = (Math.abs(diffRaw) / Math.pow(10, INMU_DECIMALS)).toString();
+
+        try {
+          await db.insert(tradeHistoryTable).values({
+            userId,
+            walletAddress,
+            type,
+            tokenAmount,
+            txSignature: sigInfo.signature,
+            dex: DEX_LABELS[matchedDex] ?? "DEX",
+            tradedAt: new Date(sigInfo.blockTime! * 1000),
+          });
+          existingSet.add(sigInfo.signature);
+          added++;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (!msg.includes("unique") && !msg.includes("duplicate")) {
+            console.warn("[Scan] insert error:", e);
+          }
         }
       }
     }
   }
 
-  const allTrades = await db
-    .select()
-    .from(tradeHistoryTable)
-    .where(eq(tradeHistoryTable.userId, userId));
+  // ④ 統計を SQL 集計で並列取得（全行読み込みを廃止）
+  const [[buyRow], [sellRow], [latestBuy], [latestSell]] = await Promise.all([
+    db.select({ total: sql<string>`coalesce(sum(cast("tokenAmount" as numeric)), '0')` })
+      .from(tradeHistoryTable)
+      .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"))),
+    db.select({ total: sql<string>`coalesce(sum(cast("tokenAmount" as numeric)), '0')` })
+      .from(tradeHistoryTable)
+      .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "sell"))),
+    db.select({ tradedAt: tradeHistoryTable.tradedAt })
+      .from(tradeHistoryTable)
+      .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy")))
+      .orderBy(sql`${tradeHistoryTable.tradedAt} desc`)
+      .limit(1),
+    db.select({ tradedAt: tradeHistoryTable.tradedAt })
+      .from(tradeHistoryTable)
+      .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "sell")))
+      .orderBy(sql`${tradeHistoryTable.tradedAt} desc`)
+      .limit(1),
+  ]);
 
-  const totalBought = allTrades.filter((t) => t.type === "buy").reduce((s, t) => s + Number(t.tokenAmount), 0);
-  const totalSold = allTrades.filter((t) => t.type === "sell").reduce((s, t) => s + Number(t.tokenAmount), 0);
-  const buyTrades = allTrades.filter((t) => t.type === "buy").sort((a, b) => b.tradedAt.getTime() - a.tradedAt.getTime());
-  const sellTrades = allTrades.filter((t) => t.type === "sell").sort((a, b) => b.tradedAt.getTime() - a.tradedAt.getTime());
+  await db.update(profileTable).set({
+    totalBought: buyRow?.total ?? "0",
+    totalSold: sellRow?.total ?? "0",
+    lastBuyAt: latestBuy?.tradedAt ?? null,
+    lastSellAt: latestSell?.tradedAt ?? null,
+    updatedAt: new Date(),
+  }).where(eq(profileTable.userId, userId));
 
-  await db
-    .update(profileTable)
-    .set({
-      totalBought: String(totalBought),
-      totalSold: String(totalSold),
-      lastBuyAt: buyTrades[0]?.tradedAt ?? null,
-      lastSellAt: sellTrades[0]?.tradedAt ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(profileTable.userId, userId));
+  const elapsed = Date.now() - t0;
+  console.info(`[Scan] userId=${userId} added=${added} total=${existingSet.size + added} differential=${differential} elapsed=${elapsed}ms`);
 
-  return { added, total: allTrades.length };
+  return { added, total: existingSet.size + added, differential };
 }
 
 // ── RPC プロキシ ──
