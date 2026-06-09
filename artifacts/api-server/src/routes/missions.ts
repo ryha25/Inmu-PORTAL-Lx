@@ -92,18 +92,23 @@ const CONDITION_TYPES_NEEDING_VALUE = new Set([
   "daily_weekly_count", "total_clears",
   "daily_clears_today", "daily_clears_total", "weekly_clears_total", "achievement_clears_total",
   "monthly_points",
+  "login_weekly", "dex_vote_weekly", "weekly_clears_weekly",
 ]);
 
 const VALID_MISSION_TYPES = new Set(["daily", "weekly", "achievement", "event"]);
 
 const PREREQ_LABEL_MAP: Record<string, string> = {
   daily_clears_today:       "当日デイリークリア数",
+  daily_weekly_count:       "デイリーミッション週間クリア数",
   total_clears:             "全ミッションクリア回数",
   daily_clears_total:       "デイリークリア累計",
   weekly_clears_total:      "ウィークリークリア累計",
+  weekly_clears_weekly:     "週間ウィークリーミッション達成数",
   achievement_clears_total: "アチーブメント達成数",
   login_total:              "累計ログイン日数",
   login_streak:             "連続ログイン日数",
+  login_weekly:             "週間ログイン日数",
+  dex_vote_weekly:          "dexScanner週間投票数",
   inmu_balance:             "INMU保有枚数",
   buy_total:                "累計購入枚数",
   monthly_points:           "ポイント保有数",
@@ -139,6 +144,8 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       dailyClearsRow,
       weeklyClearsRow,
       achievementClearsRow,
+      weeklyLoginCountRow,
+      weeklyDexVoteCountRow,
     ] = await Promise.all([
       db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
         .from(missionParticipationsTable)
@@ -185,6 +192,14 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         .from(missionParticipationsTable)
         .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
         .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "achievement")))
+        .then(r => r[0]),
+      // login days this week
+      db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
+        .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "daily_login"), gte(pointsTable.createdAt, weekStart)))
+        .then(r => r[0]),
+      // dex votes this week
+      db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
+        .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "dex_vote"), gte(pointsTable.createdAt, weekStart)))
         .then(r => r[0]),
     ]);
 
@@ -273,6 +288,15 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         current = Number(achievementClearsRow?.cnt ?? 0);
       } else if (condType === "monthly_points") {
         current = Number(profile?.monthlyPoints ?? 0);
+      } else if (condType === "login_weekly") {
+        current = Number(weeklyLoginCountRow?.cnt ?? 0);
+      } else if (condType === "dex_vote_weekly") {
+        current = Number(weeklyDexVoteCountRow?.cnt ?? 0);
+      } else if (condType === "weekly_clears_weekly") {
+        current = missions.filter(m =>
+          m.type === "weekly" &&
+          participationMap.get(`${m.id}:${weeklyPeriod}`) === "rewarded"
+        ).length;
       }
 
       if (current === null) return { conditionMet: null as boolean | null, conditionCurrent: null as number | null };
@@ -446,6 +470,26 @@ async function checkCondition(
   } else if (condType === "monthly_points") {
     const cur = Number(profile?.monthlyPoints ?? 0);
     if (cur < condVal) return { met: false, errorMsg: `ポイント保有数が不足しています（必要: ${condVal.toLocaleString()}pt、現在: ${cur.toLocaleString()}pt）` };
+  } else if (condType === "login_weekly") {
+    const ws = getWeekStart();
+    const [row] = await db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
+      .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "daily_login"), gte(pointsTable.createdAt, ws)));
+    const cur = Number(row?.cnt ?? 0);
+    if (cur < condVal) return { met: false, errorMsg: `今週のログイン日数が不足しています（必要: ${condVal}日、現在: ${cur}日）` };
+  } else if (condType === "dex_vote_weekly") {
+    const ws = getWeekStart();
+    const [row] = await db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
+      .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "dex_vote"), gte(pointsTable.createdAt, ws)));
+    const cur = Number(row?.cnt ?? 0);
+    if (cur < condVal) return { met: false, errorMsg: `今週のdexScanner投票数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+  } else if (condType === "weekly_clears_weekly") {
+    const wp = getPeriod("weekly");
+    const [row] = await db.select({ cnt: sql<number>`count(*)` })
+      .from(missionParticipationsTable)
+      .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
+      .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "weekly"), eq(missionParticipationsTable.period, wp)));
+    const cur = Number(row?.cnt ?? 0);
+    if (cur < condVal) return { met: false, errorMsg: `今週のウィークリーミッション達成数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   }
 
   return { met: true };

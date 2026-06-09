@@ -87,11 +87,15 @@ const PREREQUISITE_CATEGORIES = [
   { value: 'inmu_balance',      label: '累計保有枚数',                  presets: [1000000, 2000000, 3000000, 4000000, 5000000, 10000000, 30000000, 50000000] },
   { value: 'login_streak',      label: '連続ログイン日数',              presets: [7, 10, 14, 30, 100, 150, 200, 250, 300] },
   { value: 'login_total',       label: '通算ログイン日数',              presets: [7, 10, 30, 60, 90, 100, 150, 200, 250, 300] },
-  { value: 'daily_clears_today', label: '当日デイリークリア数',           presets: [4, 5, 6, 7, 8, 9, 10] },
-  { value: 'daily_clears_total',label: 'デイリーミッションクリア累計',    presets: [5, 10, 15] },
-  { value: 'total_clears',      label: '累計ミッションクリア回数',       presets: [30, 50, 100] },
-  { value: 'monthly_points',    label: '累計ポイント保有数',             presets: [1000, 5000, 10000, 100000, 500000, 1000000] },
-  { value: 'buy_total',         label: '累計購入枚数',                  presets: [1000000, 3000000, 5000000, 10000000, 30000000, 50000000] },
+  { value: 'daily_clears_today',    label: '当日デイリークリア数',           presets: [4, 5, 6, 7, 8, 9, 10] },
+  { value: 'daily_clears_total',   label: 'デイリーミッションクリア累計',    presets: [5, 10, 15] },
+  { value: 'daily_weekly_count',   label: 'デイリーミッション週間クリア数',  presets: [10, 15, 28] },
+  { value: 'dex_vote_weekly',      label: 'dexScanner週間投票数',          presets: [3, 5, 7] },
+  { value: 'login_weekly',         label: '週間ログイン日数',              presets: [3, 5, 7] },
+  { value: 'weekly_clears_weekly', label: '週間ウィークリーミッション達成数', presets: [4, 5, 6, 7, 8, 9, 10] },
+  { value: 'total_clears',         label: '累計ミッションクリア回数',       presets: [30, 50, 100] },
+  { value: 'monthly_points',       label: '累計ポイント保有数',             presets: [1000, 5000, 10000, 100000, 500000, 1000000] },
+  { value: 'buy_total',            label: '累計購入枚数',                  presets: [1000000, 3000000, 5000000, 10000000, 30000000, 50000000] },
 ]
 
 const CONDITION_TYPE_OPTIONS = [
@@ -103,7 +107,6 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'buy_daily',               label: 'デイリー購入枚数' },
   { value: 'buy_weekly',              label: 'ウィークリー購入枚数' },
   { value: 'buy_total',               label: '累計購入枚数' },
-  { value: 'daily_weekly_count',      label: 'デイリーミッション週間クリア数' },
   { value: 'total_clears',            label: 'ミッションクリア回数（全種合計）' },
   { value: 'daily_clears_total',      label: 'デイリーミッションクリア累計' },
   { value: 'weekly_clears_total',     label: 'ウィークリーミッションクリア累計' },
