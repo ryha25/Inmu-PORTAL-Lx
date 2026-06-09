@@ -90,13 +90,14 @@ const CONDITION_TYPES_NEEDING_VALUE = new Set([
   "inmu_balance", "login_streak", "login_total",
   "buy_daily", "buy_weekly", "buy_total",
   "daily_weekly_count", "total_clears",
-  "daily_clears_total", "weekly_clears_total", "achievement_clears_total",
+  "daily_clears_today", "daily_clears_total", "weekly_clears_total", "achievement_clears_total",
   "monthly_points",
 ]);
 
 const VALID_MISSION_TYPES = new Set(["daily", "weekly", "achievement", "event"]);
 
 const PREREQ_LABEL_MAP: Record<string, string> = {
+  daily_clears_today:       "当日デイリークリア数",
   total_clears:             "全ミッションクリア回数",
   daily_clears_total:       "デイリークリア累計",
   weekly_clears_total:      "ウィークリークリア累計",
@@ -259,6 +260,11 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         current = Number(weeklyDailyCountRow?.cnt ?? 0);
       } else if (condType === "total_clears") {
         current = Number(totalClearsRow?.cnt ?? 0);
+      } else if (condType === "daily_clears_today") {
+        current = missions.filter(m =>
+          m.type === "daily" &&
+          participationMap.get(`${m.id}:${dailyPeriod}`) === "rewarded"
+        ).length;
       } else if (condType === "daily_clears_total") {
         current = Number(dailyClearsRow?.cnt ?? 0);
       } else if (condType === "weekly_clears_total") {
@@ -408,13 +414,21 @@ async function checkCondition(
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded")));
     const cur = Number(row?.cnt ?? 0);
     if (cur < condVal) return { met: false, errorMsg: `ミッションクリア回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+  } else if (condType === "daily_clears_today") {
+    const todayPeriod = getPeriod("daily");
+    const [row] = await db.select({ cnt: sql<number>`count(*)` })
+      .from(missionParticipationsTable)
+      .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
+      .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "daily"), eq(missionParticipationsTable.period, todayPeriod)));
+    const cur = Number(row?.cnt ?? 0);
+    if (cur < condVal) return { met: false, errorMsg: `本日のデイリークリア数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "daily_clears_total") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
       .from(missionParticipationsTable)
       .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "daily")));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `デイリーミッションクリア回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+    if (cur < condVal) return { met: false, errorMsg: `デイリーミッションクリア累計が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "weekly_clears_total") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
       .from(missionParticipationsTable)
