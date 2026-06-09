@@ -76,7 +76,23 @@ export function DashboardPage() {
           size="sm"
           variant="outline"
           className="gap-1.5 h-8 text-xs"
-          onClick={() => setSendOpen(true)}
+          onClick={() => {
+            const w = window as Window & { phantom?: { solana?: { isPhantom?: boolean } }; solana?: { isPhantom?: boolean } }
+            const hasPhantom = !!(w.phantom?.solana?.isPhantom || w.solana?.isPhantom)
+            const mob = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+            if (mob && !hasPhantom) {
+              const url = encodeURIComponent(window.location.href)
+              const ref = encodeURIComponent(window.location.origin)
+              const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
+              if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                window.location.href = phantomUrl
+              } else {
+                window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+              }
+              return
+            }
+            setSendOpen(true)
+          }}
         >
           <Send className="size-3.5" />
           INMU送金

@@ -213,7 +213,7 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       tx.add(...instructions)
       tx.feePayer = fromPubkey
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: 'signing' })
@@ -225,20 +225,11 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       const signature = await connection.sendRawTransaction(rawTx, {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
+        maxRetries: 3,
       })
       toast.dismiss('sending')
 
-      toast.loading('トランザクション確認中…', { id: 'confirming' })
-      const result = await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        'confirmed',
-      )
-      toast.dismiss('confirming')
-
-      if (result.value.err) {
-        throw new Error(`トランザクションが失敗しました: ${JSON.stringify(result.value.err)}`)
-      }
-
+      // 署名取得後すぐに履歴記録（確認タイムアウト前に保存）
       const recordRes = await fetch('/api/transfer/send', {
         method: 'POST',
         credentials: 'include',
@@ -251,10 +242,25 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
           txHash: signature,
         }),
       })
-
       if (!recordRes.ok) {
         const d = await recordRes.json()
         toast.warning(`送金は完了しましたが記録に失敗しました: ${d.error ?? ''}`)
+      }
+
+      // 確認はベストエフォート — BlockHeightExceeded 等でも送金成功扱い
+      toast.loading('トランザクション確認中…', { id: 'confirming' })
+      try {
+        const result = await connection.confirmTransaction(
+          { signature, blockhash, lastValidBlockHeight },
+          'confirmed',
+        )
+        toast.dismiss('confirming')
+        if (result.value.err) {
+          toast.warning(`オンチェーン確認エラー。Solscanでトランザクションを確認してください。`)
+        }
+      } catch {
+        toast.dismiss('confirming')
+        // BlockHeightExceeded 等: tx は送信済み。Solscanで確認可能。
       }
 
       setTxHash(signature)

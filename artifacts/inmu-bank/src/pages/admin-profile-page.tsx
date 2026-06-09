@@ -13,25 +13,13 @@ import { AdminShell } from '@/components/admin-shell'
 import { PageHeader } from '@/components/page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Shield, WalletCards, ExternalLink, LogOut, Coins,
-  Send, RefreshCw, User, AlertTriangle, CheckCircle2, Info,
+  RefreshCw, CheckCircle2, Info,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatInmu } from '@/lib/format'
-import { Connection, PublicKey, Transaction } from '@solana/web3.js'
-import {
-  getAssociatedTokenAddress,
-  createTransferInstruction,
-  getAccount,
-  createAssociatedTokenAccountInstruction,
-  TOKEN_2022_PROGRAM_ID,
-} from '@solana/spl-token'
 
-const INMU_MINT = new PublicKey('4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump')
-const INMU_DECIMALS = 6
 const ADMIN_WALLET_KEY = 'inmu_admin_wallet'
 
 // Phantom プロバイダの型定義
@@ -40,8 +28,6 @@ interface PhantomProvider {
   publicKey?: { toString(): string } | null
   connect(opts?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>
   disconnect(): Promise<void>
-  signTransaction(tx: Transaction): Promise<Transaction>
-  signAndSendTransaction(tx: Transaction): Promise<{ signature: string }>
 }
 
 function getPhantom(): PhantomProvider | null {
@@ -54,17 +40,6 @@ function getPhantom(): PhantomProvider | null {
 function isMobile() { return /iPhone|iPad|iPod|Android/.test(navigator.userAgent) }
 function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) }
 
-function getRpcUrl() {
-  return `${window.location.origin}/api/solana/rpc-proxy`
-}
-
-type UserRow = {
-  userId: string
-  displayName: string
-  solWallet: string | null
-  balance: string
-  monthlyPoints: string
-}
 
 export function AdminProfilePage() {
   const [, navigate] = useLocation()
@@ -78,14 +53,6 @@ export function AdminProfilePage() {
   const [inmuBalance, setInmuBalance] = useState<number | null>(null)
   const [balanceLoading, setBalanceLoading] = useState(false)
   const [connectLoading, setConnectLoading] = useState(false)
-
-  // 送金ダイアログ
-  const [users, setUsers] = useState<UserRow[]>([])
-  const [sendOpen, setSendOpen] = useState(false)
-  const [sendTarget, setSendTarget] = useState<UserRow | null>(null)
-  const [sendAmount, setSendAmount] = useState('1')
-  const [sendLoading, setSendLoading] = useState(false)
-  const [userSearch, setUserSearch] = useState('')
 
   const initDone = useRef(false)
 
@@ -149,15 +116,6 @@ export function AdminProfilePage() {
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // ── ユーザー一覧 ──
-  useEffect(() => {
-    if (!isAdmin) return
-    fetch('/api/admin/users', { credentials: 'include' })
-      .then(r => r.json())
-      .then((d: UserRow[]) => setUsers(Array.isArray(d) ? d : []))
-      .catch(() => {})
-  }, [isAdmin])
 
   // ── INMU残高取得 (バックエンドRPC経由, Phantom不要) ──
   const fetchBalanceFor = useCallback(async (wallet: string) => {
@@ -245,134 +203,9 @@ export function AdminProfilePage() {
     navigate('/inmu1919-login')
   }
 
-  // ── 実INMU送金 ──
-  async function handleSendInmu() {
-    if (!sendTarget?.solWallet || !savedWallet) return
-    const amount = Number(sendAmount)
-    if (Number.isNaN(amount) || amount <= 0) {
-      toast.error('送金量を正しく入力してください')
-      return
-    }
-
-    const phantom = getPhantom()
-    if (!phantom) {
-      toast.error('Phantom ウォレットが見つかりません。インストールしてください。')
-      return
-    }
-
-    // Phantom が未接続(または前回接続のみ)なら明示的に再接続
-    if (!phantomReady || !phantom.publicKey) {
-      toast.loading('Phantom に接続しています…', { id: 'ph-connect' })
-      try {
-        const resp = await phantom.connect()
-        const addr = resp.publicKey.toString()
-        toast.dismiss('ph-connect')
-        if (addr !== savedWallet) {
-          toast.error(`異なるウォレットが接続されました（${addr.slice(0, 6)}…）。正しいウォレットを選択してください。`)
-          return
-        }
-        setPhantomReady(true)
-      } catch {
-        toast.dismiss('ph-connect')
-        toast.error('Phantom への接続が必要です。「Phantom に接続」ボタンを押してください。')
-        return
-      }
-    }
-
-    setSendLoading(true)
-    try {
-      // バックエンドRPCプロキシ経由で接続 (403回避)
-      const connection = new Connection(getRpcUrl(), 'confirmed')
-      const fromPubkey = new PublicKey(savedWallet)
-      const toPubkey = new PublicKey(sendTarget.solWallet)
-
-      // INMU は Token-2022 トークン: 全命令に TOKEN_2022_PROGRAM_ID を指定
-      const fromATA = await getAssociatedTokenAddress(INMU_MINT, fromPubkey, false, TOKEN_2022_PROGRAM_ID)
-      const toATA = await getAssociatedTokenAddress(INMU_MINT, toPubkey, false, TOKEN_2022_PROGRAM_ID)
-
-      const instructions = []
-
-      // 受信者のATAが存在しない場合は作成
-      try {
-        await getAccount(connection, toATA, 'confirmed', TOKEN_2022_PROGRAM_ID)
-      } catch {
-        instructions.push(
-          createAssociatedTokenAccountInstruction(fromPubkey, toATA, toPubkey, INMU_MINT, TOKEN_2022_PROGRAM_ID)
-        )
-      }
-
-      const rawAmount = Math.floor(amount * Math.pow(10, INMU_DECIMALS))
-      instructions.push(
-        createTransferInstruction(fromATA, toATA, fromPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID)
-      )
-
-      const tx = new Transaction()
-      tx.add(...instructions)
-      tx.feePayer = fromPubkey
-
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
-      tx.recentBlockhash = blockhash
-
-      // signTransaction → sendRawTransaction (Phantom推奨方式)
-      toast.loading('Phantom で署名してください…', { id: 'signing' })
-      const signedTx = await phantom.signTransaction(tx)
-      toast.dismiss('signing')
-
-      toast.loading('Solanaネットワークへ送信中…', { id: 'sending' })
-      const rawTx = signedTx.serialize()
-      const signature = await connection.sendRawTransaction(rawTx, {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-      })
-      toast.dismiss('sending')
-
-      toast.loading('トランザクション確認中…', { id: 'confirming' })
-      const result = await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        'confirmed',
-      )
-      toast.dismiss('confirming')
-
-      if (result.value.err) {
-        throw new Error(`トランザクションが失敗しました: ${JSON.stringify(result.value.err)}`)
-      }
-
-      // バックエンドに履歴記録
-      await fetch('/api/admin/record-sol-transfer', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetUserId: sendTarget.userId,
-          amount,
-          txSignature: signature,
-          targetWallet: sendTarget.solWallet,
-        }),
-      })
-
-      toast.success(`${formatInmu(amount)} INMU を ${sendTarget.displayName} に送金しました！`)
-      setSendOpen(false)
-      setSendAmount('1')
-      setSendTarget(null)
-      fetchBalanceFor(savedWallet)
-    } catch (e: unknown) {
-      toast.dismiss('signing')
-      toast.dismiss('sending')
-      toast.dismiss('confirming')
-      if (e instanceof Error && e.message !== 'User rejected the request.') {
-        toast.error(`送金失敗: ${e.message}`)
-      }
-    } finally {
-      setSendLoading(false)
-    }
-  }
-
   if (isAdmin === null) return null
   if (!isAdmin) return null
 
-  const filteredUsers = users.filter(u =>
-    u.displayName.toLowerCase().includes(userSearch.toLowerCase()) && u.solWallet
-  )
   const shortAddr = savedWallet ? `${savedWallet.slice(0, 6)}…${savedWallet.slice(-6)}` : null
 
   return (
@@ -544,32 +377,6 @@ export function AdminProfilePage() {
           )}
         </Card>
 
-        {/* ── 実INMU送金 ── */}
-        {savedWallet && (
-          <Card className="border-primary/30 bg-card p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Send className="size-4 text-primary" />
-              <h3 className="font-semibold text-sm">実INMU送金</h3>
-            </div>
-            <p className="text-xs text-muted-foreground mb-3">
-              管理ウォレット → ユーザーウォレットへ実際のINMUをオンチェーン送金します。
-              送金時にPhantomの署名確認が必要です。
-            </p>
-            {!phantomReady && (
-              <div className="flex items-start gap-2 rounded-lg border border-yellow-300/40 bg-yellow-50/10 p-2.5 mb-3">
-                <AlertTriangle className="size-3.5 text-yellow-500 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-yellow-700 dark:text-yellow-400">
-                  Phantom未接続です。送金ボタンを押すと自動でPhantomへの接続確認が行われます。
-                </p>
-              </div>
-            )}
-            <Button onClick={() => setSendOpen(true)} className="min-h-11 w-full gap-2">
-              <Send className="size-4" />
-              ユーザーを選択して送金
-            </Button>
-          </Card>
-        )}
-
         {/* ── ログアウト ── */}
         <Card className="border-border bg-card overflow-hidden">
           <button
@@ -583,115 +390,6 @@ export function AdminProfilePage() {
         </Card>
       </div>
 
-      {/* ── 実INMU送金ダイアログ ── */}
-      <Dialog open={sendOpen} onOpenChange={open => { setSendOpen(open); if (!open) setSendTarget(null) }}>
-        <DialogContent className="max-w-sm mx-4">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Send className="size-4 text-primary" />
-              実INMU送金
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-4 pt-2">
-            {!sendTarget ? (
-              <>
-                <p className="text-xs text-muted-foreground">
-                  SOLアドレス登録済みのユーザーを選択してください
-                </p>
-                <Input
-                  placeholder="ユーザー名で検索"
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
-                  className="min-h-10"
-                />
-                {filteredUsers.length === 0 ? (
-                  <p className="text-sm text-center text-muted-foreground py-4">
-                    SOLアドレス登録済みのユーザーがいません
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
-                    {filteredUsers.map(u => (
-                      <button
-                        key={u.userId}
-                        type="button"
-                        onClick={() => setSendTarget(u)}
-                        className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-left hover:bg-secondary/30 transition-colors"
-                      >
-                        <User className="size-4 text-muted-foreground shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">{u.displayName}</p>
-                          <p className="text-[10px] font-mono text-muted-foreground truncate">
-                            {u.solWallet?.slice(0, 12)}…
-                          </p>
-                        </div>
-                        <span className="text-xs font-mono shrink-0">{formatInmu(u.balance)}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="rounded-lg bg-secondary/50 p-3">
-                  <p className="text-xs text-muted-foreground mb-1">送金先</p>
-                  <p className="font-medium text-sm">{sendTarget.displayName}</p>
-                  <p className="font-mono text-[10px] text-muted-foreground break-all mt-0.5">
-                    {sendTarget.solWallet}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-medium mb-1.5">送金量 (INMU)</p>
-                  <Input
-                    type="number"
-                    min="0.000001"
-                    step="0.000001"
-                    value={sendAmount}
-                    onChange={e => setSendAmount(e.target.value)}
-                    className="min-h-11"
-                    placeholder="例: 1"
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    管理ウォレット残高: {inmuBalance !== null ? formatInmu(inmuBalance) : '—'} INMU
-                  </p>
-                </div>
-
-                {/* Phantom警告の説明 */}
-                <div className="rounded-lg border border-amber-300/40 bg-amber-50/10 p-3">
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium mb-1">
-                    ⚠️ Phantom で「警告」が表示された場合
-                  </p>
-                  <p className="text-[11px] text-amber-700/80 dark:text-amber-300/70">
-                    「無視して続ける」を選択してください。
-                    開発用URLのため表示されます。本番ドメインでは出ません。
-                    秘密鍵は当アプリには送信されません。
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setSendTarget(null)}
-                    disabled={sendLoading}
-                    className="flex-1 min-h-11"
-                  >
-                    戻る
-                  </Button>
-                  <Button
-                    onClick={handleSendInmu}
-                    disabled={sendLoading || !sendAmount}
-                    className="flex-1 min-h-11 gap-2"
-                  >
-                    <Send className="size-4" />
-                    {sendLoading ? '処理中…' : '署名して送金'}
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </AdminShell>
   )
 }

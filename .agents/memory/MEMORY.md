@@ -1,8 +1,3 @@
-- [Block height exceeded fix](block-height-fix.md) — use 'confirmed' for getLatestBlockhash + poll getSignatureStatuses on expiry
-- [Drizzle push non-interactive](drizzle-push.md) — drizzle-kit push fails in non-TTY; use direct SQL ALTER TABLE instead
-- [INMU Token-2022 batch transfer](inmu-batch-transfer.md) — single Transaction with multiple createTransferInstruction calls; one Phantom signature for N users
-- [INMU admin wallet persistence](inmu-admin-wallet.md) — admin wallet stored in app_settings raw-SQL table (not Drizzle schema); created with CREATE TABLE IF NOT EXISTS on each request
-- [INMU Replit import](inmu-replit-import.md) — importing real GitHub repo: Python shutil.copytree preserves .replit-artifact; rsync not available; drizzle push --force accepts data-loss in non-TTY
-- [INMU auth: username-only](inmu-auth.md) — sign-up uses username+password+passcode; synthetic email {name}@inmu.local stored; sign-in tries synthetic email then raw email (compat)
-- [INMU requireAdmin source](inmu-admin-middleware.md) — requireAdmin/requireAuth both exported from middlewares/session.ts, NOT from routes/admin-auth.ts
-- [INMU admin login endpoint](inmu-admin-login.md) — passcode auth: POST /api/auth/admin-code-login (in admin-auth.ts); not /api/admin/login
+- [Solana tx confirmation](solana-tx-confirm.md) — record tx after sendRawTransaction (not after confirmTransaction) to avoid BlockHeightExceeded data loss
+- [Admin profile cleanup](admin-profile-cleanup.md) — INMU send removed from admin profile; only lives in Actions tab (distribute-airdrop routes)
+- [Phantom mobile redirect](phantom-mobile.md) — mobile send button fires Phantom deep link immediately on press; iOS uses phantom.app/ul/browse, Android uses intent:// scheme
