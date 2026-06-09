@@ -35,6 +35,17 @@ type TradeTxRow = {
   tradedAt: string
 }
 
+const CONDITION_TYPE_OPTIONS = [
+  { value: 'none',          label: '条件なし' },
+  { value: 'link_visit',    label: 'リンク訪問' },
+  { value: 'inmu_balance',  label: 'INMU保有枚数' },
+  { value: 'login_streak',  label: '連続ログイン日数' },
+  { value: 'login_total',   label: '累計ログイン日数' },
+  { value: 'buy_daily',     label: 'デイリー購入枚数' },
+  { value: 'buy_weekly',    label: 'ウィークリー購入枚数' },
+  { value: 'buy_total',     label: '累計購入枚数' },
+]
+
 type MissionRow = {
   id: number
   title: string
@@ -46,6 +57,8 @@ type MissionRow = {
   linkUrl: string | null
   isActive: boolean
   createdAt: string
+  conditionType: string | null
+  conditionValue: string | null
 }
 
 type TxRow = {
@@ -226,7 +239,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [pointsAmount, setPointsAmount] = useState('')
   const [deductPointsAmount, setDeductPointsAmount] = useState('')
   const [missions, setMissions] = useState<MissionRow[]>([])
-  const [missionForm, setMissionForm] = useState({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '' })
+  const [missionForm, setMissionForm] = useState({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' })
   const [editingMissionId, setEditingMissionId] = useState<number | null>(null)
 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
@@ -370,15 +383,22 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   }
 
   async function saveMission() {
-    const { title, description, type, points, startAt, endAt, linkUrl } = missionForm
+    const { title, description, type, points, startAt, endAt, linkUrl, conditionType, conditionValue } = missionForm
     if (!title.trim()) { toast.error('タイトルが必要です'); return }
+    const condTypeVal = conditionType === 'none' ? null : conditionType
+    const condValueVal = condTypeVal && conditionValue ? Number(conditionValue) : null
+    const payload = {
+      title, description, type, points: Number(points) || 0,
+      startAt: startAt || null, endAt: endAt || null, linkUrl: linkUrl || null,
+      conditionType: condTypeVal, conditionValue: condValueVal,
+    }
     try {
       if (editingMissionId !== null) {
-        await api(`/admin/missions/${editingMissionId}`, 'PUT', { title, description, type, points: Number(points) || 0, startAt: startAt || null, endAt: endAt || null, linkUrl: linkUrl || null })
+        await api(`/admin/missions/${editingMissionId}`, 'PUT', payload)
       } else {
-        await api('/admin/missions', 'POST', { title, description, type, points: Number(points) || 0, startAt: startAt || null, endAt: endAt || null, linkUrl: linkUrl || null })
+        await api('/admin/missions', 'POST', payload)
       }
-      setMissionForm({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '' })
+      setMissionForm({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' })
       setEditingMissionId(null)
       await loadMissions()
       toast.success('保存しました')
@@ -762,6 +782,29 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 onChange={e => setMissionForm(f => ({ ...f, linkUrl: e.target.value }))}
                 className="min-h-10"
               />
+              {/* 条件設定 */}
+              <div className="flex gap-2">
+                <select
+                  value={missionForm.conditionType}
+                  onChange={e => setMissionForm(f => ({ ...f, conditionType: e.target.value, conditionValue: '' }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring flex-1"
+                >
+                  {CONDITION_TYPE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                {missionForm.conditionType !== 'none' && missionForm.conditionType !== 'link_visit' && (
+                  <Input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="条件値"
+                    value={missionForm.conditionValue}
+                    onChange={e => setMissionForm(f => ({ ...f, conditionValue: e.target.value }))}
+                    className="min-h-10 flex-1"
+                  />
+                )}
+              </div>
               <div className="flex gap-2">
                 <div className="flex flex-col gap-1 flex-1">
                   <Label className="text-xs text-muted-foreground">開始日時</Label>
@@ -791,7 +834,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     variant="outline"
                     onClick={() => {
                       setEditingMissionId(null)
-                      setMissionForm({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '' })
+                      setMissionForm({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' })
                     }}
                     className="min-h-10"
                   >
@@ -821,6 +864,12 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                         <span className="font-mono text-xs text-chart-5 shrink-0">+{m.points}pts</span>
                       </div>
                       {m.description && <p className="text-xs text-muted-foreground mt-0.5 ml-6">{m.description}</p>}
+                      {m.conditionType && m.conditionType !== 'none' && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5 ml-6">
+                          条件: {CONDITION_TYPE_OPTIONS.find(o => o.value === m.conditionType)?.label ?? m.conditionType}
+                          {m.conditionValue && m.conditionType !== 'link_visit' ? ` — ${Number(m.conditionValue).toLocaleString()}` : ''}
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-1 shrink-0">
                       <Button
@@ -837,6 +886,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                             startAt: m.startAt ? new Date(m.startAt).toISOString().slice(0, 16) : '',
                             endAt: m.endAt ? new Date(m.endAt).toISOString().slice(0, 16) : '',
                             linkUrl: m.linkUrl ?? '',
+                            conditionType: m.conditionType ?? 'none',
+                            conditionValue: m.conditionValue ?? '',
                           })
                         }}
                       >

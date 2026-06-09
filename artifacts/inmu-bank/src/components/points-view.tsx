@@ -14,6 +14,24 @@ type PointsData = {
   leaderboard: { rank: number; userId: string; displayName: string; points: number }[]
 }
 
+const CONDITION_LABELS: Record<string, string> = {
+  inmu_balance: 'INMU保有',
+  login_streak: '連続ログイン',
+  login_total:  '累計ログイン',
+  buy_daily:    'デイリー購入',
+  buy_weekly:   'ウィークリー購入',
+  buy_total:    '累計購入',
+}
+
+const CONDITION_UNITS: Record<string, string> = {
+  inmu_balance: ' INMU',
+  login_streak: '日',
+  login_total:  '日',
+  buy_daily:    ' INMU',
+  buy_weekly:   ' INMU',
+  buy_total:    ' INMU',
+}
+
 type Mission = {
   id: number
   title: string
@@ -25,6 +43,8 @@ type Mission = {
   linkUrl: string | null
   isActive: boolean
   participationStatus: string | null
+  conditionType: string | null
+  conditionValue: string | null
 }
 
 export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: () => void }) {
@@ -124,6 +144,25 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
     }
   }
 
+  function ConditionBadge({ conditionType, conditionValue }: { conditionType: string | null; conditionValue: string | null }) {
+    if (!conditionType || conditionType === 'none') return null
+    if (conditionType === 'link_visit') {
+      return <span className="text-[10px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5">条件: リンク訪問</span>
+    }
+    const label = CONDITION_LABELS[conditionType]
+    const unit = CONDITION_UNITS[conditionType] ?? ''
+    if (!label || !conditionValue) return null
+    const numVal = Number(conditionValue)
+    const displayVal = numVal >= 10000
+      ? `${(numVal / 10000).toLocaleString()}万`
+      : numVal.toLocaleString()
+    return (
+      <span className="text-[10px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5">
+        条件: {label} {displayVal}{unit}
+      </span>
+    )
+  }
+
   function MissionItem({ m }: { m: Mission }) {
     const isBusy = busy === m.id
     const status = m.participationStatus
@@ -141,6 +180,9 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
               )}
             </div>
             {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
+            <div className="mt-1">
+              <ConditionBadge conditionType={m.conditionType} conditionValue={m.conditionValue} />
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="font-mono text-sm font-bold text-chart-5">+{m.points} pts</span>

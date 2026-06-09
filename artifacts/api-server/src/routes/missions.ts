@@ -508,7 +508,7 @@ router.get("/admin/missions", requireAdmin, async (_req, res): Promise<void> => 
 });
 
 router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => {
-  const { title, description, type, points, startAt, endAt, linkUrl, isActive } =
+  const { title, description, type, points, startAt, endAt, linkUrl, isActive, conditionType, conditionValue } =
     req.body as {
       title?: string;
       description?: string;
@@ -518,6 +518,8 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
       endAt?: string;
       linkUrl?: string;
       isActive?: boolean;
+      conditionType?: string | null;
+      conditionValue?: number | null;
     };
   if (!title?.trim() || !type) {
     res.status(400).json({ error: "title and type required" });
@@ -535,6 +537,8 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
         endAt: endAt ? new Date(endAt) : null,
         linkUrl: linkUrl?.trim() || null,
         isActive: isActive !== false,
+        conditionType: conditionType || null,
+        conditionValue: conditionValue != null ? String(conditionValue) : null,
       })
       .returning();
     res.status(201).json(mission);
@@ -546,7 +550,7 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
 router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { title, description, type, points, startAt, endAt, linkUrl, isActive } =
+  const { title, description, type, points, startAt, endAt, linkUrl, isActive, conditionType, conditionValue } =
     req.body as {
       title?: string;
       description?: string;
@@ -556,6 +560,8 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
       endAt?: string | null;
       linkUrl?: string | null;
       isActive?: boolean;
+      conditionType?: string | null;
+      conditionValue?: number | null;
     };
   try {
     await db
@@ -569,6 +575,8 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
         ...(endAt !== undefined && { endAt: endAt ? new Date(endAt) : null }),
         ...(linkUrl !== undefined && { linkUrl: linkUrl?.trim() || null }),
         ...(isActive !== undefined && { isActive }),
+        ...(conditionType !== undefined && { conditionType: conditionType || null }),
+        ...(conditionValue !== undefined && { conditionValue: conditionValue != null ? String(conditionValue) : null }),
       })
       .where(eq(missionsTable.id, id));
     res.json({ ok: true });
