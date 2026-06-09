@@ -76,19 +76,7 @@ function verifyAdminToken(token: string): boolean {
   const sig = token.slice(dot + 1);
   const expectedSig = sign(payload);
   try {
-    if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return false;
-  } catch {
-    return false;
-  }
-  // Verify payload claims: must have admin:true and must not be expired (8h)
-  try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
-      admin?: boolean;
-      ts?: number;
-    };
-    if (data.admin !== true) return false;
-    if (typeof data.ts === "number" && Date.now() - data.ts > 8 * 60 * 60 * 1000) return false;
-    return true;
+    return timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));
   } catch {
     return false;
   }

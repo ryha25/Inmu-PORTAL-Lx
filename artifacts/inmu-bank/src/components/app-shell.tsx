@@ -14,6 +14,7 @@ type NavItem = { href: string; key: TranslationKey; icon: React.ElementType }
 
 const ALL_NAV: NavItem[] = [
   { href: '/',              key: 'nav_dashboard',     icon: LayoutDashboard },
+  { href: '/balance',       key: 'nav_balance',       icon: Coins },
   { href: '/history',       key: 'nav_history',       icon: History },
   { href: '/points',        key: 'nav_points',        icon: Star },
   { href: '/achievements',  key: 'nav_achievements',  icon: Medal },

@@ -240,7 +240,7 @@ export function ProfileView({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <WalletCards className="size-4 text-primary" />
-            <h3 className="font-semibold text-sm">SOL ウォレット</h3>
+            <h3 className="font-semibold text-sm">Phantom Wallet</h3>
           </div>
           {solWallet && (
             <a
@@ -261,32 +261,13 @@ export function ProfileView({
               <span className="inline-flex size-2 rounded-full bg-green-500" />
               <span className="text-xs font-medium text-green-600">接続中</span>
             </div>
-            {/* SOLアドレス編集 */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[10px] text-muted-foreground">SOL アドレス（編集可）</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={solWallet}
-                  onChange={e => setSolWallet(e.target.value)}
-                  className="min-h-9 flex-1 font-mono text-[11px]"
-                />
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await saveWallet(solWallet.trim())
-                      toast.success('アドレスを保存しました')
-                      onRefresh()
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : t('error'))
-                    }
-                  }}
-                  disabled={loading}
-                  className="min-h-9 shrink-0"
-                >
-                  保存
-                </Button>
-              </div>
+            {/* SOLアドレス短縮表示 */}
+            <div className="rounded-md bg-secondary/50 p-2.5">
+              <p className="text-[10px] text-muted-foreground mb-1">SOL アドレス</p>
+              <p className="font-mono text-xs text-foreground break-all">{solWallet}</p>
+              <p className="font-mono text-xs text-muted-foreground mt-0.5">
+                ({solWallet.slice(0, 6)}…{solWallet.slice(-6)})
+              </p>
             </div>
             <p className="text-[11px] text-muted-foreground">{t('wallet_private')}</p>
             <div className="flex gap-2">
@@ -310,44 +291,11 @@ export function ProfileView({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">SOLアドレスを手入力</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={solWallet}
-                  onChange={e => setSolWallet(e.target.value)}
-                  placeholder="SOLアドレスを入力"
-                  className="min-h-10 flex-1 font-mono text-xs"
-                />
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    if (!solWallet.trim()) return
-                    try {
-                      await saveWallet(solWallet.trim())
-                      toast.success('アドレスを保存しました')
-                      onRefresh()
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : t('error'))
-                    }
-                  }}
-                  disabled={loading || !solWallet.trim()}
-                  className="min-h-10 shrink-0"
-                >
-                  保存
-                </Button>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 border-t border-border" />
-              <span className="text-[11px] text-muted-foreground">または</span>
-              <div className="flex-1 border-t border-border" />
-            </div>
+          <div className="flex flex-col gap-2">
             <Button
               onClick={connectPhantom}
               disabled={phantomLoading}
-              className="min-h-10 w-full gap-2"
+              className="min-h-11 w-full gap-2"
             >
               <WalletCards className="size-4" />
               {phantomLoading ? t('loading') : t('connect_phantom')}

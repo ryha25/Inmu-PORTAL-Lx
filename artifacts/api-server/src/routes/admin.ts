@@ -730,37 +730,4 @@ router.post("/admin/set-role", requireAdmin, async (req, res): Promise<void> => 
   }
 });
 
-router.post("/admin/deduct-points", requireAdmin, async (req, res): Promise<void> => {
-  const adminId = req.userId ?? "admin";
-  const { targetUserIds, amount, reason } = req.body as {
-    targetUserIds?: string[];
-    amount?: number;
-    reason?: string;
-  };
-  if (!targetUserIds?.length || !amount || amount <= 0) {
-    res.status(400).json({ error: "targetUserIds and amount required" });
-    return;
-  }
-  try {
-    for (const uid of targetUserIds) {
-      const profile = await db
-        .select({ monthlyPoints: profileTable.monthlyPoints })
-        .from(profileTable)
-        .where(eq(profileTable.userId, uid))
-        .then((r) => r[0]);
-      const current = Number(profile?.monthlyPoints ?? 0);
-      const newPoints = Math.max(0, current - amount);
-      await db
-        .update(profileTable)
-        .set({ monthlyPoints: String(newPoints), updatedAt: new Date() })
-        .where(eq(profileTable.userId, uid));
-      await notify(uid, "points", `${amount}ポイントが減算されました`, reason ?? `管理者による減算`);
-    }
-    await logAudit(adminId, "adminDeductPoints", undefined, { targetUserIds, amount, reason });
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ error: "Internal error" });
-  }
-});
-
 export default router;
