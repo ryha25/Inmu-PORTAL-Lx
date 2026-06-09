@@ -4,7 +4,7 @@ import { ADMIN_SESSION_COOKIE, makeAdminSessionValue } from "../middlewares/sess
 
 const router = Router();
 
-const ADMIN_SESSION_MS = 5 * 60 * 1000;
+const ADMIN_SESSION_MS = 60 * 60 * 1000;
 const ADMIN_LOCK_MS = 60 * 60 * 1000;
 const ADMIN_MAX_FAILS = 5;
 

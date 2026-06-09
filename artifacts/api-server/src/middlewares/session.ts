@@ -5,7 +5,7 @@ export const SESSION_COOKIE = "inmu-session";
 export const ADMIN_SESSION_COOKIE = "inmu-admin-session";
 
 const USER_SESSION_MS = 30 * 60 * 1000;
-const ADMIN_SESSION_MS = 5 * 60 * 1000;
+const ADMIN_SESSION_MS = 60 * 60 * 1000;
 
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;

@@ -120,7 +120,13 @@ async function fetchTransaction(sig: string) {
   const data = await res.json() as {
     result?: {
       blockTime: number | null;
-      meta: { err: unknown; preTokenBalances: TokenBalance[]; postTokenBalances: TokenBalance[] };
+      meta: {
+        err: unknown;
+        preTokenBalances: TokenBalance[];
+        postTokenBalances: TokenBalance[];
+        // バージョン付きトランザクション（ALT）でロードされたアカウント
+        loadedAddresses?: { writable: string[]; readonly: string[] };
+      };
       transaction: { message: { accountKeys: string[] } };
     } | null;
     error?: { message: string };
@@ -181,7 +187,13 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
         const tx = result.status === "fulfilled" ? result.value : null;
         if (!tx || tx.meta?.err !== null) continue;
 
-        const accountKeys: string[] = tx.transaction?.message?.accountKeys ?? [];
+        // 静的アカウント + ALT（アドレスルックアップテーブル）でロードされたアカウントを結合
+        // Jupiter等のバージョン付きTXではINMUトークンアカウントがALT経由で参照される
+        const staticKeys: string[] = tx.transaction?.message?.accountKeys ?? [];
+        const altWritable: string[] = tx.meta.loadedAddresses?.writable ?? [];
+        const altReadonly: string[] = tx.meta.loadedAddresses?.readonly ?? [];
+        const accountKeys = [...staticKeys, ...altWritable, ...altReadonly];
+
         const matchedDex = accountKeys.find((k) => DEX_PROGRAMS.has(k));
         if (!matchedDex) continue;
 
