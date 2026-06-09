@@ -80,7 +80,8 @@ type TradeTxRow = {
 
 const PREREQUISITE_CATEGORIES = [
   { value: 'none',              label: '前提条件なし',                 presets: [] as number[] },
-  { value: 'mission',           label: '特定ミッションクリア完了',       presets: [] as number[] },
+  { value: 'mission_x',        label: 'Xフォロー完了',                presets: [] as number[] },
+  { value: 'mission_discord',  label: 'Discord参加完了',              presets: [] as number[] },
   { value: 'buy_daily',         label: 'デイリー購入枚数',              presets: [50000, 100000] },
   { value: 'buy_weekly',        label: 'ウィークリー購入枚数',           presets: [500000, 1000000] },
   { value: 'inmu_balance',      label: '累計保有枚数',                  presets: [1000000, 2000000, 3000000, 4000000, 5000000, 10000000, 30000000, 50000000] },
@@ -732,8 +733,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     if (!title.trim()) { toast.error('タイトルが必要です'); return }
     const condTypeVal = conditionType === 'none' ? null : conditionType
     const condValueVal = condTypeVal && conditionValue ? Number(conditionValue) : null
-    const prereqMissionId = prerequisiteType === 'mission' ? (Number(prerequisiteValue) || null) : null
-    const prereqCondType = (prerequisiteType !== 'none' && prerequisiteType !== 'mission') ? prerequisiteType : null
+    const isMissionPrereq = prerequisiteType === 'mission_x' || prerequisiteType === 'mission_discord'
+    const prereqMissionId = isMissionPrereq ? (Number(prerequisiteValue) || null) : null
+    const prereqCondType = (prerequisiteType !== 'none' && !isMissionPrereq) ? prerequisiteType : null
     const prereqCondValue = prereqCondType && prerequisiteValue ? Number(prerequisiteValue) : null
     const payload = {
       title, description, type, points: Number(points) || 0,
@@ -1176,21 +1178,28 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
                 </select>
-                {missionForm.prerequisiteType === 'mission' && (
-                  <select
-                    value={missionForm.prerequisiteValue}
-                    onChange={e => setMissionForm(f => ({ ...f, prerequisiteValue: e.target.value }))}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">前提ミッションを選択（Xフォロー・Discord参加のみ）</option>
-                    {missions
-                      .filter(m => m.conditionType === 'link_visit' && (editingMissionId === null || m.id !== editingMissionId))
-                      .map(m => (
+                {(missionForm.prerequisiteType === 'mission_x' || missionForm.prerequisiteType === 'mission_discord') && (() => {
+                  const keyword = missionForm.prerequisiteType === 'mission_x' ? ['x', 'twitter', 'フォロー'] : ['discord']
+                  const filtered = missions.filter(m =>
+                    m.conditionType === 'link_visit' &&
+                    keyword.some(k => m.title.toLowerCase().includes(k)) &&
+                    (editingMissionId === null || m.id !== editingMissionId)
+                  )
+                  const label = missionForm.prerequisiteType === 'mission_x' ? 'Xフォロー' : 'Discord参加'
+                  return (
+                    <select
+                      value={missionForm.prerequisiteValue}
+                      onChange={e => setMissionForm(f => ({ ...f, prerequisiteValue: e.target.value }))}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">{label}ミッションを選択</option>
+                      {filtered.map(m => (
                         <option key={m.id} value={String(m.id)}>{m.title}</option>
                       ))}
-                  </select>
-                )}
-                {missionForm.prerequisiteType !== 'none' && missionForm.prerequisiteType !== 'mission' && (() => {
+                    </select>
+                  )
+                })()}
+                {missionForm.prerequisiteType !== 'none' && missionForm.prerequisiteType !== 'mission_x' && missionForm.prerequisiteType !== 'mission_discord' && (() => {
                   const presets = PREREQUISITE_CATEGORIES.find(c => c.value === missionForm.prerequisiteType)?.presets ?? []
                   return (
                     <select
@@ -1305,8 +1314,11 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                         className="size-8 p-0"
                         onClick={() => {
                           setEditingMissionId(m.id)
+                          const prereqMission = m.prerequisiteMissionId
+                            ? missions.find(mx => mx.id === m.prerequisiteMissionId)
+                            : null
                           const preType = m.prerequisiteMissionId
-                            ? 'mission'
+                            ? (prereqMission?.title.toLowerCase().includes('discord') ? 'mission_discord' : 'mission_x')
                             : m.prerequisiteConditionType ?? 'none'
                           const preValue = m.prerequisiteMissionId
                             ? String(m.prerequisiteMissionId)
