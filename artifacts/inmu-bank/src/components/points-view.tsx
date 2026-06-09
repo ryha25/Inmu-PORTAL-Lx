@@ -1,8 +1,10 @@
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useI18n } from '@/lib/i18n/context'
 import { formatDate } from '@/lib/format'
-import { Award, Flame, ChevronDown, ChevronUp, ExternalLink, CheckCircle2 } from 'lucide-react'
+import { Award, Flame, ChevronDown, ChevronUp, ExternalLink, CheckCircle2, ShoppingCart, Clock, XCircle } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 
@@ -12,24 +14,6 @@ type PointsData = {
   alreadyClaimed: boolean
   history: { id: number; amount: string; type: string; createdAt: string }[]
   leaderboard: { rank: number; userId: string; displayName: string; points: number }[]
-}
-
-const CONDITION_LABELS: Record<string, string> = {
-  inmu_balance: 'INMU保有',
-  login_streak: '連続ログイン',
-  login_total:  '累計ログイン',
-  buy_daily:    'デイリー購入',
-  buy_weekly:   'ウィークリー購入',
-  buy_total:    '累計購入',
-}
-
-const CONDITION_UNITS: Record<string, string> = {
-  inmu_balance: ' INMU',
-  login_streak: '日',
-  login_total:  '日',
-  buy_daily:    ' INMU',
-  buy_weekly:   ' INMU',
-  buy_total:    ' INMU',
 }
 
 type Mission = {
@@ -49,13 +33,41 @@ type Mission = {
   conditionCurrent: number | null
 }
 
+type PurchaseRequest = {
+  id: number
+  amount: string
+  txHash: string | null
+  comment: string | null
+  status: string
+  rebateAmount: string | null
+  rebateRate: string | null
+  adminNote: string | null
+  createdAt: string
+}
+
+const STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  pending:  { label: '審査中',   color: 'text-yellow-500' },
+  approved: { label: '承認済み', color: 'text-green-500' },
+  rejected: { label: '却下',     color: 'text-destructive' },
+}
+
 export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: () => void }) {
   const { locale } = useI18n()
-  const [dailyOpen, setDailyOpen] = useState(true)
-  const [weeklyOpen, setWeeklyOpen] = useState(true)
-  const [dailyMissions, setDailyMissions] = useState<Mission[]>([])
+  const [dailyOpen,   setDailyOpen]   = useState(true)
+  const [weeklyOpen,  setWeeklyOpen]  = useState(true)
+  const [purchaseOpen, setPurchaseOpen] = useState(false)
+
+  const [dailyMissions,  setDailyMissions]  = useState<Mission[]>([])
   const [weeklyMissions, setWeeklyMissions] = useState<Mission[]>([])
   const [busy, setBusy] = useState<number | null>(null)
+
+  // 購入申請
+  const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([])
+  const [purchaseLimit, setPurchaseLimit] = useState<number>(1000000)
+  const [prAmount,  setPrAmount]  = useState('')
+  const [prTxHash,  setPrTxHash]  = useState('')
+  const [prComment, setPrComment] = useState('')
+  const [prBusy,    setPrBusy]    = useState(false)
 
   const loadMissions = useCallback(() => {
     fetch('/api/missions', { credentials: 'include' })
@@ -69,14 +81,26 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       .catch(() => {})
   }, [])
 
+  const loadPurchaseRequests = useCallback(() => {
+    fetch('/api/purchase-requests', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) {
+          setPurchaseRequests(d.requests ?? [])
+          setPurchaseLimit(d.limit ?? 1000000)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   useEffect(() => { loadMissions() }, [loadMissions])
+  useEffect(() => { loadPurchaseRequests() }, [loadPurchaseRequests])
 
   async function joinMission(mission: Mission) {
     setBusy(mission.id)
     try {
       const res = await fetch(`/api/missions/${mission.id}/join`, {
-        method: 'POST',
-        credentials: 'include',
+        method: 'POST', credentials: 'include',
       })
       if (!res.ok) {
         const d = await res.json()
@@ -85,19 +109,15 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         toast.success('ミッションに参加しました！')
         loadMissions()
       }
-    } catch {
-      toast.error('通信エラーが発生しました')
-    } finally {
-      setBusy(null)
-    }
+    } catch { toast.error('通信エラーが発生しました') }
+    finally { setBusy(null) }
   }
 
   async function achieveMission(mission: Mission) {
     setBusy(mission.id)
     try {
       const res = await fetch(`/api/missions/${mission.id}/achieve`, {
-        method: 'POST',
-        credentials: 'include',
+        method: 'POST', credentials: 'include',
       })
       if (!res.ok) {
         const d = await res.json()
@@ -106,17 +126,12 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         toast.success('達成しました！報酬を受け取ってください')
         loadMissions()
       }
-    } catch {
-      toast.error('通信エラーが発生しました')
-    } finally {
-      setBusy(null)
-    }
+    } catch { toast.error('通信エラーが発生しました') }
+    finally { setBusy(null) }
   }
 
   async function openLinkAndAchieve(mission: Mission) {
-    if (mission.linkUrl) {
-      window.open(mission.linkUrl, '_blank', 'noopener,noreferrer')
-    }
+    if (mission.linkUrl) window.open(mission.linkUrl, '_blank', 'noopener,noreferrer')
     await achieveMission(mission)
   }
 
@@ -124,67 +139,51 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
     setBusy(mission.id)
     try {
       const res = await fetch(`/api/missions/${mission.id}/claim`, {
-        method: 'POST',
-        credentials: 'include',
+        method: 'POST', credentials: 'include',
       })
       const d = await res.json()
       if (!res.ok) {
-        if (d.error === 'already_completed') {
-          toast.info('このミッションは既に達成済みです')
-        } else {
-          toast.error(d.error ?? 'エラーが発生しました')
-        }
+        if (d.error === 'already_completed') toast.info('このミッションは既に達成済みです')
+        else toast.error(d.error ?? 'エラーが発生しました')
       } else {
         toast.success(`+${d.points} ポイント獲得！`)
         loadMissions()
         onRefresh()
       }
-    } catch {
-      toast.error('通信エラーが発生しました')
-    } finally {
-      setBusy(null)
-    }
+    } catch { toast.error('通信エラーが発生しました') }
+    finally { setBusy(null) }
   }
 
-  function ConditionBadge({ conditionType, conditionValue, conditionMet, conditionCurrent }: {
-    conditionType: string | null
-    conditionValue: string | null
-    conditionMet: boolean | null
-    conditionCurrent: number | null
-  }) {
-    if (!conditionType || conditionType === 'none') return null
-
-    if (conditionType === 'link_visit') {
-      return (
-        <span className="text-[10px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5">
-          条件: リンク訪問
-        </span>
-      )
+  async function submitPurchaseRequest() {
+    const num = Number(prAmount)
+    if (!prAmount || isNaN(num) || num <= 0) {
+      toast.error('有効な枚数を入力してください')
+      return
     }
-
-    const label = CONDITION_LABELS[conditionType]
-    const unit = CONDITION_UNITS[conditionType] ?? ''
-    if (!label || !conditionValue) return null
-
-    const target = Number(conditionValue)
-    const fmtNum = (n: number) => n >= 10000 ? `${(n / 10000).toLocaleString()}万` : n.toLocaleString()
-
-    const met = conditionMet
-    const current = conditionCurrent
-
-    return (
-      <span className={`inline-flex items-center gap-1 text-[10px] rounded px-1.5 py-0.5 ${
-        met === true
-          ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-          : met === false
-            ? 'bg-destructive/10 text-destructive'
-            : 'bg-secondary/50 text-muted-foreground'
-      }`}>
-        {met === true ? '✓' : met === false ? '✗' : ''}
-        {label}: {current !== null ? `${fmtNum(current)}/` : ''}{fmtNum(target)}{unit}
-        {met === true ? ' 達成' : met === false ? ' 未達成' : ''}
-      </span>
-    )
+    if (num > purchaseLimit) {
+      toast.error(`申請上限を超えています（上限: ${purchaseLimit.toLocaleString()} INMU）`)
+      return
+    }
+    setPrBusy(true)
+    try {
+      const res = await fetch('/api/purchase-requests', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: num, txHash: prTxHash || null, comment: prComment || null }),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        toast.error(d.error ?? 'エラーが発生しました')
+      } else {
+        toast.success('購入申請を送信しました')
+        setPrAmount('')
+        setPrTxHash('')
+        setPrComment('')
+        loadPurchaseRequests()
+      }
+    } catch { toast.error('通信エラーが発生しました') }
+    finally { setPrBusy(false) }
   }
 
   function MissionItem({ m }: { m: Mission }) {
@@ -204,14 +203,6 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
               )}
             </div>
             {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
-            <div className="mt-1">
-              <ConditionBadge
-                conditionType={m.conditionType}
-                conditionValue={m.conditionValue}
-                conditionMet={m.conditionMet}
-                conditionCurrent={m.conditionCurrent}
-              />
-            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="font-mono text-sm font-bold text-chart-5">+{m.points} pts</span>
@@ -221,53 +212,26 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
                 <CheckCircle2 className="size-3 text-chart-5" />
                 <span className="text-[10px] font-medium text-chart-5">受取済み</span>
               </div>
-
             ) : status === 'achieved' ? (
-              <Button
-                size="sm"
-                className="h-7 px-2 text-xs bg-chart-5 hover:bg-chart-5/90"
-                disabled={isBusy}
-                onClick={() => claimMission(m)}
-              >
+              <Button size="sm" className="h-7 px-2 text-xs bg-chart-5 hover:bg-chart-5/90"
+                disabled={isBusy} onClick={() => claimMission(m)}>
                 {isBusy ? '処理中…' : '報酬を受け取る'}
               </Button>
-
             ) : status === 'joined' ? (
               m.linkUrl ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs gap-1"
-                  disabled={isBusy}
-                  onClick={() => openLinkAndAchieve(m)}
-                >
-                  {isBusy ? '処理中…' : (
-                    <>
-                      <ExternalLink className="size-3" />
-                      リンクを開く
-                    </>
-                  )}
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1"
+                  disabled={isBusy} onClick={() => openLinkAndAchieve(m)}>
+                  {isBusy ? '処理中…' : <><ExternalLink className="size-3" />リンクを開く</>}
                 </Button>
               ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs"
-                  disabled={isBusy}
-                  onClick={() => achieveMission(m)}
-                >
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                  disabled={isBusy} onClick={() => achieveMission(m)}>
                   {isBusy ? '処理中…' : '達成する'}
                 </Button>
               )
-
             ) : (
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-7 px-2 text-xs"
-                disabled={isBusy}
-                onClick={() => joinMission(m)}
-              >
+              <Button size="sm" variant="secondary" className="h-7 px-2 text-xs"
+                disabled={isBusy} onClick={() => joinMission(m)}>
                 {isBusy ? '処理中…' : '参加する'}
               </Button>
             )}
@@ -298,47 +262,145 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
 
       {/* ── デイリーミッション ── */}
       <Card className="border-border bg-card overflow-hidden">
-        <button
-          type="button"
+        <button type="button"
           className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
-          onClick={() => setDailyOpen(o => !o)}
-        >
+          onClick={() => setDailyOpen(o => !o)}>
           <h2 className="text-sm font-semibold">▼ デイリーミッション</h2>
-          {dailyOpen
-            ? <ChevronUp className="size-4 text-muted-foreground" />
-            : <ChevronDown className="size-4 text-muted-foreground" />}
+          {dailyOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
         </button>
         {dailyOpen && (
           dailyMissions.length === 0
             ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">現在ミッションはありません</p>
-            : (
-              <ul className="divide-y divide-border">
-                {dailyMissions.map(m => <MissionItem key={m.id} m={m} />)}
-              </ul>
-            )
+            : <ul className="divide-y divide-border">{dailyMissions.map(m => <MissionItem key={m.id} m={m} />)}</ul>
         )}
       </Card>
 
       {/* ── ウィークリーミッション ── */}
       <Card className="border-border bg-card overflow-hidden">
-        <button
-          type="button"
+        <button type="button"
           className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
-          onClick={() => setWeeklyOpen(o => !o)}
-        >
+          onClick={() => setWeeklyOpen(o => !o)}>
           <h2 className="text-sm font-semibold">▼ ウィークリーミッション</h2>
-          {weeklyOpen
-            ? <ChevronUp className="size-4 text-muted-foreground" />
-            : <ChevronDown className="size-4 text-muted-foreground" />}
+          {weeklyOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
         </button>
         {weeklyOpen && (
           weeklyMissions.length === 0
             ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">現在ミッションはありません</p>
-            : (
-              <ul className="divide-y divide-border">
-                {weeklyMissions.map(m => <MissionItem key={m.id} m={m} />)}
-              </ul>
-            )
+            : <ul className="divide-y divide-border">{weeklyMissions.map(m => <MissionItem key={m.id} m={m} />)}</ul>
+        )}
+      </Card>
+
+      {/* ── 購入枚数申請 ── */}
+      <Card className="border-border bg-card overflow-hidden">
+        <button type="button"
+          className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
+          onClick={() => setPurchaseOpen(o => !o)}>
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="size-4 text-primary" />
+            <h2 className="text-sm font-semibold">購入枚数申請</h2>
+          </div>
+          {purchaseOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+        </button>
+
+        {purchaseOpen && (
+          <div className="flex flex-col gap-4 p-4">
+            {/* 申請フォーム */}
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-primary">新規申請</p>
+                <p className="text-[11px] text-muted-foreground">
+                  上限: <span className="font-mono font-bold">{purchaseLimit.toLocaleString()} INMU</span>
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs text-muted-foreground">購入枚数（INMU）*</Label>
+                <Input
+                  type="number"
+                  placeholder={`最大 ${purchaseLimit.toLocaleString()}`}
+                  value={prAmount}
+                  onChange={e => setPrAmount(e.target.value)}
+                  min="1"
+                  max={purchaseLimit}
+                  className="min-h-10"
+                />
+                {prAmount && Number(prAmount) > purchaseLimit && (
+                  <p className="text-[11px] text-destructive flex items-center gap-1">
+                    <XCircle className="size-3" />
+                    申請上限（{purchaseLimit.toLocaleString()} INMU）を超えています
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs text-muted-foreground">取引TxHash（任意）</Label>
+                <Input
+                  placeholder="Solanaトランザクション署名"
+                  value={prTxHash}
+                  onChange={e => setPrTxHash(e.target.value)}
+                  className="min-h-10 font-mono text-xs"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs text-muted-foreground">コメント（任意）</Label>
+                <Input
+                  placeholder="申請に関するメモ"
+                  value={prComment}
+                  onChange={e => setPrComment(e.target.value)}
+                  className="min-h-10"
+                />
+              </div>
+
+              <Button
+                onClick={submitPurchaseRequest}
+                disabled={prBusy || !prAmount || Number(prAmount) <= 0 || Number(prAmount) > purchaseLimit}
+                className="min-h-10"
+              >
+                {prBusy ? '送信中…' : '申請を送信'}
+              </Button>
+            </div>
+
+            {/* 申請履歴 */}
+            {purchaseRequests.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-muted-foreground">申請履歴</p>
+                {purchaseRequests.map(pr => {
+                  const s = STATUS_LABEL[pr.status] ?? { label: pr.status, color: 'text-muted-foreground' }
+                  return (
+                    <div key={pr.id} className="rounded-lg border border-border bg-secondary/20 p-3 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-sm font-bold">
+                          {Number(pr.amount).toLocaleString()} INMU
+                        </span>
+                        <span className={`text-xs font-medium flex items-center gap-1 ${s.color}`}>
+                          {pr.status === 'pending'  && <Clock className="size-3" />}
+                          {pr.status === 'approved' && <CheckCircle2 className="size-3" />}
+                          {pr.status === 'rejected' && <XCircle className="size-3" />}
+                          {s.label}
+                        </span>
+                      </div>
+                      {pr.status === 'approved' && pr.rebateAmount && (
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          還元: {Number(pr.rebateAmount).toLocaleString()} INMU
+                          {pr.rebateRate && ` (${Number(pr.rebateRate)}%)`}
+                        </p>
+                      )}
+                      {pr.status === 'rejected' && pr.adminNote && (
+                        <p className="text-xs text-destructive">理由: {pr.adminNote}</p>
+                      )}
+                      {pr.comment && <p className="text-xs text-muted-foreground">{pr.comment}</p>}
+                      <p className="text-[10px] text-muted-foreground">{formatDate(pr.createdAt, locale)}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {purchaseRequests.length === 0 && (
+              <p className="text-center text-sm text-muted-foreground py-4">申請履歴がありません</p>
+            )}
+          </div>
         )}
       </Card>
 

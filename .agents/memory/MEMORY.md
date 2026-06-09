@@ -1,3 +1,5 @@
 - [Solana tx confirmation](solana-tx-confirm.md) — record tx after sendRawTransaction (not after confirmTransaction) to avoid BlockHeightExceeded data loss
 - [Admin profile cleanup](admin-profile-cleanup.md) — INMU send removed from admin profile; only lives in Actions tab (distribute-airdrop routes)
 - [Phantom mobile redirect](phantom-mobile.md) — mobile send button fires Phantom deep link immediately on press; iOS uses phantom.app/ul/browse, Android uses intent:// scheme
+- [Purchase request system](purchase-request-system.md) — purchaseRequestsTable + systemSettingsTable; limit is admin-configurable via systemSettings key=purchase_request_limit
+- [Admin configurable settings](admin-configurable-settings.md) — systemSettingsTable is KV store for runtime config; initial key: purchase_request_limit=1000000; add new keys for future numeric settings

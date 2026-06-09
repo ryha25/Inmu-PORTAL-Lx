@@ -18,6 +18,8 @@ import solanaRouter from "./solana";
 import missionsRouter from "./missions";
 import transferRouter from "./transfer";
 import tradeHistoryRouter from "./trade-history";
+import purchaseRequestsRouter from "./purchase-requests";
+import systemSettingsRouter from "./system-settings";
 
 const router: IRouter = Router();
 
@@ -40,5 +42,7 @@ router.use(solanaRouter);
 router.use(missionsRouter);
 router.use(transferRouter);
 router.use(tradeHistoryRouter);
+router.use(purchaseRequestsRouter);
+router.use(systemSettingsRouter);
 
 export default router;

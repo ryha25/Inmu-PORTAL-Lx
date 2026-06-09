@@ -12,7 +12,8 @@ import {
   Search, Download, Shield, User, Trash2,
   CheckSquare, Square, Send, Star, Coins,
   WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2, Lock,
-  TrendingUp, TrendingDown, RefreshCw,
+  TrendingUp, TrendingDown, RefreshCw, Settings, ShoppingCart,
+  CheckCircle2, Clock, XCircle,
 } from 'lucide-react'
 import type { UserRow } from '@/pages/admin-page'
 
@@ -77,6 +78,39 @@ type EmergencyRow = {
   passwordEnabled: boolean
   passcodeEnabled: boolean
   updatedAt: string | null
+}
+
+type PurchaseRequestAdminRow = {
+  id: number
+  userId: string
+  displayName: string | null
+  solWallet: string | null
+  amount: string
+  txHash: string | null
+  comment: string | null
+  status: string
+  rebateAmount: string | null
+  rebateRate: string | null
+  adminNote: string | null
+  reviewedAt: string | null
+  createdAt: string
+}
+
+type SystemSettingRow = {
+  key: string
+  value: string
+  description: string | null
+  updatedAt: string
+}
+
+const PR_STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  pending:  { label: '審査中',   color: 'text-yellow-500' },
+  approved: { label: '承認済み', color: 'text-green-500' },
+  rejected: { label: '却下',     color: 'text-destructive' },
+}
+
+const SYSTEM_SETTING_PRESETS: Record<string, string[]> = {
+  purchase_request_limit: ['100000', '500000', '1000000', '5000000'],
 }
 
 async function api(path: string, method: string, body?: unknown) {
@@ -257,6 +291,23 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [tradeScanning, setTradeScanning] = useState<string | null>(null)
 
   const [emergencyList, setEmergencyList] = useState<EmergencyRow[]>([])
+
+  // ── 購入申請 ──
+  const [purchaseReqs, setPurchaseReqs] = useState<PurchaseRequestAdminRow[]>([])
+  const [prLoading, setPrLoading] = useState(false)
+  const [prEditId, setPrEditId] = useState<number | null>(null)
+  const [prStatus, setPrStatus] = useState('approved')
+  const [prRebateAmount, setPrRebateAmount] = useState('')
+  const [prRebateRate, setPrRebateRate] = useState('')
+  const [prAdminNote, setPrAdminNote] = useState('')
+  const [prSaving, setPrSaving] = useState(false)
+
+  // ── システム設定 ──
+  const [systemSettings, setSystemSettings] = useState<SystemSettingRow[]>([])
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [editingSettingKey, setEditingSettingKey] = useState<string | null>(null)
+  const [settingEditValue, setSettingEditValue] = useState('')
+  const [settingSaving, setSettingSaving] = useState(false)
   const [emergencySearch, setEmergencySearch] = useState('')
   const [emergencyUserId, setEmergencyUserId] = useState<string | null>(null)
   const [emergencyForm, setEmergencyForm] = useState({ password: '', passcode: '', passwordEnabled: false, passcodeEnabled: false })
@@ -382,6 +433,56 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     }
   }
 
+  async function loadPurchaseRequests() {
+    setPrLoading(true)
+    try {
+      const data = await api('/admin/purchase-requests', 'GET') as PurchaseRequestAdminRow[]
+      setPurchaseReqs(Array.isArray(data) ? data : [])
+    } catch { toast.error(t('error')) }
+    finally { setPrLoading(false) }
+  }
+
+  async function savePurchaseReview(id: number) {
+    setPrSaving(true)
+    try {
+      await api(`/admin/purchase-requests/${id}`, 'PUT', {
+        status: prStatus,
+        rebateAmount: prRebateAmount ? Number(prRebateAmount) : null,
+        rebateRate:   prRebateRate   ? Number(prRebateRate)   : null,
+        adminNote: prAdminNote || null,
+      })
+      toast.success('更新しました')
+      setPrEditId(null)
+      setPrStatus('approved')
+      setPrRebateAmount('')
+      setPrRebateRate('')
+      setPrAdminNote('')
+      await loadPurchaseRequests()
+    } catch (e) { toast.error(e instanceof Error ? e.message : t('error')) }
+    finally { setPrSaving(false) }
+  }
+
+  async function loadSystemSettings() {
+    setSettingsLoading(true)
+    try {
+      const data = await api('/admin/system-settings', 'GET') as SystemSettingRow[]
+      setSystemSettings(Array.isArray(data) ? data : [])
+    } catch { toast.error(t('error')) }
+    finally { setSettingsLoading(false) }
+  }
+
+  async function saveSystemSetting(key: string) {
+    setSettingSaving(true)
+    try {
+      await api(`/admin/system-settings/${key}`, 'PUT', { value: settingEditValue })
+      toast.success('設定を保存しました')
+      setEditingSettingKey(null)
+      setSettingEditValue('')
+      await loadSystemSettings()
+    } catch (e) { toast.error(e instanceof Error ? e.message : t('error')) }
+    finally { setSettingSaving(false) }
+  }
+
   async function saveMission() {
     const { title, description, type, points, startAt, endAt, linkUrl, conditionType, conditionValue } = missionForm
     if (!title.trim()) { toast.error('タイトルが必要です'); return }
@@ -425,15 +526,21 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       </div>
 
       <Tabs defaultValue="users">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="actions">Actions</TabsTrigger>
-          <TabsTrigger value="audit">Audit</TabsTrigger>
-          <TabsTrigger value="missions" onClick={loadMissions}>ミッション</TabsTrigger>
-          <TabsTrigger value="emergency" onClick={async () => {
+        <TabsList className="grid w-full grid-cols-4 h-auto gap-0.5">
+          <TabsTrigger value="users" className="text-xs py-1.5">Users</TabsTrigger>
+          <TabsTrigger value="actions" className="text-xs py-1.5">Actions</TabsTrigger>
+          <TabsTrigger value="audit" className="text-xs py-1.5">Audit</TabsTrigger>
+          <TabsTrigger value="missions" className="text-xs py-1.5" onClick={loadMissions}>Mission</TabsTrigger>
+          <TabsTrigger value="emergency" className="text-xs py-1.5" onClick={async () => {
             try { const d = await api('/admin/emergency-auth', 'GET'); setEmergencyList(Array.isArray(d) ? d : []) } catch { setEmergencyList([]) }
           }}>緊急</TabsTrigger>
-          <TabsTrigger value="trade" onClick={() => loadTradeHistory()}>売買</TabsTrigger>
+          <TabsTrigger value="trade" className="text-xs py-1.5" onClick={() => loadTradeHistory()}>売買</TabsTrigger>
+          <TabsTrigger value="purchase" className="text-xs py-1.5" onClick={loadPurchaseRequests}>
+            <ShoppingCart className="size-3 mr-1" />申請
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="text-xs py-1.5" onClick={loadSystemSettings}>
+            <Settings className="size-3 mr-1" />設定
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Users tab ── */}
@@ -1105,6 +1212,191 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                   )}
                 </Card>
               ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── 購入申請 tab ── */}
+        <TabsContent value="purchase" className="flex flex-col gap-3 mt-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold flex items-center gap-2">
+              <ShoppingCart className="size-4 text-primary" />購入枚数申請
+            </p>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={loadPurchaseRequests} disabled={prLoading}>
+              <RefreshCw className={`size-3 mr-1 ${prLoading ? 'animate-spin' : ''}`} />更新
+            </Button>
+          </div>
+
+          {prLoading ? (
+            <p className="text-sm text-center text-muted-foreground py-6">読み込み中…</p>
+          ) : purchaseReqs.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+              申請がありません
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {purchaseReqs.map(pr => {
+                const s = PR_STATUS_LABEL[pr.status] ?? { label: pr.status, color: 'text-muted-foreground' }
+                const isEditing = prEditId === pr.id
+                return (
+                  <Card key={pr.id} className="border-border bg-card p-3 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-sm">{Number(pr.amount).toLocaleString()} INMU</span>
+                          <span className={`text-[10px] font-medium flex items-center gap-0.5 ${s.color}`}>
+                            {pr.status === 'pending'  && <Clock className="size-3" />}
+                            {pr.status === 'approved' && <CheckCircle2 className="size-3" />}
+                            {pr.status === 'rejected' && <XCircle className="size-3" />}
+                            {s.label}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {pr.displayName ?? pr.userId.slice(0, 12)}
+                        </span>
+                        {pr.comment && <span className="text-xs text-muted-foreground">"{pr.comment}"</span>}
+                        {pr.txHash && (
+                          <a href={`https://solscan.io/tx/${pr.txHash}`} target="_blank" rel="noopener noreferrer"
+                            className="text-[10px] text-primary/70 hover:text-primary font-mono truncate">
+                            {pr.txHash.slice(0, 20)}…
+                          </a>
+                        )}
+                        {pr.status === 'approved' && pr.rebateAmount && (
+                          <span className="text-xs text-green-600 dark:text-green-400">
+                            還元: {Number(pr.rebateAmount).toLocaleString()} INMU{pr.rebateRate ? ` (${pr.rebateRate}%)` : ''}
+                          </span>
+                        )}
+                        {pr.adminNote && <span className="text-xs text-muted-foreground">管理メモ: {pr.adminNote}</span>}
+                        <span className="text-[10px] text-muted-foreground">{new Date(pr.createdAt).toLocaleString('ja-JP')}</span>
+                      </div>
+                      <Button size="sm" variant={isEditing ? 'secondary' : 'outline'} className="h-7 text-xs shrink-0"
+                        onClick={() => {
+                          if (isEditing) {
+                            setPrEditId(null)
+                          } else {
+                            setPrEditId(pr.id)
+                            setPrStatus(pr.status === 'pending' ? 'approved' : pr.status)
+                            setPrRebateAmount(pr.rebateAmount ?? '')
+                            setPrRebateRate(pr.rebateRate ?? '')
+                            setPrAdminNote(pr.adminNote ?? '')
+                          }
+                        }}>
+                        {isEditing ? 'キャンセル' : '審査'}
+                      </Button>
+                    </div>
+
+                    {isEditing && (
+                      <div className="border-t border-border pt-2 flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <select
+                            value={prStatus}
+                            onChange={e => setPrStatus(e.target.value)}
+                            className="flex h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          >
+                            <option value="approved">承認</option>
+                            <option value="rejected">却下</option>
+                            <option value="pending">保留</option>
+                          </select>
+                        </div>
+                        {prStatus === 'approved' && (
+                          <div className="flex gap-2">
+                            <Input type="number" placeholder="還元INMU枚数" value={prRebateAmount}
+                              onChange={e => setPrRebateAmount(e.target.value)} className="min-h-9 flex-1" />
+                            <Input type="number" placeholder="還元率%" value={prRebateRate}
+                              onChange={e => {
+                                setPrRebateRate(e.target.value)
+                                if (e.target.value && pr.amount) {
+                                  setPrRebateAmount(String(Math.round(Number(pr.amount) * Number(e.target.value) / 100)))
+                                }
+                              }} className="min-h-9 w-24" />
+                          </div>
+                        )}
+                        <Input placeholder="管理メモ（任意）" value={prAdminNote}
+                          onChange={e => setPrAdminNote(e.target.value)} className="min-h-9" />
+                        <Button className="min-h-9" disabled={prSaving} onClick={() => savePurchaseReview(pr.id)}>
+                          {prSaving ? '保存中…' : '保存'}
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── システム設定 tab ── */}
+        <TabsContent value="settings" className="flex flex-col gap-3 mt-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold flex items-center gap-2">
+              <Settings className="size-4 text-primary" />システム設定
+            </p>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={loadSystemSettings} disabled={settingsLoading}>
+              <RefreshCw className={`size-3 mr-1 ${settingsLoading ? 'animate-spin' : ''}`} />更新
+            </Button>
+          </div>
+
+          <div className="rounded-lg border border-border/50 bg-secondary/10 p-3">
+            <p className="text-[11px] text-muted-foreground">
+              ここで変更した値はコード修正なしで即時反映されます。
+            </p>
+          </div>
+
+          {settingsLoading ? (
+            <p className="text-sm text-center text-muted-foreground py-6">読み込み中…</p>
+          ) : systemSettings.length === 0 ? (
+            <Button onClick={loadSystemSettings} variant="outline">設定を読み込む</Button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {systemSettings.map(s => {
+                const isEditing = editingSettingKey === s.key
+                const presets = SYSTEM_SETTING_PRESETS[s.key]
+                return (
+                  <Card key={s.key} className="border-border bg-card p-3 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <p className="text-sm font-medium">{s.description ?? s.key}</p>
+                        <p className="font-mono text-sm font-bold text-primary">
+                          {Number(s.value).toLocaleString()}
+                          {s.key.includes('limit') ? ' INMU' : ''}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          更新: {new Date(s.updatedAt).toLocaleString('ja-JP')}
+                        </p>
+                      </div>
+                      <Button size="sm" variant={isEditing ? 'secondary' : 'outline'} className="h-7 text-xs shrink-0"
+                        onClick={() => {
+                          if (isEditing) { setEditingSettingKey(null); setSettingEditValue('') }
+                          else { setEditingSettingKey(s.key); setSettingEditValue(s.value) }
+                        }}>
+                        {isEditing ? 'キャンセル' : '変更'}
+                      </Button>
+                    </div>
+
+                    {isEditing && (
+                      <div className="border-t border-border pt-2 flex flex-col gap-2">
+                        <Input type="number" value={settingEditValue}
+                          onChange={e => setSettingEditValue(e.target.value)}
+                          placeholder="新しい値" className="min-h-9" />
+                        {presets && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {presets.map(p => (
+                              <button key={p} type="button" onClick={() => setSettingEditValue(p)}
+                                className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${settingEditValue === p ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
+                                {Number(p).toLocaleString()}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <Button className="min-h-9" disabled={settingSaving || !settingEditValue}
+                          onClick={() => saveSystemSetting(s.key)}>
+                          {settingSaving ? '保存中…' : '保存'}
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
             </div>
           )}
         </TabsContent>

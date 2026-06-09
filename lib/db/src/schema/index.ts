@@ -236,3 +236,31 @@ export const emergencyAuthTable = pgTable("emergencyAuth", {
   passcodeEnabledAt: timestamp("passcodeEnabledAt"),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
+
+// ── INMU Bank: purchase requests (ユーザーからの購入申請) ──
+export const purchaseRequestsTable = pgTable("purchaseRequests", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  amount: numeric("amount").notNull(),
+  txHash: text("txHash"),
+  comment: text("comment"),
+  status: text("status").notNull().default("pending"),
+  reviewedByAdminId: text("reviewedByAdminId"),
+  reviewedAt: timestamp("reviewedAt"),
+  rebateAmount: numeric("rebateAmount"),
+  rebateRate: numeric("rebateRate"),
+  adminNote: text("adminNote"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type PurchaseRequest = typeof purchaseRequestsTable.$inferSelect;
+
+// ── INMU Bank: system settings (管理者が変更できる設定値) ──
+export const systemSettingsTable = pgTable("systemSettings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
+export type SystemSetting = typeof systemSettingsTable.$inferSelect;
