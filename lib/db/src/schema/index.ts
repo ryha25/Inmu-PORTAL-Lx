@@ -202,3 +202,16 @@ export const missionParticipationsTable = pgTable("missionParticipations", {
   achievedAt: timestamp("achievedAt"),
   rewardedAt: timestamp("rewardedAt"),
 });
+
+// ── INMU Bank: emergency auth (per-user emergency credentials) ──
+export const emergencyAuthTable = pgTable("emergencyAuth", {
+  userId: text("userId").primaryKey(),
+  emergencyPasswordHash: text("emergencyPasswordHash"),
+  emergencyPasscodeHash: text("emergencyPasscodeHash"),
+  passwordEnabled: boolean("passwordEnabled").notNull().default(false),
+  passcodeEnabled: boolean("passcodeEnabled").notNull().default(false),
+  setByAdminId: text("setByAdminId"),
+  passwordEnabledAt: timestamp("passwordEnabledAt"),
+  passcodeEnabledAt: timestamp("passcodeEnabledAt"),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});

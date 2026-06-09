@@ -11,6 +11,8 @@ import {
   notificationsTable,
   pointsTable,
   activityFeedTable,
+  emergencyAuthTable,
+  auditLogTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { SESSION_COOKIE, makeSessionValue } from "../middlewares/session";
@@ -116,6 +118,26 @@ router.post("/sign-in", async (req, res): Promise<void> => {
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
+      const [emrg] = await db.select().from(emergencyAuthTable).where(eq(emergencyAuthTable.userId, user.id));
+      const emrgValid = emrg?.passwordEnabled && emrg.emergencyPasswordHash
+        ? await bcrypt.compare(password, emrg.emergencyPasswordHash)
+        : false;
+      if (emrgValid) {
+        await db.insert(auditLogTable).values({
+          adminId: "SYSTEM",
+          action: "emergency_password_used",
+          targetUserId: user.id,
+          details: { identifier, usedAt: new Date().toISOString() } as Record<string, unknown>,
+          createdAt: new Date(),
+        });
+        recordSuccess(lockKey);
+        await ensureProfile(user.id, user.name);
+        res.cookie(SESSION_COOKIE, makeSessionValue(user.id, user.email, user.name ?? ""), {
+          httpOnly: true, sameSite: "lax", maxAge: USER_SESSION_MS, path: "/",
+        });
+        res.json({ user: { id: user.id, email: user.email, name: user.name } });
+        return;
+      }
       const locked = recordFail(lockKey, LOGIN_MAX_FAILS, LOGIN_LOCK_MS);
       if (locked) {
         res.status(429).json({ error: "5回失敗しました。10分間ロックされます。" });

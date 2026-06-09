@@ -4,6 +4,8 @@ import {
   profileTable,
   transactionsTable,
   notificationsTable,
+  emergencyAuthTable,
+  auditLogTable,
 } from "@workspace/db/schema";
 import { eq, or, and, not, sql, ilike } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
@@ -104,15 +106,26 @@ router.post("/transfer/verify-passcode", requireAuth, async (req, res): Promise<
       return;
     }
 
-    const valid = await bcrypt.compare(passcode, profile.passcodeHash);
-    if (!valid) {
-      const locked = recordFail(lockKey);
-      if (locked) {
-        res.status(429).json({ error: "5回失敗しました。30分間ロックされます。" });
-      } else {
-        res.status(401).json({ error: "パスコードが正しくありません" });
+    const normalValid = await bcrypt.compare(passcode, profile.passcodeHash);
+    if (!normalValid) {
+      const [emrg] = await db.select().from(emergencyAuthTable).where(eq(emergencyAuthTable.userId, userId));
+      const emrgValid = emrg?.passcodeEnabled && emrg.emergencyPasscodeHash
+        ? await bcrypt.compare(passcode, emrg.emergencyPasscodeHash)
+        : false;
+      if (!emrgValid) {
+        const locked = recordFail(lockKey);
+        if (locked) {
+          res.status(429).json({ error: "5回失敗しました。30分間ロックされます。" });
+        } else {
+          res.status(401).json({ error: "パスコードが正しくありません" });
+        }
+        return;
       }
-      return;
+      await db.insert(auditLogTable).values({
+        adminId: "SYSTEM", action: "emergency_passcode_used", targetUserId: userId,
+        details: { usedAt: new Date().toISOString() } as Record<string, unknown>,
+        createdAt: new Date(),
+      });
     }
 
     clearFail(lockKey);
@@ -165,15 +178,26 @@ router.post("/transfer/send", requireAuth, async (req, res): Promise<void> => {
       return;
     }
 
-    const valid = await bcrypt.compare(passcode, sender.passcodeHash);
-    if (!valid) {
-      const locked = recordFail(lockKey);
-      if (locked) {
-        res.status(429).json({ error: "5回失敗しました。30分間ロックされます。" });
-      } else {
-        res.status(401).json({ error: "パスコードが正しくありません" });
+    const normalValid2 = await bcrypt.compare(passcode, sender.passcodeHash);
+    if (!normalValid2) {
+      const [emrg] = await db.select().from(emergencyAuthTable).where(eq(emergencyAuthTable.userId, userId));
+      const emrgValid = emrg?.passcodeEnabled && emrg.emergencyPasscodeHash
+        ? await bcrypt.compare(passcode, emrg.emergencyPasscodeHash)
+        : false;
+      if (!emrgValid) {
+        const locked = recordFail(lockKey);
+        if (locked) {
+          res.status(429).json({ error: "5回失敗しました。30分間ロックされます。" });
+        } else {
+          res.status(401).json({ error: "パスコードが正しくありません" });
+        }
+        return;
       }
-      return;
+      await db.insert(auditLogTable).values({
+        adminId: "SYSTEM", action: "emergency_passcode_used", targetUserId: userId,
+        details: { action: "send", usedAt: new Date().toISOString() } as Record<string, unknown>,
+        createdAt: new Date(),
+      });
     }
 
     clearFail(lockKey);

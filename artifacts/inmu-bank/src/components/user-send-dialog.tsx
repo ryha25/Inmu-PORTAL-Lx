@@ -41,6 +41,20 @@ function getPhantom(): PhantomProvider | null {
   return null
 }
 
+function isMobile() { return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) }
+function isIOS() { return /iPhone|iPad|iPod/i.test(navigator.userAgent) }
+
+function openPhantomBrowser() {
+  const url = encodeURIComponent(window.location.href)
+  const ref = encodeURIComponent(window.location.origin)
+  const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
+  if (isIOS()) {
+    window.location.href = phantomUrl
+  } else {
+    window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+  }
+}
+
 function getRpcUrl() {
   return `${window.location.origin}/api/solana/rpc-proxy`
 }
@@ -57,9 +71,10 @@ type Props = {
   open: boolean
   onClose: () => void
   senderWallet: string | null
+  onSuccess?: () => void
 }
 
-export function UserSendDialog({ open, onClose, senderWallet }: Props) {
+export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props) {
   const [searchQ, setSearchQ] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
@@ -144,7 +159,14 @@ export function UserSendDialog({ open, onClose, senderWallet }: Props) {
 
       const phantom = getPhantom()
       if (!phantom) {
+        setSending(false)
+        if (isMobile()) {
+          toast.info('Phantomアプリで開きます…')
+          openPhantomBrowser()
+          return
+        }
         toast.error('Phantom ウォレットが見つかりません。インストールしてください。')
+        window.open('https://phantom.app/', '_blank')
         return
       }
 
@@ -236,7 +258,8 @@ export function UserSendDialog({ open, onClose, senderWallet }: Props) {
       }
 
       setTxHash(signature)
-      toast.success(`${formatInmu(amountNum)} INMU を ${recipient.displayName} に送金しました！`)
+      toast.success(`送金が完了しました！ ${formatInmu(amountNum)} INMU → ${recipient.displayName}`)
+      onSuccess?.()
     } catch (e: unknown) {
       toast.dismiss('signing')
       toast.dismiss('sending')
@@ -263,7 +286,7 @@ export function UserSendDialog({ open, onClose, senderWallet }: Props) {
           <div className="flex flex-col gap-4 pt-1">
             <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
               <CheckCircle2 className="size-5" />
-              <p className="font-semibold text-sm">送金完了！</p>
+              <p className="font-semibold text-sm">送金が完了しました！</p>
             </div>
             <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-1">
               <p className="text-xs text-muted-foreground">TxHash</p>
@@ -287,6 +310,14 @@ export function UserSendDialog({ open, onClose, senderWallet }: Props) {
                 <AlertTriangle className="size-3.5 text-yellow-500 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-yellow-700 dark:text-yellow-400">
                   SOLアドレスが設定されていません。プロフィールで設定してください。
+                </p>
+              </div>
+            )}
+            {isMobile() && !getPhantom() && (
+              <div className="flex items-start gap-2 rounded-lg border border-blue-300/40 bg-blue-50/10 p-2.5">
+                <AlertTriangle className="size-3.5 text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-blue-700 dark:text-blue-400">
+                  Phantomが検出されていません。送金ボタンを押すとPhantomアプリで開きます。
                 </p>
               </div>
             )}

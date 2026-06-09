@@ -9,7 +9,7 @@ import { useLocation } from 'wouter'
 import {
   User, WalletCards,
   ExternalLink, LogOut as WalletDisconnect, LogOut,
-  AtSign, MessageSquare,
+  AtSign, MessageSquare, Lock, KeyRound,
 } from 'lucide-react'
 
 type ProfileData = {
@@ -29,25 +29,15 @@ type ProfileData = {
   createdAt: string
 }
 
-declare global {
-  interface Window {
-    phantom?: {
-      solana?: {
-        isPhantom?: boolean
-        connect: () => Promise<{ publicKey: { toString(): string } }>
-        disconnect: () => Promise<void>
-      }
-    }
-    solana?: {
-      isPhantom?: boolean
-      connect: () => Promise<{ publicKey: { toString(): string } }>
-      disconnect: () => Promise<void>
-    }
-  }
+type PhantomLike = {
+  isPhantom?: boolean
+  connect: () => Promise<{ publicKey: { toString(): string } }>
+  disconnect: () => Promise<void>
 }
 
-function getPhantomProvider() {
-  return window.phantom?.solana ?? (window.solana?.isPhantom ? window.solana : null)
+function getPhantomProvider(): PhantomLike | null {
+  const w = window as Window & { phantom?: { solana?: PhantomLike }; solana?: PhantomLike }
+  return w.phantom?.solana ?? (w.solana?.isPhantom ? w.solana : null) ?? null
 }
 
 function isIOS() {
@@ -78,6 +68,10 @@ export function ProfileView({
   const [xId, setXId] = useState(profile.xId || '')
   const [discordId, setDiscordId] = useState(profile.discordId || '')
   const [solWallet, setSolWallet] = useState(profile.solWallet || '')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [currentPasscode, setCurrentPasscode] = useState('')
+  const [newPasscode, setNewPasscode] = useState('')
 
   async function handleSave() {
     setLoading(true)
@@ -101,6 +95,44 @@ export function ProfileView({
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleChangePassword() {
+    if (!currentPassword || !newPassword) return
+    setLoading(true)
+    try {
+      const res = await fetch('/api/profile/change-password', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error ?? 'エラーが発生しました')
+      toast.success('パスワードを変更しました')
+      setCurrentPassword('')
+      setNewPassword('')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('error'))
+    } finally { setLoading(false) }
+  }
+
+  async function handleChangePasscode() {
+    if (!currentPasscode || !newPasscode) return
+    setLoading(true)
+    try {
+      const res = await fetch('/api/profile/change-passcode', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPasscode, newPasscode }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error ?? 'エラーが発生しました')
+      toast.success('パスコードを変更しました')
+      setCurrentPasscode('')
+      setNewPasscode('')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('error'))
+    } finally { setLoading(false) }
   }
 
   async function saveWallet(address: string | null) {
@@ -359,6 +391,70 @@ export function ProfileView({
             )}
           </div>
         )}
+      </Card>
+
+      {/* ── パスワード変更 ── */}
+      <Card className="border-border bg-card p-4 flex flex-col gap-3">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <Lock className="size-4 text-primary" />
+          パスワード変更
+        </p>
+        <div className="flex flex-col gap-2">
+          <Input
+            type="password"
+            placeholder="現在のパスワード"
+            value={currentPassword}
+            onChange={e => setCurrentPassword(e.target.value)}
+            className="min-h-10"
+          />
+          <Input
+            type="password"
+            placeholder="新しいパスワード"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            className="min-h-10"
+          />
+          <Button
+            size="sm"
+            onClick={handleChangePassword}
+            disabled={!currentPassword || !newPassword || loading}
+            className="min-h-10"
+          >
+            パスワードを変更する
+          </Button>
+        </div>
+      </Card>
+
+      {/* ── パスコード変更 ── */}
+      <Card className="border-border bg-card p-4 flex flex-col gap-3">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <KeyRound className="size-4 text-primary" />
+          パスコード変更
+        </p>
+        <div className="flex flex-col gap-2">
+          <Input
+            type="password"
+            placeholder="現在のパスコード"
+            value={currentPasscode}
+            onChange={e => setCurrentPasscode(e.target.value)}
+            className="min-h-10"
+          />
+          <Input
+            type="password"
+            placeholder="新しいパスコード（数字4〜6桁）"
+            value={newPasscode}
+            onChange={e => setNewPasscode(e.target.value)}
+            className="min-h-10"
+          />
+          <Button
+            size="sm"
+            onClick={handleChangePasscode}
+            disabled={!currentPasscode || !newPasscode || loading}
+            className="min-h-10"
+          >
+            パスコードを変更する
+          </Button>
+        </div>
       </Card>
 
       {/* ── ログアウト ── */}

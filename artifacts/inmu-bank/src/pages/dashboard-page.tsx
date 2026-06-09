@@ -20,11 +20,14 @@ export function DashboardPage() {
   const [dailyClaim, setDailyClaim] = useState<{ alreadyClaimed: boolean; streak: number } | null>(null)
   const [sendOpen, setSendOpen] = useState(false)
 
-  useEffect(() => {
+  const loadDashboard = useCallback(() => {
     fetch('/api/dashboard', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.recent) setData(d) })
+      .catch(() => {})
   }, [])
+
+  useEffect(() => { loadDashboard() }, [loadDashboard])
 
   const loadPoints = useCallback(() => {
     fetch('/api/points', { credentials: 'include' })
@@ -89,6 +92,7 @@ export function DashboardPage() {
         open={sendOpen}
         onClose={() => setSendOpen(false)}
         senderWallet={profile?.solWallet ?? null}
+        onSuccess={loadDashboard}
       />
     </AppShell>
   )

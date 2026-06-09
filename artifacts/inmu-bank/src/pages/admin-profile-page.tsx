@@ -44,17 +44,10 @@ interface PhantomProvider {
   signAndSendTransaction(tx: Transaction): Promise<{ signature: string }>
 }
 
-declare global {
-  interface Window {
-    phantom?: { solana?: PhantomProvider }
-    solana?: PhantomProvider
-  }
-}
-
 function getPhantom(): PhantomProvider | null {
-  // Phantom推奨: window.phantom.solana を優先
-  if (window.phantom?.solana?.isPhantom) return window.phantom.solana
-  if (window.solana?.isPhantom) return window.solana
+  const w = window as Window & { phantom?: { solana?: PhantomProvider }; solana?: PhantomProvider }
+  if (w.phantom?.solana?.isPhantom) return w.phantom.solana
+  if (w.solana?.isPhantom) return w.solana
   return null
 }
 

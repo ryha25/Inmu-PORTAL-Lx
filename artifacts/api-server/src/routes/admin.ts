@@ -11,9 +11,11 @@ import {
   pointsTable,
   loginStreaksTable,
   auditLogTable,
+  emergencyAuthTable,
 } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireAdmin } from "../middlewares/session";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
@@ -822,6 +824,58 @@ router.post("/admin/deduct-points", requireAdmin, async (req, res): Promise<void
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
+});
+
+// ── Emergency Auth routes ──
+
+router.get("/admin/emergency-auth", requireAdmin, async (_req, res): Promise<void> => {
+  try {
+    const rows = await db.select({
+      userId: emergencyAuthTable.userId,
+      passwordEnabled: emergencyAuthTable.passwordEnabled,
+      passcodeEnabled: emergencyAuthTable.passcodeEnabled,
+      setByAdminId: emergencyAuthTable.setByAdminId,
+      updatedAt: emergencyAuthTable.updatedAt,
+    }).from(emergencyAuthTable);
+    const profiles = await db.select({ userId: profileTable.userId, displayName: profileTable.displayName }).from(profileTable);
+    const nameMap = Object.fromEntries(profiles.map(p => [p.userId, p.displayName ?? p.userId]));
+    res.json(rows.map(r => ({ ...r, displayName: nameMap[r.userId] ?? r.userId })));
+  } catch { res.status(500).json({ error: "Internal error" }); }
+});
+
+router.get("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    const [row] = await db.select().from(emergencyAuthTable).where(eq(emergencyAuthTable.userId, userId));
+    res.json(row ?? { userId, passwordEnabled: false, passcodeEnabled: false, emergencyPasswordHash: null, emergencyPasscodeHash: null });
+  } catch { res.status(500).json({ error: "Internal error" }); }
+});
+
+router.put("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Promise<void> => {
+  try {
+    const adminId = req.userId!;
+    const { userId } = req.params;
+    const { password, passcode, passwordEnabled, passcodeEnabled } = req.body as {
+      password?: string; passcode?: string; passwordEnabled?: boolean; passcodeEnabled?: boolean;
+    };
+    const [existing] = await db.select().from(emergencyAuthTable).where(eq(emergencyAuthTable.userId, userId));
+    const updates: Record<string, unknown> = { setByAdminId: adminId, updatedAt: new Date() };
+    if (typeof passwordEnabled === "boolean") updates.passwordEnabled = passwordEnabled;
+    if (typeof passcodeEnabled === "boolean") updates.passcodeEnabled = passcodeEnabled;
+    if (password) updates.emergencyPasswordHash = await bcrypt.hash(password, 12);
+    if (passcode) updates.emergencyPasscodeHash = await bcrypt.hash(passcode, 12);
+    if (existing) {
+      await db.update(emergencyAuthTable).set(updates).where(eq(emergencyAuthTable.userId, userId));
+    } else {
+      await db.insert(emergencyAuthTable).values({ userId, ...updates } as typeof emergencyAuthTable.$inferInsert);
+    }
+    await db.insert(auditLogTable).values({
+      adminId, action: "emergency_auth_updated", targetUserId: userId,
+      details: { passwordSet: !!password, passcodeSet: !!passcode, passwordEnabled, passcodeEnabled } as Record<string, unknown>,
+      createdAt: new Date(),
+    });
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: "Internal error" }); }
 });
 
 export default router;

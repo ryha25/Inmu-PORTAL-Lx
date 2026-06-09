@@ -7,11 +7,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useI18n } from '@/lib/i18n/context'
 import { formatInmu, maskWallet } from '@/lib/format'
 import { toast } from 'sonner'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Search, Download, Shield, User, Trash2,
   CheckSquare, Square, Send, Star, Coins,
-  WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2,
+  WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2, Lock,
 } from 'lucide-react'
 
 type UserRow = {
@@ -59,6 +59,14 @@ type TxRow = {
   memo: string | null
   counterparty: string | null
   createdAt: string
+}
+
+type EmergencyRow = {
+  userId: string
+  displayName: string
+  passwordEnabled: boolean
+  passcodeEnabled: boolean
+  updatedAt: string | null
 }
 
 async function api(path: string, method: string, body?: unknown) {
@@ -221,6 +229,12 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(false)
+
+  const [emergencyList, setEmergencyList] = useState<EmergencyRow[]>([])
+  const [emergencySearch, setEmergencySearch] = useState('')
+  const [emergencyUserId, setEmergencyUserId] = useState<string | null>(null)
+  const [emergencyForm, setEmergencyForm] = useState({ password: '', passcode: '', passwordEnabled: false, passcodeEnabled: false })
+  const [emergencySaving, setEmergencySaving] = useState(false)
   const [confirmOp, setConfirmOp] = useState<{ label: string; fn: () => Promise<void> } | null>(null)
   const [passcodeInput, setPasscodeInput] = useState('')
   const [passcodeLoading, setPasscodeLoading] = useState(false)
@@ -351,11 +365,14 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       </div>
 
       <Tabs defaultValue="users">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
           <TabsTrigger value="missions" onClick={loadMissions}>ミッション</TabsTrigger>
+          <TabsTrigger value="emergency" onClick={async () => {
+            try { const d = await api('/admin/emergency-auth', 'GET'); setEmergencyList(Array.isArray(d) ? d : []) } catch { setEmergencyList([]) }
+          }}>緊急認証</TabsTrigger>
         </TabsList>
 
         {/* ── Users tab ── */}
@@ -813,6 +830,165 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 </Card>
               ))}
             </div>
+          )}
+        </TabsContent>
+
+        {/* ── Emergency Auth tab ── */}
+        <TabsContent value="emergency" className="flex flex-col gap-4 mt-3">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 flex items-start gap-2">
+            <Lock className="size-3.5 text-destructive shrink-0 mt-0.5" />
+            <p className="text-[11px] text-destructive/80">緊急認証はユーザーが通常の認証情報を使えない場合の予備手段です。有効化は慎重に行ってください。</p>
+          </div>
+
+          {/* ユーザー選択フォーム */}
+          <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3">
+            <p className="text-sm font-semibold flex items-center gap-2">
+              <Lock className="size-4 text-primary" />
+              ユーザー設定
+            </p>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+              <Input
+                placeholder="ユーザー名で検索"
+                value={emergencySearch}
+                onChange={e => setEmergencySearch(e.target.value)}
+                className="pl-8 min-h-10"
+              />
+            </div>
+            {emergencySearch.trim() && (
+              <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                {users.filter(u => u.displayName.toLowerCase().includes(emergencySearch.toLowerCase())).map(u => (
+                  <button
+                    key={u.userId}
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const d = await api(`/admin/emergency-auth/${u.userId}`, 'GET')
+                        setEmergencyForm({ password: '', passcode: '', passwordEnabled: d.passwordEnabled ?? false, passcodeEnabled: d.passcodeEnabled ?? false })
+                        setEmergencyUserId(u.userId)
+                        setEmergencySearch('')
+                      } catch { toast.error('読み込みエラー') }
+                    }}
+                    className="flex items-center gap-2 rounded-md border border-border bg-secondary/30 p-2.5 text-left text-sm hover:bg-secondary/60"
+                  >
+                    <User className="size-3.5 text-muted-foreground shrink-0" />
+                    {u.displayName}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {emergencyUserId && (
+              <div className="flex flex-col gap-3 border-t border-border pt-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  対象: {users.find(u => u.userId === emergencyUserId)?.displayName ?? emergencyUserId}
+                </p>
+
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                    <span>緊急パスワード</span>
+                    <button
+                      type="button"
+                      onClick={() => setEmergencyForm(f => ({ ...f, passwordEnabled: !f.passwordEnabled }))}
+                      className={`text-[11px] px-2 py-0.5 rounded-full border ${emergencyForm.passwordEnabled ? 'border-green-500 text-green-600 bg-green-50/20' : 'border-border text-muted-foreground'}`}
+                    >
+                      {emergencyForm.passwordEnabled ? '有効' : '無効'}
+                    </button>
+                  </Label>
+                  <Input
+                    type="password"
+                    placeholder="新しい緊急パスワード（空白=変更なし）"
+                    value={emergencyForm.password}
+                    onChange={e => setEmergencyForm(f => ({ ...f, password: e.target.value }))}
+                    className="min-h-10"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                    <span>緊急パスコード</span>
+                    <button
+                      type="button"
+                      onClick={() => setEmergencyForm(f => ({ ...f, passcodeEnabled: !f.passcodeEnabled }))}
+                      className={`text-[11px] px-2 py-0.5 rounded-full border ${emergencyForm.passcodeEnabled ? 'border-green-500 text-green-600 bg-green-50/20' : 'border-border text-muted-foreground'}`}
+                    >
+                      {emergencyForm.passcodeEnabled ? '有効' : '無効'}
+                    </button>
+                  </Label>
+                  <Input
+                    type="password"
+                    placeholder="新しい緊急パスコード（空白=変更なし）"
+                    value={emergencyForm.passcode}
+                    onChange={e => setEmergencyForm(f => ({ ...f, passcode: e.target.value }))}
+                    className="min-h-10"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 min-h-10"
+                    onClick={() => { setEmergencyUserId(null); setEmergencyForm({ password: '', passcode: '', passwordEnabled: false, passcodeEnabled: false }) }}
+                  >キャンセル</Button>
+                  <Button
+                    className="flex-1 min-h-10"
+                    disabled={emergencySaving}
+                    onClick={async () => {
+                      setEmergencySaving(true)
+                      try {
+                        await api(`/admin/emergency-auth/${emergencyUserId}`, 'PUT', {
+                          password: emergencyForm.password || undefined,
+                          passcode: emergencyForm.passcode || undefined,
+                          passwordEnabled: emergencyForm.passwordEnabled,
+                          passcodeEnabled: emergencyForm.passcodeEnabled,
+                        })
+                        toast.success('緊急認証設定を保存しました')
+                        setEmergencyForm(f => ({ ...f, password: '', passcode: '' }))
+                        const d = await api('/admin/emergency-auth', 'GET')
+                        setEmergencyList(Array.isArray(d) ? d : [])
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'エラーが発生しました')
+                      } finally { setEmergencySaving(false) }
+                    }}
+                  >{emergencySaving ? '保存中…' : '保存'}</Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 緊急認証有効ユーザー一覧 */}
+          {emergencyList.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground">緊急認証が設定済みのユーザー</p>
+              {emergencyList.map(row => (
+                <Card key={row.userId} className="border-border bg-card p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{row.displayName}</p>
+                    <div className="flex gap-1.5">
+                      {row.passwordEnabled && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">PW有効</span>
+                      )}
+                      {row.passcodeEnabled && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">PC有効</span>
+                      )}
+                      {!row.passwordEnabled && !row.passcodeEnabled && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">無効</span>
+                      )}
+                    </div>
+                  </div>
+                  {row.updatedAt && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      更新: {new Date(row.updatedAt).toLocaleString('ja-JP')}
+                    </p>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
+          {emergencyList.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+              緊急認証が設定されたユーザーはいません
+            </p>
           )}
         </TabsContent>
 
