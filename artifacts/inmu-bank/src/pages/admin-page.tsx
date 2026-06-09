@@ -19,6 +19,10 @@ export type UserRow = {
   discordId: string | null
   solWallet: string | null
   createdAt: string
+  totalBought: string | null
+  totalSold: string | null
+  lastBuyAt: string | null
+  lastSellAt: string | null
 }
 
 export function AdminPage() {

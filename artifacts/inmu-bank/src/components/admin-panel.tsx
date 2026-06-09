@@ -12,23 +12,9 @@ import {
   Search, Download, Shield, User, Trash2,
   CheckSquare, Square, Send, Star, Coins,
   WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2, Lock,
+  TrendingUp, TrendingDown, RefreshCw,
 } from 'lucide-react'
-
-type UserRow = {
-  userId: string
-  displayName: string
-  role: string
-  balance: string
-  savingsBalance: string
-  totalReceived: string
-  totalSent: string
-  monthlyPoints: string
-  participationCount: number
-  xId: string | null
-  discordId: string | null
-  solWallet: string | null
-  createdAt: string
-}
+import type { UserRow } from '@/pages/admin-page'
 
 type AuditRow = {
   id: number
@@ -36,6 +22,17 @@ type AuditRow = {
   action: string
   targetUserId: string | null
   createdAt: string
+}
+
+type TradeTxRow = {
+  id: number
+  userId: string
+  walletAddress: string
+  type: string
+  tokenAmount: string
+  txSignature: string
+  dex: string | null
+  tradedAt: string
 }
 
 type MissionRow = {
@@ -148,6 +145,16 @@ function UserDetailDialog({
             <p className="text-[10px] text-muted-foreground">累計受取</p>
             <p className="font-mono font-bold text-sm mt-0.5">{formatInmu(user.totalReceived)}</p>
           </div>
+          <div className="rounded-lg bg-green-500/10 p-3">
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1"><TrendingUp className="size-3 text-green-500" />累計購入</p>
+            <p className="font-mono font-bold text-sm mt-0.5 text-green-600 dark:text-green-400">{formatInmu(user.totalBought ?? '0')} INMU</p>
+            {user.lastBuyAt && <p className="text-[9px] text-muted-foreground mt-0.5">{new Date(user.lastBuyAt).toLocaleDateString('ja-JP')}</p>}
+          </div>
+          <div className="rounded-lg bg-red-500/10 p-3">
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1"><TrendingDown className="size-3 text-red-500" />累計売却</p>
+            <p className="font-mono font-bold text-sm mt-0.5 text-red-500">{formatInmu(user.totalSold ?? '0')} INMU</p>
+            {user.lastSellAt && <p className="text-[9px] text-muted-foreground mt-0.5">{new Date(user.lastSellAt).toLocaleDateString('ja-JP')}</p>}
+          </div>
         </div>
 
         {/* SOLアドレス */}
@@ -229,6 +236,12 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(false)
+
+  const [tradeRows, setTradeRows] = useState<TradeTxRow[]>([])
+  const [tradeLoading, setTradeLoading] = useState(false)
+  const [tradeFetched, setTradeFetched] = useState(false)
+  const [tradeUserFilter, setTradeUserFilter] = useState('')
+  const [tradeScanning, setTradeScanning] = useState<string | null>(null)
 
   const [emergencyList, setEmergencyList] = useState<EmergencyRow[]>([])
   const [emergencySearch, setEmergencySearch] = useState('')
@@ -329,6 +342,33 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     }
   }
 
+  const loadTradeHistory = useCallback(async (force = false) => {
+    if (tradeFetched && !force) return
+    setTradeLoading(true)
+    try {
+      const data = await api('/admin/trade-history?limit=200', 'GET') as TradeTxRow[]
+      setTradeRows(Array.isArray(data) ? data : [])
+      setTradeFetched(true)
+    } catch {
+      toast.error(t('error'))
+    } finally {
+      setTradeLoading(false)
+    }
+  }, [tradeFetched, t])
+
+  async function handleAdminScan(userId: string) {
+    setTradeScanning(userId)
+    try {
+      const result = await api('/admin/solana/scan-trades', 'POST', { targetUserId: userId }) as { added: number; total: number }
+      toast.success(`${result.added}件の新規取引（合計${result.total}件）`)
+      await loadTradeHistory(true)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('error'))
+    } finally {
+      setTradeScanning(null)
+    }
+  }
+
   async function saveMission() {
     const { title, description, type, points, startAt, endAt, linkUrl } = missionForm
     if (!title.trim()) { toast.error('タイトルが必要です'); return }
@@ -365,14 +405,15 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       </div>
 
       <Tabs defaultValue="users">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
           <TabsTrigger value="missions" onClick={loadMissions}>ミッション</TabsTrigger>
           <TabsTrigger value="emergency" onClick={async () => {
             try { const d = await api('/admin/emergency-auth', 'GET'); setEmergencyList(Array.isArray(d) ? d : []) } catch { setEmergencyList([]) }
-          }}>緊急認証</TabsTrigger>
+          }}>緊急</TabsTrigger>
+          <TabsTrigger value="trade" onClick={() => loadTradeHistory()}>売買</TabsTrigger>
         </TabsList>
 
         {/* ── Users tab ── */}
@@ -1013,6 +1054,102 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                   )}
                 </Card>
               ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── 売買履歴 tab ── */}
+        <TabsContent value="trade" className="flex flex-col gap-3 mt-3">
+          {/* ユーザー検索フィルタ + スキャンボタン */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="ユーザー名で絞り込み"
+                value={tradeUserFilter}
+                onChange={e => setTradeUserFilter(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 pl-8 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+
+          {/* ウォレット登録ユーザーのスキャンボタン一覧 */}
+          {users.filter(u => u.solWallet && (!tradeUserFilter || u.displayName.toLowerCase().includes(tradeUserFilter.toLowerCase()))).length > 0 && (
+            <div className="rounded-lg border border-border bg-card p-3 flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <RefreshCw className="size-3" /> ウォレット登録ユーザーのスキャン
+              </p>
+              <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                {users
+                  .filter(u => u.solWallet && (!tradeUserFilter || u.displayName.toLowerCase().includes(tradeUserFilter.toLowerCase())))
+                  .map(u => (
+                    <div key={u.userId} className="flex items-center justify-between rounded-md bg-secondary/30 px-2.5 py-1.5">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-medium">{u.displayName}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">{maskWallet(u.solWallet!)}</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1"
+                        disabled={tradeScanning === u.userId}
+                        onClick={() => handleAdminScan(u.userId)}
+                      >
+                        <RefreshCw className={`size-3 ${tradeScanning === u.userId ? 'animate-spin' : ''}`} />
+                        スキャン
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* 取引一覧 */}
+          {tradeLoading ? (
+            <p className="text-xs text-center text-muted-foreground py-4">読み込み中…</p>
+          ) : tradeRows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+              売買履歴がありません。ウォレット登録ユーザーをスキャンしてください。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {tradeRows
+                .filter(r => !tradeUserFilter || (users.find(u => u.userId === r.userId)?.displayName ?? '').toLowerCase().includes(tradeUserFilter.toLowerCase()))
+                .map(row => {
+                  const isBuy = row.type === 'buy'
+                  const userName = users.find(u => u.userId === row.userId)?.displayName ?? row.userId.slice(0, 10)
+                  return (
+                    <Card key={row.id} className="border-border bg-card p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            {isBuy
+                              ? <TrendingUp className="size-3.5 text-green-500" />
+                              : <TrendingDown className="size-3.5 text-red-500" />}
+                            <span className={`text-xs font-semibold ${isBuy ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                              {isBuy ? '購入' : '売却'}
+                            </span>
+                            {row.dex && <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground">{row.dex}</span>}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{userName}</span>
+                          <span className="text-[10px] text-muted-foreground">{new Date(row.tradedAt).toLocaleString('ja-JP')}</span>
+                          <a
+                            href={`https://solscan.io/tx/${row.txSignature}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-primary/70 hover:text-primary font-mono"
+                          >
+                            {row.txSignature.slice(0, 12)}…
+                          </a>
+                        </div>
+                        <span className={`font-mono font-bold text-sm shrink-0 ${isBuy ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                          {isBuy ? '+' : '-'}{formatInmu(row.tokenAmount)}
+                        </span>
+                      </div>
+                    </Card>
+                  )
+                })}
             </div>
           )}
         </TabsContent>

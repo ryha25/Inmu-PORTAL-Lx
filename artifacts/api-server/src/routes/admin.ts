@@ -151,12 +151,21 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
         xId: profileTable.xId,
         discordId: profileTable.discordId,
         solWallet: profileTable.solWallet,
+        totalBought: profileTable.totalBought,
+        totalSold: profileTable.totalSold,
+        lastBuyAt: profileTable.lastBuyAt,
+        lastSellAt: profileTable.lastSellAt,
         createdAt: profileTable.createdAt,
       })
       .from(profileTable)
       .orderBy(sql`${profileTable.createdAt} DESC`);
     res.json(
-      users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() })),
+      users.map((u) => ({
+        ...u,
+        createdAt: u.createdAt.toISOString(),
+        lastBuyAt: u.lastBuyAt?.toISOString() ?? null,
+        lastSellAt: u.lastSellAt?.toISOString() ?? null,
+      })),
     );
   } catch {
     res.status(500).json({ error: "Internal error" });

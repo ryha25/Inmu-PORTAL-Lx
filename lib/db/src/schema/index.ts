@@ -38,6 +38,10 @@ export const profileTable = pgTable("profile", {
   monthlyPoints: numeric("monthlyPoints").notNull().default("0"),
   participationCount: integer("participationCount").notNull().default(0),
   passcodeHash: text("passcodeHash"),
+  totalBought: numeric("totalBought").notNull().default("0"),
+  totalSold: numeric("totalSold").notNull().default("0"),
+  lastBuyAt: timestamp("lastBuyAt"),
+  lastSellAt: timestamp("lastSellAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
@@ -60,6 +64,21 @@ export const transactionsTable = pgTable("transactions", {
 });
 
 export type Transaction = typeof transactionsTable.$inferSelect;
+
+// ── INMU Bank: trade history (DEX buy/sell) ──
+export const tradeHistoryTable = pgTable("tradeHistory", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  walletAddress: text("walletAddress").notNull(),
+  type: text("type").notNull(), // "buy" | "sell"
+  tokenAmount: numeric("tokenAmount").notNull(),
+  txSignature: text("txSignature").notNull(),
+  dex: text("dex"),
+  tradedAt: timestamp("tradedAt").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type TradeHistory = typeof tradeHistoryTable.$inferSelect;
 
 // ── INMU Bank: jars ──
 export const jarsTable = pgTable("jars", {

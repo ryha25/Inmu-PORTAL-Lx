@@ -7,7 +7,7 @@ import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/hooks/use-auth'
 import { UserSendDialog } from '@/components/user-send-dialog'
 import { toast } from 'sonner'
-import { Send } from 'lucide-react'
+import { Send, RefreshCw } from 'lucide-react'
 
 export function DashboardPage() {
   const { t } = useI18n()
@@ -19,6 +19,21 @@ export function DashboardPage() {
   const [walletInmu, setWalletInmu] = useState<number | null>(null)
   const [dailyClaim, setDailyClaim] = useState<{ alreadyClaimed: boolean; streak: number } | null>(null)
   const [sendOpen, setSendOpen] = useState(false)
+  const [scanning, setScanning] = useState(false)
+
+  async function handleScanTrades() {
+    setScanning(true)
+    try {
+      const res = await fetch('/api/solana/scan-trades', { method: 'POST', credentials: 'include' })
+      const d = await res.json() as { added?: number; total?: number; error?: string }
+      if (!res.ok) { toast.error(d.error ?? 'スキャンエラー'); return }
+      toast.success(d.added ? `${d.added}件の新規取引を取得しました` : '新規取引はありませんでした')
+    } catch {
+      toast.error('スキャンエラー')
+    } finally {
+      setScanning(false)
+    }
+  }
 
   const loadDashboard = useCallback(() => {
     fetch('/api/dashboard', { credentials: 'include' })
@@ -72,6 +87,18 @@ export function DashboardPage() {
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
       <PageHeader titleKey="nav_dashboard">
+        {profile?.solWallet && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 h-8 text-xs"
+            disabled={scanning}
+            onClick={handleScanTrades}
+          >
+            <RefreshCw className={`size-3.5 ${scanning ? 'animate-spin' : ''}`} />
+            スキャン
+          </Button>
+        )}
         <Button
           size="sm"
           variant="outline"
