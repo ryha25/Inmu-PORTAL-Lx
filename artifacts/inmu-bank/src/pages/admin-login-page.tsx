@@ -15,7 +15,7 @@ export function AdminLoginPage() {
   useEffect(() => {
     fetch('/api/auth/admin-session', { credentials: 'include' })
       .then(r => r.ok ? r.json() : { isAdmin: false })
-      .then((d: { isAdmin: boolean }) => { if (d.isAdmin) navigate('/admin') })
+      .then((d: { isAdmin: boolean }) => { if (d.isAdmin) navigate('/inmu1919') })
       .catch(() => {})
     setTimeout(() => inputRef.current?.focus(), 100)
   }, [navigate])
@@ -37,7 +37,7 @@ export function AdminLoginPage() {
         inputRef.current?.focus()
         return
       }
-      navigate('/admin')
+      navigate('/inmu1919')
     } catch {
       toast.error('エラーが発生しました')
     } finally {

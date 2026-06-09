@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { DashboardView } from '@/components/dashboard-view'
 import { PageHeader } from '@/components/page-header'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/hooks/use-auth'
+import { UserSendDialog } from '@/components/user-send-dialog'
 import { toast } from 'sonner'
+import { Send } from 'lucide-react'
 
 export function DashboardPage() {
   const { t } = useI18n()
@@ -15,6 +18,7 @@ export function DashboardPage() {
   } | null>(null)
   const [walletInmu, setWalletInmu] = useState<number | null>(null)
   const [dailyClaim, setDailyClaim] = useState<{ alreadyClaimed: boolean; streak: number } | null>(null)
+  const [sendOpen, setSendOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/dashboard', { credentials: 'include' })
@@ -64,12 +68,27 @@ export function DashboardPage() {
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
-      <PageHeader titleKey="nav_dashboard" />
+      <PageHeader titleKey="nav_dashboard">
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 h-8 text-xs"
+          onClick={() => setSendOpen(true)}
+        >
+          <Send className="size-3.5" />
+          INMU送金
+        </Button>
+      </PageHeader>
       <DashboardView
         data={data}
         displayName={profile?.displayName ?? ''}
         walletInmu={walletInmu}
         dailyClaim={dailyClaim ? { ...dailyClaim, onClaim: handleClaimDaily } : undefined}
+      />
+      <UserSendDialog
+        open={sendOpen}
+        onClose={() => setSendOpen(false)}
+        senderWallet={profile?.solWallet ?? null}
       />
     </AppShell>
   )

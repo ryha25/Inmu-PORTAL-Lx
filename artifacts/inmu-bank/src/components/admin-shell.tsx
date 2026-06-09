@@ -6,8 +6,8 @@ import { Link, useLocation } from 'wouter'
 type AdminNavItem = { href: string; label: string; icon: React.ElementType }
 
 const ADMIN_NAV: AdminNavItem[] = [
-  { href: '/admin/profile', label: 'プロフィール', icon: UserIcon },
-  { href: '/admin',         label: '管理ツール',   icon: Shield },
+  { href: '/inmu1919/profile', label: 'プロフィール', icon: UserIcon },
+  { href: '/inmu1919',         label: '管理ツール',   icon: Shield },
 ]
 
 export function AdminShell({
@@ -20,7 +20,7 @@ export function AdminShell({
   const [location] = useLocation()
 
   const isActive = (href: string) =>
-    href === '/admin' ? location === '/admin' : location.startsWith(href)
+    href === '/inmu1919' ? location === '/inmu1919' : location.startsWith(href)
 
   return (
     <div className="min-h-dvh">

@@ -102,9 +102,9 @@ export function AdminProfilePage() {
       .then(r => r.ok ? r.json() : { isAdmin: false })
       .then((d: { isAdmin: boolean }) => {
         setIsAdmin(d.isAdmin)
-        if (!d.isAdmin) navigate('/admin-login')
+        if (!d.isAdmin) navigate('/inmu1919-login')
       })
-      .catch(() => { setIsAdmin(false); navigate('/admin-login') })
+      .catch(() => { setIsAdmin(false); navigate('/inmu1919-login') })
   }, [navigate])
 
   // ── 初期化: サーバー保存ウォレットを優先読み込み + Phantom自動再接続 ──
@@ -249,7 +249,7 @@ export function AdminProfilePage() {
   // ── ログアウト ──
   async function handleLogout() {
     await fetch('/api/auth/admin-sign-out', { method: 'POST', credentials: 'include' })
-    navigate('/admin-login')
+    navigate('/inmu1919-login')
   }
 
   // ── 実INMU送金 ──

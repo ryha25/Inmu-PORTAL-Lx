@@ -33,9 +33,9 @@ export function AdminPage() {
       .then(r => r.ok ? r.json() : { isAdmin: false })
       .then((d: { isAdmin: boolean }) => {
         setIsAdmin(d.isAdmin)
-        if (!d.isAdmin) navigate('/admin-login')
+        if (!d.isAdmin) navigate('/inmu1919-login')
       })
-      .catch(() => { setIsAdmin(false); navigate('/admin-login') })
+      .catch(() => { setIsAdmin(false); navigate('/inmu1919-login') })
   }, [navigate])
 
   const load = useCallback(() => {
@@ -52,7 +52,7 @@ export function AdminPage() {
 
   async function handleLogout() {
     await fetch('/api/auth/admin-sign-out', { method: 'POST', credentials: 'include' })
-    navigate('/admin-login')
+    navigate('/inmu1919-login')
   }
 
   if (isAdmin === null || !isAdmin) {

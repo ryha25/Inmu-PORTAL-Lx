@@ -24,7 +24,7 @@ type Mission = {
   endAt: string | null
   linkUrl: string | null
   isActive: boolean
-  completed: boolean
+  participationStatus: string | null
 }
 
 export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: () => void }) {
@@ -33,7 +33,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
   const [weeklyOpen, setWeeklyOpen] = useState(true)
   const [dailyMissions, setDailyMissions] = useState<Mission[]>([])
   const [weeklyMissions, setWeeklyMissions] = useState<Mission[]>([])
-  const [completing, setCompleting] = useState<number | null>(null)
+  const [busy, setBusy] = useState<number | null>(null)
 
   const loadMissions = useCallback(() => {
     fetch('/api/missions', { credentials: 'include' })
@@ -49,11 +49,59 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
 
   useEffect(() => { loadMissions() }, [loadMissions])
 
-  async function completeMission(mission: Mission) {
-    if (mission.completed) return
-    setCompleting(mission.id)
+  async function joinMission(mission: Mission) {
+    setBusy(mission.id)
     try {
-      const res = await fetch(`/api/missions/${mission.id}/complete`, {
+      const res = await fetch(`/api/missions/${mission.id}/join`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        toast.error(d.error ?? 'エラーが発生しました')
+      } else {
+        toast.success('ミッションに参加しました！')
+        loadMissions()
+      }
+    } catch {
+      toast.error('通信エラーが発生しました')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function achieveMission(mission: Mission) {
+    setBusy(mission.id)
+    try {
+      const res = await fetch(`/api/missions/${mission.id}/achieve`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        toast.error(d.error ?? 'エラーが発生しました')
+      } else {
+        toast.success('達成しました！報酬を受け取ってください')
+        loadMissions()
+      }
+    } catch {
+      toast.error('通信エラーが発生しました')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function openLinkAndAchieve(mission: Mission) {
+    if (mission.linkUrl) {
+      window.open(mission.linkUrl, '_blank', 'noopener,noreferrer')
+    }
+    await achieveMission(mission)
+  }
+
+  async function claimMission(mission: Mission) {
+    setBusy(mission.id)
+    try {
+      const res = await fetch(`/api/missions/${mission.id}/claim`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -72,12 +120,14 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
     } catch {
       toast.error('通信エラーが発生しました')
     } finally {
-      setCompleting(null)
+      setBusy(null)
     }
   }
 
   function MissionItem({ m }: { m: Mission }) {
-    const isCompleting = completing === m.id
+    const isBusy = busy === m.id
+    const status = m.participationStatus
+
     return (
       <li className="px-4 py-3">
         <div className="flex items-start justify-between gap-2">
@@ -94,19 +144,60 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="font-mono text-sm font-bold text-chart-5">+{m.points} pts</span>
-            {m.completed ? (
+
+            {status === 'rewarded' ? (
               <div className="flex items-center gap-1 rounded-full bg-chart-5/15 px-2 py-1">
                 <CheckCircle2 className="size-3 text-chart-5" />
                 <span className="text-[10px] font-medium text-chart-5">受取済み</span>
               </div>
+
+            ) : status === 'achieved' ? (
+              <Button
+                size="sm"
+                className="h-7 px-2 text-xs bg-chart-5 hover:bg-chart-5/90"
+                disabled={isBusy}
+                onClick={() => claimMission(m)}
+              >
+                {isBusy ? '処理中…' : '報酬を受け取る'}
+              </Button>
+
+            ) : status === 'joined' ? (
+              m.linkUrl ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs gap-1"
+                  disabled={isBusy}
+                  onClick={() => openLinkAndAchieve(m)}
+                >
+                  {isBusy ? '処理中…' : (
+                    <>
+                      <ExternalLink className="size-3" />
+                      リンクを開く
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  disabled={isBusy}
+                  onClick={() => achieveMission(m)}
+                >
+                  {isBusy ? '処理中…' : '達成する'}
+                </Button>
+              )
+
             ) : (
               <Button
                 size="sm"
+                variant="secondary"
                 className="h-7 px-2 text-xs"
-                disabled={isCompleting}
-                onClick={() => completeMission(m)}
+                disabled={isBusy}
+                onClick={() => joinMission(m)}
               >
-                {isCompleting ? '処理中…' : m.linkUrl ? 'ポイントを受け取る' : '達成する'}
+                {isBusy ? '処理中…' : '参加する'}
               </Button>
             )}
           </div>

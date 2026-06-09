@@ -16,6 +16,7 @@ import pointsRouter from "./points";
 import adminRouter from "./admin";
 import solanaRouter from "./solana";
 import missionsRouter from "./missions";
+import transferRouter from "./transfer";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(pointsRouter);
 router.use(adminRouter);
 router.use(solanaRouter);
 router.use(missionsRouter);
+router.use(transferRouter);
 
 export default router;

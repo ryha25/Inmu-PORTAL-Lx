@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   missionsTable,
   missionCompletionsTable,
+  missionParticipationsTable,
   profileTable,
   pointsTable,
   notificationsTable,
@@ -41,7 +42,16 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
     const dailyPeriod = getPeriod("daily");
     const weeklyPeriod = getPeriod("weekly");
 
-    const completions = await db
+    const participations = await db
+      .select({
+        missionId: missionParticipationsTable.missionId,
+        period: missionParticipationsTable.period,
+        status: missionParticipationsTable.status,
+      })
+      .from(missionParticipationsTable)
+      .where(eq(missionParticipationsTable.userId, userId));
+
+    const legacyCompletions = await db
       .select({
         missionId: missionCompletionsTable.missionId,
         period: missionCompletionsTable.period,
@@ -49,17 +59,239 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       .from(missionCompletionsTable)
       .where(eq(missionCompletionsTable.userId, userId));
 
-    const completedSet = new Set(completions.map((c) => `${c.missionId}:${c.period}`));
+    const participationMap = new Map(
+      participations.map((p) => [`${p.missionId}:${p.period}`, p.status]),
+    );
+
+    const legacySet = new Set(
+      legacyCompletions.map((c) => `${c.missionId}:${c.period}`),
+    );
+
+    function getStatus(missionId: number, period: string): string | null {
+      const key = `${missionId}:${period}`;
+      if (participationMap.has(key)) return participationMap.get(key)!;
+      if (legacySet.has(key)) return "rewarded";
+      return null;
+    }
 
     const daily = active
       .filter((m) => m.type === "daily")
-      .map((m) => ({ ...m, completed: completedSet.has(`${m.id}:${dailyPeriod}`) }));
+      .map((m) => ({ ...m, participationStatus: getStatus(m.id, dailyPeriod) }));
 
     const weekly = active
       .filter((m) => m.type === "weekly")
-      .map((m) => ({ ...m, completed: completedSet.has(`${m.id}:${weeklyPeriod}`) }));
+      .map((m) => ({ ...m, participationStatus: getStatus(m.id, weeklyPeriod) }));
 
     res.json({ daily, weekly });
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const missionId = Number(req.params.id);
+  if (isNaN(missionId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  try {
+    const mission = await db
+      .select()
+      .from(missionsTable)
+      .where(eq(missionsTable.id, missionId))
+      .then((r) => r[0]);
+
+    if (!mission || !mission.isActive) {
+      res.status(404).json({ error: "ミッションが見つかりません" });
+      return;
+    }
+
+    const now = new Date();
+    if (mission.endAt && mission.endAt < now) {
+      res.status(400).json({ error: "このミッションは終了しています" });
+      return;
+    }
+
+    const period = getPeriod(mission.type);
+
+    const existing = await db
+      .select()
+      .from(missionParticipationsTable)
+      .where(
+        and(
+          eq(missionParticipationsTable.userId, userId),
+          eq(missionParticipationsTable.missionId, missionId),
+          eq(missionParticipationsTable.period, period),
+        ),
+      )
+      .then((r) => r[0]);
+
+    if (existing) {
+      res.json({ ok: true, status: existing.status });
+      return;
+    }
+
+    await db.insert(missionParticipationsTable).values({
+      userId,
+      missionId,
+      period,
+      status: "joined",
+    });
+
+    res.json({ ok: true, status: "joined" });
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const missionId = Number(req.params.id);
+  if (isNaN(missionId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  try {
+    const mission = await db
+      .select()
+      .from(missionsTable)
+      .where(eq(missionsTable.id, missionId))
+      .then((r) => r[0]);
+
+    if (!mission || !mission.isActive) {
+      res.status(404).json({ error: "ミッションが見つかりません" });
+      return;
+    }
+
+    const period = getPeriod(mission.type);
+
+    const existing = await db
+      .select()
+      .from(missionParticipationsTable)
+      .where(
+        and(
+          eq(missionParticipationsTable.userId, userId),
+          eq(missionParticipationsTable.missionId, missionId),
+          eq(missionParticipationsTable.period, period),
+        ),
+      )
+      .then((r) => r[0]);
+
+    if (!existing) {
+      res.status(400).json({ error: "先に「参加する」を押してください" });
+      return;
+    }
+
+    if (existing.status === "rewarded") {
+      res.status(409).json({ error: "already_completed" });
+      return;
+    }
+
+    if (existing.status === "achieved") {
+      res.json({ ok: true, status: "achieved" });
+      return;
+    }
+
+    await db
+      .update(missionParticipationsTable)
+      .set({ status: "achieved", achievedAt: new Date() })
+      .where(
+        and(
+          eq(missionParticipationsTable.userId, userId),
+          eq(missionParticipationsTable.missionId, missionId),
+          eq(missionParticipationsTable.period, period),
+        ),
+      );
+
+    res.json({ ok: true, status: "achieved" });
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const missionId = Number(req.params.id);
+  if (isNaN(missionId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  try {
+    const mission = await db
+      .select()
+      .from(missionsTable)
+      .where(eq(missionsTable.id, missionId))
+      .then((r) => r[0]);
+
+    if (!mission || !mission.isActive) {
+      res.status(404).json({ error: "ミッションが見つかりません" });
+      return;
+    }
+
+    const now = new Date();
+    const period = getPeriod(mission.type);
+
+    const existing = await db
+      .select()
+      .from(missionParticipationsTable)
+      .where(
+        and(
+          eq(missionParticipationsTable.userId, userId),
+          eq(missionParticipationsTable.missionId, missionId),
+          eq(missionParticipationsTable.period, period),
+        ),
+      )
+      .then((r) => r[0]);
+
+    if (!existing) {
+      res.status(400).json({ error: "先に「参加する」を押してください" });
+      return;
+    }
+
+    if (existing.status === "rewarded") {
+      res.status(409).json({ error: "already_completed", message: "このミッションは既に達成済みです" });
+      return;
+    }
+
+    if (existing.status === "joined") {
+      res.status(400).json({ error: "先に達成条件を満たしてください" });
+      return;
+    }
+
+    await db
+      .update(missionParticipationsTable)
+      .set({ status: "rewarded", rewardedAt: now })
+      .where(
+        and(
+          eq(missionParticipationsTable.userId, userId),
+          eq(missionParticipationsTable.missionId, missionId),
+          eq(missionParticipationsTable.period, period),
+        ),
+      );
+
+    await db.insert(missionCompletionsTable).values({ userId, missionId, period }).catch(() => {});
+
+    if (mission.points > 0) {
+      const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      await db.insert(pointsTable).values({
+        userId,
+        amount: String(mission.points),
+        type: "mission",
+        source: mission.title,
+        month,
+      });
+      await db
+        .update(profileTable)
+        .set({
+          monthlyPoints: sql`${profileTable.monthlyPoints} + ${mission.points}`,
+          updatedAt: now,
+        })
+        .where(eq(profileTable.userId, userId));
+    }
+
+    await db.insert(notificationsTable).values({
+      userId,
+      type: "mission",
+      title: "ミッション達成！",
+      message: `「${mission.title}」を達成して ${mission.points} ポイントを獲得しました`,
+    });
+
+    res.json({ ok: true, points: mission.points });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -68,10 +300,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
 router.post("/missions/:id/complete", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const missionId = Number(req.params.id);
-  if (isNaN(missionId)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+  if (isNaN(missionId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   try {
     const mission = await db
@@ -106,14 +335,22 @@ router.post("/missions/:id/complete", requireAuth, async (req, res): Promise<voi
       .then((r) => r[0]);
 
     if (already) {
-      res.status(409).json({
-        error: "already_completed",
-        message: "このミッションは既に達成済みです",
-      });
+      res.status(409).json({ error: "already_completed", message: "このミッションは既に達成済みです" });
       return;
     }
 
     await db.insert(missionCompletionsTable).values({ userId, missionId, period });
+
+    await db
+      .update(missionParticipationsTable)
+      .set({ status: "rewarded", rewardedAt: now })
+      .where(
+        and(
+          eq(missionParticipationsTable.userId, userId),
+          eq(missionParticipationsTable.missionId, missionId),
+          eq(missionParticipationsTable.period, period),
+        ),
+      );
 
     if (mission.points > 0) {
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -128,7 +365,7 @@ router.post("/missions/:id/complete", requireAuth, async (req, res): Promise<voi
         .update(profileTable)
         .set({
           monthlyPoints: sql`${profileTable.monthlyPoints} + ${mission.points}`,
-          updatedAt: new Date(),
+          updatedAt: now,
         })
         .where(eq(profileTable.userId, userId));
     }
@@ -136,7 +373,7 @@ router.post("/missions/:id/complete", requireAuth, async (req, res): Promise<voi
     await db.insert(notificationsTable).values({
       userId,
       type: "mission",
-      title: `ミッション達成！`,
+      title: "ミッション達成！",
       message: `「${mission.title}」を達成して ${mission.points} ポイントを獲得しました`,
     });
 
@@ -196,10 +433,7 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
 
 router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const { title, description, type, points, startAt, endAt, linkUrl, isActive } =
     req.body as {
       title?: string;
@@ -233,10 +467,7 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
 
 router.delete("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     await db.delete(missionsTable).where(eq(missionsTable.id, id));
     res.json({ ok: true });

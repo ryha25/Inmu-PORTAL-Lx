@@ -54,6 +54,7 @@ export const transactionsTable = pgTable("transactions", {
   counterparty: text("counterparty"),
   counterpartyId: text("counterpartyId"),
   memo: text("memo"),
+  txHash: text("txHash"),
   jarId: integer("jarId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
@@ -188,4 +189,16 @@ export const missionCompletionsTable = pgTable("missionCompletions", {
   missionId: integer("missionId").notNull(),
   period: text("period").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+// ── INMU Bank: mission participations (join → achieve → rewarded) ──
+export const missionParticipationsTable = pgTable("missionParticipations", {
+  id: serial("id").primaryKey(),
+  userId: text("userId").notNull(),
+  missionId: integer("missionId").notNull(),
+  period: text("period").notNull(),
+  status: text("status").notNull().default("joined"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  achievedAt: timestamp("achievedAt"),
+  rewardedAt: timestamp("rewardedAt"),
 });
