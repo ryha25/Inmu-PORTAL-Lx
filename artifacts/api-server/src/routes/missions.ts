@@ -59,6 +59,10 @@ function getPeriod(type: string): string {
   return now.toISOString().slice(0, 10);
 }
 
+const CONDITION_TYPES_NEEDING_VALUE = new Set([
+  "inmu_balance", "login_streak", "login_total", "buy_daily", "buy_weekly", "buy_total",
+]);
+
 router.get("/missions", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
@@ -76,27 +80,37 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
     const dailyPeriod = getPeriod("daily");
     const weeklyPeriod = getPeriod("weekly");
 
-    const participations = await db
-      .select({
-        missionId: missionParticipationsTable.missionId,
-        period: missionParticipationsTable.period,
-        status: missionParticipationsTable.status,
-      })
-      .from(missionParticipationsTable)
-      .where(eq(missionParticipationsTable.userId, userId));
+    // ── 参加状況・条件達成状況を並列取得 ──
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const weekStart = new Date();
+    weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
+    weekStart.setUTCHours(0, 0, 0, 0);
 
-    const legacyCompletions = await db
-      .select({
-        missionId: missionCompletionsTable.missionId,
-        period: missionCompletionsTable.period,
-      })
-      .from(missionCompletionsTable)
-      .where(eq(missionCompletionsTable.userId, userId));
+    const [participations, legacyCompletions, profile, streakRow, loginCountRow, dailyBuyRow, weeklyBuyRow] =
+      await Promise.all([
+        db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
+          .from(missionParticipationsTable)
+          .where(eq(missionParticipationsTable.userId, userId)),
+        db.select({ missionId: missionCompletionsTable.missionId, period: missionCompletionsTable.period })
+          .from(missionCompletionsTable)
+          .where(eq(missionCompletionsTable.userId, userId)),
+        db.select().from(profileTable).where(eq(profileTable.userId, userId)).then((r) => r[0]),
+        db.select().from(loginStreaksTable).where(eq(loginStreaksTable.userId, userId)).then((r) => r[0]),
+        db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
+          .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "daily_login")))
+          .then((r) => r[0]),
+        db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
+          .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, todayStart)))
+          .then((r) => r[0]),
+        db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
+          .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, weekStart)))
+          .then((r) => r[0]),
+      ]);
 
     const participationMap = new Map(
       participations.map((p) => [`${p.missionId}:${p.period}`, p.status]),
     );
-
     const legacySet = new Set(
       legacyCompletions.map((c) => `${c.missionId}:${c.period}`),
     );
@@ -108,13 +122,46 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       return null;
     }
 
+    function getConditionStatus(
+      condType: string | null,
+      condVal: string | null,
+    ): { conditionMet: boolean | null; conditionCurrent: number | null } {
+      if (!condType || condType === "none" || condType === "link_visit") {
+        return { conditionMet: null, conditionCurrent: null };
+      }
+      const target = condVal ? Number(condVal) : null;
+      if (target === null) return { conditionMet: null, conditionCurrent: null };
+
+      let current: number | null = null;
+      if (condType === "login_streak") current = streakRow?.streak ?? 0;
+      else if (condType === "login_total") current = Number(loginCountRow?.cnt ?? 0);
+      else if (condType === "buy_daily") current = Number(dailyBuyRow?.total ?? 0);
+      else if (condType === "buy_weekly") current = Number(weeklyBuyRow?.total ?? 0);
+      else if (condType === "buy_total") current = Number(profile?.totalBought ?? 0);
+      else if (condType === "inmu_balance") {
+        // on-chain balance is not fetched here (too slow); use net-bought as approximation
+        current = Number(profile?.totalBought ?? 0) - Number(profile?.totalSold ?? 0);
+      }
+
+      if (current === null) return { conditionMet: null, conditionCurrent: null };
+      return { conditionMet: current >= target, conditionCurrent: current };
+    }
+
     const daily = active
       .filter((m) => m.type === "daily")
-      .map((m) => ({ ...m, participationStatus: getStatus(m.id, dailyPeriod) }));
+      .map((m) => ({
+        ...m,
+        participationStatus: getStatus(m.id, dailyPeriod),
+        ...getConditionStatus(m.conditionType, m.conditionValue),
+      }));
 
     const weekly = active
       .filter((m) => m.type === "weekly")
-      .map((m) => ({ ...m, participationStatus: getStatus(m.id, weeklyPeriod) }));
+      .map((m) => ({
+        ...m,
+        participationStatus: getStatus(m.id, weeklyPeriod),
+        ...getConditionStatus(m.conditionType, m.conditionValue),
+      }));
 
     res.json({ daily, weekly });
   } catch {
@@ -525,6 +572,10 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
     res.status(400).json({ error: "title and type required" });
     return;
   }
+  if (conditionType && CONDITION_TYPES_NEEDING_VALUE.has(conditionType) && (conditionValue == null || isNaN(conditionValue))) {
+    res.status(400).json({ error: "この条件タイプには条件値が必要です" });
+    return;
+  }
   try {
     const [mission] = await db
       .insert(missionsTable)
@@ -563,6 +614,10 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
       conditionType?: string | null;
       conditionValue?: number | null;
     };
+  if (conditionType && CONDITION_TYPES_NEEDING_VALUE.has(conditionType) && (conditionValue == null || isNaN(conditionValue))) {
+    res.status(400).json({ error: "この条件タイプには条件値が必要です" });
+    return;
+  }
   try {
     await db
       .update(missionsTable)

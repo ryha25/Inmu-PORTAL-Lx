@@ -45,6 +45,8 @@ type Mission = {
   participationStatus: string | null
   conditionType: string | null
   conditionValue: string | null
+  conditionMet: boolean | null
+  conditionCurrent: number | null
 }
 
 export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: () => void }) {
@@ -144,21 +146,43 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
     }
   }
 
-  function ConditionBadge({ conditionType, conditionValue }: { conditionType: string | null; conditionValue: string | null }) {
+  function ConditionBadge({ conditionType, conditionValue, conditionMet, conditionCurrent }: {
+    conditionType: string | null
+    conditionValue: string | null
+    conditionMet: boolean | null
+    conditionCurrent: number | null
+  }) {
     if (!conditionType || conditionType === 'none') return null
+
     if (conditionType === 'link_visit') {
-      return <span className="text-[10px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5">条件: リンク訪問</span>
+      return (
+        <span className="text-[10px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5">
+          条件: リンク訪問
+        </span>
+      )
     }
+
     const label = CONDITION_LABELS[conditionType]
     const unit = CONDITION_UNITS[conditionType] ?? ''
     if (!label || !conditionValue) return null
-    const numVal = Number(conditionValue)
-    const displayVal = numVal >= 10000
-      ? `${(numVal / 10000).toLocaleString()}万`
-      : numVal.toLocaleString()
+
+    const target = Number(conditionValue)
+    const fmtNum = (n: number) => n >= 10000 ? `${(n / 10000).toLocaleString()}万` : n.toLocaleString()
+
+    const met = conditionMet
+    const current = conditionCurrent
+
     return (
-      <span className="text-[10px] text-muted-foreground bg-secondary/50 rounded px-1.5 py-0.5">
-        条件: {label} {displayVal}{unit}
+      <span className={`inline-flex items-center gap-1 text-[10px] rounded px-1.5 py-0.5 ${
+        met === true
+          ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+          : met === false
+            ? 'bg-destructive/10 text-destructive'
+            : 'bg-secondary/50 text-muted-foreground'
+      }`}>
+        {met === true ? '✓' : met === false ? '✗' : ''}
+        {label}: {current !== null ? `${fmtNum(current)}/` : ''}{fmtNum(target)}{unit}
+        {met === true ? ' 達成' : met === false ? ' 未達成' : ''}
       </span>
     )
   }
@@ -181,7 +205,12 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             </div>
             {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
             <div className="mt-1">
-              <ConditionBadge conditionType={m.conditionType} conditionValue={m.conditionValue} />
+              <ConditionBadge
+                conditionType={m.conditionType}
+                conditionValue={m.conditionValue}
+                conditionMet={m.conditionMet}
+                conditionCurrent={m.conditionCurrent}
+              />
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
