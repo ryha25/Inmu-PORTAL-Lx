@@ -263,9 +263,6 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
     )
   }
 
-  const limitLabel = userPurchased > 0 && userPurchased < adminLimit
-    ? `購入済み: ${userPurchased.toLocaleString()} INMU`
-    : `上限: ${adminLimit.toLocaleString()} INMU`
   const inputMax = effectiveLimit
 
   return (
@@ -390,15 +387,25 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         {purchaseOpen && (
           <div className="flex flex-col gap-4 p-4">
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-primary">新規申請</p>
-                <div className="text-right">
-                  <p className="text-[11px] text-muted-foreground">
-                    申請上限: <span className="font-mono font-bold">{effectiveLimit.toLocaleString()} INMU</span>
-                  </p>
-                  {userPurchased > 0 && userPurchased < adminLimit && (
-                    <p className="text-[10px] text-muted-foreground">{limitLabel}</p>
-                  )}
+              <p className="text-sm font-semibold text-primary">新規申請</p>
+
+              {/* 4項目表示 */}
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-secondary/30 p-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">購入済み枚数</p>
+                  <p className="font-mono text-sm font-bold">{totalBought.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">申請済み枚数</p>
+                  <p className="font-mono text-sm font-bold text-yellow-500">{totalApplied.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">申請可能枚数</p>
+                  <p className="font-mono text-sm font-bold text-green-500">{effectiveLimit.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">管理者設定上限</p>
+                  <p className="font-mono text-sm font-bold">{adminLimit.toLocaleString()}</p>
                 </div>
               </div>
 
@@ -415,8 +422,8 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
                 {prAmount && Number(prAmount) > effectiveLimit && (
                   <p className="text-[11px] text-destructive flex items-center gap-1">
                     <XCircle className="size-3" />
-                    {userPurchased > 0 && Number(prAmount) > userPurchased
-                      ? `購入済み枚数を超えて申請することはできません（購入済み: ${userPurchased.toLocaleString()} INMU）`
+                    {totalBought > 0 && Number(prAmount) > (totalBought - totalApplied)
+                      ? `申請可能枚数を超えています（購入済み ${totalBought.toLocaleString()} − 申請済み ${totalApplied.toLocaleString()} = ${Math.max(0, totalBought - totalApplied).toLocaleString()} INMU）`
                       : `申請上限（${adminLimit.toLocaleString()} INMU）を超えています`}
                   </p>
                 )}
