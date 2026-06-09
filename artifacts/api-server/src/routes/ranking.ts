@@ -108,6 +108,7 @@ router.get("/ranking", requireAuth, async (_req, res): Promise<void> => {
     entries.sort((a, b) => b.balance - a.balance);
     const top100 = entries.slice(0, 100).map((e, i) => ({ ...e, rank: i + 1 }));
 
+    res.set("Cache-Control", "no-store");
     res.json(top100);
   } catch {
     res.status(500).json({ error: "Internal error" });
