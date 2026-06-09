@@ -148,6 +148,29 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
     await achieveMission(mission)
   }
 
+  async function achieveMissionDirect(mission: Mission) {
+    setBusy(mission.id)
+    try {
+      if (!mission.participationStatus) {
+        const joinRes = await fetch(`/api/missions/${mission.id}/join`, { method: 'POST', credentials: 'include' })
+        if (!joinRes.ok) {
+          const d = await joinRes.json()
+          toast.error(d.error ?? 'エラーが発生しました')
+          return
+        }
+      }
+      const res = await fetch(`/api/missions/${mission.id}/achieve`, { method: 'POST', credentials: 'include' })
+      if (!res.ok) {
+        const d = await res.json()
+        toast.error(d.error ?? 'エラーが発生しました')
+      } else {
+        toast.success('達成しました！報酬を受け取ってください')
+        loadMissions()
+      }
+    } catch { toast.error('通信エラーが発生しました') }
+    finally { setBusy(null) }
+  }
+
   async function claimMission(mission: Mission) {
     setBusy(mission.id)
     try {
@@ -251,10 +274,16 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
                   {isBusy ? '処理中…' : '達成する'}
                 </Button>
               )
-            ) : (
+            ) : m.conditionType === 'link_visit' ? (
               <Button size="sm" variant="secondary" className="h-7 px-2 text-xs"
                 disabled={isBusy} onClick={() => joinMission(m)}>
                 {isBusy ? '処理中…' : '参加する'}
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                disabled={isBusy || (m.conditionType && m.conditionType !== 'none' ? !m.conditionMet : false)}
+                onClick={() => achieveMissionDirect(m)}>
+                {isBusy ? '処理中…' : '達成する'}
               </Button>
             )}
           </div>

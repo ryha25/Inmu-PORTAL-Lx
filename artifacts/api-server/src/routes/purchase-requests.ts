@@ -130,6 +130,7 @@ router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<
     })
       .from(purchaseRequestsTable)
       .leftJoin(profileTable, eq(purchaseRequestsTable.userId, profileTable.userId))
+      .where(eq(purchaseRequestsTable.status, "pending"))
       .orderBy(desc(purchaseRequestsTable.createdAt))
       .limit(500);
     res.json(requests);

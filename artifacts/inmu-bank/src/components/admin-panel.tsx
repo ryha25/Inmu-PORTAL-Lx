@@ -78,18 +78,18 @@ type TradeTxRow = {
   tradedAt: string
 }
 
-const PREREQUISITE_TYPE_OPTIONS = [
-  { value: 'none',                     label: '前提条件なし' },
-  { value: 'mission',                  label: '特定ミッション完了' },
-  { value: 'total_clears',             label: 'ミッションクリア回数（全種合計）' },
-  { value: 'daily_clears_total',       label: 'デイリークリア累計' },
-  { value: 'weekly_clears_total',      label: 'ウィークリークリア累計' },
-  { value: 'achievement_clears_total', label: 'アチーブメント達成数' },
-  { value: 'login_total',              label: '累計ログイン日数' },
-  { value: 'login_streak',             label: '連続ログイン日数' },
-  { value: 'inmu_balance',             label: 'INMU保有枚数' },
-  { value: 'buy_total',                label: '累計購入枚数' },
-  { value: 'monthly_points',           label: 'ポイント保有数' },
+const PREREQUISITE_CATEGORIES = [
+  { value: 'none',              label: '前提条件なし',                 presets: [] as number[] },
+  { value: 'mission',           label: '特定ミッションクリア完了',       presets: [] as number[] },
+  { value: 'buy_daily',         label: 'デイリー購入枚数',              presets: [50000, 100000] },
+  { value: 'buy_weekly',        label: 'ウィークリー購入枚数',           presets: [500000, 1000000] },
+  { value: 'inmu_balance',      label: '累計保有枚数',                  presets: [1000000, 2000000, 3000000, 4000000, 5000000, 10000000, 30000000, 50000000] },
+  { value: 'login_streak',      label: '連続ログイン日数',              presets: [7, 10, 14, 30, 100, 150, 200, 250, 300] },
+  { value: 'login_total',       label: '通算ログイン日数',              presets: [7, 10, 30, 60, 90, 100, 150, 200, 250, 300] },
+  { value: 'daily_clears_total',label: 'デイリーミッションクリア回数',   presets: [5, 10, 15] },
+  { value: 'total_clears',      label: '累計ミッションクリア回数',       presets: [30, 50, 100] },
+  { value: 'monthly_points',    label: '累計ポイント保有数',             presets: [1000, 5000, 10000, 100000, 500000, 1000000] },
+  { value: 'buy_total',         label: '累計購入枚数',                  presets: [1000000, 3000000, 5000000, 10000000, 30000000, 50000000] },
 ]
 
 const CONDITION_TYPE_OPTIONS = [
@@ -339,6 +339,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [deductPointsAmount, setDeductPointsAmount] = useState('')
   const [missions, setMissions] = useState<MissionRow[]>([])
   const [missionForm, setMissionForm] = useState({ title: '', description: '', type: 'daily', points: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '', prerequisiteType: 'none', prerequisiteValue: '' })
+  const [selectedMissionIds, setSelectedMissionIds] = useState<Set<number>>(new Set())
   const [editingMissionId, setEditingMissionId] = useState<number | null>(null)
 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
@@ -648,6 +649,17 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       await loadSystemSettings()
     } catch (e) { toast.error(e instanceof Error ? e.message : t('error')) }
     finally { setSettingSaving(false) }
+  }
+
+  async function bulkDeleteMissions() {
+    if (selectedMissionIds.size === 0) return
+    const ids = Array.from(selectedMissionIds)
+    await withLoading(async () => {
+      await Promise.all(ids.map(id => api(`/admin/missions/${id}`, 'DELETE')))
+      setSelectedMissionIds(new Set())
+      await loadMissions()
+      toast.success(`${ids.length}件のミッションを削除しました`)
+    })
   }
 
   async function saveMission() {
@@ -1095,8 +1107,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                   onChange={e => setMissionForm(f => ({ ...f, prerequisiteType: e.target.value, prerequisiteValue: '' }))}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  {PREREQUISITE_TYPE_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
+                  {PREREQUISITE_CATEGORIES.map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
                 </select>
                 {missionForm.prerequisiteType === 'mission' && (
@@ -1105,22 +1117,29 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     onChange={e => setMissionForm(f => ({ ...f, prerequisiteValue: e.target.value }))}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="">前提ミッションを選択</option>
-                    {missions.filter(m => editingMissionId === null || m.id !== editingMissionId).map(m => (
-                      <option key={m.id} value={String(m.id)}>{m.title}</option>
-                    ))}
+                    <option value="">前提ミッションを選択（Xフォロー・Discord参加のみ）</option>
+                    {missions
+                      .filter(m => m.conditionType === 'link_visit' && (editingMissionId === null || m.id !== editingMissionId))
+                      .map(m => (
+                        <option key={m.id} value={String(m.id)}>{m.title}</option>
+                      ))}
                   </select>
                 )}
-                {missionForm.prerequisiteType !== 'none' && missionForm.prerequisiteType !== 'mission' && (
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="しきい値（この数値以上で解放）"
-                    value={missionForm.prerequisiteValue}
-                    onChange={e => setMissionForm(f => ({ ...f, prerequisiteValue: e.target.value }))}
-                    className="min-h-10"
-                  />
-                )}
+                {missionForm.prerequisiteType !== 'none' && missionForm.prerequisiteType !== 'mission' && (() => {
+                  const presets = PREREQUISITE_CATEGORIES.find(c => c.value === missionForm.prerequisiteType)?.presets ?? []
+                  return (
+                    <select
+                      value={missionForm.prerequisiteValue}
+                      onChange={e => setMissionForm(f => ({ ...f, prerequisiteValue: e.target.value }))}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">しきい値を選択</option>
+                      {presets.map(p => (
+                        <option key={p} value={String(p)}>{p.toLocaleString()}</option>
+                      ))}
+                    </select>
+                  )
+                })()}
               </div>
               <div className="flex gap-2">
                 <div className="flex flex-col gap-1 flex-1">
@@ -1169,9 +1188,27 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
             </p>
           ) : (
             <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2 px-1">
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                  <input type="checkbox"
+                    checked={selectedMissionIds.size === missions.length && missions.length > 0}
+                    onChange={e => setSelectedMissionIds(e.target.checked ? new Set(missions.map(m => m.id)) : new Set())} />
+                  全選択（{selectedMissionIds.size}件選択中）
+                </label>
+                {selectedMissionIds.size > 0 && (
+                  <Button size="sm" variant="destructive" className="h-7 px-2 text-xs"
+                    onClick={bulkDeleteMissions}>
+                    <Trash2 className="size-3 mr-1" />選択削除（{selectedMissionIds.size}件）
+                  </Button>
+                )}
+              </div>
               {missions.map(m => (
-                <Card key={m.id} className={`border-border bg-card p-3 ${!m.isActive ? 'opacity-50' : ''}`}>
-                  <div className="flex items-start justify-between gap-2">
+                <Card key={m.id} className={`border-border bg-card p-3 ${!m.isActive ? 'opacity-50' : ''} ${selectedMissionIds.has(m.id) ? 'ring-1 ring-primary/40' : ''}`}>
+                  <div className="flex items-start gap-2">
+                    <input type="checkbox" className="mt-1 shrink-0 cursor-pointer accent-primary"
+                      checked={selectedMissionIds.has(m.id)}
+                      onChange={e => setSelectedMissionIds(prev => { const next = new Set(prev); if (e.target.checked) next.add(m.id); else next.delete(m.id); return next })} />
+                  <div className="flex items-start justify-between gap-2 flex-1">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${m.type === 'weekly' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
@@ -1191,7 +1228,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                         <p className="text-[10px] text-yellow-600 dark:text-yellow-400 mt-0.5 ml-6">
                           🔒 解放条件: {m.prerequisiteMissionId
                             ? `ミッション完了 #${m.prerequisiteMissionId}`
-                            : `${PREREQUISITE_TYPE_OPTIONS.find(o => o.value === m.prerequisiteConditionType)?.label ?? m.prerequisiteConditionType} ≥ ${Number(m.prerequisiteConditionValue).toLocaleString()}`
+                            : `${PREREQUISITE_CATEGORIES.find(c => c.value === m.prerequisiteConditionType)?.label ?? m.prerequisiteConditionType} ≥ ${Number(m.prerequisiteConditionValue).toLocaleString()}`
                           }
                         </p>
                       )}
@@ -1250,6 +1287,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                       >
                         <Trash2 className="size-3" />
                       </Button>
+                    </div>
                     </div>
                   </div>
                 </Card>
