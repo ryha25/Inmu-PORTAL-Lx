@@ -5,6 +5,11 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { sessionMiddleware } from "./middlewares/session";
+import { deleteInactiveUsers } from "./routes/auth";
+
+const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+deleteInactiveUsers().catch(() => {});
+setInterval(() => deleteInactiveUsers().catch(() => {}), TWENTY_FOUR_HOURS);
 
 const app: Express = express();
 

@@ -1,11 +1,25 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { userTable, profileTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  userTable,
+  profileTable,
+  loginStreaksTable,
+  transactionsTable,
+  jarsTable,
+  goalsTable,
+  notificationsTable,
+  pointsTable,
+  activityFeedTable,
+} from "@workspace/db/schema";
+import { eq, lt, and, isNull, or } from "drizzle-orm";
 import { SESSION_COOKIE, makeSessionValue } from "../middlewares/session";
 
 const router = Router();
+
+function makeEmail(name: string): string {
+  return `${name.toLowerCase().replace(/[^a-z0-9]/g, "_")}@inmu.local`;
+}
 
 router.get("/session", (req, res): void => {
   if (!req.userId) {
@@ -22,31 +36,40 @@ router.get("/session", (req, res): void => {
 });
 
 router.post("/sign-in", async (req, res): Promise<void> => {
-  const { email, password } = req.body as { email?: string; password?: string };
-  if (!email || !password) {
-    res.status(400).json({ error: "Email and password required" });
+  const { name, email, password } = req.body as {
+    name?: string;
+    email?: string;
+    password?: string;
+  };
+  const identifier = (name || email || "").trim();
+  if (!identifier || !password) {
+    res.status(400).json({ error: "ユーザー名とパスワードが必要です" });
     return;
   }
   try {
-    const user = await db
+    const syntheticEmail = makeEmail(identifier);
+    let user = await db
       .select()
       .from(userTable)
-      .where(eq(userTable.email, email))
+      .where(eq(userTable.email, syntheticEmail))
       .then((r) => r[0]);
 
     if (!user) {
-      res.status(401).json({ error: "Invalid email or password" });
-      return;
+      user = await db
+        .select()
+        .from(userTable)
+        .where(eq(userTable.email, identifier))
+        .then((r) => r[0]);
     }
 
-    if (!user.passwordHash) {
-      res.status(401).json({ error: "Invalid email or password" });
+    if (!user || !user.passwordHash) {
+      res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません" });
       return;
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
-      res.status(401).json({ error: "Invalid email or password" });
+      res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません" });
       return;
     }
 
@@ -65,19 +88,28 @@ router.post("/sign-in", async (req, res): Promise<void> => {
 });
 
 router.post("/sign-up", async (req, res): Promise<void> => {
-  const { email, password, name } = req.body as {
-    email?: string;
-    password?: string;
+  const { name, password, passcode } = req.body as {
     name?: string;
+    password?: string;
+    passcode?: string;
   };
-  if (!email || !password || !name) {
-    res.status(400).json({ error: "All fields required" });
+  if (!name?.trim() || !password) {
+    res.status(400).json({ error: "全項目を入力してください" });
     return;
   }
   if (password.length < 8) {
-    res.status(400).json({ error: "Password must be at least 8 characters" });
+    res.status(400).json({ error: "パスワードは8文字以上にしてください" });
     return;
   }
+  const adminCode = process.env.ADMIN_CODE;
+  if (adminCode && passcode !== adminCode) {
+    res.status(400).json({ error: "パスコードが正しくありません" });
+    return;
+  }
+
+  const trimmedName = name.trim();
+  const email = makeEmail(trimmedName);
+
   try {
     const existing = await db
       .select()
@@ -85,7 +117,7 @@ router.post("/sign-up", async (req, res): Promise<void> => {
       .where(eq(userTable.email, email))
       .then((r) => r[0]);
     if (existing) {
-      res.status(400).json({ error: "Email already in use" });
+      res.status(400).json({ error: "このユーザー名は既に使用されています" });
       return;
     }
 
@@ -95,19 +127,19 @@ router.post("/sign-up", async (req, res): Promise<void> => {
     await db.insert(userTable).values({
       id: userId,
       email,
-      name,
+      name: trimmedName,
       passwordHash,
       emailVerified: false,
     });
-    await ensureProfile(userId, name);
+    await ensureProfile(userId, trimmedName);
 
-    res.cookie(SESSION_COOKIE, makeSessionValue(userId, email, name), {
+    res.cookie(SESSION_COOKIE, makeSessionValue(userId, email, trimmedName), {
       httpOnly: true,
       sameSite: "lax",
       maxAge: 30 * 24 * 60 * 60 * 1000,
       path: "/",
     });
-    res.status(201).json({ user: { id: userId, email, name } });
+    res.status(201).json({ user: { id: userId, email, name: trimmedName } });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -126,6 +158,36 @@ async function ensureProfile(userId: string, displayName: string) {
     .then((r) => r[0]);
   if (!existing) {
     await db.insert(profileTable).values({ userId, displayName });
+  }
+}
+
+export async function deleteInactiveUsers() {
+  const cutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+  try {
+    const allUsers = await db.select({ id: userTable.id, createdAt: userTable.createdAt }).from(userTable);
+
+    for (const user of allUsers) {
+      const streak = await db
+        .select({ lastLogin: loginStreaksTable.lastLogin })
+        .from(loginStreaksTable)
+        .where(eq(loginStreaksTable.userId, user.id))
+        .then((r) => r[0]);
+
+      const lastActivity = streak?.lastLogin ?? user.createdAt;
+      if (lastActivity < cutoff) {
+        await db.delete(activityFeedTable).where(eq(activityFeedTable.userId, user.id));
+        await db.delete(notificationsTable).where(eq(notificationsTable.userId, user.id));
+        await db.delete(pointsTable).where(eq(pointsTable.userId, user.id));
+        await db.delete(loginStreaksTable).where(eq(loginStreaksTable.userId, user.id));
+        await db.delete(jarsTable).where(eq(jarsTable.userId, user.id));
+        await db.delete(goalsTable).where(eq(goalsTable.userId, user.id));
+        await db.delete(transactionsTable).where(eq(transactionsTable.userId, user.id));
+        await db.delete(profileTable).where(eq(profileTable.userId, user.id));
+        await db.delete(userTable).where(eq(userTable.id, user.id));
+      }
+    }
+  } catch (err) {
+    console.error("Inactive user cleanup error:", err);
   }
 }
 

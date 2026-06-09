@@ -22,7 +22,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={DashboardPage} />
-      <Route path="/balance" component={BalancePage} />
+      <Route path="/balance"><Redirect to="/" /></Route>
       <Route path="/history" component={HistoryPage} />
       <Route path="/achievements" component={AchievementsPage} />
       <Route path="/community">

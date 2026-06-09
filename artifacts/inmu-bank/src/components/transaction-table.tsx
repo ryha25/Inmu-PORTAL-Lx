@@ -13,7 +13,7 @@ import { useMemo, useState } from 'react'
 
 export type TxRow = { id: number; type: string; amount: string; category: string | null; counterparty: string | null; memo: string | null; createdAt: string }
 
-const TYPE_OPTIONS = ['all', 'deposit', 'withdraw', 'send', 'receive', 'reward', 'airdrop']
+const TYPE_OPTIONS = ['all', 'reward', 'airdrop']
 
 export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu-transactions.csv' }: { rows: TxRow[]; showTypeFilter?: boolean; filename?: string }) {
   const { t, locale } = useI18n()
