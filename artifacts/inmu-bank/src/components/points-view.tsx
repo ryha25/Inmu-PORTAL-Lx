@@ -4,7 +4,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useI18n } from '@/lib/i18n/context'
 import { formatDate } from '@/lib/format'
-import { Award, Flame, ChevronDown, ChevronUp, ExternalLink, CheckCircle2, ShoppingCart, Clock, XCircle } from 'lucide-react'
+import {
+  Award, Flame, ChevronDown, ChevronUp, ExternalLink,
+  CheckCircle2, ShoppingCart, Clock, XCircle, Star, Zap,
+} from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 
@@ -42,6 +45,7 @@ type PurchaseRequest = {
   rebateAmount: string | null
   rebateRate: string | null
   adminNote: string | null
+  rebateTxSignature: string | null
   createdAt: string
 }
 
@@ -53,17 +57,22 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: () => void }) {
   const { locale } = useI18n()
-  const [dailyOpen,   setDailyOpen]   = useState(true)
-  const [weeklyOpen,  setWeeklyOpen]  = useState(true)
-  const [purchaseOpen, setPurchaseOpen] = useState(false)
+  const [dailyOpen,       setDailyOpen]       = useState(true)
+  const [weeklyOpen,      setWeeklyOpen]       = useState(true)
+  const [achievementOpen, setAchievementOpen]  = useState(true)
+  const [eventOpen,       setEventOpen]        = useState(true)
+  const [purchaseOpen,    setPurchaseOpen]     = useState(false)
 
-  const [dailyMissions,  setDailyMissions]  = useState<Mission[]>([])
-  const [weeklyMissions, setWeeklyMissions] = useState<Mission[]>([])
+  const [dailyMissions,       setDailyMissions]       = useState<Mission[]>([])
+  const [weeklyMissions,      setWeeklyMissions]       = useState<Mission[]>([])
+  const [achievementMissions, setAchievementMissions]  = useState<Mission[]>([])
+  const [eventMissions,       setEventMissions]        = useState<Mission[]>([])
   const [busy, setBusy] = useState<number | null>(null)
 
-  // 購入申請
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([])
-  const [purchaseLimit, setPurchaseLimit] = useState<number>(1000000)
+  const [adminLimit,       setAdminLimit]       = useState<number>(1000000)
+  const [userPurchased,    setUserPurchased]    = useState<number>(0)
+  const [effectiveLimit,   setEffectiveLimit]   = useState<number>(1000000)
   const [prAmount,  setPrAmount]  = useState('')
   const [prTxHash,  setPrTxHash]  = useState('')
   const [prComment, setPrComment] = useState('')
@@ -76,6 +85,8 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         if (d) {
           setDailyMissions(d.daily ?? [])
           setWeeklyMissions(d.weekly ?? [])
+          setAchievementMissions(d.achievement ?? [])
+          setEventMissions(d.event ?? [])
         }
       })
       .catch(() => {})
@@ -87,7 +98,9 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       .then(d => {
         if (d) {
           setPurchaseRequests(d.requests ?? [])
-          setPurchaseLimit(d.limit ?? 1000000)
+          setAdminLimit(d.adminLimit ?? 1000000)
+          setUserPurchased(d.userPurchased ?? 0)
+          setEffectiveLimit(d.effectiveLimit ?? d.adminLimit ?? 1000000)
         }
       })
       .catch(() => {})
@@ -99,12 +112,10 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
   async function joinMission(mission: Mission) {
     setBusy(mission.id)
     try {
-      const res = await fetch(`/api/missions/${mission.id}/join`, {
-        method: 'POST', credentials: 'include',
-      })
+      const res = await fetch(`/api/missions/${mission.id}/join`, { method: 'POST', credentials: 'include' })
       if (!res.ok) {
         const d = await res.json()
-        toast.error(d.error ?? 'エラーが発生しました')
+        toast.error(d.message ?? d.error ?? 'エラーが発生しました')
       } else {
         toast.success('ミッションに参加しました！')
         loadMissions()
@@ -116,9 +127,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
   async function achieveMission(mission: Mission) {
     setBusy(mission.id)
     try {
-      const res = await fetch(`/api/missions/${mission.id}/achieve`, {
-        method: 'POST', credentials: 'include',
-      })
+      const res = await fetch(`/api/missions/${mission.id}/achieve`, { method: 'POST', credentials: 'include' })
       if (!res.ok) {
         const d = await res.json()
         toast.error(d.error ?? 'エラーが発生しました')
@@ -138,9 +147,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
   async function claimMission(mission: Mission) {
     setBusy(mission.id)
     try {
-      const res = await fetch(`/api/missions/${mission.id}/claim`, {
-        method: 'POST', credentials: 'include',
-      })
+      const res = await fetch(`/api/missions/${mission.id}/claim`, { method: 'POST', credentials: 'include' })
       const d = await res.json()
       if (!res.ok) {
         if (d.error === 'already_completed') toast.info('このミッションは既に達成済みです')
@@ -158,10 +165,6 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
     const num = Number(prAmount)
     if (!prAmount || isNaN(num) || num <= 0) {
       toast.error('有効な枚数を入力してください')
-      return
-    }
-    if (num > purchaseLimit) {
-      toast.error(`申請上限を超えています（上限: ${purchaseLimit.toLocaleString()} INMU）`)
       return
     }
     setPrBusy(true)
@@ -186,12 +189,13 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
     finally { setPrBusy(false) }
   }
 
-  function MissionItem({ m }: { m: Mission }) {
+  function MissionItem({ m, isAchievement }: { m: Mission; isAchievement?: boolean }) {
     const isBusy = busy === m.id
     const status = m.participationStatus
+    const isCompleted = status === 'rewarded'
 
     return (
-      <li className="px-4 py-3">
+      <li className={`px-4 py-3 ${isCompleted && isAchievement ? 'opacity-70' : ''}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
@@ -203,6 +207,17 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
               )}
             </div>
             {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
+            {m.conditionType && m.conditionType !== 'none' && m.conditionCurrent !== null && m.conditionValue && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                進捗: {Number(m.conditionCurrent).toLocaleString()} / {Number(m.conditionValue).toLocaleString()}
+                {m.conditionMet && <span className="text-green-500 ml-1">✓</span>}
+              </p>
+            )}
+            {m.endAt && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                期限: {new Date(m.endAt).toLocaleDateString('ja-JP')}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="font-mono text-sm font-bold text-chart-5">+{m.points} pts</span>
@@ -210,7 +225,9 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             {status === 'rewarded' ? (
               <div className="flex items-center gap-1 rounded-full bg-chart-5/15 px-2 py-1">
                 <CheckCircle2 className="size-3 text-chart-5" />
-                <span className="text-[10px] font-medium text-chart-5">受取済み</span>
+                <span className="text-[10px] font-medium text-chart-5">
+                  {isAchievement ? '達成済み' : '受取済み'}
+                </span>
               </div>
             ) : status === 'achieved' ? (
               <Button size="sm" className="h-7 px-2 text-xs bg-chart-5 hover:bg-chart-5/90"
@@ -225,7 +242,8 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                  disabled={isBusy} onClick={() => achieveMission(m)}>
+                  disabled={isBusy || (m.conditionType && m.conditionType !== 'none' && m.conditionType !== 'link_visit' ? !m.conditionMet : false)}
+                  onClick={() => achieveMission(m)}>
                   {isBusy ? '処理中…' : '達成する'}
                 </Button>
               )
@@ -240,6 +258,11 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       </li>
     )
   }
+
+  const limitLabel = userPurchased > 0 && userPurchased < adminLimit
+    ? `購入済み: ${userPurchased.toLocaleString()} INMU`
+    : `上限: ${adminLimit.toLocaleString()} INMU`
+  const inputMax = effectiveLimit
 
   return (
     <div className="flex flex-col gap-4">
@@ -265,7 +288,15 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         <button type="button"
           className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
           onClick={() => setDailyOpen(o => !o)}>
-          <h2 className="text-sm font-semibold">▼ デイリーミッション</h2>
+          <div className="flex items-center gap-2">
+            <Flame className="size-3.5 text-orange-400" />
+            <h2 className="text-sm font-semibold">デイリーミッション</h2>
+            {dailyMissions.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">
+                ({dailyMissions.filter(m => m.participationStatus === 'rewarded').length}/{dailyMissions.length})
+              </span>
+            )}
+          </div>
           {dailyOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
         </button>
         {dailyOpen && (
@@ -280,7 +311,15 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         <button type="button"
           className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
           onClick={() => setWeeklyOpen(o => !o)}>
-          <h2 className="text-sm font-semibold">▼ ウィークリーミッション</h2>
+          <div className="flex items-center gap-2">
+            <Star className="size-3.5 text-blue-400" />
+            <h2 className="text-sm font-semibold">ウィークリーミッション</h2>
+            {weeklyMissions.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">
+                ({weeklyMissions.filter(m => m.participationStatus === 'rewarded').length}/{weeklyMissions.length})
+              </span>
+            )}
+          </div>
           {weeklyOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
         </button>
         {weeklyOpen && (
@@ -289,6 +328,48 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             : <ul className="divide-y divide-border">{weeklyMissions.map(m => <MissionItem key={m.id} m={m} />)}</ul>
         )}
       </Card>
+
+      {/* ── アチーブメント ── */}
+      <Card className="border-border bg-card overflow-hidden">
+        <button type="button"
+          className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
+          onClick={() => setAchievementOpen(o => !o)}>
+          <div className="flex items-center gap-2">
+            <Award className="size-3.5 text-chart-5" />
+            <h2 className="text-sm font-semibold">アチーブメント</h2>
+            {achievementMissions.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">
+                ({achievementMissions.filter(m => m.participationStatus === 'rewarded').length}/{achievementMissions.length})
+              </span>
+            )}
+          </div>
+          {achievementOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+        </button>
+        {achievementOpen && (
+          achievementMissions.length === 0
+            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">現在アチーブメントはありません</p>
+            : <ul className="divide-y divide-border">{achievementMissions.map(m => <MissionItem key={m.id} m={m} isAchievement />)}</ul>
+        )}
+      </Card>
+
+      {/* ── イベントミッション ── */}
+      {eventMissions.length > 0 && (
+        <Card className="border border-primary/40 bg-primary/5 overflow-hidden">
+          <button type="button"
+            className="flex w-full items-center justify-between px-4 py-3 border-b border-primary/20 hover:bg-primary/10 transition-colors"
+            onClick={() => setEventOpen(o => !o)}>
+            <div className="flex items-center gap-2">
+              <Zap className="size-3.5 text-primary" />
+              <h2 className="text-sm font-semibold text-primary">イベントミッション</h2>
+              <span className="text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">LIMITED</span>
+            </div>
+            {eventOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+          </button>
+          {eventOpen && (
+            <ul className="divide-y divide-primary/10">{eventMissions.map(m => <MissionItem key={m.id} m={m} />)}</ul>
+          )}
+        </Card>
+      )}
 
       {/* ── 購入枚数申請 ── */}
       <Card className="border-border bg-card overflow-hidden">
@@ -304,30 +385,35 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
 
         {purchaseOpen && (
           <div className="flex flex-col gap-4 p-4">
-            {/* 申請フォーム */}
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-primary">新規申請</p>
-                <p className="text-[11px] text-muted-foreground">
-                  上限: <span className="font-mono font-bold">{purchaseLimit.toLocaleString()} INMU</span>
-                </p>
+                <div className="text-right">
+                  <p className="text-[11px] text-muted-foreground">
+                    申請上限: <span className="font-mono font-bold">{effectiveLimit.toLocaleString()} INMU</span>
+                  </p>
+                  {userPurchased > 0 && userPurchased < adminLimit && (
+                    <p className="text-[10px] text-muted-foreground">{limitLabel}</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs text-muted-foreground">購入枚数（INMU）*</Label>
                 <Input
                   type="number"
-                  placeholder={`最大 ${purchaseLimit.toLocaleString()}`}
+                  placeholder={`最大 ${inputMax.toLocaleString()}`}
                   value={prAmount}
                   onChange={e => setPrAmount(e.target.value)}
                   min="1"
-                  max={purchaseLimit}
                   className="min-h-10"
                 />
-                {prAmount && Number(prAmount) > purchaseLimit && (
+                {prAmount && Number(prAmount) > effectiveLimit && (
                   <p className="text-[11px] text-destructive flex items-center gap-1">
                     <XCircle className="size-3" />
-                    申請上限（{purchaseLimit.toLocaleString()} INMU）を超えています
+                    {userPurchased > 0 && Number(prAmount) > userPurchased
+                      ? `購入済み枚数を超えて申請することはできません（購入済み: ${userPurchased.toLocaleString()} INMU）`
+                      : `申請上限（${adminLimit.toLocaleString()} INMU）を超えています`}
                   </p>
                 )}
               </div>
@@ -354,14 +440,13 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
 
               <Button
                 onClick={submitPurchaseRequest}
-                disabled={prBusy || !prAmount || Number(prAmount) <= 0 || Number(prAmount) > purchaseLimit}
+                disabled={prBusy || !prAmount || Number(prAmount) <= 0 || Number(prAmount) > effectiveLimit}
                 className="min-h-10"
               >
                 {prBusy ? '送信中…' : '申請を送信'}
               </Button>
             </div>
 
-            {/* 申請履歴 */}
             {purchaseRequests.length > 0 && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-muted-foreground">申請履歴</p>
@@ -381,10 +466,22 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
                         </span>
                       </div>
                       {pr.status === 'approved' && pr.rebateAmount && (
-                        <p className="text-xs text-green-600 dark:text-green-400">
-                          還元: {Number(pr.rebateAmount).toLocaleString()} INMU
-                          {pr.rebateRate && ` (${Number(pr.rebateRate)}%)`}
-                        </p>
+                        <div>
+                          <p className="text-xs text-green-600 dark:text-green-400">
+                            還元: {Number(pr.rebateAmount).toLocaleString()} INMU
+                            {pr.rebateRate && ` (${Number(pr.rebateRate)}%)`}
+                          </p>
+                          {pr.rebateTxSignature && (
+                            <a
+                              href={`https://solscan.io/tx/${pr.rebateTxSignature}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-primary/70 hover:text-primary font-mono truncate block"
+                            >
+                              TxSig: {pr.rebateTxSignature.slice(0, 20)}…
+                            </a>
+                          )}
+                        </div>
                       )}
                       {pr.status === 'rejected' && pr.adminNote && (
                         <p className="text-xs text-destructive">理由: {pr.adminNote}</p>

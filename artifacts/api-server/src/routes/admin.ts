@@ -870,7 +870,7 @@ router.get("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Prom
 
 router.put("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Promise<void> => {
   try {
-    const adminId = req.userId!;
+    const adminId = req.userId ?? "admin";
     const { userId } = req.params;
     const { password, passcode, passwordEnabled, passcodeEnabled } = req.body as {
       password?: string; passcode?: string; passwordEnabled?: boolean; passcodeEnabled?: boolean;

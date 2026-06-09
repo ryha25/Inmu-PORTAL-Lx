@@ -6,13 +6,14 @@ import {
   transactionsTable,
   notificationsTable,
   profileTable,
+  auditLogTable,
 } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
-async function getPurchaseLimit(): Promise<number> {
+async function getPurchaseAdminLimit(): Promise<number> {
   try {
     const [setting] = await db
       .select()
@@ -25,10 +26,17 @@ async function getPurchaseLimit(): Promise<number> {
 }
 
 // ── ユーザー: 現在の上限取得 ──
-router.get("/purchase-requests/limit", requireAuth, async (_req, res): Promise<void> => {
+router.get("/purchase-requests/limit", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
   try {
-    const limit = await getPurchaseLimit();
-    res.json({ limit });
+    const adminLimit = await getPurchaseAdminLimit();
+    const [profile] = await db
+      .select({ totalBought: profileTable.totalBought })
+      .from(profileTable)
+      .where(eq(profileTable.userId, userId));
+    const userPurchased = Number(profile?.totalBought ?? 0);
+    const effectiveLimit = Math.min(adminLimit, userPurchased > 0 ? userPurchased : adminLimit);
+    res.json({ adminLimit, userPurchased, effectiveLimit });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -38,14 +46,22 @@ router.get("/purchase-requests/limit", requireAuth, async (_req, res): Promise<v
 router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
-    const requests = await db
-      .select()
-      .from(purchaseRequestsTable)
-      .where(eq(purchaseRequestsTable.userId, userId))
-      .orderBy(desc(purchaseRequestsTable.createdAt))
-      .limit(50);
-    const limit = await getPurchaseLimit();
-    res.json({ requests, limit });
+    const [requests, adminLimit, profile] = await Promise.all([
+      db
+        .select()
+        .from(purchaseRequestsTable)
+        .where(eq(purchaseRequestsTable.userId, userId))
+        .orderBy(desc(purchaseRequestsTable.createdAt))
+        .limit(50),
+      getPurchaseAdminLimit(),
+      db.select({ totalBought: profileTable.totalBought })
+        .from(profileTable)
+        .where(eq(profileTable.userId, userId))
+        .then(r => r[0]),
+    ]);
+    const userPurchased = Number(profile?.totalBought ?? 0);
+    const effectiveLimit = userPurchased > 0 ? Math.min(adminLimit, userPurchased) : adminLimit;
+    res.json({ requests, adminLimit, userPurchased, effectiveLimit });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -67,11 +83,32 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
   }
 
   try {
-    const limit = await getPurchaseLimit();
-    if (numAmount > limit) {
+    const [adminLimit, profile] = await Promise.all([
+      getPurchaseAdminLimit(),
+      db.select({ totalBought: profileTable.totalBought })
+        .from(profileTable)
+        .where(eq(profileTable.userId, userId))
+        .then(r => r[0]),
+    ]);
+
+    const userPurchased = Number(profile?.totalBought ?? 0);
+
+    // Check admin limit first
+    if (numAmount > adminLimit) {
       res.status(400).json({
-        error: `申請上限を超えています（上限: ${limit.toLocaleString()} INMU）`,
-        limit,
+        error: `申請上限を超えています（管理者設定上限: ${adminLimit.toLocaleString()} INMU）`,
+        adminLimit,
+        userPurchased,
+      });
+      return;
+    }
+
+    // Check user's own purchased amount
+    if (userPurchased > 0 && numAmount > userPurchased) {
+      res.status(400).json({
+        error: `購入済み枚数を超えて申請することはできません（購入済み: ${userPurchased.toLocaleString()} INMU）`,
+        adminLimit,
+        userPurchased,
       });
       return;
     }
@@ -108,6 +145,7 @@ router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<
         rebateAmount: purchaseRequestsTable.rebateAmount,
         rebateRate: purchaseRequestsTable.rebateRate,
         adminNote: purchaseRequestsTable.adminNote,
+        rebateTxSignature: purchaseRequestsTable.rebateTxSignature,
         createdAt: purchaseRequestsTable.createdAt,
         displayName: profileTable.displayName,
         solWallet: profileTable.solWallet,
@@ -122,16 +160,17 @@ router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<
   }
 });
 
-// ── 管理者: 申請ステータス更新・還元送金 ──
+// ── 管理者: 申請ステータス更新・還元送金記録 ──
 router.put("/admin/purchase-requests/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const { status, rebateAmount, rebateRate, adminNote } = req.body as {
+  const { status, rebateAmount, rebateRate, adminNote, rebateTxSignature } = req.body as {
     status?: string;
     rebateAmount?: number | string | null;
     rebateRate?: number | string | null;
     adminNote?: string;
+    rebateTxSignature?: string | null;
   };
 
   if (!status || !["approved", "rejected", "pending"].includes(status)) {
@@ -163,16 +202,19 @@ router.put("/admin/purchase-requests/:id", requireAdmin, async (req, res): Promi
         rebateAmount: numRebate != null ? String(numRebate) : null,
         rebateRate:   numRate   != null ? String(numRate)   : null,
         adminNote: adminNote?.trim() || null,
+        rebateTxSignature: rebateTxSignature?.trim() || null,
       })
       .where(eq(purchaseRequestsTable.id, id));
 
     // 承認 + 還元額あり → ユーザーへ INMU 送金記録 + 通知
     if (status === "approved" && numRebate != null && numRebate > 0) {
+      const txSig = rebateTxSignature?.trim() || null;
       await db.insert(transactionsTable).values({
         userId: request.userId,
         type: "reward",
         amount: String(numRebate),
         memo: `購入申請還元 (申請${Number(request.amount).toLocaleString()} INMU${numRate != null ? `・還元率 ${numRate}%` : ""})`,
+        txHash: txSig,
         createdAt: now,
       });
 
@@ -180,8 +222,24 @@ router.put("/admin/purchase-requests/:id", requireAdmin, async (req, res): Promi
         userId: request.userId,
         type: "purchase_approved",
         title: "購入申請が承認されました",
-        message: `${Number(request.amount).toLocaleString()} INMU の購入申請が承認され、${numRebate.toLocaleString()} INMU が還元されました。`,
+        message: `${Number(request.amount).toLocaleString()} INMU の購入申請が承認され、${numRebate.toLocaleString()} INMU が還元されました。${txSig ? `TxSignature: ${txSig}` : ""}`,
       });
+
+      // 管理者監査ログ
+      await db.insert(auditLogTable).values({
+        adminId: "admin",
+        action: "purchase_request_approved",
+        targetUserId: request.userId,
+        details: {
+          requestId: id,
+          requestAmount: request.amount,
+          rebateAmount: numRebate,
+          rebateRate: numRate,
+          rebateTxSignature: txSig,
+        } as Record<string, unknown>,
+        createdAt: now,
+      }).catch(() => {});
+
     } else if (status === "rejected") {
       await db.insert(notificationsTable).values({
         userId: request.userId,

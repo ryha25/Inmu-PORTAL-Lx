@@ -16,6 +16,34 @@ import {
   CheckCircle2, Clock, XCircle,
 } from 'lucide-react'
 import type { UserRow } from '@/pages/admin-page'
+import { Connection, PublicKey, Transaction } from '@solana/web3.js'
+import {
+  getAssociatedTokenAddress,
+  createTransferInstruction,
+  getAccount,
+  createAssociatedTokenAccountInstruction,
+  TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token'
+
+interface PhantomProvider {
+  isPhantom: boolean
+  publicKey?: { toString(): string } | null
+  connect(opts?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>
+  disconnect(): Promise<void>
+  signTransaction(tx: Transaction): Promise<Transaction>
+}
+declare global {
+  interface Window {
+    phantom?: { solana?: PhantomProvider }
+    solana?: PhantomProvider
+  }
+}
+function getPhantom(): PhantomProvider | null {
+  if (window.phantom?.solana?.isPhantom) return window.phantom.solana
+  if (window.solana?.isPhantom) return window.solana
+  return null
+}
+function getAdminRpcUrl() { return `${window.location.origin}/api/solana/rpc-proxy` }
 
 type AuditRow = {
   id: number
@@ -37,14 +65,15 @@ type TradeTxRow = {
 }
 
 const CONDITION_TYPE_OPTIONS = [
-  { value: 'none',          label: '条件なし' },
-  { value: 'link_visit',    label: 'リンク訪問' },
-  { value: 'inmu_balance',  label: 'INMU保有枚数' },
-  { value: 'login_streak',  label: '連続ログイン日数' },
-  { value: 'login_total',   label: '累計ログイン日数' },
-  { value: 'buy_daily',     label: 'デイリー購入枚数' },
-  { value: 'buy_weekly',    label: 'ウィークリー購入枚数' },
-  { value: 'buy_total',     label: '累計購入枚数' },
+  { value: 'none',               label: '条件なし' },
+  { value: 'link_visit',         label: 'リンク訪問' },
+  { value: 'inmu_balance',       label: 'INMU保有枚数' },
+  { value: 'login_streak',       label: '連続ログイン日数' },
+  { value: 'login_total',        label: '累計ログイン日数' },
+  { value: 'buy_daily',          label: 'デイリー購入枚数' },
+  { value: 'buy_weekly',         label: 'ウィークリー購入枚数' },
+  { value: 'buy_total',          label: '累計購入枚数' },
+  { value: 'daily_weekly_count', label: 'デイリーミッション週間クリア数' },
 ]
 
 type MissionRow = {
@@ -92,6 +121,7 @@ type PurchaseRequestAdminRow = {
   rebateAmount: string | null
   rebateRate: string | null
   adminNote: string | null
+  rebateTxSignature: string | null
   reviewedAt: string | null
   createdAt: string
 }
@@ -444,12 +474,76 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
   async function savePurchaseReview(id: number) {
     setPrSaving(true)
+    let rebateTxSignature: string | null = null
     try {
+      const pr = purchaseReqs.find(r => r.id === id)
+      const numRebate = prRebateAmount ? Number(prRebateAmount) : 0
+
+      if (prStatus === 'approved' && numRebate > 0) {
+        if (!pr?.solWallet) {
+          toast.error('ユーザーのウォレットアドレスが未設定です')
+          setPrSaving(false)
+          return
+        }
+        const phantom = getPhantom()
+        if (!phantom) {
+          toast.error('Phantom ウォレットが見つかりません。管理者ブラウザにPhantomをインストールしてください。')
+          setPrSaving(false)
+          return
+        }
+        try {
+          toast.loading('Phantom に接続しています…', { id: 'ph-admin' })
+          const resp = await phantom.connect()
+          const adminWallet = resp.publicKey.toString()
+          toast.dismiss('ph-admin')
+
+          const INMU_MINT_KEY = new PublicKey('4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump')
+          const INMU_DEC = 6
+          const connection = new Connection(getAdminRpcUrl(), 'confirmed')
+          const fromPubkey = new PublicKey(adminWallet)
+          const toPubkey = new PublicKey(pr.solWallet)
+
+          const fromATA = await getAssociatedTokenAddress(INMU_MINT_KEY, fromPubkey, false, TOKEN_2022_PROGRAM_ID)
+          const toATA   = await getAssociatedTokenAddress(INMU_MINT_KEY, toPubkey,   false, TOKEN_2022_PROGRAM_ID)
+          const instrs: Parameters<typeof Transaction.prototype.add>[0][] = []
+          try { await getAccount(connection, toATA, 'confirmed', TOKEN_2022_PROGRAM_ID) }
+          catch { instrs.push(createAssociatedTokenAccountInstruction(fromPubkey, toATA, toPubkey, INMU_MINT_KEY, TOKEN_2022_PROGRAM_ID)) }
+
+          const rawAmount = Math.floor(numRebate * Math.pow(10, INMU_DEC))
+          instrs.push(createTransferInstruction(fromATA, toATA, fromPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID))
+
+          const tx = new Transaction()
+          tx.add(...instrs)
+          tx.feePayer = fromPubkey
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+          tx.recentBlockhash = blockhash
+
+          toast.loading('Phantom で署名してください…', { id: 'ph-sign' })
+          const signedTx = await phantom.signTransaction(tx)
+          toast.dismiss('ph-sign')
+
+          toast.loading('Solana へ送信中…', { id: 'ph-send' })
+          const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false, maxRetries: 3 })
+          toast.dismiss('ph-send')
+          rebateTxSignature = signature
+
+          try { await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed') } catch { /* best-effort */ }
+          toast.success(`オンチェーン送金完了: ${numRebate.toLocaleString()} INMU → ${pr.displayName ?? pr.userId}`)
+        } catch (e: unknown) {
+          toast.dismiss('ph-admin'); toast.dismiss('ph-sign'); toast.dismiss('ph-send')
+          const msg = e instanceof Error ? e.message : '不明なエラー'
+          if (msg !== 'User rejected the request.') toast.error(`Phantom 送金失敗: ${msg}`)
+          setPrSaving(false)
+          return
+        }
+      }
+
       await api(`/admin/purchase-requests/${id}`, 'PUT', {
         status: prStatus,
         rebateAmount: prRebateAmount ? Number(prRebateAmount) : null,
         rebateRate:   prRebateRate   ? Number(prRebateRate)   : null,
         adminNote: prAdminNote || null,
+        rebateTxSignature,
       })
       toast.success('更新しました')
       setPrEditId(null)
@@ -874,6 +968,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 >
                   <option value="daily">デイリー</option>
                   <option value="weekly">ウィークリー</option>
+                  <option value="achievement">アチーブメント（恒久）</option>
+                  <option value="event">イベント（期間限定）</option>
                 </select>
                 <Input
                   type="number"
@@ -1262,9 +1358,17 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                           </a>
                         )}
                         {pr.status === 'approved' && pr.rebateAmount && (
-                          <span className="text-xs text-green-600 dark:text-green-400">
-                            還元: {Number(pr.rebateAmount).toLocaleString()} INMU{pr.rebateRate ? ` (${pr.rebateRate}%)` : ''}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-xs text-green-600 dark:text-green-400">
+                              還元: {Number(pr.rebateAmount).toLocaleString()} INMU{pr.rebateRate ? ` (${pr.rebateRate}%)` : ''}
+                            </span>
+                            {pr.rebateTxSignature && (
+                              <a href={`https://solscan.io/tx/${pr.rebateTxSignature}`} target="_blank" rel="noopener noreferrer"
+                                className="text-[10px] text-primary/70 hover:text-primary font-mono truncate">
+                                TxSig: {pr.rebateTxSignature.slice(0, 16)}…
+                              </a>
+                            )}
+                          </div>
                         )}
                         {pr.adminNote && <span className="text-xs text-muted-foreground">管理メモ: {pr.adminNote}</span>}
                         <span className="text-[10px] text-muted-foreground">{new Date(pr.createdAt).toLocaleString('ja-JP')}</span>

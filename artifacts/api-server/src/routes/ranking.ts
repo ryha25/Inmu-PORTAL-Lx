@@ -11,7 +11,7 @@ router.get("/ranking", requireAuth, async (_req, res): Promise<void> => {
     const rows = await db
       .select()
       .from(profileTable)
-      .orderBy(sql`${profileTable.balance} DESC`)
+      .orderBy(sql`${profileTable.totalBought} - ${profileTable.totalSold} DESC`)
       .limit(100);
 
     res.json(
@@ -19,7 +19,7 @@ router.get("/ranking", requireAuth, async (_req, res): Promise<void> => {
         rank: i + 1,
         userId: p.userId,
         displayName: p.displayName,
-        balance: Number(p.balance),
+        balance: Number(p.totalBought) - Number(p.totalSold),
         totalReceived: Number(p.totalReceived),
         participations: p.participationCount,
       })),

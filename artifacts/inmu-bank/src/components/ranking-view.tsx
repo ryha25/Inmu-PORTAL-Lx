@@ -55,8 +55,11 @@ export function RankingView({
                 <p className="text-xs text-muted-foreground">{t('participations')}: {r.participations}</p>
               </div>
               <div className="text-right">
-                <p className="font-mono font-bold tabular-nums gold-text">{formatInmu(r.balance)}</p>
-                <p className="text-xs text-muted-foreground">{t('total_received')}: {formatInmu(r.totalReceived)}</p>
+                <div>
+                  <p className="text-[9px] text-muted-foreground mb-0.5">現在残高</p>
+                  <p className="font-mono font-bold tabular-nums gold-text">{formatInmu(r.balance)}</p>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">累計受取: {formatInmu(r.totalReceived)}</p>
               </div>
             </div>
           </Card>

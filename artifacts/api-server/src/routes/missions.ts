@@ -43,25 +43,54 @@ async function fetchInmuBalanceForMission(wallet: string): Promise<number> {
   }
   throw new Error("RPC unavailable");
 }
+
 import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
+// JST 4:00 reset: UTC+9 - 4h = UTC+5 offset for period calculation
+function getAdjustedNow(): Date {
+  return new Date(Date.now() + 5 * 3600 * 1000);
+}
+
 function getPeriod(type: string): string {
-  const now = new Date();
+  if (type === "achievement" || type === "event") return "all-time";
+  const adj = getAdjustedNow();
   if (type === "weekly") {
-    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-    const startOfYear = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const week = Math.ceil(((d.getTime() - startOfYear.getTime()) / 86400000 + 1) / 7);
-    return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+    const day = adj.getUTCDay(); // 0=Sun
+    const diff = (day + 6) % 7; // days since Monday
+    const mon = new Date(adj.getTime() - diff * 86400000);
+    const year = mon.getUTCFullYear();
+    const startOfYear = Date.UTC(year, 0, 1);
+    const week = Math.ceil(((mon.getTime() - startOfYear) / 86400000 + 1) / 7);
+    return `${year}-W${String(week).padStart(2, "0")}`;
   }
-  return now.toISOString().slice(0, 10);
+  return adj.toISOString().slice(0, 10);
+}
+
+// JST 4:00 adjusted start of today (real UTC)
+function getTodayStart(): Date {
+  const adj = getAdjustedNow();
+  const adjMid = new Date(adj);
+  adjMid.setUTCHours(0, 0, 0, 0);
+  return new Date(adjMid.getTime() - 5 * 3600 * 1000);
+}
+
+// JST 4:00 adjusted start of this week Monday (real UTC)
+function getWeekStart(): Date {
+  const adj = getAdjustedNow();
+  const day = adj.getUTCDay();
+  const diff = (day + 6) % 7;
+  const mon = new Date(adj.getTime() - diff * 86400000);
+  mon.setUTCHours(0, 0, 0, 0);
+  return new Date(mon.getTime() - 5 * 3600 * 1000);
 }
 
 const CONDITION_TYPES_NEEDING_VALUE = new Set([
-  "inmu_balance", "login_streak", "login_total", "buy_daily", "buy_weekly", "buy_total",
+  "inmu_balance", "login_streak", "login_total", "buy_daily", "buy_weekly", "buy_total", "daily_weekly_count",
 ]);
+
+const VALID_MISSION_TYPES = new Set(["daily", "weekly", "achievement", "event"]);
 
 router.get("/missions", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
@@ -77,36 +106,44 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       return true;
     });
 
-    const dailyPeriod = getPeriod("daily");
-    const weeklyPeriod = getPeriod("weekly");
+    const dailyPeriod   = getPeriod("daily");
+    const weeklyPeriod  = getPeriod("weekly");
+    const todayStart = getTodayStart();
+    const weekStart  = getWeekStart();
 
-    // ── 参加状況・条件達成状況を並列取得 ──
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const weekStart = new Date();
-    weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
-    weekStart.setUTCHours(0, 0, 0, 0);
-
-    const [participations, legacyCompletions, profile, streakRow, loginCountRow, dailyBuyRow, weeklyBuyRow] =
-      await Promise.all([
-        db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
-          .from(missionParticipationsTable)
-          .where(eq(missionParticipationsTable.userId, userId)),
-        db.select({ missionId: missionCompletionsTable.missionId, period: missionCompletionsTable.period })
-          .from(missionCompletionsTable)
-          .where(eq(missionCompletionsTable.userId, userId)),
-        db.select().from(profileTable).where(eq(profileTable.userId, userId)).then((r) => r[0]),
-        db.select().from(loginStreaksTable).where(eq(loginStreaksTable.userId, userId)).then((r) => r[0]),
-        db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
-          .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "daily_login")))
-          .then((r) => r[0]),
-        db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
-          .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, todayStart)))
-          .then((r) => r[0]),
-        db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
-          .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, weekStart)))
-          .then((r) => r[0]),
-      ]);
+    const [
+      participations, legacyCompletions, profile, streakRow,
+      loginCountRow, dailyBuyRow, weeklyBuyRow, weeklyDailyCountRow,
+    ] = await Promise.all([
+      db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
+        .from(missionParticipationsTable)
+        .where(eq(missionParticipationsTable.userId, userId)),
+      db.select({ missionId: missionCompletionsTable.missionId, period: missionCompletionsTable.period })
+        .from(missionCompletionsTable)
+        .where(eq(missionCompletionsTable.userId, userId)),
+      db.select().from(profileTable).where(eq(profileTable.userId, userId)).then((r) => r[0]),
+      db.select().from(loginStreaksTable).where(eq(loginStreaksTable.userId, userId)).then((r) => r[0]),
+      db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
+        .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "daily_login")))
+        .then((r) => r[0]),
+      db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
+        .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, todayStart)))
+        .then((r) => r[0]),
+      db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
+        .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, weekStart)))
+        .then((r) => r[0]),
+      // Count daily missions rewarded this week (for daily_weekly_count condition)
+      db.select({ cnt: sql<number>`count(*)` })
+        .from(missionParticipationsTable)
+        .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
+        .where(and(
+          eq(missionParticipationsTable.userId, userId),
+          eq(missionParticipationsTable.status, "rewarded"),
+          eq(missionsTable.type, "daily"),
+          gte(missionParticipationsTable.rewardedAt, weekStart),
+        ))
+        .then((r) => r[0]),
+    ]);
 
     const participationMap = new Map(
       participations.map((p) => [`${p.missionId}:${p.period}`, p.status]),
@@ -138,8 +175,8 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       else if (condType === "buy_daily") current = Number(dailyBuyRow?.total ?? 0);
       else if (condType === "buy_weekly") current = Number(weeklyBuyRow?.total ?? 0);
       else if (condType === "buy_total") current = Number(profile?.totalBought ?? 0);
+      else if (condType === "daily_weekly_count") current = Number(weeklyDailyCountRow?.cnt ?? 0);
       else if (condType === "inmu_balance") {
-        // on-chain balance is not fetched here (too slow); use net-bought as approximation
         current = Number(profile?.totalBought ?? 0) - Number(profile?.totalSold ?? 0);
       }
 
@@ -163,7 +200,23 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         ...getConditionStatus(m.conditionType, m.conditionValue),
       }));
 
-    res.json({ daily, weekly });
+    const achievement = active
+      .filter((m) => m.type === "achievement")
+      .map((m) => ({
+        ...m,
+        participationStatus: getStatus(m.id, "all-time"),
+        ...getConditionStatus(m.conditionType, m.conditionValue),
+      }));
+
+    const event = active
+      .filter((m) => m.type === "event")
+      .map((m) => ({
+        ...m,
+        participationStatus: getStatus(m.id, "all-time"),
+        ...getConditionStatus(m.conditionType, m.conditionValue),
+      }));
+
+    res.json({ daily, weekly, achievement, event });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -207,6 +260,11 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
       .then((r) => r[0]);
 
     if (existing) {
+      // achievement/event: cannot rejoin if already rewarded
+      if ((mission.type === "achievement" || mission.type === "event") && existing.status === "rewarded") {
+        res.status(409).json({ error: "already_completed", message: "このミッションは既に達成済みです" });
+        return;
+      }
       res.json({ ok: true, status: existing.status });
       return;
     }
@@ -317,8 +375,7 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
           return;
         }
       } else if (condType === "buy_daily") {
-        const todayStart = new Date();
-        todayStart.setUTCHours(0, 0, 0, 0);
+        const todayStart = getTodayStart();
         const [row] = await db
           .select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` })
           .from(tradeHistoryTable)
@@ -328,9 +385,7 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
           return;
         }
       } else if (condType === "buy_weekly") {
-        const weekStart = new Date();
-        weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
-        weekStart.setUTCHours(0, 0, 0, 0);
+        const weekStart = getWeekStart();
         const [row] = await db
           .select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` })
           .from(tradeHistoryTable)
@@ -343,6 +398,23 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
         const totalBought = Number(profile?.totalBought ?? 0);
         if (totalBought < condVal) {
           res.status(400).json({ error: `累計購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU、現在: ${totalBought.toLocaleString()} INMU）` });
+          return;
+        }
+      } else if (condType === "daily_weekly_count") {
+        const weekStart = getWeekStart();
+        const [row] = await db
+          .select({ cnt: sql<number>`count(*)` })
+          .from(missionParticipationsTable)
+          .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
+          .where(and(
+            eq(missionParticipationsTable.userId, userId),
+            eq(missionParticipationsTable.status, "rewarded"),
+            eq(missionsTable.type, "daily"),
+            gte(missionParticipationsTable.rewardedAt, weekStart),
+          ));
+        const count = Number(row?.cnt ?? 0);
+        if (count < condVal) {
+          res.status(400).json({ error: `今週のデイリーミッションクリア数が不足しています（必要: ${condVal}回、現在: ${count}回）` });
           return;
         }
       }
@@ -576,13 +648,14 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
     res.status(400).json({ error: "この条件タイプには条件値が必要です" });
     return;
   }
+  const validType = VALID_MISSION_TYPES.has(type ?? "") ? type! : "daily";
   try {
     const [mission] = await db
       .insert(missionsTable)
       .values({
         title: title.trim(),
         description: description?.trim() || null,
-        type: type === "weekly" ? "weekly" : "daily",
+        type: validType,
         points: points ?? 0,
         startAt: startAt ? new Date(startAt) : null,
         endAt: endAt ? new Date(endAt) : null,
@@ -624,7 +697,7 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
       .set({
         ...(title !== undefined && { title: title.trim() }),
         ...(description !== undefined && { description: description?.trim() || null }),
-        ...(type !== undefined && { type: type === "weekly" ? "weekly" : "daily" }),
+        ...(type !== undefined && { type: VALID_MISSION_TYPES.has(type) ? type : "daily" }),
         ...(points !== undefined && { points }),
         ...(startAt !== undefined && { startAt: startAt ? new Date(startAt) : null }),
         ...(endAt !== undefined && { endAt: endAt ? new Date(endAt) : null }),
@@ -644,7 +717,7 @@ router.delete("/admin/missions/:id", requireAdmin, async (req, res): Promise<voi
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
-    await db.delete(missionsTable).where(eq(missionsTable.id, id));
+    await db.update(missionsTable).set({ isActive: false }).where(eq(missionsTable.id, id));
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Internal error" });
