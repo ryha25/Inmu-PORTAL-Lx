@@ -5,6 +5,7 @@ import {
   transactionsTable,
   jarsTable,
   goalsTable,
+  tradeHistoryTable,
 } from "@workspace/db/schema";
 import { eq, sql, and, gte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
@@ -69,7 +70,35 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       .from(transactionsTable)
       .where(eq(transactionsTable.userId, userId))
       .orderBy(sql`${transactionsTable.createdAt} DESC`)
-      .limit(10);
+      .limit(20);
+
+    const recentTrades = await db
+      .select()
+      .from(tradeHistoryTable)
+      .where(eq(tradeHistoryTable.userId, userId))
+      .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
+      .limit(20);
+
+    const merged = [
+      ...recent.map((t) => ({
+        id: t.id,
+        type: t.type,
+        amount: t.amount,
+        counterparty: t.counterparty ?? null,
+        memo: t.memo ?? null,
+        createdAt: t.createdAt.toISOString(),
+      })),
+      ...recentTrades.map((t) => ({
+        id: t.id + 1_000_000,
+        type: t.type,
+        amount: t.tokenAmount,
+        counterparty: t.dex ?? null,
+        memo: t.txSignature,
+        createdAt: t.tradedAt.toISOString(),
+      })),
+    ]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
 
     res.json({
       balance: Number(profile.balance),
@@ -80,10 +109,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       jarTotal,
       goalRate,
       monthlyPoints: Number(profile.monthlyPoints),
-      recent: recent.map((t) => ({
-        ...t,
-        createdAt: t.createdAt.toISOString(),
-      })),
+      recent: merged,
     });
   } catch {
     res.status(500).json({ error: "Internal error" });

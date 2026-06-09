@@ -107,7 +107,7 @@ export function DashboardView({
           <p className="px-4 py-10 text-center text-sm text-muted-foreground">{t('no_data')}</p>
         ) : (
           <ul className="divide-y divide-border">
-            {data.recent.filter(tx => tx.type === 'reward' || tx.type === 'airdrop').map((tx) => {
+            {data.recent.map((tx) => {
               const out = isOutgoing(tx.type)
               return (
                 <li key={tx.id} className="flex items-center gap-3 px-4 py-3">

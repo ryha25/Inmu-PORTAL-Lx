@@ -11,6 +11,8 @@ const TYPE_MAP: Record<string, { label: string; className: string; outgoing: boo
   receive:       { label: '受取',        className: 'bg-chart-5/15 text-chart-5 border-chart-5/30',             outgoing: false },
   withdraw:      { label: '出金',        className: 'bg-destructive/15 text-destructive border-destructive/30', outgoing: true  },
   send:          { label: '送金',        className: 'bg-destructive/15 text-destructive border-destructive/30', outgoing: true  },
+  buy:           { label: 'DEX購入',     className: 'bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30', outgoing: false },
+  sell:          { label: 'DEX売却',     className: 'bg-red-500/15 text-red-500 border-red-500/30',             outgoing: true  },
 }
 
 export function TxTypeBadge({ type }: { type: string }) {
