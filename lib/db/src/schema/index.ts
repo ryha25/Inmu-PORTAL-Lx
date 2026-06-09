@@ -196,6 +196,8 @@ export const missionsTable = pgTable("missions", {
   endAt: timestamp("endAt"),
   linkUrl: text("linkUrl"),
   isActive: boolean("isActive").notNull().default(true),
+  conditionType: text("conditionType"),
+  conditionValue: numeric("conditionValue"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 

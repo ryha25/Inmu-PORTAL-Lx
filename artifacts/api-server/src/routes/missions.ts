@@ -7,8 +7,42 @@ import {
   profileTable,
   pointsTable,
   notificationsTable,
+  loginStreaksTable,
+  tradeHistoryTable,
 } from "@workspace/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
+
+const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
+const INMU_DECIMALS = 6;
+const RPC_ENDPOINTS = [
+  "https://api.mainnet-beta.solana.com",
+  "https://solana-api.projectserum.com",
+];
+
+async function fetchInmuBalanceForMission(wallet: string): Promise<number> {
+  const customRpc = process.env.SOLANA_RPC;
+  const endpoints = customRpc ? [customRpc, ...RPC_ENDPOINTS] : RPC_ENDPOINTS;
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1,
+          method: "getTokenAccountsByOwner",
+          params: [wallet, { mint: INMU_TOKEN_MINT }, { encoding: "jsonParsed" }],
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json() as { result?: { value?: Array<{ account: { data: { parsed: { info: { tokenAmount: { amount: string } } } } } }> } };
+      const accounts = data.result?.value ?? [];
+      const totalRaw = accounts.reduce((sum, acct) => sum + Number(acct.account.data.parsed.info.tokenAmount.amount), 0);
+      return totalRaw / Math.pow(10, INMU_DECIMALS);
+    } catch { continue; }
+  }
+  throw new Error("RPC unavailable");
+}
 import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
@@ -187,6 +221,84 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
     if (existing.status === "achieved") {
       res.json({ ok: true, status: "achieved" });
       return;
+    }
+
+    // ── 条件チェック ──
+    const condType = mission.conditionType;
+    const condVal = mission.conditionValue ? Number(mission.conditionValue) : null;
+
+    if (condType && condType !== "none" && condType !== "link_visit" && condVal !== null) {
+      const profile = await db
+        .select()
+        .from(profileTable)
+        .where(eq(profileTable.userId, userId))
+        .then((r) => r[0]);
+
+      if (condType === "inmu_balance") {
+        if (!profile?.solWallet) {
+          res.status(400).json({ error: "ウォレットアドレスが設定されていません" });
+          return;
+        }
+        try {
+          const balance = await fetchInmuBalanceForMission(profile.solWallet);
+          if (balance < condVal) {
+            res.status(400).json({ error: `INMU保有枚数が不足しています（必要: ${condVal.toLocaleString()} INMU、現在: ${balance.toLocaleString()} INMU）` });
+            return;
+          }
+        } catch {
+          res.status(500).json({ error: "INMU残高の取得に失敗しました。しばらくしてから再試行してください。" });
+          return;
+        }
+      } else if (condType === "login_streak") {
+        const streak = await db
+          .select()
+          .from(loginStreaksTable)
+          .where(eq(loginStreaksTable.userId, userId))
+          .then((r) => r[0]);
+        if ((streak?.streak ?? 0) < condVal) {
+          res.status(400).json({ error: `連続ログイン日数が不足しています（必要: ${condVal}日、現在: ${streak?.streak ?? 0}日）` });
+          return;
+        }
+      } else if (condType === "login_total") {
+        const [row] = await db
+          .select({ cnt: sql<number>`count(*)` })
+          .from(pointsTable)
+          .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "daily_login")));
+        const loginCount = Number(row?.cnt ?? 0);
+        if (loginCount < condVal) {
+          res.status(400).json({ error: `累計ログイン日数が不足しています（必要: ${condVal}日、現在: ${loginCount}日）` });
+          return;
+        }
+      } else if (condType === "buy_daily") {
+        const todayStart = new Date();
+        todayStart.setUTCHours(0, 0, 0, 0);
+        const [row] = await db
+          .select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` })
+          .from(tradeHistoryTable)
+          .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, todayStart)));
+        if (Number(row?.total ?? 0) < condVal) {
+          res.status(400).json({ error: `本日の購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU）` });
+          return;
+        }
+      } else if (condType === "buy_weekly") {
+        const weekStart = new Date();
+        weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
+        weekStart.setUTCHours(0, 0, 0, 0);
+        const [row] = await db
+          .select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` })
+          .from(tradeHistoryTable)
+          .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, weekStart)));
+        if (Number(row?.total ?? 0) < condVal) {
+          res.status(400).json({ error: `今週の購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU）` });
+          return;
+        }
+      } else if (condType === "buy_total") {
+        const totalBought = Number(profile?.totalBought ?? 0);
+        if (totalBought < condVal) {
+          res.status(400).json({ error: `累計購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU、現在: ${totalBought.toLocaleString()} INMU）` });
+          return;
+        }
+      }
     }
 
     await db
