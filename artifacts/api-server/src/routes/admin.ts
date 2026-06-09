@@ -178,13 +178,10 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
 
 // ── ユーザー削除（管理者用） ──
 router.delete("/admin/users/:userId", requireAdmin, async (req, res): Promise<void> => {
-  const adminId = req.userId!;
+  const adminId = req.userId ?? "admin";
   const targetUserId = req.params.userId;
-  if (adminId === targetUserId) {
-    res.status(400).json({ error: "自分自身は削除できません" });
-    return;
-  }
   try {
+    await logAudit(adminId, "deleteUser", targetUserId);
     await db.delete(missionParticipationsTable).where(eq(missionParticipationsTable.userId, targetUserId));
     await db.delete(missionCompletionsTable).where(eq(missionCompletionsTable.userId, targetUserId));
     await db.delete(purchaseRequestsTable).where(eq(purchaseRequestsTable.userId, targetUserId));
@@ -199,9 +196,9 @@ router.delete("/admin/users/:userId", requireAdmin, async (req, res): Promise<vo
     await db.delete(emergencyAuthTable).where(eq(emergencyAuthTable.userId, targetUserId));
     await db.delete(profileTable).where(eq(profileTable.userId, targetUserId));
     await db.delete(userTable).where(eq(userTable.id, targetUserId));
-    await logAudit(adminId, "deleteUser", targetUserId);
     res.json({ ok: true });
-  } catch {
+  } catch (e) {
+    console.error("[DeleteUser]", e);
     res.status(500).json({ error: "Internal error" });
   }
 });
