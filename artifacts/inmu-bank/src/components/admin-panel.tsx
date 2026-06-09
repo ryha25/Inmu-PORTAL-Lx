@@ -210,12 +210,16 @@ const TX_INCOME_TYPES = ['deposit', 'receive', 'reward', 'airdrop', 'inmu_send',
 function UserDetailDialog({
   user,
   onClose,
+  onDelete,
 }: {
   user: UserRow
   onClose: () => void
+  onDelete: (userId: string) => Promise<void>
 }) {
   const [txs, setTxs] = useState<TxRow[]>([])
   const [txLoading, setTxLoading] = useState(true)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   useEffect(() => {
     setTxLoading(true)
@@ -315,6 +319,55 @@ function UserDetailDialog({
                   </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+
+        {/* ── ユーザー削除 ── */}
+        <div className="border-t border-border pt-3">
+          {!confirmDelete ? (
+            <Button
+              variant="outline"
+              className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="size-4" />
+              このユーザーを削除
+            </Button>
+          ) : (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex flex-col gap-2">
+              <p className="text-xs font-medium text-destructive text-center">
+                「{user.displayName}」を完全に削除しますか？<br />
+                <span className="text-[10px] text-muted-foreground">全データが削除されます。この操作は取り消せません。</span>
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleteLoading}
+                >
+                  キャンセル
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="flex-1 gap-1"
+                  disabled={deleteLoading}
+                  onClick={async () => {
+                    setDeleteLoading(true)
+                    try {
+                      await onDelete(user.userId)
+                    } finally {
+                      setDeleteLoading(false)
+                    }
+                  }}
+                >
+                  <Trash2 className="size-3" />
+                  {deleteLoading ? '削除中…' : '削除する'}
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -450,6 +503,18 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     } finally {
       setLoading(false)
     }
+  }
+
+  async function deleteUser(userId: string) {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? '削除失敗')
+    toast.success('ユーザーを削除しました')
+    setDetailUser(null)
+    onRefresh()
   }
 
   async function handleDownloadBackup() {
@@ -1805,6 +1870,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           <UserDetailDialog
             user={detailUser}
             onClose={() => setDetailUser(null)}
+            onDelete={deleteUser}
           />
         )}
       </Dialog>

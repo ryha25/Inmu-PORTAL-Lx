@@ -12,6 +12,10 @@ import {
   loginStreaksTable,
   auditLogTable,
   emergencyAuthTable,
+  purchaseRequestsTable,
+  missionParticipationsTable,
+  missionCompletionsTable,
+  tradeHistoryTable,
 } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireAdmin } from "../middlewares/session";
@@ -167,6 +171,36 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
         lastSellAt: u.lastSellAt?.toISOString() ?? null,
       })),
     );
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// ── ユーザー削除（管理者用） ──
+router.delete("/admin/users/:userId", requireAdmin, async (req, res): Promise<void> => {
+  const adminId = req.userId!;
+  const targetUserId = req.params.userId;
+  if (adminId === targetUserId) {
+    res.status(400).json({ error: "自分自身は削除できません" });
+    return;
+  }
+  try {
+    await db.delete(missionParticipationsTable).where(eq(missionParticipationsTable.userId, targetUserId));
+    await db.delete(missionCompletionsTable).where(eq(missionCompletionsTable.userId, targetUserId));
+    await db.delete(purchaseRequestsTable).where(eq(purchaseRequestsTable.userId, targetUserId));
+    await db.delete(tradeHistoryTable).where(eq(tradeHistoryTable.userId, targetUserId));
+    await db.delete(transactionsTable).where(eq(transactionsTable.userId, targetUserId));
+    await db.delete(rewardsTable).where(eq(rewardsTable.userId, targetUserId));
+    await db.delete(jarsTable).where(eq(jarsTable.userId, targetUserId));
+    await db.delete(goalsTable).where(eq(goalsTable.userId, targetUserId));
+    await db.delete(notificationsTable).where(eq(notificationsTable.userId, targetUserId));
+    await db.delete(pointsTable).where(eq(pointsTable.userId, targetUserId));
+    await db.delete(loginStreaksTable).where(eq(loginStreaksTable.userId, targetUserId));
+    await db.delete(emergencyAuthTable).where(eq(emergencyAuthTable.userId, targetUserId));
+    await db.delete(profileTable).where(eq(profileTable.userId, targetUserId));
+    await db.delete(userTable).where(eq(userTable.id, targetUserId));
+    await logAudit(adminId, "deleteUser", targetUserId);
+    res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
