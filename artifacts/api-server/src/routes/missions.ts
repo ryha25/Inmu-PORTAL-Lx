@@ -588,6 +588,15 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
 
     await db.insert(missionCompletionsTable).values({ userId, missionId, period }).catch(() => {});
 
+    // dexScanner投票ミッションなら週間投票カウントを記録
+    if (mission.type === "daily") {
+      const haystack = `${mission.title ?? ""} ${mission.description ?? ""}`.toLowerCase();
+      if (haystack.includes("dex") || haystack.includes("投票")) {
+        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        await db.insert(pointsTable).values({ userId, amount: "0", type: "dex_vote", source: mission.title, month });
+      }
+    }
+
     if (mission.points > 0) {
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       await db.insert(pointsTable).values({ userId, amount: String(mission.points), type: "mission", source: mission.title, month });
