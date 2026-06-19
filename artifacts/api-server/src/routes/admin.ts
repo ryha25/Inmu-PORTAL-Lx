@@ -74,7 +74,9 @@ async function notify(
 }
 
 // ── アプリ設定（KV）テーブル: マイグレーション不要で自動作成 ──
-const ADMIN_WALLET_SETTING_KEY = "admin_wallet";
+function adminWalletKey(adminType?: string): string {
+  return `admin_wallet_${adminType ?? "owner"}`;
+}
 let settingsTableReady = false;
 async function ensureSettingsTable() {
   if (settingsTableReady) return;
@@ -88,18 +90,18 @@ async function ensureSettingsTable() {
   settingsTableReady = true;
 }
 
-// ── 管理ウォレットアドレス取得（サーバー側永続: ブラウザ跨ぎで共有） ──
-router.get("/admin/wallet", requireAdmin, async (_req, res): Promise<void> => {
+// ── 管理ウォレットアドレス取得（adminTypeごとに分離） ──
+router.get("/admin/wallet", requireAdmin, async (req, res): Promise<void> => {
+  const key = adminWalletKey(req.adminType);
   try {
     await ensureSettingsTable();
     const r = await pool.query(
       "SELECT value FROM app_settings WHERE key = $1",
-      [ADMIN_WALLET_SETTING_KEY],
+      [key],
     );
-    res.json({ wallet: (r.rows[0]?.value as string | undefined) ?? null });
+    res.json({ wallet: (r.rows[0]?.value as string | undefined) ?? null, adminType: req.adminType ?? "owner" });
   } catch (e) {
     console.error("[Admin] get wallet error:", e);
-    // DBエラーは5xxで返す。null(=未接続)と障害をクライアントが区別できるようにする
     res.status(500).json({ error: "Internal error" });
   }
 });
@@ -107,6 +109,7 @@ router.get("/admin/wallet", requireAdmin, async (_req, res): Promise<void> => {
 // ── 管理ウォレットアドレス保存 ──
 router.post("/admin/wallet", requireAdmin, async (req, res): Promise<void> => {
   const { wallet } = req.body as { wallet?: string };
+  const key = adminWalletKey(req.adminType);
   // Solanaアドレスは base58 32〜44文字
   if (!wallet || typeof wallet !== "string" || wallet.length < 32 || wallet.length > 44) {
     res.status(400).json({ error: "valid wallet address required" });
@@ -118,7 +121,7 @@ router.post("/admin/wallet", requireAdmin, async (req, res): Promise<void> => {
       `INSERT INTO app_settings (key, value, updated_at)
        VALUES ($1, $2, now())
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      [ADMIN_WALLET_SETTING_KEY, wallet],
+      [key, wallet],
     );
     res.json({ ok: true });
   } catch (e) {
@@ -128,12 +131,11 @@ router.post("/admin/wallet", requireAdmin, async (req, res): Promise<void> => {
 });
 
 // ── 管理ウォレットアドレス削除（切断時） ──
-router.delete("/admin/wallet", requireAdmin, async (_req, res): Promise<void> => {
+router.delete("/admin/wallet", requireAdmin, async (req, res): Promise<void> => {
+  const key = adminWalletKey(req.adminType);
   try {
     await ensureSettingsTable();
-    await pool.query("DELETE FROM app_settings WHERE key = $1", [
-      ADMIN_WALLET_SETTING_KEY,
-    ]);
+    await pool.query("DELETE FROM app_settings WHERE key = $1", [key]);
     res.json({ ok: true });
   } catch (e) {
     console.error("[Admin] delete wallet error:", e);
@@ -611,12 +613,20 @@ router.post(
 
 router.get("/admin/audit", requireAdmin, async (req, res): Promise<void> => {
   try {
-    const rows = await db
-      .select()
-      .from(auditLogTable)
-      .orderBy(sql`${auditLogTable.createdAt} DESC`)
-      .limit(500);
-    res.json(rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })));
+    // adminTypeごとに操作履歴を分離
+    // owner: "admin_owner" + 移行前レガシー "admin" も含む
+    // operator: "admin_operator" のみ
+    const adminId = req.adminId ?? "admin_owner";
+    const rows = await pool.query(
+      adminId === "admin_owner"
+        ? `SELECT * FROM "auditLog" WHERE "adminId" IN ('admin_owner', 'admin') ORDER BY "createdAt" DESC LIMIT 500`
+        : `SELECT * FROM "auditLog" WHERE "adminId" = $1 ORDER BY "createdAt" DESC LIMIT 500`,
+      adminId === "admin_owner" ? [] : [adminId],
+    );
+    res.json(rows.rows.map((r: { createdAt: Date | string; [k: string]: unknown }) => ({
+      ...r,
+      createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+    })));
   } catch {
     res.status(500).json({ error: "Internal error" });
   }

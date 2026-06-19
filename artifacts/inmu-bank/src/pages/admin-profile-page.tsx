@@ -22,8 +22,6 @@ import { formatInmu } from '@/lib/format'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-const ADMIN_WALLET_KEY = 'inmu_admin_wallet'
-
 // Phantom プロバイダの型定義
 interface PhantomProvider {
   isPhantom: boolean
@@ -46,8 +44,9 @@ function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) }
 export function AdminProfilePage() {
   const [, navigate] = useLocation()
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+  const [adminType, setAdminType] = useState<'owner' | 'operator'>('owner')
 
-  // ── ウォレットアドレス (localStorage永続) ──
+  // ── ウォレットアドレス (localStorage永続, adminTypeごとに分離) ──
   const [savedWallet, setSavedWallet] = useState<string | null>(null)
   // ── Phantom接続状態 (ページ跨ぎで消える) ──
   const [phantomReady, setPhantomReady] = useState(false)
@@ -63,52 +62,51 @@ export function AdminProfilePage() {
 
   const initDone = useRef(false)
 
-  // ── 管理者認証 ──
+  // adminTypeごとのlocalStorageキー
+  const walletStorageKey = `inmu_admin_wallet_${adminType}`
+
+  // ── 管理者認証 + adminType取得 → ウォレット初期化 ──
   useEffect(() => {
     fetch('/api/auth/admin-session', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : { isAdmin: false })
-      .then((d: { isAdmin: boolean }) => {
+      .then(r => r.ok ? r.json() : { isAdmin: false, adminType: 'owner' })
+      .then((d: { isAdmin: boolean; adminType?: string }) => {
         setIsAdmin(d.isAdmin)
+        const type = d.adminType === 'operator' ? 'operator' : 'owner'
+        setAdminType(type)
+        setCodeChangeType(type)
         if (!d.isAdmin) navigate('/inmu1919-login')
       })
       .catch(() => { setIsAdmin(false); navigate('/inmu1919-login') })
   }, [navigate])
 
-  // ── 初期化: サーバー保存ウォレットを優先読み込み + Phantom自動再接続 ──
-  // サーバー側に保存することで、Phantom内ブラウザ・Safari・別端末など
-  // どのブラウザで管理画面を開いてもウォレットアドレスと残高が表示される。
-  // localStorage はオフライン時のキャッシュとして併用。
+  // ── 初期化: adminType確定後にウォレットを読み込み ──
   useEffect(() => {
+    if (isAdmin === null || !isAdmin) return
     if (initDone.current) return
     initDone.current = true
 
+    const localKey = `inmu_admin_wallet_${adminType}`
     const localStored = (() => {
-      try { return localStorage.getItem(ADMIN_WALLET_KEY) } catch { return null }
+      try { return localStorage.getItem(localKey) } catch { return null }
     })()
 
     void (async () => {
       let wallet = localStored
-      // サーバー保存値を取得（管理者セッションがあればブラウザを問わず取得可能）
-      // 取得成功時はサーバーを権威とする: 別ブラウザで切断(null)されたら
-      // ローカルキャッシュも消し、全ブラウザで切断状態を同期する。
       try {
         const res = await fetch('/api/admin/wallet', { credentials: 'include' })
         if (res.ok) {
           const d = await res.json() as { wallet: string | null }
-          wallet = d.wallet  // サーバーが権威 (null の可能性あり)
+          wallet = d.wallet
           try {
-            if (d.wallet) localStorage.setItem(ADMIN_WALLET_KEY, d.wallet)
-            else localStorage.removeItem(ADMIN_WALLET_KEY)
+            if (d.wallet) localStorage.setItem(localKey, d.wallet)
+            else localStorage.removeItem(localKey)
           } catch {}
         }
-        // res.ok でない(5xx等)場合はローカルキャッシュを維持
       } catch { /* サーバー未到達時は localStorage を使用 */ }
 
       if (wallet) {
         setSavedWallet(wallet)
-        // 残高はバックエンド経由で取得(Phantom不要)
         fetchBalanceFor(wallet)
-        // Phantom がインストール済みなら onlyIfTrusted で静かに再接続
         const phantom = getPhantom()
         if (phantom) {
           phantom.connect({ onlyIfTrusted: true })
@@ -117,12 +115,12 @@ export function AdminProfilePage() {
                 setPhantomReady(true)
               }
             })
-            .catch(() => { /* ユーザー未承認 → cached 状態のまま */ })
+            .catch(() => {})
         }
       }
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isAdmin, adminType])
 
   // ── INMU残高取得 (バックエンドRPC経由, Phantom不要) ──
   const fetchBalanceFor = useCallback(async (wallet: string) => {
@@ -151,13 +149,11 @@ export function AdminProfilePage() {
     try {
       const phantom = getPhantom()
       if (phantom) {
-        // Phantom 推奨: connect() でユーザーに接続承認を求める
         const resp = await phantom.connect()
         const addr = resp.publicKey.toString()
         setSavedWallet(addr)
         setPhantomReady(true)
-        try { localStorage.setItem(ADMIN_WALLET_KEY, addr) } catch {}
-        // サーバー側に保存（ブラウザ跨ぎで永続）
+        try { localStorage.setItem(walletStorageKey, addr) } catch {}
         fetch('/api/admin/wallet', {
           method: 'POST',
           credentials: 'include',
@@ -168,7 +164,6 @@ export function AdminProfilePage() {
         fetchBalanceFor(addr)
         return
       }
-      // モバイル: Phantomアプリへディープリンク
       if (isMobile()) {
         const url = encodeURIComponent(window.location.href)
         const ref = encodeURIComponent(window.location.origin)
@@ -198,8 +193,7 @@ export function AdminProfilePage() {
     setSavedWallet(null)
     setPhantomReady(false)
     setInmuBalance(null)
-    try { localStorage.removeItem(ADMIN_WALLET_KEY) } catch {}
-    // サーバー側の保存も削除
+    try { localStorage.removeItem(walletStorageKey) } catch {}
     fetch('/api/admin/wallet', { method: 'DELETE', credentials: 'include' }).catch(() => {})
     toast.success('ウォレットを切断しました')
   }
@@ -265,12 +259,17 @@ export function AdminProfilePage() {
         {/* ── 管理者情報 ── */}
         <Card className="border-primary/30 bg-primary/5 p-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
-              <Shield className="size-6 text-primary" />
+            <div className={`flex size-12 items-center justify-center rounded-full ${adminType === 'operator' ? 'bg-blue-500/10' : 'bg-primary/10'}`}>
+              <Shield className={`size-6 ${adminType === 'operator' ? 'text-blue-500' : 'text-primary'}`} />
             </div>
-            <div>
-              <p className="font-bold text-base">管理者</p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <p className="font-bold text-base">管理者</p>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${adminType === 'operator' ? 'bg-blue-500/15 text-blue-500' : 'bg-primary/15 text-primary'}`}>
+                  {adminType === 'operator' ? 'Operator' : 'Owner'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                 <Shield className="size-3 text-primary" /> INMU PORTAL 管理者権限
               </p>
             </div>
