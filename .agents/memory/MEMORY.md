@@ -1,0 +1,1 @@
+- [INMU PORTAL project structure](inmu-portal-structure.md) — api-server + inmu-bank artifacts; both require DATABASE_URL and SESSION_SECRET env vars
