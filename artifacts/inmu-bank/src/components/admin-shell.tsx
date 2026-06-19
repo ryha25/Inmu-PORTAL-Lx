@@ -2,6 +2,7 @@ import { Logo } from '@/components/logo'
 import { cn } from '@/lib/utils'
 import { Shield, User as UserIcon, LogOut, Trophy } from 'lucide-react'
 import { Link, useLocation } from 'wouter'
+import { useEffect, useState } from 'react'
 
 type AdminNavItem = { href: string; label: string; icon: React.ElementType }
 
@@ -19,6 +20,17 @@ export function AdminShell({
   onLogout: () => void
 }) {
   const [location] = useLocation()
+  const [adminType, setAdminType] = useState<'owner' | 'operator' | null>(null)
+
+  useEffect(() => {
+    fetch('/api/auth/admin-session', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { adminType?: string } | null) => {
+        if (d?.adminType === 'operator') setAdminType('operator')
+        else setAdminType('owner')
+      })
+      .catch(() => setAdminType('owner'))
+  }, [])
 
   const isActive = (href: string) =>
     href === '/inmu1919' ? location === '/inmu1919' : location.startsWith(href)
@@ -32,7 +44,8 @@ export function AdminShell({
           <div className="flex flex-col">
             <span className="font-bold tracking-tight gold-text text-sm">INMU PORTAL</span>
             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <Shield className="size-3 text-primary" /> 管理者
+              <Shield className="size-3 text-primary" />
+              {adminType === 'operator' ? 'Operator' : 'Owner'}
             </span>
           </div>
         </div>
@@ -79,13 +92,20 @@ export function AdminShell({
           <div className="flex items-center gap-2 lg:hidden">
             <Logo size={26} />
             <span className="font-bold tracking-tight gold-text text-sm">INMU PORTAL</span>
-            <span className="text-[10px] text-muted-foreground flex items-center gap-1 ml-1">
-              <Shield className="size-3 text-primary" /> 管理者
-            </span>
+            {adminType && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ml-1 ${adminType === 'operator' ? 'bg-blue-500/15 text-blue-500' : 'bg-primary/15 text-primary'}`}>
+                {adminType === 'operator' ? 'Operator' : 'Owner'}
+              </span>
+            )}
           </div>
           <div className="hidden lg:block">
-            <p className="text-sm text-muted-foreground flex items-center gap-1">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
               <Shield className="size-3 text-primary" /> 管理者専用画面
+              {adminType && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${adminType === 'operator' ? 'bg-blue-500/15 text-blue-500' : 'bg-primary/15 text-primary'}`}>
+                  {adminType === 'operator' ? 'Operator' : 'Owner'}
+                </span>
+              )}
             </p>
           </div>
           <div />
