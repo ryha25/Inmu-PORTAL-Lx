@@ -6,7 +6,7 @@ import { Trophy, Star, Medal } from 'lucide-react'
 
 type InmuRow   = { rank: number; userId: string; displayName: string; balance: number; showBalance: boolean; totalReceived: number; participations: number }
 type PointsRow = { rank: number; userId: string; displayName: string; points: number; participations: number }
-type CompositeRow = { rank: number; userId: string; displayName: string; balance: number; points: number; clears: number; score: number }
+type CompositeRow = { rank: number; userId: string; displayName: string; balance: number; points: number; events?: number; clears: number; score: number }
 
 function RankBadge({ rank }: { rank: number }) {
   return (

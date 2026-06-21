@@ -14,6 +14,9 @@ import { eq, and, sql, gte } from "drizzle-orm";
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
+
+// ── 購入履歴の有効期間開始日（2026-05-01以降のみ対象）──
+const HISTORY_CUTOFF = new Date("2026-05-01T00:00:00.000Z");
 const RPC_ENDPOINTS = [
   "https://api.mainnet-beta.solana.com",
   "https://solana-api.projectserum.com",
@@ -111,6 +114,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       loginCountRow,
       dailyBuyRow,
       weeklyBuyRow,
+      totalBuyRow,
       weeklyDailyCountRow,
       totalClearsRow,
       dailyClearsRow,
@@ -135,6 +139,10 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         .then(r => r[0]),
       db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
         .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, weekStart)))
+        .then(r => r[0]),
+      // 2026-05-01以降の総購入枚数（buy_total条件用）
+      db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
+        .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, HISTORY_CUTOFF)))
         .then(r => r[0]),
       // count daily missions rewarded this week
       db.select({ cnt: sql<number>`count(*)` })
@@ -243,7 +251,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       } else if (condType === "buy_weekly") {
         current = Number(weeklyBuyRow?.total ?? 0);
       } else if (condType === "buy_total") {
-        current = Number(profile?.totalBought ?? 0);
+        current = Number(totalBuyRow?.total ?? 0);
       } else if (condType === "daily_weekly_count") {
         current = Number(weeklyDailyCountRow?.cnt ?? 0);
       } else if (condType === "total_clears") {
@@ -427,8 +435,10 @@ async function checkCondition(
     const cur = Number(row?.total ?? 0);
     if (cur < condVal) return { met: false, errorMsg: `今週の購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU）` };
   } else if (condType === "buy_total") {
-    const cur = Number(profile?.totalBought ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `累計購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU、現在: ${cur.toLocaleString()} INMU）` };
+    const [row] = await db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
+      .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, HISTORY_CUTOFF)));
+    const cur = Number(row?.total ?? 0);
+    if (cur < condVal) return { met: false, errorMsg: `購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU、現在: ${cur.toLocaleString()} INMU）` };
   } else if (condType === "daily_weekly_count") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
       .from(missionParticipationsTable)

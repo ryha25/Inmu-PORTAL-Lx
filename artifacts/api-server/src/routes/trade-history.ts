@@ -6,6 +6,9 @@ import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
+// ── 購入履歴の有効期間開始日（2026-05-01以降のみ対象）──
+const HISTORY_CUTOFF = new Date("2026-05-01T00:00:00.000Z");
+
 function periodStart(period: string): Date | null {
   const now = new Date();
   if (period === "daily") {
@@ -22,7 +25,15 @@ function periodStart(period: string): Date | null {
   return null;
 }
 
-// ── ユーザー: 売買履歴一覧 ──
+// periodStart と HISTORY_CUTOFF の新しい方を返す
+function effectiveStart(period: string | undefined): Date {
+  if (!period) return HISTORY_CUTOFF;
+  const ps = periodStart(period);
+  if (!ps) return HISTORY_CUTOFF;
+  return ps > HISTORY_CUTOFF ? ps : HISTORY_CUTOFF;
+}
+
+// ── ユーザー: 売買履歴一覧（2026-05-01以降のみ）──
 router.get("/trade-history", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const type = req.query.type as string | undefined;
@@ -30,13 +41,13 @@ router.get("/trade-history", requireAuth, async (req, res): Promise<void> => {
   const limit = Math.min(Number(req.query.limit ?? 100), 200);
 
   try {
-    const conditions = [eq(tradeHistoryTable.userId, userId)];
+    const startDate = effectiveStart(period);
+    const conditions = [
+      eq(tradeHistoryTable.userId, userId),
+      gte(tradeHistoryTable.tradedAt, startDate),
+    ];
     if (type === "buy" || type === "sell") {
       conditions.push(eq(tradeHistoryTable.type, type));
-    }
-    const start = period ? periodStart(period) : null;
-    if (start) {
-      conditions.push(gte(tradeHistoryTable.tradedAt, start));
     }
 
     const rows = await db
@@ -60,17 +71,17 @@ router.get("/trade-history", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-// ── ユーザー: 売買統計（ミッション条件チェック用） ──
+// ── ユーザー: 売買統計（ミッション条件チェック用）──
 router.get("/trade-history/stats", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const period = req.query.period as string | undefined;
 
   try {
-    const start = period ? periodStart(period) : null;
-    const conditions = [eq(tradeHistoryTable.userId, userId)];
-    if (start) {
-      conditions.push(gte(tradeHistoryTable.tradedAt, start));
-    }
+    const startDate = effectiveStart(period);
+    const conditions = [
+      eq(tradeHistoryTable.userId, userId),
+      gte(tradeHistoryTable.tradedAt, startDate),
+    ];
 
     const rows = await db
       .select()
@@ -91,7 +102,7 @@ router.get("/trade-history/stats", requireAuth, async (req, res): Promise<void> 
   }
 });
 
-// ── 管理者: 全売買履歴（ユーザー別フィルタ可能） ──
+// ── 管理者: 全売買履歴（全期間・ユーザー別フィルタ可能）──
 router.get("/admin/trade-history", requireAdmin, async (req, res): Promise<void> => {
   const userId = req.query.userId as string | undefined;
   const type = req.query.type as string | undefined;
