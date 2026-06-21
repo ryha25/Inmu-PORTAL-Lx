@@ -24,7 +24,7 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
     const receivedMap = new Map(receivedRows.map((r) => [r.userId, Math.max(0, Number(r.total))]));
 
     const entries = profiles.map((p) => {
-      const balance = Math.max(0, Number(p.totalBought) - Number(p.totalSold));
+      const balance = Math.max(0, Number(p.balance));
       return {
         userId: p.userId,
         displayName: p.displayName,
@@ -78,8 +78,7 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
       db.select({
         userId: profileTable.userId,
         displayName: profileTable.displayName,
-        totalBought: profileTable.totalBought,
-        totalSold: profileTable.totalSold,
+        balance: profileTable.balance,
         monthlyPoints: profileTable.monthlyPoints,
         participationCount: profileTable.participationCount,
       }).from(profileTable).limit(500),
@@ -100,7 +99,7 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
     const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
 
     // 各指標を計算
-    const inmuValues  = allProfiles.map((p) => Math.max(0, Number(p.totalBought) - Number(p.totalSold)));
+    const inmuValues  = allProfiles.map((p) => Math.max(0, Number(p.balance)));
     const pointValues = allProfiles.map((p) => Math.max(0, Number(p.monthlyPoints)));
     const clearValues = allProfiles.map((p) => clearMap.get(p.userId) ?? 0);
 
