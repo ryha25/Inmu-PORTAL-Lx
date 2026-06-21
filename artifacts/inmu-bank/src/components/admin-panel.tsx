@@ -847,13 +847,29 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   async function handleAdminScan(userId: string) {
     setTradeScanning(userId)
     try {
-      const result = await api('/admin/solana/scan-trades', 'POST', { targetUserId: userId }) as { added: number; total: number }
-      toast.success(`${result.added}件の新規取引（合計${result.total}件）`)
+      const result = await api('/admin/solana/scan-trades', 'POST', { targetUserId: userId }) as { added: number; total: number; skipped: number }
+      toast.success(`${result.added}件追加（スキップ:${result.skipped ?? 0}件 / 合計${result.total}件）`)
       await loadTradeHistory(true)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('error'))
     } finally {
       setTradeScanning(null)
+    }
+  }
+
+  const [tradeReclassifying, setTradeReclassifying] = useState<string | null>(null)
+
+  async function handleAdminReclassify(userId: string) {
+    if (!window.confirm('既存の取引履歴を再分類します。通常送金と判定されたレコードは「transfer」タイプに変更されます（削除はしません）。続行しますか？')) return
+    setTradeReclassifying(userId)
+    try {
+      const result = await api('/admin/solana/reclassify-trades', 'POST', { targetUserId: userId }) as { reclassified: number; unchanged: number; failed: number }
+      toast.success(`再分類完了: ${result.reclassified}件変更・${result.unchanged}件変更なし・${result.failed}件RPC取得失敗`)
+      await loadTradeHistory(true)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('error'))
+    } finally {
+      setTradeReclassifying(null)
     }
   }
 
@@ -2293,16 +2309,29 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                         <span className="text-xs font-medium">{u.displayName}</span>
                         <span className="text-[10px] text-muted-foreground font-mono">{maskWallet(u.solWallet!)}</span>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1"
-                        disabled={tradeScanning === u.userId}
-                        onClick={() => handleAdminScan(u.userId)}
-                      >
-                        <RefreshCw className={`size-3 ${tradeScanning === u.userId ? 'animate-spin' : ''}`} />
-                        スキャン
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                          disabled={tradeScanning === u.userId || tradeReclassifying === u.userId}
+                          onClick={() => handleAdminScan(u.userId)}
+                        >
+                          <RefreshCw className={`size-3 ${tradeScanning === u.userId ? 'animate-spin' : ''}`} />
+                          スキャン
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1 border-yellow-500/50 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10"
+                          disabled={tradeScanning === u.userId || tradeReclassifying === u.userId}
+                          onClick={() => handleAdminReclassify(u.userId)}
+                          title="既存の取引履歴を再分類（通常送金を除外）"
+                        >
+                          <RefreshCw className={`size-3 ${tradeReclassifying === u.userId ? 'animate-spin' : ''}`} />
+                          再分類
+                        </Button>
+                      </div>
                     </div>
                   ))}
               </div>
