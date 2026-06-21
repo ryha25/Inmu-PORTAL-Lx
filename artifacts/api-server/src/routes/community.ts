@@ -35,11 +35,13 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
       .then((r) => r[0]);
     const totalReceivedInmu = Math.max(0, Number(receivedRow?.total ?? 0));
 
-    // 総合評価ランキング: INMU保有量(40%) + ポイント保有量(40%) + ミッションクリア数(20%)
+    // 総合評価ランキング（/ranking/composite と完全同一ロジック）
+    // スコア = INMU保有量(40%) + ポイント保有量(40%) + ミッションクリア数(20%)
     const [allProfiles, clearRows] = await Promise.all([
       db.select({
         userId: profileTable.userId,
-        balance: profileTable.balance,
+        totalBought: profileTable.totalBought,
+        totalSold: profileTable.totalSold,
         monthlyPoints: profileTable.monthlyPoints,
       }).from(profileTable),
       db.select({
@@ -54,18 +56,19 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
     const totalUsers = allProfiles.length;
     const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
 
-    const maxBalance = Math.max(...allProfiles.map((p) => Number(p.balance)), 1);
-    const maxPoints = Math.max(...allProfiles.map((p) => Number(p.monthlyPoints)), 1);
-    const maxClears = Math.max(...[...clearMap.values()], 1);
+    const inmuValues  = allProfiles.map((p) => Math.max(0, Number(p.totalBought) - Number(p.totalSold)));
+    const pointValues = allProfiles.map((p) => Math.max(0, Number(p.monthlyPoints)));
+    const clearValues = allProfiles.map((p) => clearMap.get(p.userId) ?? 0);
 
-    const entries = allProfiles.map((p) => {
-      const bal = Number(p.balance);
-      const pts = Number(p.monthlyPoints);
-      const cls = clearMap.get(p.userId) ?? 0;
+    const maxInmu   = Math.max(...inmuValues,  1);
+    const maxPoints = Math.max(...pointValues, 1);
+    const maxClears = Math.max(...clearValues, 1);
+
+    const entries = allProfiles.map((p, i) => {
       const score =
-        (bal / maxBalance) * 40 +
-        (pts / maxPoints) * 40 +
-        (cls / maxClears) * 20;
+        (inmuValues[i]  / maxInmu)   * 40 +
+        (pointValues[i] / maxPoints) * 40 +
+        (clearValues[i] / maxClears) * 20;
       return { userId: p.userId, score };
     });
 

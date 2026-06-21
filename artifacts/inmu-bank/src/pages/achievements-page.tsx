@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { PageHeader } from '@/components/page-header'
 import { RankingView } from '@/components/ranking-view'
-import { StatCard } from '@/components/stat-card'
 import { Card } from '@/components/ui/card'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/hooks/use-auth'
@@ -18,21 +17,58 @@ type CommunityStats = {
   loginStreak: number
 }
 
-type InmuRow   = { rank: number; userId: string; displayName: string; balance: number; showBalance: boolean; totalReceived: number; participations: number }
-type PointsRow = { rank: number; userId: string; displayName: string; points: number; participations: number }
+type InmuRow      = { rank: number; userId: string; displayName: string; balance: number; showBalance: boolean; totalReceived: number; participations: number }
+type PointsRow    = { rank: number; userId: string; displayName: string; points: number; participations: number }
+type CompositeRow = { rank: number; userId: string; displayName: string; balance: number; points: number; clears: number; score: number }
+type CompositeResult = { ranking: CompositeRow[]; myRank: number | null; totalUsers: number }
 
 export function AchievementsPage() {
   const { t } = useI18n()
   const { profile, unread } = useAuth()
-  const [stats, setStats] = useState<CommunityStats | null>(null)
-  const [inmuRows,   setInmuRows]   = useState<InmuRow[]>([])
-  const [pointsRows, setPointsRows] = useState<PointsRow[]>([])
+  const [stats,         setStats]         = useState<CommunityStats | null>(null)
+  const [inmuRows,      setInmuRows]      = useState<InmuRow[]>([])
+  const [pointsRows,    setPointsRows]    = useState<PointsRow[]>([])
+  const [compositeRows, setCompositeRows] = useState<CompositeRow[]>([])
+  const [myCompositeRank, setMyCompositeRank] = useState<number | null>(null)
+  const [myInmuRank,    setMyInmuRank]    = useState<number | null>(null)
+  const [myPointsRank,  setMyPointsRank]  = useState<number | null>(null)
+  const [totalUsers,    setTotalUsers]    = useState(0)
 
   useEffect(() => {
-    fetch('/api/community',        { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(d => { if (d) setStats(d) })
-    fetch('/api/ranking',          { credentials: 'include' }).then(r => r.ok ? r.json() : []).then(d => { if (Array.isArray(d)) setInmuRows(d) })
-    fetch('/api/ranking/points',   { credentials: 'include' }).then(r => r.ok ? r.json() : []).then(d => { if (Array.isArray(d)) setPointsRows(d) })
-  }, [])
+    const userId = profile?.userId
+
+    fetch('/api/community', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStats(d) })
+
+    fetch('/api/ranking', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then((d: InmuRow[]) => {
+        if (Array.isArray(d)) {
+          setInmuRows(d)
+          if (userId) setMyInmuRank(d.find(r => r.userId === userId)?.rank ?? null)
+        }
+      })
+
+    fetch('/api/ranking/points', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then((d: PointsRow[]) => {
+        if (Array.isArray(d)) {
+          setPointsRows(d)
+          if (userId) setMyPointsRank(d.find(r => r.userId === userId)?.rank ?? null)
+        }
+      })
+
+    fetch('/api/ranking/composite', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: CompositeResult | null) => {
+        if (d) {
+          setCompositeRows(d.ranking ?? [])
+          setMyCompositeRank(d.myRank ?? null)
+          setTotalUsers(d.totalUsers ?? 0)
+        }
+      })
+  }, [profile?.userId])
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
@@ -84,7 +120,7 @@ export function AchievementsPage() {
             </Card>
           </div>
 
-          {/* ランク情報 */}
+          {/* あなたの順位（総合ランキングと同一ロジック）*/}
           <Card className="border-border bg-card p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -93,17 +129,17 @@ export function AchievementsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <p className="font-mono font-bold text-lg gold-text">
-                  {stats.rank}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">位 / {stats.totalUsers}人</span>
+                  {myCompositeRank ?? stats.rank}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">位 / {totalUsers || stats.totalUsers}人</span>
                 </p>
               </div>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              {stats.rank <= 3
+              {(myCompositeRank ?? stats.rank) <= 3
                 ? '🏆 Top 3! 素晴らしい成績です！'
-                : stats.rank <= 10
+                : (myCompositeRank ?? stats.rank) <= 10
                 ? '🥇 Top 10! 上位入賞中！'
-                : stats.rank <= stats.totalUsers * 0.3
+                : (myCompositeRank ?? stats.rank) <= (totalUsers || stats.totalUsers) * 0.3
                 ? '💪 上位30%に入っています！'
                 : '📊 もっとINMUをアクティブに使いましょう！'}
             </p>
@@ -118,7 +154,16 @@ export function AchievementsPage() {
         <Users className="size-4 text-primary" />
         <h2 className="font-semibold text-sm">{t('ranking_title')}</h2>
       </div>
-      <RankingView inmuRows={inmuRows} pointsRows={pointsRows} />
+      <RankingView
+        inmuRows={inmuRows}
+        pointsRows={pointsRows}
+        compositeRows={compositeRows}
+        myCompositeRank={myCompositeRank}
+        myInmuRank={myInmuRank}
+        myPointsRank={myPointsRank}
+        totalUsers={totalUsers}
+        currentUserId={profile?.userId}
+      />
     </AppShell>
   )
 }
