@@ -37,8 +37,10 @@ type PurchaseRequest = {
 
 type PurchaseRequestsData = {
   requests: PurchaseRequest[]
-  totalBought: number
-  totalApplied: number
+  totalBought: number        // 購入済み枚数（キャップ適用後）
+  monthlyBought: number      // 当月の実購入合計
+  monthlyCapacity: number    // 今月の反映上限 = 通常日上限 × 月日数
+  totalApplied: number       // 今月の申請済み
   available: number
   dailyLimit: number
   dailyUsed: number
@@ -103,14 +105,16 @@ function TradeList({ rows, loading, emptyMsg }: { rows: TradeRow[]; loading: boo
 
 function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([])
-  const [totalBought,    setTotalBought]    = useState<number>(0)
-  const [totalApplied,   setTotalApplied]   = useState<number>(0)
-  const [available,      setAvailable]      = useState<number>(0)
-  const [dailyLimit,     setDailyLimit]     = useState<number>(300000)
-  const [dailyUsed,      setDailyUsed]      = useState<number>(0)
-  const [dailyRemaining, setDailyRemaining] = useState<number>(300000)
-  const [isEventMode,    setIsEventMode]    = useState<boolean>(false)
-  const [effectiveLimit, setEffectiveLimit] = useState<number>(300000)
+  const [totalBought,      setTotalBought]      = useState<number>(0)
+  const [monthlyBought,    setMonthlyBought]    = useState<number>(0)
+  const [monthlyCapacity,  setMonthlyCapacity]  = useState<number>(0)
+  const [totalApplied,     setTotalApplied]     = useState<number>(0)
+  const [available,        setAvailable]        = useState<number>(0)
+  const [dailyLimit,       setDailyLimit]       = useState<number>(300000)
+  const [dailyUsed,        setDailyUsed]        = useState<number>(0)
+  const [dailyRemaining,   setDailyRemaining]   = useState<number>(300000)
+  const [isEventMode,      setIsEventMode]      = useState<boolean>(false)
+  const [effectiveLimit,   setEffectiveLimit]   = useState<number>(300000)
   const [prAmount,  setPrAmount]  = useState('')
   const [prTxHash,  setPrTxHash]  = useState('')
   const [prComment, setPrComment] = useState('')
@@ -123,6 +127,8 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
         if (d) {
           setPurchaseRequests(d.requests ?? [])
           setTotalBought(d.totalBought ?? 0)
+          setMonthlyBought(d.monthlyBought ?? 0)
+          setMonthlyCapacity(d.monthlyCapacity ?? 0)
           setTotalApplied(d.totalApplied ?? 0)
           setAvailable(d.available ?? 0)
           setDailyLimit(d.dailyLimit ?? 300000)
@@ -188,30 +194,46 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-secondary/30 p-3">
-              <div>
-                <p className="text-[10px] text-muted-foreground">購入済み枚数</p>
-                <p className="font-mono text-sm font-bold">{totalBought.toLocaleString()}</p>
+            <div className="flex flex-col gap-1 rounded-lg bg-secondary/30 p-3">
+              {/* 今月の購入枚数ブロック */}
+              <p className="text-[10px] font-semibold text-muted-foreground mb-1">今月の購入枚数</p>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">今月の実購入合計</p>
+                  <p className="font-mono text-sm font-bold">{monthlyBought.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">今月の反映上限</p>
+                  <p className="font-mono text-sm font-bold text-muted-foreground">{monthlyCapacity.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">購入済み枚数（反映分）</p>
+                  <p className="font-mono text-sm font-bold">{totalBought.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">今月の申請済み</p>
+                  <p className="font-mono text-sm font-bold text-yellow-500">{totalApplied.toLocaleString()}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-[10px] text-muted-foreground">今月の申請可能残り</p>
+                  <p className="font-mono text-sm font-bold text-green-500">{available.toLocaleString()}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">申請済み（全期間）</p>
-                <p className="font-mono text-sm font-bold text-yellow-500">{totalApplied.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">購入履歴残り</p>
-                <p className="font-mono text-sm font-bold">{available.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">本日の1日上限</p>
-                <p className="font-mono text-sm font-bold">{dailyLimit.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">本日申請済み</p>
-                <p className="font-mono text-sm font-bold text-yellow-500">{dailyUsed.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">本日残り申請可能</p>
-                <p className="font-mono text-sm font-bold text-green-500">{dailyRemaining.toLocaleString()}</p>
+              {/* 本日の申請状況ブロック */}
+              <p className="text-[10px] font-semibold text-muted-foreground mb-1">本日の申請状況</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">本日の1日上限</p>
+                  <p className="font-mono text-sm font-bold">{dailyLimit.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">本日申請済み</p>
+                  <p className="font-mono text-sm font-bold text-yellow-500">{dailyUsed.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">本日残り申請可能</p>
+                  <p className="font-mono text-sm font-bold text-green-500">{dailyRemaining.toLocaleString()}</p>
+                </div>
               </div>
             </div>
 
@@ -219,7 +241,7 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
               <p className="text-[10px] text-muted-foreground">今日申請可能な最大枚数</p>
               <p className="font-mono text-lg font-bold text-primary">{effectiveLimit.toLocaleString()} INMU</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                ＝ 本日残り（{dailyRemaining.toLocaleString()}）と購入履歴残り（{available.toLocaleString()}）の少ない方
+                ＝ 本日残り（{dailyRemaining.toLocaleString()}）と今月の申請可能残り（{available.toLocaleString()}）の少ない方
               </p>
             </div>
 
