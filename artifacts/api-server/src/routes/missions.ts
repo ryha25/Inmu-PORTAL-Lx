@@ -95,7 +95,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
     const now = new Date();
-    const missions = await db.select().from(missionsTable).where(eq(missionsTable.isActive, true));
+    const missions = await db.select().from(missionsTable).where(and(eq(missionsTable.isActive, true), eq(missionsTable.status, "active")));
     const active = missions.filter(m => !(m.endAt && m.endAt < now));
 
     const dailyPeriod  = getPeriod("daily");
@@ -646,10 +646,12 @@ router.put("/admin/missions/reorder", requireAdmin, async (req, res): Promise<vo
 });
 
 router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => {
-  const { title, description, type, points, startAt, endAt, linkUrl, isActive, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
-    req.body as { title?: string; description?: string; type?: string; points?: number; startAt?: string; endAt?: string; linkUrl?: string; isActive?: boolean; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
+  const { title, description, type, points, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
+    req.body as { title?: string; description?: string; type?: string; points?: number; startAt?: string; endAt?: string; linkUrl?: string; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
   if (!title?.trim() || !type) { res.status(400).json({ error: "title and type required" }); return; }
   const validType = VALID_MISSION_TYPES.has(type) ? type : "daily";
+  const VALID_STATUSES = new Set(["active", "inactive", "draft"]);
+  const missionStatus = status && VALID_STATUSES.has(status) ? status : "active";
   try {
     let autoOrder = displayOrder ?? 0;
     if (displayOrder === undefined) {
@@ -666,7 +668,8 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
       startAt: startAt ? new Date(startAt) : null,
       endAt: endAt ? new Date(endAt) : null,
       linkUrl: linkUrl?.trim() || null,
-      isActive: isActive !== false,
+      isActive: missionStatus === "active",
+      status: missionStatus,
       conditionType: conditionType || null,
       conditionValue: conditionValue != null ? String(conditionValue) : null,
       prerequisiteMissionId: prerequisiteMissionId ?? null,
@@ -680,7 +683,7 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
 
 // Create a staged unlock chain in one request
 router.post("/admin/missions/chain", requireAdmin, async (req, res): Promise<void> => {
-  const { type, conditionType, linkUrl, startAt, endAt, isActive, stages } =
+  const { type, conditionType, linkUrl, startAt, endAt, isActive, status, stages } =
     req.body as {
       type?: string;
       conditionType?: string | null;
@@ -688,6 +691,7 @@ router.post("/admin/missions/chain", requireAdmin, async (req, res): Promise<voi
       startAt?: string | null;
       endAt?: string | null;
       isActive?: boolean;
+      status?: string;
       stages?: Array<{
         title?: string;
         description?: string;
@@ -706,9 +710,10 @@ router.post("/admin/missions/chain", requireAdmin, async (req, res): Promise<voi
   }
 
   const validType = type && VALID_MISSION_TYPES.has(type) ? type : "daily";
+  const VALID_STATUSES_C = new Set(["active", "inactive", "draft"]);
+  const chainStatus = status && VALID_STATUSES_C.has(status) ? status : "active";
 
   try {
-    // Get base displayOrder
     const rows = await db.select({ maxOrder: sql<number>`coalesce(max("displayOrder"), -1)` })
       .from(missionsTable)
       .where(eq(missionsTable.type, validType));
@@ -727,7 +732,8 @@ router.post("/admin/missions/chain", requireAdmin, async (req, res): Promise<voi
         startAt: startAt ? new Date(startAt) : null,
         endAt: endAt ? new Date(endAt) : null,
         linkUrl: linkUrl?.trim() || null,
-        isActive: isActive !== false,
+        isActive: chainStatus === "active",
+        status: chainStatus,
         conditionType: conditionType || null,
         conditionValue: stage.conditionValue != null ? String(stage.conditionValue) : null,
         prerequisiteMissionId: prereqId,
@@ -742,11 +748,59 @@ router.post("/admin/missions/chain", requireAdmin, async (req, res): Promise<voi
   }
 });
 
+// Update all missions in a chain at once (must be before /:id to avoid route conflict)
+router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promise<void> => {
+  const { rootId, type, conditionType, linkUrl, startAt, endAt, status, stages } =
+    req.body as {
+      rootId?: number;
+      type?: string;
+      conditionType?: string | null;
+      linkUrl?: string | null;
+      startAt?: string | null;
+      endAt?: string | null;
+      status?: string;
+      stages?: Array<{ id: number; title?: string; description?: string; points?: number; conditionValue?: number | null }>;
+    };
+  if (!Array.isArray(stages) || stages.length === 0) {
+    res.status(400).json({ error: "stages array required" }); return;
+  }
+  if (stages.some(s => !s.title?.trim())) {
+    res.status(400).json({ error: "All stages must have a title" }); return;
+  }
+  const VALID_STATUSES_U = new Set(["active", "inactive", "draft"]);
+  const missionStatus = status && VALID_STATUSES_U.has(status) ? status : undefined;
+  const validType = type && VALID_MISSION_TYPES.has(type) ? type : undefined;
+  const condTypeVal = conditionType === "none" ? null : conditionType;
+  try {
+    await Promise.all(
+      stages.map(({ id, title, description, points, conditionValue }) =>
+        db.update(missionsTable).set({
+          ...(title !== undefined && { title: title!.trim() }),
+          ...(description !== undefined && { description: description?.trim() || null }),
+          ...(points !== undefined && { points }),
+          ...(conditionValue !== undefined && { conditionValue: conditionValue != null ? String(conditionValue) : null }),
+          ...(validType && { type: validType }),
+          ...(condTypeVal !== undefined && { conditionType: condTypeVal || null }),
+          ...(linkUrl !== undefined && { linkUrl: linkUrl?.trim() || null }),
+          ...(startAt !== undefined && { startAt: startAt ? new Date(startAt) : null }),
+          ...(endAt !== undefined && { endAt: endAt ? new Date(endAt) : null }),
+          ...(missionStatus !== undefined && { status: missionStatus, isActive: missionStatus === "active" }),
+        }).where(eq(missionsTable.id, id))
+      )
+    );
+    res.json({ ok: true, rootId });
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { title, description, type, points, startAt, endAt, linkUrl, isActive, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
-    req.body as { title?: string; description?: string; type?: string; points?: number; startAt?: string | null; endAt?: string | null; linkUrl?: string | null; isActive?: boolean; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
+  const { title, description, type, points, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
+    req.body as { title?: string; description?: string; type?: string; points?: number; startAt?: string | null; endAt?: string | null; linkUrl?: string | null; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
+  const VALID_STATUSES_P = new Set(["active", "inactive", "draft"]);
+  const missionStatus = status && VALID_STATUSES_P.has(status) ? status : undefined;
   try {
     await db.update(missionsTable).set({
       ...(title !== undefined && { title: title.trim() }),
@@ -756,7 +810,9 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
       ...(startAt !== undefined && { startAt: startAt ? new Date(startAt) : null }),
       ...(endAt !== undefined && { endAt: endAt ? new Date(endAt) : null }),
       ...(linkUrl !== undefined && { linkUrl: linkUrl?.trim() || null }),
-      ...(isActive !== undefined && { isActive }),
+      ...(missionStatus !== undefined
+        ? { status: missionStatus, isActive: missionStatus === "active" }
+        : isActive !== undefined ? { isActive } : {}),
       ...(conditionType !== undefined && { conditionType: conditionType || null }),
       ...(conditionValue !== undefined && { conditionValue: conditionValue != null ? String(conditionValue) : null }),
       ...(prerequisiteMissionId !== undefined && { prerequisiteMissionId: prerequisiteMissionId ?? null }),
@@ -768,11 +824,33 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
   }
 });
 
+router.put("/admin/missions/:id/restore", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  try {
+    await db.update(missionsTable).set({ isActive: true, status: "active" }).where(eq(missionsTable.id, id));
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 router.delete("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
-    await db.update(missionsTable).set({ isActive: false }).where(eq(missionsTable.id, id));
+    await db.update(missionsTable).set({ isActive: false, status: "inactive" }).where(eq(missionsTable.id, id));
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.delete("/admin/missions/:id/permanent", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  try {
+    await db.delete(missionsTable).where(eq(missionsTable.id, id));
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Internal error" });
