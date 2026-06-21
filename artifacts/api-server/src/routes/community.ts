@@ -40,8 +40,7 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
     const [allProfiles, clearRows] = await Promise.all([
       db.select({
         userId: profileTable.userId,
-        totalBought: profileTable.totalBought,
-        totalSold: profileTable.totalSold,
+        balance: profileTable.balance,
         monthlyPoints: profileTable.monthlyPoints,
       }).from(profileTable),
       db.select({
@@ -56,7 +55,7 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
     const totalUsers = allProfiles.length;
     const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
 
-    const inmuValues  = allProfiles.map((p) => Math.max(0, Number(p.totalBought) - Number(p.totalSold)));
+    const inmuValues  = allProfiles.map((p) => Math.max(0, Number(p.balance)));
     const pointValues = allProfiles.map((p) => Math.max(0, Number(p.monthlyPoints)));
     const clearValues = allProfiles.map((p) => clearMap.get(p.userId) ?? 0);
 
