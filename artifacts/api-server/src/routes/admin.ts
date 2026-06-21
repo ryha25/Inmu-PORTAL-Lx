@@ -230,7 +230,7 @@ router.delete("/admin/users/:userId", requireAdmin, async (req, res): Promise<vo
   }
 });
 
-// ── ユーザー取引履歴（管理者用） ──
+// ── ユーザー取引履歴（管理者用）: INMU送受信 + ポイント + エアドロ + DEX取引を統合 ──
 router.get("/admin/user-transactions", requireAdmin, async (req, res): Promise<void> => {
   const userId = req.query.userId as string | undefined;
   if (!userId) {
@@ -238,13 +238,53 @@ router.get("/admin/user-transactions", requireAdmin, async (req, res): Promise<v
     return;
   }
   try {
-    const rows = await db
-      .select()
-      .from(transactionsTable)
-      .where(eq(transactionsTable.userId, userId))
-      .orderBy(sql`${transactionsTable.createdAt} DESC`)
-      .limit(50);
-    res.json(rows.map((t) => ({ ...t, createdAt: t.createdAt.toISOString() })));
+    const [txRows, tradeRows] = await Promise.all([
+      db.select().from(transactionsTable)
+        .where(eq(transactionsTable.userId, userId))
+        .orderBy(sql`${transactionsTable.createdAt} DESC`)
+        .limit(100),
+      db.select().from(tradeHistoryTable)
+        .where(eq(tradeHistoryTable.userId, userId))
+        .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
+        .limit(100),
+    ]);
+
+    type UnifiedRow = {
+      id: number;
+      source: "tx" | "trade";
+      type: string;
+      amount: string;
+      memo: string | null;
+      counterparty: string | null;
+      txHash: string | null;
+      createdAt: string;
+    };
+
+    const unified: UnifiedRow[] = [
+      ...txRows.map((t) => ({
+        id: t.id,
+        source: "tx" as const,
+        type: t.type,
+        amount: t.amount,
+        memo: t.memo ?? null,
+        counterparty: t.counterparty ?? null,
+        txHash: t.txHash ?? null,
+        createdAt: t.createdAt.toISOString(),
+      })),
+      ...tradeRows.map((t) => ({
+        id: t.id + 1000000,
+        source: "trade" as const,
+        type: t.type === "buy" ? "dex_buy" : "dex_sell",
+        amount: t.tokenAmount,
+        memo: t.dex ? `DEX: ${t.dex}` : "DEX取引",
+        counterparty: t.walletAddress,
+        txHash: t.txSignature,
+        createdAt: t.tradedAt.toISOString(),
+      })),
+    ];
+
+    unified.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(unified.slice(0, 100));
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -252,7 +292,7 @@ router.get("/admin/user-transactions", requireAdmin, async (req, res): Promise<v
 
 // ── SOL実送金記録（管理者用） ──
 router.post("/admin/record-sol-transfer", requireAdmin, async (req, res): Promise<void> => {
-  const adminId = "admin";
+  const adminId = req.userId ?? req.adminId ?? "admin";
   const { targetUserId, amount, txSignature, targetWallet } = req.body as {
     targetUserId?: string;
     amount?: number;
@@ -326,7 +366,6 @@ router.post("/admin/record-airdrop-batch", requireAdmin, async (req, res): Promi
         .set({
           balance: sql`${profileTable.balance} + ${amount}`,
           totalReceived: sql`${profileTable.totalReceived} + ${amount}`,
-          participationCount: sql`${profileTable.participationCount} + 1`,
           updatedAt: new Date(),
         })
         .where(eq(profileTable.userId, u.userId));
@@ -509,7 +548,6 @@ router.post(
           .update(profileTable)
           .set({
             balance: sql`${profileTable.balance} + ${amount}`,
-            participationCount: sql`${profileTable.participationCount} + 1`,
             updatedAt: new Date(),
           })
           .where(eq(profileTable.userId, uid));
@@ -872,7 +910,7 @@ router.post("/admin/distribute-airdrop-all", requireAdmin, async (req, res): Pro
       await db.insert(transactionsTable).values({ userId: u.userId, type: "inmu_send", amount: String(amount), memo });
       await db
         .update(profileTable)
-        .set({ balance: sql`${profileTable.balance} + ${amount}`, participationCount: sql`${profileTable.participationCount} + 1`, updatedAt: new Date() })
+        .set({ balance: sql`${profileTable.balance} + ${amount}`, updatedAt: new Date() })
         .where(eq(profileTable.userId, u.userId));
       await notify(u.userId, "airdrop", "エアドロップを受け取りました", `${amount} INMU`);
     }

@@ -162,9 +162,10 @@ router.put("/admin/purchase-requests/:id", requireAdmin, async (req, res): Promi
     const numRebate = rebateAmount != null && rebateAmount !== "" ? Number(rebateAmount) : null;
     const numRate   = rebateRate   != null && rebateRate   !== "" ? Number(rebateRate)   : null;
 
+    const reviewerId = req.adminId ?? req.userId ?? "admin";
     await db.update(purchaseRequestsTable).set({
       status,
-      reviewedByAdminId: "admin",
+      reviewedByAdminId: reviewerId,
       reviewedAt: now,
       rebateAmount: numRebate != null ? String(numRebate) : null,
       rebateRate:   numRate   != null ? String(numRate)   : null,
@@ -189,7 +190,7 @@ router.put("/admin/purchase-requests/:id", requireAdmin, async (req, res): Promi
         message: `${Number(request.amount).toLocaleString()} INMU の購入申請が承認され、${numRebate.toLocaleString()} INMU が還元されました。${txSig ? `TxSignature: ${txSig}` : ""}`,
       });
       await db.insert(auditLogTable).values({
-        adminId: "admin", action: "purchase_request_approved", targetUserId: request.userId,
+        adminId: reviewerId, action: "purchase_request_approved", targetUserId: request.userId,
         details: { requestId: id, requestAmount: request.amount, rebateAmount: numRebate, rebateRate: numRate, rebateTxSignature: txSig } as Record<string, unknown>,
         createdAt: now,
       }).catch(() => {});
@@ -200,6 +201,11 @@ router.put("/admin/purchase-requests/:id", requireAdmin, async (req, res): Promi
         title: "購入申請が却下されました",
         message: `${Number(request.amount).toLocaleString()} INMU の購入申請が却下されました。${adminNote?.trim() ? `理由: ${adminNote.trim()}` : ""}`,
       });
+      await db.insert(auditLogTable).values({
+        adminId: reviewerId, action: "purchase_request_rejected", targetUserId: request.userId,
+        details: { requestId: id, requestAmount: request.amount, adminNote: adminNote?.trim() || null } as Record<string, unknown>,
+        createdAt: now,
+      }).catch(() => {});
     }
 
     res.json({ ok: true });

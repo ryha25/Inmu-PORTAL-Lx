@@ -350,6 +350,15 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
     }
 
     await db.insert(missionParticipationsTable).values({ userId, missionId, period, status: "joined" });
+
+    // イベント参加時のみ participationCount をインクリメント
+    if (mission.type === "event") {
+      await db
+        .update(profileTable)
+        .set({ participationCount: sql`${profileTable.participationCount} + 1`, updatedAt: new Date() })
+        .where(eq(profileTable.userId, userId));
+    }
+
     res.json({ ok: true, status: "joined" });
   } catch {
     res.status(500).json({ error: "Internal error" });

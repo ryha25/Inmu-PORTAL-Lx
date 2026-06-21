@@ -70,7 +70,37 @@ type AuditRow = {
   adminId: string
   action: string
   targetUserId: string | null
+  details: Record<string, unknown> | null
   createdAt: string
+}
+
+const AUDIT_ACTION_LABEL: Record<string, string> = {
+  deleteUser:                '👤 ユーザー削除',
+  adminSolTransfer:          '💸 INMU送金',
+  adminAirdropBatch:         '🪂 エアドロップ（バッチ）',
+  adminSetBalance:           '⚖️  残高設定',
+  adminRegisterTx:           '📝 取引登録',
+  adminDistributeReward:     '🎁 報酬配布',
+  adminDistributeAirdrop:    '🪂 エアドロップ配布',
+  adminDistributeAirdropAll: '🪂 全員エアドロップ',
+  adminGrantPoints:          '⭐ ポイント付与',
+  adminGrantPointsAll:       '⭐ 全員ポイント付与',
+  adminDeductBalance:        '➖ 残高減算',
+  adminDeductPoints:         '➖ ポイント減算',
+  adminSendNotification:     '📣 通知送信',
+  adminSetRole:              '🔑 ロール変更',
+  adminBackupCsv:            '📥 CSVバックアップ',
+  emergency_auth_updated:    '🔒 緊急認証設定',
+  purchase_request_approved: '✅ 購入申請承認',
+  purchase_request_rejected: '❌ 購入申請却下',
+  change_admin_code_owner:   '🔑 Ownerコード変更',
+  change_admin_code_operator:'🔑 Operatorコード変更',
+}
+
+function getAdminLabel(adminId: string) {
+  if (adminId === 'admin_owner' || adminId === 'admin') return 'Owner'
+  if (adminId === 'admin_operator') return 'Operator'
+  return adminId.slice(0, 12)
 }
 
 type TradeTxRow = {
@@ -128,11 +158,12 @@ type MissionRow = {
 
 type TxRow = {
   id: number
-  userId: string
+  source?: 'tx' | 'trade'
   type: string
   amount: string
   memo: string | null
   counterparty: string | null
+  txHash: string | null
   createdAt: string
 }
 
@@ -197,15 +228,18 @@ const TX_TYPE_LABEL: Record<string, string> = {
   deposit: '入金',
   withdraw: '出金',
   send: '送金',
-  receive: '受取',
-  reward: '報酬',
-  airdrop: 'エアドロップ',
-  inmu_send: 'INMU送金',
-  points_send: 'ポイント送金',
+  receive: 'INMU受取',
+  reward: '管理者配布（報酬）',
+  airdrop: 'エアドロ受取',
+  inmu_send: 'INMU配布',
+  points_send: 'ポイント受取',
   points_deduct: 'ポイント減算',
+  mission_reward: 'ミッション報酬',
+  dex_buy: 'DEX購入（INMU）',
+  dex_sell: 'DEX売却（INMU）',
 }
 
-const TX_INCOME_TYPES = ['deposit', 'receive', 'reward', 'airdrop', 'inmu_send', 'points_send']
+const TX_INCOME_TYPES = ['deposit', 'receive', 'reward', 'airdrop', 'inmu_send', 'points_send', 'mission_reward', 'dex_buy']
 
 function UserDetailDialog({
   user,
@@ -1096,12 +1130,13 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                       <User className="size-4 text-muted-foreground shrink-0" />
                       <span className="font-medium text-sm truncate">{u.displayName}</span>
                       {u.role === 'admin' && <Shield className="size-3 text-primary shrink-0" />}
+
                     </div>
                     {lastLoginFmt && (
                       <p className="text-[10px] text-muted-foreground pl-6">最終ログイン：{lastLoginFmt}</p>
                     )}
                   </div>
-                  <span className="font-mono text-sm font-bold shrink-0">{formatInmu(u.balance)}</span>
+                  
                 </div>
                 <div className="mt-1.5 pl-7 flex items-center gap-3">
                   <span className="text-xs text-muted-foreground">
@@ -1929,21 +1964,46 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
             <Button onClick={loadAuditLog} variant="outline">監査ログを読み込む</Button>
           ) : (
             <div className="flex flex-col gap-2">
-              {auditLogs.map(log => (
-                <Card key={log.id} className="border-border bg-card p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-muted-foreground">{log.action}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(log.createdAt).toLocaleString('ja-JP')}
-                    </span>
-                  </div>
-                  {log.targetUserId && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      対象: {users.find(u => u.userId === log.targetUserId)?.displayName ?? log.targetUserId.slice(0, 12) + '…'}
-                    </p>
-                  )}
-                </Card>
-              ))}
+              <Button size="sm" variant="outline" className="h-8 text-xs self-end" onClick={loadAuditLog}>
+                <RefreshCw className="size-3 mr-1" />更新
+              </Button>
+              {auditLogs.map(log => {
+                const label = AUDIT_ACTION_LABEL[log.action] ?? log.action
+                const adminLabel = getAdminLabel(log.adminId)
+                const targetName = log.targetUserId
+                  ? users.find(u => u.userId === log.targetUserId)?.displayName ?? log.targetUserId.slice(0, 12) + '…'
+                  : null
+                const detailEntries = log.details
+                  ? Object.entries(log.details).filter(([, v]) => v != null && v !== '').slice(0, 4)
+                  : []
+                return (
+                  <Card key={log.id} className="border-border bg-card p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="text-xs font-medium">{label}</span>
+                        <span className="text-[10px] text-primary font-semibold">{adminLabel}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {new Date(log.createdAt).toLocaleString('ja-JP')}
+                      </span>
+                    </div>
+                    {targetName && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        対象: <span className="font-medium text-foreground">{targetName}</span>
+                      </p>
+                    )}
+                    {detailEntries.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {detailEntries.map(([k, v]) => (
+                          <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                            {k}: {String(v)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
             </div>
           )}
         </TabsContent>

@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { profileTable, loginStreaksTable, transactionsTable } from "@workspace/db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import {
+  profileTable,
+  loginStreaksTable,
+  transactionsTable,
+  missionParticipationsTable,
+} from "@workspace/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
 
 const router = Router();
@@ -19,7 +24,6 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
       return;
     }
 
-    // トランザクションテーブルから累計受取を集計（エアドロ・報酬・還元すべて含む）
     const receivedRow = await db
       .select({
         total: sql<string>`coalesce(sum(cast(${transactionsTable.amount} as numeric)), '0')`,
@@ -31,27 +35,42 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
       .then((r) => r[0]);
     const totalReceivedInmu = Math.max(0, Number(receivedRow?.total ?? 0));
 
-    // ランクは全ユーザーのトランザクション集計で算出
-    const allReceivedRows = await db
-      .select({
-        userId: transactionsTable.userId,
-        total: sql<string>`coalesce(sum(cast(${transactionsTable.amount} as numeric)), '0')`,
+    // 総合評価ランキング: INMU保有量(40%) + ポイント保有量(40%) + ミッションクリア数(20%)
+    const [allProfiles, clearRows] = await Promise.all([
+      db.select({
+        userId: profileTable.userId,
+        balance: profileTable.balance,
+        monthlyPoints: profileTable.monthlyPoints,
+      }).from(profileTable),
+      db.select({
+        userId: missionParticipationsTable.userId,
+        count: sql<string>`count(*)`,
       })
-      .from(transactionsTable)
-      .where(inArray(transactionsTable.type, ["airdrop", "reward", "mission_reward"]))
-      .groupBy(transactionsTable.userId);
+        .from(missionParticipationsTable)
+        .where(eq(missionParticipationsTable.status, "rewarded"))
+        .groupBy(missionParticipationsTable.userId),
+    ]);
 
-    const receivedMap = new Map(
-      allReceivedRows.map((r) => [r.userId, Math.max(0, Number(r.total))]),
-    );
-
-    const allProfiles = await db.select({ userId: profileTable.userId }).from(profileTable);
     const totalUsers = allProfiles.length;
+    const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
 
-    const sorted = allProfiles
-      .slice()
-      .sort((a, b) => (receivedMap.get(b.userId) ?? 0) - (receivedMap.get(a.userId) ?? 0));
-    const rank = sorted.findIndex((p) => p.userId === userId) + 1;
+    const maxBalance = Math.max(...allProfiles.map((p) => Number(p.balance)), 1);
+    const maxPoints = Math.max(...allProfiles.map((p) => Number(p.monthlyPoints)), 1);
+    const maxClears = Math.max(...[...clearMap.values()], 1);
+
+    const entries = allProfiles.map((p) => {
+      const bal = Number(p.balance);
+      const pts = Number(p.monthlyPoints);
+      const cls = clearMap.get(p.userId) ?? 0;
+      const score =
+        (bal / maxBalance) * 40 +
+        (pts / maxPoints) * 40 +
+        (cls / maxClears) * 20;
+      return { userId: p.userId, score };
+    });
+
+    entries.sort((a, b) => b.score - a.score);
+    const rank = (entries.findIndex((e) => e.userId === userId) + 1) || totalUsers;
 
     const streak = await db
       .select()
@@ -68,7 +87,8 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
       monthlyPoints: Number(profile.monthlyPoints),
       loginStreak: streak?.streak ?? 0,
     });
-  } catch {
+  } catch (e) {
+    console.error("[Community]", e);
     res.status(500).json({ error: "Internal error" });
   }
 });

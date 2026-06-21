@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { profileTable, transactionsTable } from "@workspace/db/schema";
-import { sql, inArray } from "drizzle-orm";
+import { profileTable, transactionsTable, missionParticipationsTable } from "@workspace/db/schema";
+import { sql, inArray, eq } from "drizzle-orm";
 import { requireAuthOrAdmin } from "../middlewares/session";
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
@@ -134,6 +134,80 @@ router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<voi
       })),
     );
   } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// 総合評価ランキング: INMU保有量(40%) + ポイント保有量(40%) + ミッションクリア数(20%)
+router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<void> => {
+  const currentUserId = req.userId;
+  try {
+    const [allProfiles, clearRows] = await Promise.all([
+      db.select({
+        userId: profileTable.userId,
+        displayName: profileTable.displayName,
+        balance: profileTable.balance,
+        monthlyPoints: profileTable.monthlyPoints,
+        showBalance: profileTable.showBalance,
+        participationCount: profileTable.participationCount,
+      }).from(profileTable).limit(500),
+      db.select({
+        userId: missionParticipationsTable.userId,
+        count: sql<string>`count(*)`,
+      })
+        .from(missionParticipationsTable)
+        .where(eq(missionParticipationsTable.status, "rewarded"))
+        .groupBy(missionParticipationsTable.userId),
+    ]);
+
+    const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
+
+    const maxBalance = Math.max(...allProfiles.map((p) => Number(p.balance)), 1);
+    const maxPoints = Math.max(...allProfiles.map((p) => Number(p.monthlyPoints)), 1);
+    const maxClears = Math.max(...[...clearMap.values()], 1);
+
+    const entries = allProfiles.map((p) => {
+      const bal = Number(p.balance);
+      const pts = Number(p.monthlyPoints);
+      const cls = clearMap.get(p.userId) ?? 0;
+      const score =
+        (bal / maxBalance) * 40 +
+        (pts / maxPoints) * 40 +
+        (cls / maxClears) * 20;
+      return {
+        userId: p.userId,
+        displayName: p.displayName,
+        balance: bal,
+        points: pts,
+        clears: cls,
+        participations: p.participationCount,
+        showBalance: p.showBalance,
+        score,
+      };
+    });
+
+    entries.sort((a, b) => b.score - a.score);
+
+    const totalUsers = entries.length;
+    const ranked = entries.map((e, i) => ({ ...e, rank: i + 1 }));
+
+    let myRank: number | null = null;
+    let myEntry = null;
+    if (currentUserId) {
+      const found = ranked.find((r) => r.userId === currentUserId);
+      myRank = found?.rank ?? totalUsers;
+      myEntry = found ?? null;
+    }
+
+    res.set("Cache-Control", "no-store");
+    res.json({
+      ranking: ranked.slice(0, 100),
+      myRank,
+      myEntry,
+      totalUsers,
+    });
+  } catch (e) {
+    console.error("[Ranking/Composite]", e);
     res.status(500).json({ error: "Internal error" });
   }
 });
