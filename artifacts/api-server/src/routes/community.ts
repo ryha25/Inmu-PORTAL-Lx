@@ -11,6 +11,36 @@ import { requireAuth } from "../middlewares/session";
 
 const router = Router();
 
+const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
+
+async function fetchOnChainInmuBalance(wallet: string): Promise<number | null> {
+  const rpcUrl = process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
+  try {
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1,
+        method: "getTokenAccountsByOwner",
+        params: [wallet, { mint: INMU_TOKEN_MINT }, { encoding: "jsonParsed" }],
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      result?: { value?: Array<{ account?: { data?: { parsed?: { info?: { tokenAmount?: { uiAmount?: number } } } } } }> }
+    };
+    const accounts = data.result?.value ?? [];
+    let total = 0;
+    for (const a of accounts) {
+      total += a.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+    }
+    return total;
+  } catch {
+    return null;
+  }
+}
+
 router.get("/community", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
@@ -41,6 +71,7 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
       db.select({
         userId: profileTable.userId,
         balance: profileTable.balance,
+        solWallet: profileTable.solWallet,
         monthlyPoints: profileTable.monthlyPoints,
       }).from(profileTable),
       db.select({
@@ -55,7 +86,17 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
     const totalUsers = allProfiles.length;
     const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
 
-    const inmuValues  = allProfiles.map((p) => Math.max(0, Number(p.balance)));
+    // オンチェーン残高を並列取得（タイムアウト付き）
+    const onChainResults = await Promise.allSettled(
+      allProfiles.map((p) =>
+        p.solWallet ? fetchOnChainInmuBalance(p.solWallet) : Promise.resolve(null)
+      )
+    );
+
+    const inmuValues  = allProfiles.map((p, i) => {
+      const onChain = onChainResults[i].status === "fulfilled" ? onChainResults[i].value : null;
+      return Math.max(0, onChain ?? Number(p.balance));
+    });
     const pointValues = allProfiles.map((p) => Math.max(0, Number(p.monthlyPoints)));
     const clearValues = allProfiles.map((p) => clearMap.get(p.userId) ?? 0);
 

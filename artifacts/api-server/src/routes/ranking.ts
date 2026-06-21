@@ -6,11 +6,61 @@ import { requireAuthOrAdmin } from "../middlewares/session";
 
 const router = Router();
 
-// ── INMU保有ランキング（DB値ベース・高速版）──
-// on-chain RPCは全ユーザー並列呼び出しでタイムアウトするためDB値を使用
+const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
+
+// オンチェーンINMU残高をウォレットアドレスから取得（タイムアウト付き）
+async function fetchOnChainInmuBalance(wallet: string): Promise<number | null> {
+  const rpcUrl = process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
+  try {
+    const res = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1,
+        method: "getTokenAccountsByOwner",
+        params: [wallet, { mint: INMU_TOKEN_MINT }, { encoding: "jsonParsed" }],
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      result?: {
+        value?: Array<{
+          account?: {
+            data?: {
+              parsed?: {
+                info?: { tokenAmount?: { uiAmount?: number } }
+              }
+            }
+          }
+        }>
+      }
+    };
+    const accounts = data.result?.value ?? [];
+    let total = 0;
+    for (const a of accounts) {
+      total += a.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+    }
+    return total;
+  } catch {
+    return null;
+  }
+}
+
+// ── INMU保有ランキング（オンチェーン実残高ベース）──
 router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
-    const profiles = await db.select().from(profileTable).limit(200);
+    const profiles = await db
+      .select({
+        userId: profileTable.userId,
+        displayName: profileTable.displayName,
+        balance: profileTable.balance,
+        solWallet: profileTable.solWallet,
+        showBalance: profileTable.showBalance,
+        participationCount: profileTable.participationCount,
+      })
+      .from(profileTable)
+      .limit(200);
 
     const receivedRows = await db
       .select({
@@ -23,8 +73,17 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
 
     const receivedMap = new Map(receivedRows.map((r) => [r.userId, Math.max(0, Number(r.total))]));
 
-    const entries = profiles.map((p) => {
-      const balance = Math.max(0, Number(p.balance));
+    // ウォレットが設定されているユーザーのオンチェーン残高を並列取得
+    const onChainResults = await Promise.allSettled(
+      profiles.map((p) =>
+        p.solWallet ? fetchOnChainInmuBalance(p.solWallet) : Promise.resolve(null)
+      )
+    );
+
+    const entries = profiles.map((p, i) => {
+      const onChain = onChainResults[i].status === "fulfilled" ? onChainResults[i].value : null;
+      // オンチェーン取得成功 → 実残高。失敗/ウォレット未設定 → profile.balance にフォールバック
+      const balance = Math.max(0, onChain ?? Number(p.balance));
       return {
         userId: p.userId,
         displayName: p.displayName,
@@ -79,6 +138,7 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
         userId: profileTable.userId,
         displayName: profileTable.displayName,
         balance: profileTable.balance,
+        solWallet: profileTable.solWallet,
         monthlyPoints: profileTable.monthlyPoints,
         participationCount: profileTable.participationCount,
       }).from(profileTable).limit(500),
@@ -96,14 +156,22 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
       return;
     }
 
+    // ウォレット設定ユーザーのオンチェーン残高を並列取得
+    const onChainResults = await Promise.allSettled(
+      allProfiles.map((p) =>
+        p.solWallet ? fetchOnChainInmuBalance(p.solWallet) : Promise.resolve(null)
+      )
+    );
+
     const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
 
-    // 各指標を計算
-    const inmuValues  = allProfiles.map((p) => Math.max(0, Number(p.balance)));
+    const inmuValues  = allProfiles.map((p, i) => {
+      const onChain = onChainResults[i].status === "fulfilled" ? onChainResults[i].value : null;
+      return Math.max(0, onChain ?? Number(p.balance));
+    });
     const pointValues = allProfiles.map((p) => Math.max(0, Number(p.monthlyPoints)));
     const clearValues = allProfiles.map((p) => clearMap.get(p.userId) ?? 0);
 
-    // 正規化のための最大値（0除算防止で最低1）
     const maxInmu   = Math.max(...inmuValues,  1);
     const maxPoints = Math.max(...pointValues, 1);
     const maxClears = Math.max(...clearValues, 1);
@@ -112,7 +180,6 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
       const inmu = inmuValues[i];
       const pts  = pointValues[i];
       const cls  = clearValues[i];
-      // INMU保有量(40%) + ポイント(40%) + ミッションクリア数(20%)
       const score = (inmu / maxInmu)   * 40
                   + (pts  / maxPoints) * 40
                   + (cls  / maxClears) * 20;
