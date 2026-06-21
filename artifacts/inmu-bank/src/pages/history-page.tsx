@@ -106,7 +106,6 @@ function TradeList({ rows, loading, emptyMsg }: { rows: TradeRow[]; loading: boo
 function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([])
   const [totalBought,      setTotalBought]      = useState<number>(0)
-  const [monthlyBought,    setMonthlyBought]    = useState<number>(0)
   const [monthlyCapacity,  setMonthlyCapacity]  = useState<number>(0)
   const [totalApplied,     setTotalApplied]     = useState<number>(0)
   const [available,        setAvailable]        = useState<number>(0)
@@ -127,7 +126,6 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
         if (d) {
           setPurchaseRequests(d.requests ?? [])
           setTotalBought(d.totalBought ?? 0)
-          setMonthlyBought(d.monthlyBought ?? 0)
           setMonthlyCapacity(d.monthlyCapacity ?? 0)
           setTotalApplied(d.totalApplied ?? 0)
           setAvailable(d.available ?? 0)
@@ -199,22 +197,18 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
               <p className="text-[10px] font-semibold text-muted-foreground mb-1">今月の購入枚数</p>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
-                  <p className="text-[10px] text-muted-foreground">今月の実購入合計</p>
-                  <p className="font-mono text-sm font-bold">{monthlyBought.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground">購入済み枚数（反映分）</p>
+                  <p className="font-mono text-sm font-bold">{totalBought.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground">今月の反映上限</p>
                   <p className="font-mono text-sm font-bold text-muted-foreground">{monthlyCapacity.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground">購入済み枚数（反映分）</p>
-                  <p className="font-mono text-sm font-bold">{totalBought.toLocaleString()}</p>
-                </div>
-                <div>
                   <p className="text-[10px] text-muted-foreground">今月の申請済み</p>
                   <p className="font-mono text-sm font-bold text-yellow-500">{totalApplied.toLocaleString()}</p>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <p className="text-[10px] text-muted-foreground">今月の申請可能残り</p>
                   <p className="font-mono text-sm font-bold text-green-500">{available.toLocaleString()}</p>
                 </div>

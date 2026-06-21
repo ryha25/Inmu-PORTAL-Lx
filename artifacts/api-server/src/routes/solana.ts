@@ -178,13 +178,8 @@ function classifySwapType(params: {
   const knownDex = [...invokedProgramIds].find(id => ALL_KNOWN_LABELS[id]);
   if (knownDex) return diffRaw > 0 ? "buy" : "sell";
 
-  // ③ 未知プログラムが関与 → SOL変化 or 他トークン変化でスワップか判定
-  const walletIdx = accountKeys.indexOf(walletAddress);
-  const solChangeLamports = walletIdx >= 0
-    ? (postBalances[walletIdx] ?? 0) - (preBalances[walletIdx] ?? 0)
-    : 0;
-
-  // 非INMUトークンの残高変化を確認
+  // ③ 未知プログラムが関与 → 非INMUトークンの残高変化のみでスワップ判定
+  //    SOL変化のみでは判定しない（ATA作成・手数料等で誤検知が起きるため）
   const preOtherMap = new Map<string, number>();
   const postOtherMap = new Map<string, number>();
   for (const b of preTokenBalances) {
@@ -198,24 +193,16 @@ function classifySwapType(params: {
     }
   }
   const allOtherKeys = new Set([...preOtherMap.keys(), ...postOtherMap.keys()]);
-  let otherTokenChanged = false;
   for (const key of allOtherKeys) {
     const pre = preOtherMap.get(key) ?? 0;
     const post = postOtherMap.get(key) ?? 0;
-    if (Math.abs(post - pre) > 0) { otherTokenChanged = true; break; }
+    if (Math.abs(post - pre) > 0) {
+      // 他トークン（USDC等）の変化あり → スワップと判定
+      return diffRaw > 0 ? "buy" : "sell";
+    }
   }
 
-  if (diffRaw > 0) {
-    // 購入候補: SOL支払い（手数料ノイズ以上の減少）または他トークン減少
-    const solPaid = solChangeLamports < -SOL_SWAP_THRESHOLD_LAMPORTS;
-    if (solPaid || otherTokenChanged) return "buy";
-  } else {
-    // 売却候補: SOL受取または他トークン増加
-    const solReceived = solChangeLamports > SOL_SWAP_THRESHOLD_LAMPORTS;
-    if (solReceived || otherTokenChanged) return "sell";
-  }
-
-  // SOLも他トークンも動いていない → 通常送金
+  // INMUのみ移動 / 対価トークン変化なし → 通常送金・エアドロとして扱わない
   return null;
 }
 
