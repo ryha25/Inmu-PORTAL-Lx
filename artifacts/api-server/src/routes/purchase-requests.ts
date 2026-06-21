@@ -8,21 +8,20 @@ import {
   profileTable,
   auditLogTable,
 } from "@workspace/db/schema";
-import { eq, desc, and, or, sql } from "drizzle-orm";
+import { eq, desc, and, or, gte, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
+// ── 全体申請上限（管理者設定） ──
 async function getPurchaseAdminLimit(): Promise<number> {
   try {
-    const [setting] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, "purchase_request_limit"));
-    return setting ? Number(setting.value) : 1000000;
-  } catch {
-    return 1000000;
-  }
+    const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, "purchase_request_limit"));
+    return s ? Number(s.value) : 1000000;
+  } catch { return 1000000; }
 }
 
-// Fetch user's applied amount (pending + approved — not rejected)
+// ── 全期間の申請済み総額（pending + approved） ──
 async function getTotalApplied(userId: string): Promise<number> {
   const [row] = await db
     .select({ total: sql<string>`coalesce(sum(cast(amount as numeric)), 0)` })
@@ -34,25 +33,103 @@ async function getTotalApplied(userId: string): Promise<number> {
   return Number(row?.total ?? 0);
 }
 
+// ── イベントモード設定を取得 ──
+async function getEventSettings(): Promise<{
+  eventModeEnabled: boolean;
+  eventStartDate: string;
+  eventEndDate: string;
+  isEventDay: boolean;
+}> {
+  try {
+    const rows = await db.select().from(systemSettingsTable)
+      .where(inArray(systemSettingsTable.key, ["event_mode_enabled", "event_start_date", "event_end_date"]));
+    const map = new Map(rows.map(r => [r.key, r.value]));
+    const eventModeEnabled = map.get("event_mode_enabled") === "true";
+    const eventStartDate = map.get("event_start_date") ?? "";
+    const eventEndDate = map.get("event_end_date") ?? "";
+
+    let isEventDay = false;
+    if (eventModeEnabled && eventStartDate && eventEndDate) {
+      // 日本時間(UTC+9)でのトゥデイ判定
+      const now = new Date();
+      const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+      const todayStr = `${jstNow.getUTCFullYear()}-${String(jstNow.getUTCMonth() + 1).padStart(2, "0")}-${String(jstNow.getUTCDate()).padStart(2, "0")}`;
+      isEventDay = todayStr >= eventStartDate && todayStr <= eventEndDate;
+    }
+    return { eventModeEnabled, eventStartDate, eventEndDate, isEventDay };
+  } catch {
+    return { eventModeEnabled: false, eventStartDate: "", eventEndDate: "", isEventDay: false };
+  }
+}
+
+// ── 1日の申請上限を取得（通常 or イベント） ──
+async function getDailyLimit(isEventDay: boolean): Promise<number> {
+  const key = isEventDay ? "event_daily_purchase_limit" : "normal_daily_purchase_limit";
+  const defaultVal = isEventDay ? 500000 : 300000;
+  try {
+    const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, key));
+    return s ? Number(s.value) : defaultVal;
+  } catch { return defaultVal; }
+}
+
+// ── 本日の申請済み総額（JST基準、pending + approved） ──
+async function getDailyUsed(userId: string): Promise<number> {
+  // UTC+9 で今日の00:00:00を計算
+  const now = new Date();
+  const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const jstMidnight = Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), jstNow.getUTCDate());
+  const todayStartUTC = new Date(jstMidnight - 9 * 60 * 60 * 1000); // JSTの0:00をUTCに戻す
+
+  const [row] = await db
+    .select({ total: sql<string>`coalesce(sum(cast(amount as numeric)), 0)` })
+    .from(purchaseRequestsTable)
+    .where(and(
+      eq(purchaseRequestsTable.userId, userId),
+      or(eq(purchaseRequestsTable.status, "pending"), eq(purchaseRequestsTable.status, "approved")),
+      gte(purchaseRequestsTable.createdAt, todayStartUTC),
+    ));
+  return Number(row?.total ?? 0);
+}
+
 // ── ユーザー: 自分の申請一覧 ──
 router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
-    const [requests, adminLimit, profile, totalApplied] = await Promise.all([
+    const [eventSettings, requests, profile, totalApplied] = await Promise.all([
+      getEventSettings(),
       db.select().from(purchaseRequestsTable)
         .where(eq(purchaseRequestsTable.userId, userId))
         .orderBy(desc(purchaseRequestsTable.createdAt))
         .limit(50),
-      getPurchaseAdminLimit(),
-      db.select({ totalBought: profileTable.totalBought }).from(profileTable).where(eq(profileTable.userId, userId)).then(r => r[0]),
+      db.select({ totalBought: profileTable.totalBought })
+        .from(profileTable).where(eq(profileTable.userId, userId)).then(r => r[0]),
       getTotalApplied(userId),
+    ]);
+
+    const [dailyLimit, dailyUsed] = await Promise.all([
+      getDailyLimit(eventSettings.isEventDay),
+      getDailyUsed(userId),
     ]);
 
     const totalBought = Number(profile?.totalBought ?? 0);
     const available = Math.max(0, totalBought - totalApplied);
-    const effectiveLimit = Math.min(adminLimit, available > 0 || totalBought > 0 ? available : adminLimit);
+    const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
+    // 申請可能 = 1日残り vs 購入履歴残りの小さい方
+    const effectiveLimit = totalBought > 0
+      ? Math.min(dailyRemaining, available)
+      : dailyRemaining;
 
-    res.json({ requests, adminLimit, totalBought, totalApplied, effectiveLimit });
+    res.json({
+      requests,
+      totalBought,
+      totalApplied,
+      available,
+      dailyLimit,
+      dailyUsed,
+      dailyRemaining,
+      isEventMode: eventSettings.isEventDay,
+      effectiveLimit,
+    });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
@@ -70,27 +147,35 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
   }
 
   try {
-    const [adminLimit, profile, totalApplied] = await Promise.all([
-      getPurchaseAdminLimit(),
+    const [eventSettings, profile, totalApplied] = await Promise.all([
+      getEventSettings(),
       db.select({ totalBought: profileTable.totalBought }).from(profileTable).where(eq(profileTable.userId, userId)).then(r => r[0]),
       getTotalApplied(userId),
     ]);
 
+    const [dailyLimit, dailyUsed] = await Promise.all([
+      getDailyLimit(eventSettings.isEventDay),
+      getDailyUsed(userId),
+    ]);
+
     const totalBought = Number(profile?.totalBought ?? 0);
     const available = Math.max(0, totalBought - totalApplied);
+    const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
 
-    if (numAmount > adminLimit) {
+    // ① 1日の申請上限チェック
+    if (numAmount > dailyRemaining) {
       res.status(400).json({
-        error: `申請上限を超えています（管理者設定上限: ${adminLimit.toLocaleString()} INMU）`,
-        adminLimit, totalBought, totalApplied,
+        error: `本日の申請上限を超えています（本日残り: ${dailyRemaining.toLocaleString()} INMU / 1日上限: ${dailyLimit.toLocaleString()} INMU）`,
+        dailyLimit, dailyUsed, dailyRemaining,
       });
       return;
     }
 
+    // ② 購入履歴残りチェック（購入履歴がある場合のみ）
     if (totalBought > 0 && numAmount > available) {
       res.status(400).json({
         error: `申請可能枚数を超えています（申請可能: ${available.toLocaleString()} INMU = 購入済み ${totalBought.toLocaleString()} - 申請済み ${totalApplied.toLocaleString()}）`,
-        adminLimit, totalBought, totalApplied,
+        dailyLimit, dailyUsed, dailyRemaining, available,
       });
       return;
     }
@@ -108,7 +193,7 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
   }
 });
 
-// ── 管理者: 全申請一覧 ──
+// ── 管理者: 全申請一覧（pending） ──
 router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<void> => {
   try {
     const requests = await db.select({

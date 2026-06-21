@@ -163,8 +163,8 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
   for (const tokenAccount of tokenAccounts) {
     let signatures: Awaited<ReturnType<typeof fetchSignatures>>;
     try {
-      // "until" を渡すと、その署名より新しいものだけを返す（差分取得）
-      signatures = await fetchSignatures(tokenAccount, 100, untilSig);
+      // until を使わず全量取得し existingSet で重複除外（最信頼性の高い方法）
+      signatures = await fetchSignatures(tokenAccount, 200);
     } catch (e) {
       console.warn("[Scan] fetchSignatures failed:", e);
       continue;

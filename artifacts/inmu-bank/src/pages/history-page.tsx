@@ -35,6 +35,18 @@ type PurchaseRequest = {
   createdAt: string
 }
 
+type PurchaseRequestsData = {
+  requests: PurchaseRequest[]
+  totalBought: number
+  totalApplied: number
+  available: number
+  dailyLimit: number
+  dailyUsed: number
+  dailyRemaining: number
+  isEventMode: boolean
+  effectiveLimit: number
+}
+
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   pending:  { label: '審査中',   color: 'text-yellow-500' },
   approved: { label: '承認済み', color: 'text-green-500' },
@@ -91,10 +103,14 @@ function TradeList({ rows, loading, emptyMsg }: { rows: TradeRow[]; loading: boo
 
 function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([])
-  const [adminLimit,     setAdminLimit]     = useState<number>(1000000)
   const [totalBought,    setTotalBought]    = useState<number>(0)
   const [totalApplied,   setTotalApplied]   = useState<number>(0)
-  const [effectiveLimit, setEffectiveLimit] = useState<number>(1000000)
+  const [available,      setAvailable]      = useState<number>(0)
+  const [dailyLimit,     setDailyLimit]     = useState<number>(300000)
+  const [dailyUsed,      setDailyUsed]      = useState<number>(0)
+  const [dailyRemaining, setDailyRemaining] = useState<number>(300000)
+  const [isEventMode,    setIsEventMode]    = useState<boolean>(false)
+  const [effectiveLimit, setEffectiveLimit] = useState<number>(300000)
   const [prAmount,  setPrAmount]  = useState('')
   const [prTxHash,  setPrTxHash]  = useState('')
   const [prComment, setPrComment] = useState('')
@@ -103,13 +119,17 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
   const loadPurchaseRequests = useCallback(() => {
     fetch('/api/purchase-requests', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => {
+      .then((d: PurchaseRequestsData | null) => {
         if (d) {
           setPurchaseRequests(d.requests ?? [])
-          setAdminLimit(d.adminLimit ?? 1000000)
           setTotalBought(d.totalBought ?? 0)
           setTotalApplied(d.totalApplied ?? 0)
-          setEffectiveLimit(d.effectiveLimit ?? d.adminLimit ?? 1000000)
+          setAvailable(d.available ?? 0)
+          setDailyLimit(d.dailyLimit ?? 300000)
+          setDailyUsed(d.dailyUsed ?? 0)
+          setDailyRemaining(d.dailyRemaining ?? 300000)
+          setIsEventMode(d.isEventMode ?? false)
+          setEffectiveLimit(d.effectiveLimit ?? 0)
         }
       })
       .catch(() => {})
@@ -159,7 +179,14 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
 
         <div className="flex flex-col gap-4">
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col gap-3">
-            <p className="text-sm font-semibold text-primary">新規申請</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-primary">新規申請</p>
+              {isEventMode && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 font-medium">
+                  🎪 イベントモード
+                </span>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-2 rounded-lg bg-secondary/30 p-3">
               <div>
@@ -167,17 +194,33 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
                 <p className="font-mono text-sm font-bold">{totalBought.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground">申請済み枚数</p>
+                <p className="text-[10px] text-muted-foreground">申請済み（全期間）</p>
                 <p className="font-mono text-sm font-bold text-yellow-500">{totalApplied.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground">申請可能枚数</p>
-                <p className="font-mono text-sm font-bold text-green-500">{effectiveLimit.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">購入履歴残り</p>
+                <p className="font-mono text-sm font-bold">{available.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground">管理者設定上限</p>
-                <p className="font-mono text-sm font-bold">{adminLimit.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground">本日の1日上限</p>
+                <p className="font-mono text-sm font-bold">{dailyLimit.toLocaleString()}</p>
               </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">本日申請済み</p>
+                <p className="font-mono text-sm font-bold text-yellow-500">{dailyUsed.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">本日残り申請可能</p>
+                <p className="font-mono text-sm font-bold text-green-500">{dailyRemaining.toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2">
+              <p className="text-[10px] text-muted-foreground">今日申請可能な最大枚数</p>
+              <p className="font-mono text-lg font-bold text-primary">{effectiveLimit.toLocaleString()} INMU</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                ＝ 本日残り（{dailyRemaining.toLocaleString()}）と購入履歴残り（{available.toLocaleString()}）の少ない方
+              </p>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -193,9 +236,7 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
               {prAmount && Number(prAmount) > effectiveLimit && (
                 <p className="text-[11px] text-destructive flex items-center gap-1">
                   <XCircle className="size-3" />
-                  {totalBought > 0 && Number(prAmount) > (totalBought - totalApplied)
-                    ? `申請可能枚数を超えています（購入済み ${totalBought.toLocaleString()} − 申請済み ${totalApplied.toLocaleString()} = ${Math.max(0, totalBought - totalApplied).toLocaleString()} INMU）`
-                    : `申請上限（${adminLimit.toLocaleString()} INMU）を超えています`}
+                  申請可能枚数（{effectiveLimit.toLocaleString()} INMU）を超えています
                 </p>
               )}
             </div>

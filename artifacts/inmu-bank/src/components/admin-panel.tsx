@@ -206,7 +206,23 @@ const PR_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 }
 
 const SYSTEM_SETTING_PRESETS: Record<string, string[]> = {
-  purchase_request_limit: ['100000', '500000', '1000000', '5000000'],
+  purchase_request_limit:      ['100000', '300000', '500000', '1000000', '5000000'],
+  normal_daily_purchase_limit: ['100000', '200000', '300000', '500000'],
+  event_daily_purchase_limit:  ['200000', '300000', '500000', '1000000'],
+}
+
+const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
+  event_mode_enabled: 'boolean',
+  event_start_date:   'date',
+  event_end_date:     'date',
+}
+
+function formatSettingDisplay(key: string, value: string): string {
+  if (SYSTEM_SETTING_TYPE[key] === 'boolean') return value === 'true' ? '✅ 有効' : '❌ 無効'
+  if (SYSTEM_SETTING_TYPE[key] === 'date') return value || '未設定'
+  const n = Number(value)
+  if (!isNaN(n)) return `${n.toLocaleString()}${key.includes('limit') ? ' INMU' : ''}`
+  return value || '—'
 }
 
 async function api(path: string, method: string, body?: unknown) {
@@ -2185,9 +2201,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex flex-col gap-0.5 min-w-0">
                         <p className="text-sm font-medium">{s.description ?? s.key}</p>
-                        <p className="font-mono text-sm font-bold text-primary">
-                          {Number(s.value).toLocaleString()}
-                          {s.key.includes('limit') ? ' INMU' : ''}
+                        <p className={`font-mono text-sm font-bold ${s.key === 'event_mode_enabled' && s.value === 'true' ? 'text-green-500' : 'text-primary'}`}>
+                          {formatSettingDisplay(s.key, s.value)}
                         </p>
                         <p className="text-[10px] text-muted-foreground">
                           更新: {new Date(s.updatedAt).toLocaleString('ja-JP')}
@@ -2204,10 +2219,27 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
                     {isEditing && (
                       <div className="border-t border-border pt-2 flex flex-col gap-2">
-                        <Input type="number" value={settingEditValue}
-                          onChange={e => setSettingEditValue(e.target.value)}
-                          placeholder="新しい値" className="min-h-9" />
-                        {presets && (
+                        {SYSTEM_SETTING_TYPE[s.key] === 'boolean' ? (
+                          <div className="flex gap-2">
+                            <Button type="button" size="sm" variant={settingEditValue === 'true' ? 'default' : 'outline'}
+                              className="flex-1 min-h-9 gap-1" onClick={() => setSettingEditValue('true')}>
+                              ✅ 有効
+                            </Button>
+                            <Button type="button" size="sm" variant={settingEditValue === 'false' ? 'default' : 'outline'}
+                              className="flex-1 min-h-9 gap-1" onClick={() => setSettingEditValue('false')}>
+                              ❌ 無効
+                            </Button>
+                          </div>
+                        ) : SYSTEM_SETTING_TYPE[s.key] === 'date' ? (
+                          <Input type="date" value={settingEditValue}
+                            onChange={e => setSettingEditValue(e.target.value)}
+                            className="min-h-9" />
+                        ) : (
+                          <Input type="number" value={settingEditValue}
+                            onChange={e => setSettingEditValue(e.target.value)}
+                            placeholder="新しい値" className="min-h-9" />
+                        )}
+                        {presets && SYSTEM_SETTING_TYPE[s.key] !== 'boolean' && SYSTEM_SETTING_TYPE[s.key] !== 'date' && (
                           <div className="flex flex-wrap gap-1.5">
                             {presets.map(p => (
                               <button key={p} type="button" onClick={() => setSettingEditValue(p)}
@@ -2217,7 +2249,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                             ))}
                           </div>
                         )}
-                        <Button className="min-h-9" disabled={settingSaving || !settingEditValue}
+                        <Button className="min-h-9"
+                          disabled={settingSaving || (SYSTEM_SETTING_TYPE[s.key] == null && !settingEditValue)}
                           onClick={() => saveSystemSetting(s.key)}>
                           {settingSaving ? '保存中…' : '保存'}
                         </Button>

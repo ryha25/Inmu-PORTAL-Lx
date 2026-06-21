@@ -31,9 +31,9 @@ export function RankingView({
   totalUsers,
   currentUserId,
 }: {
-  inmuRows: InmuRow[]
-  pointsRows: PointsRow[]
-  compositeRows: CompositeRow[]
+  inmuRows?: InmuRow[]
+  pointsRows?: PointsRow[]
+  compositeRows?: CompositeRow[]
   myCompositeRank: number | null
   myInmuRank: number | null
   myPointsRank: number | null
@@ -78,9 +78,9 @@ export function RankingView({
           </Card>
         )}
 
-        {compositeRows.length === 0 ? (
+        {(compositeRows ?? []).length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">{t('no_data')}</p>
-        ) : compositeRows.map(r => (
+        ) : (compositeRows ?? []).map(r => (
           <Card key={r.userId} className={`border-border bg-card p-3 ${r.rank <= 3 ? 'border-primary/40' : ''} ${r.userId === currentUserId ? 'border-primary/60 bg-primary/5' : ''}`}>
             <div className="flex items-center gap-3">
               <RankBadge rank={r.rank} />
@@ -117,9 +117,9 @@ export function RankingView({
           </Card>
         )}
 
-        {inmuRows.length === 0 ? (
+        {(inmuRows ?? []).length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">{t('no_data')}</p>
-        ) : inmuRows.map(r => (
+        ) : (inmuRows ?? []).map(r => (
           <Card key={r.userId} className={`border-border bg-card p-3 ${r.rank <= 3 ? 'border-primary/40' : ''} ${r.userId === currentUserId ? 'border-primary/60 bg-primary/5' : ''}`}>
             <div className="flex items-center gap-3">
               <RankBadge rank={r.rank} />
@@ -161,9 +161,9 @@ export function RankingView({
           </Card>
         )}
 
-        {pointsRows.length === 0 ? (
+        {(pointsRows ?? []).length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">{t('no_data')}</p>
-        ) : pointsRows.map(r => (
+        ) : (pointsRows ?? []).map(r => (
           <Card key={r.userId} className={`border-border bg-card p-3 ${r.rank <= 3 ? 'border-primary/40' : ''} ${r.userId === currentUserId ? 'border-primary/60 bg-primary/5' : ''}`}>
             <div className="flex items-center gap-3">
               <RankBadge rank={r.rank} />
