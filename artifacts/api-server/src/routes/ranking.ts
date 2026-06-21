@@ -9,10 +9,7 @@ const INMU_DECIMALS = 6;
 
 function getRpcEndpoints(): string[] {
   const custom = process.env.SOLANA_RPC;
-  const defaults = [
-    "https://api.mainnet-beta.solana.com",
-  ];
-  return custom ? [custom, ...defaults] : defaults;
+  return custom ? [custom, "https://api.mainnet-beta.solana.com"] : ["https://api.mainnet-beta.solana.com"];
 }
 
 async function fetchInmuBalance(wallet: string): Promise<number | null> {
@@ -22,42 +19,27 @@ async function fetchInmuBalance(wallet: string): Promise<number | null> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
+          jsonrpc: "2.0", id: 1,
           method: "getTokenAccountsByOwner",
-          params: [
-            wallet,
-            { mint: INMU_TOKEN_MINT },
-            { encoding: "jsonParsed" },
-          ],
+          params: [wallet, { mint: INMU_TOKEN_MINT }, { encoding: "jsonParsed" }],
         }),
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) continue;
       const data = await res.json() as {
-        result?: {
-          value?: Array<{
-            account: {
-              data: { parsed: { info: { tokenAmount: { amount: string } } } };
-            };
-          }>;
-        };
+        result?: { value?: Array<{ account: { data: { parsed: { info: { tokenAmount: { amount: string } } } } } }> };
       };
       const accounts = data.result?.value ?? [];
-      const totalRaw = accounts.reduce(
-        (s, a) => s + Number(a.account.data.parsed.info.tokenAmount.amount),
-        0,
-      );
+      const totalRaw = accounts.reduce((s, a) => s + Number(a.account.data.parsed.info.tokenAmount.amount), 0);
       return Math.max(0, totalRaw / Math.pow(10, INMU_DECIMALS));
-    } catch {
-      continue;
-    }
+    } catch { continue; }
   }
   return null;
 }
 
 const router = Router();
 
+// ── INMU保有ランキング ──
 router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
     const profiles = await db.select().from(profileTable).limit(200);
@@ -71,9 +53,7 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
       .where(inArray(transactionsTable.type, ["airdrop", "reward", "mission_reward"]))
       .groupBy(transactionsTable.userId);
 
-    const receivedMap = new Map(
-      receivedRows.map((r) => [r.userId, Math.max(0, Number(r.total))]),
-    );
+    const receivedMap = new Map(receivedRows.map((r) => [r.userId, Math.max(0, Number(r.total))]));
 
     const balanceResults = await Promise.allSettled(
       profiles.map(async (p) => {
@@ -85,17 +65,14 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
 
     const balanceMap = new Map<string, number | null>();
     for (const r of balanceResults) {
-      if (r.status === "fulfilled") {
-        balanceMap.set(r.value.userId, r.value.balance);
-      }
+      if (r.status === "fulfilled") balanceMap.set(r.value.userId, r.value.balance);
     }
 
     const entries = profiles.map((p) => {
       const realBalance = balanceMap.get(p.userId);
-      const balance =
-        realBalance !== null && realBalance !== undefined
-          ? realBalance
-          : Math.max(0, Number(p.totalBought) - Number(p.totalSold));
+      const balance = (realBalance !== null && realBalance !== undefined)
+        ? realBalance
+        : Math.max(0, Number(p.totalBought) - Number(p.totalSold));
       return {
         userId: p.userId,
         displayName: p.displayName,
@@ -116,6 +93,7 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   }
 });
 
+// ── ポイントランキング ──
 router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
     const rows = await db
@@ -138,7 +116,8 @@ router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<voi
   }
 });
 
-// 総合評価ランキング: INMU保有量(40%) + ポイント保有量(40%) + ミッションクリア数(20%)
+// ── 総合評価ランキング ──
+// スコア = INMU純購入量(40%) + ポイント(40%) + ミッションクリア数(20%)
 router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<void> => {
   const currentUserId = req.userId;
   try {
@@ -146,9 +125,9 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
       db.select({
         userId: profileTable.userId,
         displayName: profileTable.displayName,
-        balance: profileTable.balance,
+        totalBought: profileTable.totalBought,
+        totalSold: profileTable.totalSold,
         monthlyPoints: profileTable.monthlyPoints,
-        showBalance: profileTable.showBalance,
         participationCount: profileTable.participationCount,
       }).from(profileTable).limit(500),
       db.select({
@@ -160,33 +139,38 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
         .groupBy(missionParticipationsTable.userId),
     ]);
 
+    if (allProfiles.length === 0) {
+      res.json({ ranking: [], myRank: null, myEntry: null, totalUsers: 0 });
+      return;
+    }
+
     const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
 
-    const maxBalance = Math.max(...allProfiles.map((p) => Number(p.balance)), 1);
-    const maxPoints = Math.max(...allProfiles.map((p) => Number(p.monthlyPoints)), 1);
-    const maxClears = Math.max(...[...clearMap.values()], 1);
+    // INMU保有量 = totalBought - totalSold（スキャン済みDEX取引の純購入量）
+    const inmuValues = allProfiles.map((p) => Math.max(0, Number(p.totalBought) - Number(p.totalSold)));
+    const pointValues = allProfiles.map((p) => Math.max(0, Number(p.monthlyPoints)));
+    const clearValues = allProfiles.map((p) => clearMap.get(p.userId) ?? 0);
 
-    const entries = allProfiles.map((p) => {
-      const bal = Number(p.balance);
-      const pts = Number(p.monthlyPoints);
-      const cls = clearMap.get(p.userId) ?? 0;
-      const score =
-        (bal / maxBalance) * 40 +
-        (pts / maxPoints) * 40 +
-        (cls / maxClears) * 20;
+    const maxInmu   = Math.max(...inmuValues,   1);
+    const maxPoints = Math.max(...pointValues,   1);
+    const maxClears = Math.max(...clearValues,   1);
+
+    const entries = allProfiles.map((p, i) => {
+      const inmu   = inmuValues[i];
+      const pts    = pointValues[i];
+      const cls    = clearValues[i];
+      const score  = (inmu / maxInmu) * 40 + (pts / maxPoints) * 40 + (cls / maxClears) * 20;
       return {
         userId: p.userId,
         displayName: p.displayName,
-        balance: bal,
+        balance: inmu,
         points: pts,
         clears: cls,
-        participations: p.participationCount,
-        showBalance: p.showBalance,
-        score,
+        score: Math.round(score * 10) / 10,
       };
     });
 
-    entries.sort((a, b) => b.score - a.score);
+    entries.sort((a, b) => b.score - a.score || b.balance - a.balance || b.points - a.points);
 
     const totalUsers = entries.length;
     const ranked = entries.map((e, i) => ({ ...e, rank: i + 1 }));
@@ -195,8 +179,13 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
     let myEntry = null;
     if (currentUserId) {
       const found = ranked.find((r) => r.userId === currentUserId);
-      myRank = found?.rank ?? totalUsers;
-      myEntry = found ?? null;
+      if (found) {
+        myRank = found.rank;
+        myEntry = found;
+      } else {
+        // ユーザーがリストに含まれない場合は最下位
+        myRank = totalUsers > 0 ? totalUsers : 1;
+      }
     }
 
     res.set("Cache-Control", "no-store");

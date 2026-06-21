@@ -9,20 +9,26 @@ const router = Router();
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
 
-const DEX_PROGRAMS = new Set([
-  "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
-  "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
-  "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
-  "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
-  "LBUZKhRxPF3XUpBCjp4YzTKgLLjLssfyqieAsxSLqqe",
-]);
-
-const DEX_LABELS: Record<string, string> = {
+// 全DEX/プラットフォームラベル（pump.fun含む）
+// ※ このマップに無いプログラムでも INMU残高変化があれば取引として記録する
+const ALL_KNOWN_LABELS: Record<string, string> = {
+  // Jupiter Aggregator
   "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4": "Jupiter",
+  // Raydium AMM
   "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8": "Raydium",
+  "5quBtoiQqxF9Jv6KYKctB59NT3gtJD2Y65kdnB1Uev3h": "Raydium",
+  // Orca Whirlpool
   "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc": "Orca",
   "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP": "Orca",
+  // Meteora
   "LBUZKhRxPF3XUpBCjp4YzTKgLLjLssfyqieAsxSLqqe": "Meteora",
+  "Eo7WjKq67rjJQDjr6b4T7dhAoaLENRNBpkRMHCnSwWZZ": "Meteora",
+  // pump.fun (オリジナル)
+  "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P": "pump.fun",
+  // pump.fun AMM v2 (Migration先)
+  "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA": "pump.fun",
+  // pump.fun fee recipient / bonding curve 関連
+  "CebN5WGQ4jvEPvsVU4EoHEpgznyQHearzZAbaeoNARs": "pump.fun",
 };
 
 const RPC_ENDPOINTS = [
@@ -124,7 +130,6 @@ async function fetchTransaction(sig: string) {
         err: unknown;
         preTokenBalances: TokenBalance[];
         postTokenBalances: TokenBalance[];
-        // バージョン付きトランザクション（ALT）でロードされたアカウント
         loadedAddresses?: { writable: string[]; readonly: string[] };
       };
       transaction: { message: { accountKeys: string[] } };
@@ -152,18 +157,12 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
   const existingSet = new Set(existingRows.map((e) => e.txSignature));
   if (tokenAccounts.length === 0) return { added: 0, total: existingSet.size, differential: false };
 
-  // ② 差分取得のアンカー: 最新既知シグネチャを "until" に使う
-  //    → 次回スキャンでその署名以前は読まなくて済む
-  const latestKnown = existingRows.sort((a, b) => b.tradedAt.getTime() - a.tradedAt.getTime())[0];
-  const untilSig = latestKnown?.txSignature;
-  const differential = !!untilSig;
-
   let added = 0;
 
   for (const tokenAccount of tokenAccounts) {
     let signatures: Awaited<ReturnType<typeof fetchSignatures>>;
     try {
-      // until を使わず全量取得し existingSet で重複除外（最信頼性の高い方法）
+      // until を使わず全量取得し existingSet で重複除外（pump.fun等の全DEX対応）
       signatures = await fetchSignatures(tokenAccount, 200);
     } catch (e) {
       console.warn("[Scan] fetchSignatures failed:", e);
@@ -176,7 +175,7 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
 
     if (newSigs.length === 0) continue;
 
-    // ③ TX を並列バッチ取得（直列30回 → 並列5本ずつ）
+    // ② TX を並列バッチ取得
     for (let i = 0; i < newSigs.length; i += TX_FETCH_CONCURRENCY) {
       const batch = newSigs.slice(i, i + TX_FETCH_CONCURRENCY);
       const txResults = await Promise.allSettled(batch.map((s) => fetchTransaction(s.signature)));
@@ -188,18 +187,17 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
         if (!tx || tx.meta?.err !== null) continue;
 
         // 静的アカウント + ALT（アドレスルックアップテーブル）でロードされたアカウントを結合
-        // Jupiter等のバージョン付きTXではINMUトークンアカウントがALT経由で参照される
         const staticKeys: string[] = tx.transaction?.message?.accountKeys ?? [];
         const altWritable: string[] = tx.meta.loadedAddresses?.writable ?? [];
         const altReadonly: string[] = tx.meta.loadedAddresses?.readonly ?? [];
         const accountKeys = [...staticKeys, ...altWritable, ...altReadonly];
 
-        const matchedDex = accountKeys.find((k) => DEX_PROGRAMS.has(k));
-        if (!matchedDex) continue;
-
+        // ③ INMUトークンアカウントのインデックスを特定（核心）
         const tokenIdx = accountKeys.indexOf(tokenAccount);
         if (tokenIdx === -1) continue;
 
+        // ④ preTokenBalances / postTokenBalances でINMU残高差分を計算
+        //    ※ DEX判定は不要。残高増加＝買い、減少＝売り。pump.fun/未知DEX含む全対象
         const preBal = (tx.meta.preTokenBalances ?? []).find(
           (b) => b.accountIndex === tokenIdx && b.mint === INMU_TOKEN_MINT,
         );
@@ -207,10 +205,15 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
           (b) => b.accountIndex === tokenIdx && b.mint === INMU_TOKEN_MINT,
         );
 
+        // postBal が無い = トークンアカウントが閉じられ残高0になった（全額売却）
         const preRaw = preBal ? Number(preBal.uiTokenAmount.amount) : 0;
         const postRaw = postBal ? Number(postBal.uiTokenAmount.amount) : 0;
         const diffRaw = postRaw - preRaw;
         if (diffRaw === 0) continue;
+
+        // ⑤ プログラムIDからDEX/プラットフォームを特定（ラベル用・任意）
+        const matchedProgram = accountKeys.find((k) => ALL_KNOWN_LABELS[k]);
+        const dexLabel = matchedProgram ? ALL_KNOWN_LABELS[matchedProgram] : "DEX";
 
         const type = diffRaw > 0 ? "buy" : "sell";
         const tokenAmount = (Math.abs(diffRaw) / Math.pow(10, INMU_DECIMALS)).toString();
@@ -222,7 +225,7 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
             type,
             tokenAmount,
             txSignature: sigInfo.signature,
-            dex: DEX_LABELS[matchedDex] ?? "DEX",
+            dex: dexLabel,
             tradedAt: new Date(sigInfo.blockTime! * 1000),
           });
           existingSet.add(sigInfo.signature);
@@ -237,7 +240,7 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
     }
   }
 
-  // ④ 統計を SQL 集計で並列取得（全行読み込みを廃止）
+  // ⑥ 統計を SQL 集計で更新
   const [[buyRow], [sellRow], [latestBuy], [latestSell]] = await Promise.all([
     db.select({ total: sql<string>`coalesce(sum(cast("tokenAmount" as numeric)), '0')` })
       .from(tradeHistoryTable)
@@ -266,9 +269,9 @@ async function doScanTrades(userId: string, walletAddress: string): Promise<{ ad
   }).where(eq(profileTable.userId, userId));
 
   const elapsed = Date.now() - t0;
-  console.info(`[Scan] userId=${userId} added=${added} total=${existingSet.size + added} differential=${differential} elapsed=${elapsed}ms`);
+  console.info(`[Scan] userId=${userId} added=${added} total=${existingSet.size + added} elapsed=${elapsed}ms`);
 
-  return { added, total: existingSet.size + added, differential };
+  return { added, total: existingSet.size + added, differential: false };
 }
 
 // ── RPC プロキシ ──
@@ -358,7 +361,7 @@ router.post("/admin/solana/scan-trades", requireAdmin, async (req, res): Promise
 
 // ── INMU価格取得（Jupiter + ExchangeRate） ──
 let priceCache: { usdPrice: number; jpyRate: number; cachedAt: number } | null = null;
-const PRICE_CACHE_MS = 5 * 60 * 1000; // 5分キャッシュ
+const PRICE_CACHE_MS = 5 * 60 * 1000;
 
 router.get("/solana/inmu-price", requireAuth, async (_req, res): Promise<void> => {
   try {

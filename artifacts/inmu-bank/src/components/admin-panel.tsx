@@ -206,7 +206,6 @@ const PR_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 }
 
 const SYSTEM_SETTING_PRESETS: Record<string, string[]> = {
-  purchase_request_limit:      ['100000', '300000', '500000', '1000000', '5000000'],
   normal_daily_purchase_limit: ['100000', '200000', '300000', '500000'],
   event_daily_purchase_limit:  ['200000', '300000', '500000', '1000000'],
 }

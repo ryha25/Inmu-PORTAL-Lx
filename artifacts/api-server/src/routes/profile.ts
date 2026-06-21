@@ -7,6 +7,11 @@ import { requireAuth } from "../middlewares/session";
 
 const router = Router();
 
+// X IDを正規化（大文字小文字・@を統一）
+function normalizeXId(raw: string): string {
+  return raw.trim().toLowerCase().replace(/^@/, "");
+}
+
 router.get("/profile", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
@@ -82,6 +87,7 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
       showBalance?: boolean;
     };
 
+  // ① SOLウォレット重複チェック
   if (solWallet !== undefined && solWallet !== null && solWallet.trim() !== "") {
     const trimmed = solWallet.trim().toLowerCase();
     const { rows: dupCheck } = await pool.query(
@@ -94,12 +100,31 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // ② X ID 重複チェック（大文字小文字・@ 無視）
+  if (xId !== undefined && xId !== null && xId.trim() !== "") {
+    const normalized = normalizeXId(xId);
+    const { rows: xDupCheck } = await pool.query(
+      `SELECT "userId" FROM profile
+       WHERE lower(regexp_replace("xId", '^@', '')) = $1 AND "userId" != $2 LIMIT 1`,
+      [normalized, userId],
+    );
+    if (xDupCheck.length > 0) {
+      res.status(400).json({ error: `この X ID（@${normalized}）は既に他のアカウントで使用されています` });
+      return;
+    }
+  }
+
   try {
+    // X ID 保存時は @ を除いた小文字に正規化
+    const normalizedXId = xId !== undefined
+      ? (xId.trim() === "" ? null : normalizeXId(xId))
+      : undefined;
+
     await db
       .update(profileTable)
       .set({
         ...(displayName !== undefined && { displayName }),
-        ...(xId !== undefined && { xId }),
+        ...(normalizedXId !== undefined && { xId: normalizedXId }),
         ...(discordId !== undefined && { discordId }),
         ...(discordUsername !== undefined && { discordUsername }),
         ...(solWallet !== undefined && { solWallet: solWallet?.trim() ?? null }),

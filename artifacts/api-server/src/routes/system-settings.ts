@@ -6,30 +6,39 @@ import { requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
+// 管理画面に表示・編集する設定（新仕様のみ）
 const DEFAULTS: Record<string, { value: string; description: string }> = {
-  purchase_request_limit:     { value: "1000000", description: "購入申請枚数の全体上限（INMU）" },
-  normal_daily_purchase_limit:{ value: "300000",  description: "通常日の1日申請上限（INMU）" },
-  event_daily_purchase_limit: { value: "500000",  description: "イベント日の1日申請上限（INMU）" },
-  event_mode_enabled:         { value: "false",   description: "イベント申請モード（true/false）" },
-  event_start_date:           { value: "",        description: "イベント対象開始日（YYYY-MM-DD）" },
-  event_end_date:             { value: "",        description: "イベント対象終了日（YYYY-MM-DD）" },
+  normal_daily_purchase_limit: { value: "300000",  description: "通常日の1日申請上限（INMU）" },
+  event_daily_purchase_limit:  { value: "500000",  description: "イベント日の1日申請上限（INMU）" },
+  event_mode_enabled:          { value: "false",   description: "イベント申請モード（ON/OFF）" },
+  event_start_date:            { value: "",        description: "イベント対象開始日（YYYY-MM-DD）" },
+  event_end_date:              { value: "",        description: "イベント対象終了日（YYYY-MM-DD）" },
 };
+
+// DBに残っているが表示・編集しない旧設定キー
+const HIDDEN_KEYS = new Set(["purchase_request_limit"]);
 
 // ── 管理者: 全設定一覧 ──
 router.get("/admin/system-settings", requireAdmin, async (_req, res): Promise<void> => {
   try {
     const rows = await db.select().from(systemSettingsTable);
     const map = new Map(rows.map(r => [r.key, r]));
+
+    // DEFAULTS に無いキーは DEFAULTS の初期値で補完
     for (const [key, def] of Object.entries(DEFAULTS)) {
       if (!map.has(key)) {
         map.set(key, { key, value: def.value, description: def.description, updatedAt: new Date() });
       }
     }
-    // 定義順で返す
+
+    // 定義順で返す（HIDDEN_KEYS は除外）
     const ordered = Object.keys(DEFAULTS)
-      .filter(k => map.has(k))
-      .map(k => map.get(k)!)
-    const extra = [...map.values()].filter(r => !DEFAULTS[r.key])
+      .filter(k => map.has(k) && !HIDDEN_KEYS.has(k))
+      .map(k => map.get(k)!);
+
+    // DEFAULTS以外の追加設定（HIDDEN_KEYSを除く）
+    const extra = [...map.values()].filter(r => !DEFAULTS[r.key] && !HIDDEN_KEYS.has(r.key));
+
     res.json([...ordered, ...extra]);
   } catch {
     res.status(500).json({ error: "Internal error" });
