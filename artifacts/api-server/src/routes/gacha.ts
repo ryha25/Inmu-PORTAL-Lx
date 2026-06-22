@@ -15,8 +15,8 @@ const PRIZES = [
 ] as const;
 type Prize = (typeof PRIZES)[number];
 
-// 確定演出の発生確率（5%）
-const GUARANTEED_RATE = 0.05;
+// 確定演出の発生確率（1/114）
+const GUARANTEED_RATE = 1 / 114;
 
 function rollPrize(): Prize {
   const r = Math.floor(Math.random() * 1000);
