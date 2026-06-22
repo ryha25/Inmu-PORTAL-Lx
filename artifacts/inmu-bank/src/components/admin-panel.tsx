@@ -567,6 +567,11 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     } catch { /* ignore */ }
   }, [users])
 
+  const [gachaResults, setGachaResults] = useState<GachaResultRow[]>([])
+  const [gachaLoading, setGachaLoading] = useState(false)
+  const [gachaFetched, setGachaFetched] = useState(false)
+  const [gachaFilter, setGachaFilter] = useState<'all'|'inmu_pending'|'inmu_sent'>('inmu_pending')
+
   const loadGachaResults = useCallback(async () => {
     if (gachaFetched) return
     setGachaLoading(true)
@@ -603,10 +608,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [editingSettingKey, setEditingSettingKey] = useState<string | null>(null)
   const [settingEditValue, setSettingEditValue] = useState('')
   const [settingSaving, setSettingSaving] = useState(false)
-  const [gachaResults, setGachaResults] = useState<GachaResultRow[]>([])
-  const [gachaLoading, setGachaLoading] = useState(false)
-  const [gachaFetched, setGachaFetched] = useState(false)
-  const [gachaFilter, setGachaFilter] = useState<'all'|'inmu_pending'|'inmu_sent'>('inmu_pending')
 
   const [emergencySearch, setEmergencySearch] = useState('')
   const [emergencyUserId, setEmergencyUserId] = useState<string | null>(null)
