@@ -14,7 +14,7 @@ import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
 type Prize = { prizeId:string; label:string; type:'points'|'inmu'; amount:number }
 type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; newPoints:number }
-type HistRow = { id:number; pullType:string; results:Prize[]; totalPoints:number; hasInmu:boolean; inmuSentStatus:string; wasGuaranteed:boolean; costPoints:number; createdAt:string }
+type HistRow = { id:number; pullType:string; isFree:boolean; results:Prize[]; totalPoints:number; hasInmu:boolean; inmuSentStatus:string; txHash:string|null; wasGuaranteed:boolean; costPoints:number; createdAt:string }
 
 /* ─── capsule color configs (image 5 reference) ─── */
 const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;label:string}> = {
@@ -310,6 +310,9 @@ export function GachaPage() {
   const [history,setHistory]     = useState<HistRow[]>([])
   const [histOpen,setHistOpen]   = useState(true)
   const [openFlash,setOpenFlash] = useState(false)
+  const [freeUsed,setFreeUsed]   = useState(true)
+  const [freeNextReset,setFreeNextReset] = useState<string|null>(null)
+  const [freeLoading,setFreeLoading] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
 
   const loadPts = useCallback(async()=>{
@@ -327,6 +330,14 @@ export function GachaPage() {
     }catch{/**/}
   },[])
   useEffect(()=>{loadHist()},[loadHist])
+
+  const loadFreeStatus = useCallback(async()=>{
+    try{
+      const r=await fetch('/api/gacha/free-status',{credentials:'include'})
+      if(r.ok){const d=await r.json() as {used:boolean;nextReset:string};setFreeUsed(d.used);setFreeNextReset(d.nextReset)}
+    }catch{/**/}
+  },[])
+  useEffect(()=>{loadFreeStatus()},[loadFreeStatus])
 
   const clr=()=>{if(timer.current)clearTimeout(timer.current)}
   const after=(ms:number,next:Phase)=>{clr();timer.current=setTimeout(()=>setPhase(next),ms)}
@@ -369,7 +380,24 @@ export function GachaPage() {
     }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
   }
 
-  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);loadPts();loadHist()}
+  async function spinFree(){
+    if(phase!=='idle'||freeUsed||freeLoading)return
+    setFreeLoading(true)
+    try{
+      const res=await fetch('/api/gacha/free-spin',{
+        method:'POST',credentials:'include',
+        headers:{'Content-Type':'application/json'},
+      })
+      if(!res.ok){const e=await res.json().catch(()=>({})) as {error?:string};throw new Error(e.error??'エラー')}
+      const r=await res.json() as Result
+      setResult(r);setRevIdx(0);setPts(r.newPoints)
+      setFreeUsed(true)
+      setPhase(r.wasGuaranteed?'guaranteed':'inserting')
+    }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
+    finally{setFreeLoading(false)}
+  }
+
+  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);loadPts();loadHist();loadFreeStatus()}
   const isMulti=(result?.results.length??0)>1
 
   /* ════ JACKPOT SCREEN ════ */
@@ -419,6 +447,44 @@ export function GachaPage() {
             background:'linear-gradient(to top,rgba(2,1,10,.99) 84%,transparent)',
             backdropFilter:'blur(16px)',
             padding:`6px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))`}}>
+
+            {/* 無料ガチャボタン */}
+            <button type="button" disabled={freeUsed||freeLoading||phase!=='idle'}
+              onClick={spinFree}
+              style={{
+                width:'100%',marginBottom:8,padding:'10px 16px',
+                border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,
+                borderRadius:8,cursor:freeUsed||freeLoading?'not-allowed':'pointer',
+                background:freeUsed
+                  ?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))'
+                  :'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',
+                opacity:freeUsed?0.6:1,
+                position:'relative',overflow:'hidden',
+                boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',
+                transition:'all .2s',
+              }}>
+              {!freeUsed&&<div style={{position:'absolute',top:0,left:'-32%',width:'32%',height:'100%',
+                background:'rgba(255,255,255,.07)',transform:'skewX(-22deg)',
+                animation:'ga-shimmer 4s ease-in-out infinite',pointerEvents:'none'}}/>}
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div style={{textAlign:'left'}}>
+                  <p style={{margin:0,fontSize:14,fontWeight:800,
+                    color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',
+                    letterSpacing:'0.04em'}}>
+                    {freeLoading?'処理中…': freeUsed?'🎁 本日の無料ガチャは使用済みです':'🎁 1日1回 無料ガチャ'}
+                  </p>
+                  {freeUsed&&freeNextReset&&(
+                    <p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>
+                      リセット: {new Date(freeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                    </p>
+                  )}
+                  {!freeUsed&&(
+                    <p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なし・通常ガチャと同じ演出</p>
+                  )}
+                </div>
+                {!freeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
+              </div>
+            </button>
 
             {/* Buttons */}
             <div style={{display:'flex',gap:10,marginBottom:8}}>
