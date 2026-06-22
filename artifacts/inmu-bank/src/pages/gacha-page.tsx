@@ -18,14 +18,18 @@ type HistRow = {
   inmuSentStatus:string; wasGuaranteed:boolean; costPoints:number; createdAt:string
 }
 
-/* ─── デザイントークン ─── */
-const GOLD     = 'linear-gradient(145deg,#7c5a00,#b8860b 25%,#daa520 50%,#b8860b 75%,#7c5a00)'
-const GOLD_BTN = 'linear-gradient(145deg,#5c3e00,#a07010 30%,#c89010 50%,#a07010 70%,#5c3e00)'
-const RED_BTN  = 'linear-gradient(145deg,#4a0000,#880000 30%,#c01818 50%,#880000 70%,#4a0000)'
-const METAL    = 'linear-gradient(180deg,#3a3020 0%,#2a2010 50%,#1a1208 100%)'
-const DOME_BG  = 'radial-gradient(circle at 42% 36%,#241c3e 0%,#120e20 55%,#080512 100%)'
-const SPACE_BG = 'radial-gradient(ellipse at 50% 20%,#1e0848 0%,#0d0520 45%,#040210 100%)'
-const PAGE_BG  = '#070412'
+/* ─── デザイントークン（メタリック / プレミアム）─── */
+// 研磨された金メタル：暗→明→暗の多段グラデで光沢を表現
+const GOLD      = 'linear-gradient(135deg,#2e2000 0%,#7a5808 14%,#f4dd84 32%,#caa028 46%,#f8e89c 56%,#9a7410 74%,#3a2800 100%)'
+const GOLD_EDGE = 'linear-gradient(180deg,#ffe9a0,#daa520 38%,#7c5a00 72%,#3a2800)'
+const GOLD_BTN  = 'linear-gradient(180deg,#f0d472 0%,#cda02a 32%,#a87a12 60%,#6e4d06 100%)'
+const GOLD_BTN_DK = '#4a3300'
+const RED_BTN   = 'linear-gradient(180deg,#e85858 0%,#c01818 32%,#8a0a0a 62%,#4a0000 100%)'
+const RED_BTN_DK = '#3a0000'
+const METAL     = 'linear-gradient(180deg,#4c4332 0%,#322a1a 22%,#221b0e 55%,#120c05 100%)'
+const DOME_BG   = 'radial-gradient(circle at 42% 34%,#2a2148 0%,#150f28 50%,#080512 100%)'
+const SPACE_BG  = 'radial-gradient(ellipse at 50% 20%,#1e0848 0%,#0d0520 45%,#040210 100%)'
+const PAGE_BG   = 'radial-gradient(ellipse at 50% 0%,#120a22 0%,#0a0614 45%,#050310 100%)'
 
 const BALLS = [
   { id:'pts100',  label:'100pt',       rate:'88%', grad:'radial-gradient(circle at 35% 32%,#c8d0d0,#404848)', glow:'#90a0a0' },
@@ -68,33 +72,55 @@ const CSS = `
   @keyframes ga-reveal { from{transform:scale(.6)translateY(20px);opacity:0} to{transform:scale(1)translateY(0);opacity:1} }
   @keyframes ga-card   { from{transform:translateY(14px);opacity:0} to{transform:translateY(0);opacity:1} }
   @keyframes ga-bounce { 0%,100%{transform:translateY(0)} 40%{transform:translateY(-24px)} 70%{transform:translateY(-10px)} }
+  @keyframes ga-shine  { 0%{transform:translateX(-160%)skewX(-20deg)} 55%,100%{transform:translateX(320%)skewX(-20deg)} }
+  @keyframes ga-glint  { 0%,100%{opacity:.25;transform:scale(.9)} 50%{opacity:.85;transform:scale(1.05)} }
+  @keyframes ga-domeglow{0%,100%{box-shadow:0 18px 50px -8px rgba(0,0,0,.9),0 0 44px rgba(184,134,11,.4),inset 0 0 80px rgba(0,0,0,.85),inset 0 6px 26px rgba(255,255,255,.12)} 50%{box-shadow:0 18px 50px -8px rgba(0,0,0,.9),0 0 70px rgba(218,165,32,.6),inset 0 0 80px rgba(0,0,0,.85),inset 0 6px 30px rgba(255,255,255,.18)}}
   .ga-float{animation:ga-float 2.6s ease-in-out infinite}
   .ga-pulse{animation:ga-pulse 2s ease-in-out infinite}
   .ga-glow{animation:ga-glow 1.3s ease-in-out infinite}
   .ga-reveal{animation:ga-reveal .4s ease-out forwards}
+  .ga-domeglow{animation:ga-domeglow 3s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){
+    .ga-float,.ga-pulse,.ga-glow,.ga-domeglow{animation:none!important}
+  }
 `
 
-/* ═══════ ガチャマシン（スタンドアロンコンポーネント）═══════ */
+/* ═══════ ガチャ筐体（3D風 / メタリック・ガラスドーム）═══════ */
 function Machine({ size=280 }: { size?:number }) {
-  const body = Math.round(size * .85)
+  const body = Math.round(size * .82)
   const dome = size
+  const fw   = Math.max(4, Math.round(dome*.022))   // フレーム太さ
+
   return (
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',width:size}}>
-      {/* アーチ */}
-      <div style={{width:dome,height:Math.round(dome*.12),background:GOLD,
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',width:size,
+      filter:'drop-shadow(0 24px 30px rgba(0,0,0,.7))'}}>
+
+      {/* ── アーチ（メタル）── */}
+      <div style={{width:dome,height:Math.round(dome*.13),
+        background:GOLD,backgroundSize:'200% 100%',
         borderRadius:`${dome*.5}px ${dome*.5}px 0 0`,
-        boxShadow:'0 -4px 20px rgba(218,165,32,.6)',
-        display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <span style={{fontSize:Math.round(dome*.046),color:'#ffe080',fontWeight:900,letterSpacing:'0.2em'}}>
+        boxShadow:'0 -3px 18px rgba(218,165,32,.55),inset 0 3px 4px rgba(255,238,170,.6),inset 0 -4px 8px rgba(0,0,0,.5)',
+        display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden',zIndex:4}}>
+        {/* 光沢スイープ */}
+        <div style={{position:'absolute',top:0,left:0,width:'30%',height:'100%',
+          background:'linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent)',
+          animation:'ga-shine 4.5s ease-in-out infinite'}} />
+        <span style={{fontSize:Math.round(dome*.05),color:'#fff6d8',fontWeight:900,letterSpacing:'0.22em',
+          textShadow:'0 1px 2px rgba(0,0,0,.6),0 0 10px rgba(255,230,140,.6)',position:'relative',zIndex:2}}>
           ★★ INMU ★★
         </span>
       </div>
 
-      {/* ドーム */}
-      <div style={{width:dome,height:dome,background:DOME_BG,
-        border:'5px solid #b8860b',borderTop:'none',
-        boxShadow:'0 0 50px rgba(184,134,11,.5),inset 0 0 80px rgba(0,0,0,.85)',
-        position:'relative',overflow:'hidden',
+      {/* ── 首リング（接合部の金属帯）── */}
+      <div style={{width:dome*.96,height:Math.round(dome*.04),background:GOLD_EDGE,
+        boxShadow:'inset 0 2px 2px rgba(255,238,170,.6),inset 0 -2px 3px rgba(0,0,0,.55),0 2px 6px rgba(0,0,0,.5)',
+        zIndex:5,marginTop:-2}} />
+
+      {/* ── ガラスドーム ── */}
+      <div className="ga-domeglow" style={{width:dome,height:dome,background:DOME_BG,
+        border:`${fw}px solid transparent`,borderTop:'none',
+        borderImage:`${GOLD_EDGE} 1`,
+        position:'relative',overflow:'hidden',marginTop:-2,
         display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
 
         {/* 星 */}
@@ -104,76 +130,184 @@ function Machine({ size=280 }: { size?:number }) {
           s: [2.4,1.6,2.6,1.8,2,2.4,1.4,2.2,1.8,1.6,2,1.6,1.8,1.4,2.2,1.6][i],
         })).map((s,i)=>(
           <div key={i} className="absolute rounded-full bg-white"
-            style={{left:s.x,top:s.y,width:s.s,height:s.s,
+            style={{left:s.x,top:s.y,width:s.s,height:s.s,zIndex:1,
               animation:`ga-star ${1.4+i*.2}s ease-in-out ${i*.17}s infinite`}} />
         ))}
 
-        {/* コイン（中央浮遊） */}
-        <img src={coinImg} alt="" className="ga-float rounded-full object-cover"
-          style={{width:dome*.36,height:dome*.36,
-            border:`${Math.max(3,dome*.012)}px solid #daa520`,
-            boxShadow:'0 0 36px rgba(218,165,32,.95),inset 0 2px 8px rgba(255,255,255,.3)',
-            position:'relative',zIndex:5,marginTop:'-8%'}} />
+        {/* コイン（中央浮遊 + 台座光） */}
+        <div className="ga-float" style={{position:'relative',zIndex:5,marginTop:'-6%',
+          display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <img src={coinImg} alt="" className="rounded-full object-cover"
+            style={{width:dome*.37,height:dome*.37,
+              border:`${Math.max(3,dome*.013)}px solid #f0d472`,
+              boxShadow:'0 0 40px rgba(255,215,0,.9),0 10px 20px rgba(0,0,0,.6),inset 0 3px 10px rgba(255,255,255,.45)'}} />
+          {/* 床の反射 */}
+          <div style={{width:dome*.34,height:dome*.07,marginTop:dome*.03,borderRadius:'50%',
+            background:'radial-gradient(ellipse,rgba(255,215,0,.4),transparent 70%)',
+            filter:'blur(3px)'}} />
+        </div>
 
-        {/* キャプセル球（下部に散らばる）*/}
+        {/* キャプセル球（下部・光沢付き）*/}
         {[
-          {x:.05,y:.72,c:BALLS[0].grad,s:.13},{x:.24,y:.78,c:BALLS[1].grad,s:.12},
-          {x:.75,y:.74,c:BALLS[2].grad,s:.14},{x:.87,y:.80,c:BALLS[3].grad,s:.15},
-          {x:.48,y:.82,c:BALLS[0].grad,s:.11},{x:.62,y:.79,c:BALLS[1].grad,s:.10},
+          {x:.05,y:.70,c:BALLS[0].grad,s:.13},{x:.24,y:.78,c:BALLS[1].grad,s:.12},
+          {x:.74,y:.72,c:BALLS[2].grad,s:.14},{x:.86,y:.79,c:BALLS[3].grad,s:.15},
+          {x:.47,y:.83,c:BALLS[0].grad,s:.11},{x:.62,y:.79,c:BALLS[1].grad,s:.10},
         ].map((b,i)=>(
           <div key={i} className="absolute rounded-full" style={{
-            left:b.x*dome, top:b.y*dome,
-            width:b.s*dome, height:b.s*dome,
-            background:b.c,
-            border:'1.5px solid rgba(255,255,255,.22)',
-            boxShadow:'inset 0 2px 5px rgba(255,255,255,.3)',
-          }} />
+            left:b.x*dome, top:b.y*dome, width:b.s*dome, height:b.s*dome,
+            background:b.c, zIndex:3,
+            border:'1px solid rgba(255,255,255,.25)',
+            boxShadow:'inset 0 3px 6px rgba(255,255,255,.45),inset 0 -3px 5px rgba(0,0,0,.4),0 3px 6px rgba(0,0,0,.4)',
+          }}>
+            {/* 球のハイライト */}
+            <div style={{position:'absolute',top:'15%',left:'22%',width:'30%',height:'24%',
+              borderRadius:'50%',background:'rgba(255,255,255,.7)',filter:'blur(1px)'}} />
+          </div>
         ))}
 
         {/* 1114514 */}
         <p style={{position:'absolute',top:dome*.1,left:'50%',transform:'translateX(-50%)',
           fontSize:dome*.044,fontWeight:700,letterSpacing:'0.22em',fontFamily:'monospace',
-          color:'rgba(218,165,32,.45)',whiteSpace:'nowrap'}}>1114514</p>
+          color:'rgba(218,165,32,.4)',whiteSpace:'nowrap',zIndex:2}}>1114514</p>
+
+        {/* ▼ ガラス反射レイヤー（最前面・触れない） ▼ */}
+        {/* 大きな鏡面ハイライト（左上） */}
+        <div style={{position:'absolute',inset:0,zIndex:8,pointerEvents:'none',
+          background:'radial-gradient(ellipse 55% 40% at 32% 22%,rgba(255,255,255,.32) 0%,rgba(255,255,255,.08) 35%,transparent 60%)'}} />
+        {/* 三日月グレア（上部の弧） */}
+        <div style={{position:'absolute',top:dome*.05,left:'50%',transform:'translateX(-50%)',
+          width:dome*.7,height:dome*.42,zIndex:9,pointerEvents:'none',
+          borderRadius:'50%',
+          background:'linear-gradient(180deg,rgba(255,255,255,.45),transparent 55%)',
+          maskImage:'radial-gradient(ellipse 50% 50% at 50% 120%,transparent 58%,#000 60%)',
+          WebkitMaskImage:'radial-gradient(ellipse 50% 50% at 50% 120%,transparent 58%,#000 60%)'}} />
+        {/* 下部の柔らかい二次反射 */}
+        <div style={{position:'absolute',inset:0,zIndex:8,pointerEvents:'none',
+          background:'radial-gradient(ellipse 45% 30% at 70% 82%,rgba(160,180,255,.12),transparent 60%)'}} />
+        {/* 内側リムライト */}
+        <div style={{position:'absolute',inset:0,zIndex:8,pointerEvents:'none',borderRadius:'inherit',
+          boxShadow:'inset 0 0 30px rgba(255,238,170,.18),inset 0 0 80px rgba(0,0,0,.7)'}} />
       </div>
 
-      {/* ボディ */}
-      <div style={{width:body,background:METAL,border:'4px solid #b8860b',borderTop:'none',position:'relative'}}>
-        {/* INSERT COIN */}
-        <div style={{borderBottom:'1px solid rgba(184,134,11,.35)',display:'flex',
-          alignItems:'center',justifyContent:'center',gap:10,padding:'7px 0'}}>
-          <div style={{width:30,height:20,background:'radial-gradient(circle at 38% 38%,#daa520,#7c5a00)',
-            borderRadius:4,border:'1.5px solid #b8860b',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      {/* ── ボディ（メタル筐体）── */}
+      <div style={{width:body,background:METAL,position:'relative',
+        border:`${fw-1}px solid transparent`,borderTop:'none',borderImage:`${GOLD_EDGE} 1`,
+        boxShadow:'inset 0 2px 4px rgba(255,238,170,.25),inset 0 -6px 12px rgba(0,0,0,.6),0 10px 22px rgba(0,0,0,.5)'}}>
+        {/* 縦ヘアライン質感 */}
+        <div style={{position:'absolute',inset:0,pointerEvents:'none',opacity:.5,
+          background:'repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,transparent 1px 4px)'}} />
+
+        {/* INSERT COIN プレート */}
+        <div style={{borderBottom:'1px solid rgba(184,134,11,.3)',display:'flex',
+          alignItems:'center',justifyContent:'center',gap:10,padding:'8px 0',position:'relative'}}>
+          <div style={{width:32,height:21,background:'radial-gradient(circle at 38% 30%,#f0d472,#7c5a00)',
+            borderRadius:4,border:'1.5px solid #daa520',
+            boxShadow:'inset 0 1px 2px rgba(255,255,255,.5),0 1px 3px rgba(0,0,0,.5)',
+            display:'flex',alignItems:'center',justifyContent:'center'}}>
             <img src={coinImg} alt="" style={{width:15,height:15,borderRadius:'50%',objectFit:'cover'}} />
           </div>
           <div>
-            <p style={{fontSize:8,color:'#b8860b',fontWeight:900,letterSpacing:'0.2em',margin:0}}>INSERT COIN</p>
-            <p style={{fontSize:7,color:'rgba(184,134,11,.65)',margin:0}}>INMU COIN ONLY</p>
+            <p style={{fontSize:8,color:'#e8c860',fontWeight:900,letterSpacing:'0.2em',margin:0,
+              textShadow:'0 1px 1px rgba(0,0,0,.6)'}}>INSERT COIN</p>
+            <p style={{fontSize:7,color:'rgba(184,134,11,.7)',margin:0}}>INMU COIN ONLY</p>
           </div>
         </div>
-        {/* コインドア */}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'8px 0'}}>
-          <div style={{width:60,height:38,background:'radial-gradient(circle at 40% 40%,#c8a050,#7c5a00)',
-            borderRadius:8,border:'2px solid #daa520',boxShadow:'0 0 14px rgba(218,165,32,.45)',
+
+        {/* コイン投入口（凹んだ立体） */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'9px 0',position:'relative'}}>
+          <div style={{width:64,height:40,
+            background:'linear-gradient(180deg,#1a1206,#0a0703)',
+            borderRadius:9,
+            border:'2px solid #b8860b',
+            boxShadow:'inset 0 4px 10px rgba(0,0,0,.85),inset 0 -1px 2px rgba(255,238,170,.25),0 1px 0 rgba(255,238,170,.3)',
             display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <span style={{fontSize:20}}>🪙</span>
+            <div style={{width:40,height:6,borderRadius:3,background:'#000',
+              boxShadow:'inset 0 1px 2px rgba(0,0,0,.9),0 1px 0 rgba(218,165,32,.4)'}} />
           </div>
         </div>
-        {/* レバー */}
-        <div style={{position:'absolute',right:-22,top:6,display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <div style={{width:16,height:16,borderRadius:'50%',background:'radial-gradient(circle at 38% 35%,#daa520,#7c5a00)',
-            border:'2px solid #b8860b',boxShadow:'0 0 12px rgba(218,165,32,.7)'}} />
-          <div style={{width:6,height:36,background:GOLD,borderRadius:4}} />
-          <div style={{width:14,height:10,background:'linear-gradient(to bottom,#b8860b,#7c5a00)',borderRadius:3}} />
+
+        {/* ── レバー（3D） ── */}
+        <div style={{position:'absolute',right:-24,top:'30%',display:'flex',flexDirection:'column',alignItems:'center',zIndex:6}}>
+          <div style={{width:20,height:20,borderRadius:'50%',
+            background:'radial-gradient(circle at 34% 30%,#fff0b0,#daa520 45%,#6e4d06)',
+            border:'1.5px solid #7c5a00',
+            boxShadow:'0 0 14px rgba(218,165,32,.7),inset 0 2px 3px rgba(255,255,255,.6),0 3px 5px rgba(0,0,0,.5)'}} />
+          <div style={{width:7,height:38,background:GOLD_EDGE,borderRadius:4,
+            boxShadow:'inset 1px 0 1px rgba(255,255,255,.5),inset -1px 0 2px rgba(0,0,0,.5)'}} />
+          <div style={{width:16,height:11,background:'linear-gradient(180deg,#daa520,#6e4d06)',borderRadius:3,
+            boxShadow:'0 2px 4px rgba(0,0,0,.5)'}} />
         </div>
       </div>
 
-      {/* ベース */}
-      <div style={{width:dome,height:Math.round(dome*.11),
-        background:'linear-gradient(180deg,#2a2010,#151008)',
-        border:'4px solid #b8860b',borderTop:'none',
-        borderRadius:`0 0 ${dome*.08}px ${dome*.08}px`,
-        boxShadow:'0 8px 30px rgba(0,0,0,.75)'}} />
+      {/* ── ベース（厚み・接地影）── */}
+      <div style={{width:dome,height:Math.round(dome*.13),
+        background:'linear-gradient(180deg,#3a2e18 0%,#1a1208 55%,#0a0602 100%)',
+        border:`${fw-1}px solid transparent`,borderTop:'none',borderImage:`${GOLD_EDGE} 1`,
+        borderRadius:`0 0 ${dome*.09}px ${dome*.09}px`,
+        boxShadow:'inset 0 3px 4px rgba(255,238,170,.3),inset 0 -8px 14px rgba(0,0,0,.7),0 14px 28px rgba(0,0,0,.65)',
+        position:'relative'}}>
+        <div style={{position:'absolute',bottom:-Math.round(dome*.04),left:'8%',width:'84%',height:dome*.05,
+          borderRadius:'50%',background:'rgba(0,0,0,.55)',filter:'blur(7px)'}} />
+      </div>
     </div>
+  )
+}
+
+/* ═══════ 立体ガチャボタン（3Dベベル + 押下）═══════ */
+function Spin3DButton({ enabled, onClick, face, edge, rim, textCol, title, sub }:{
+  enabled:boolean; onClick:()=>void; face:string; edge:string
+  rim:string; textCol:string; title:string; sub:string
+}) {
+  const [pressed, setPressed] = useState(false)
+  const lift = enabled ? (pressed ? 2 : 7) : 0
+  return (
+    <button
+      type="button"
+      onClick={onClick} disabled={!enabled}
+      onPointerDown={()=>setPressed(true)}
+      onPointerUp={()=>setPressed(false)}
+      onPointerLeave={()=>setPressed(false)}
+      onKeyDown={e=>{ if(e.key==='Enter'||e.key===' ') setPressed(true) }}
+      onKeyUp={e=>{ if(e.key==='Enter'||e.key===' ') setPressed(false) }}
+      onBlur={()=>setPressed(false)}
+      style={{
+        flex:1, position:'relative', border:'none', padding:0,
+        borderRadius:16, cursor:enabled?'pointer':'not-allowed',
+        background: enabled ? edge : '#15110a',
+        boxShadow: enabled
+          ? `0 ${lift+4}px ${lift+6}px rgba(0,0,0,.5)`
+          : 'none',
+        transition:'box-shadow .08s ease',
+        opacity: enabled ? 1 : .4,
+      }}>
+      {/* フェイス（押下で下がる） */}
+      <div style={{
+        display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+        padding:'13px 0', borderRadius:16,
+        background: enabled ? face : '#1a1510',
+        transform:`translateY(-${lift}px)`,
+        transition:'transform .08s ease',
+        border:`1.5px solid ${enabled?rim:'rgba(255,255,255,.08)'}`,
+        boxShadow: enabled
+          ? `inset 0 2px 1px ${rim}, inset 0 -4px 8px rgba(0,0,0,.35)`
+          : 'none',
+      }}>
+        {/* 上部グレア */}
+        {enabled&&(
+          <div style={{position:'absolute',top:2,left:'8%',width:'84%',height:'34%',
+            borderRadius:14,pointerEvents:'none',
+            background:'linear-gradient(180deg,rgba(255,255,255,.4),transparent)'}} />
+        )}
+        <div style={{display:'flex',alignItems:'center',gap:6,position:'relative',zIndex:2}}>
+          <img src={coinImg} alt="" style={{width:20,height:20,borderRadius:'50%',objectFit:'cover',
+            boxShadow:'0 1px 3px rgba(0,0,0,.5)'}} />
+          <span style={{fontWeight:900,fontSize:16,color:enabled?textCol:'rgba(255,255,255,.5)',
+            textShadow:enabled?'0 1px 1px rgba(255,255,255,.3)':'none'}}>{title}</span>
+        </div>
+        <span style={{fontSize:12,fontWeight:800,marginTop:2,position:'relative',zIndex:2,
+          color:enabled?textCol:'rgba(255,255,255,.4)',opacity:.85}}>{sub}</span>
+      </div>
+    </button>
   )
 }
 
@@ -228,6 +362,7 @@ export function GachaPage() {
     if (phase==='done' && result && result.results.length>1 && revIdx<result.results.length) {
       const t=setTimeout(()=>setRevIdx(i=>i+1),160); return ()=>clearTimeout(t)
     }
+    return undefined
   },[phase,result,revIdx])
 
   async function spin(type:'single'|'multi') {
@@ -397,45 +532,20 @@ export function GachaPage() {
           </div>
         </div>
 
-        {/* 1連 / 10連 ボタン */}
-        <div style={{display:'flex',gap:10}}>
-          <button onClick={()=>spin('single')} disabled={pts<1000||ptsLoading}
-            style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',
-              justifyContent:'center',padding:'14px 0',borderRadius:14,
-              background:pts>=1000&&!ptsLoading?GOLD_BTN:'#1a1400',
-              border:`2px solid ${pts>=1000&&!ptsLoading?'rgba(218,165,32,.85)':'rgba(184,134,11,.3)'}`,
-              boxShadow:pts>=1000&&!ptsLoading?'0 4px 24px rgba(184,134,11,.5),inset 0 1px 0 rgba(255,255,255,.18)':'none',
-              opacity:pts<1000||ptsLoading?.35:1,cursor:pts<1000||ptsLoading?'not-allowed':'pointer',
-              transition:'transform .1s',}}>
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <img src={coinImg} alt="" style={{width:20,height:20,borderRadius:'50%',objectFit:'cover'}} />
-              <span style={{fontWeight:900,fontSize:16,color:'#fff8e1',textShadow:'0 1px 6px rgba(0,0,0,.8)'}}>
-                1連ガチャ
-              </span>
-            </div>
-            <span style={{fontSize:12,fontWeight:700,color:'rgba(255,248,225,.7)',marginTop:2}}>
-              1,000 pt
-            </span>
-          </button>
-
-          <button onClick={()=>spin('multi')} disabled={pts<10000||ptsLoading}
-            style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',
-              justifyContent:'center',padding:'14px 0',borderRadius:14,
-              background:pts>=10000&&!ptsLoading?RED_BTN:'#1a0000',
-              border:`2px solid ${pts>=10000&&!ptsLoading?'rgba(185,28,28,.85)':'rgba(185,28,28,.3)'}`,
-              boxShadow:pts>=10000&&!ptsLoading?'0 4px 24px rgba(185,28,28,.5),inset 0 1px 0 rgba(255,255,255,.18)':'none',
-              opacity:pts<10000||ptsLoading?.35:1,cursor:pts<10000||ptsLoading?'not-allowed':'pointer',
-              transition:'transform .1s'}}>
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <img src={coinImg} alt="" style={{width:20,height:20,borderRadius:'50%',objectFit:'cover'}} />
-              <span style={{fontWeight:900,fontSize:16,color:'#fff8f8',textShadow:'0 1px 6px rgba(0,0,0,.8)'}}>
-                10連ガチャ
-              </span>
-            </div>
-            <span style={{fontSize:12,fontWeight:700,color:'rgba(255,248,248,.7)',marginTop:2}}>
-              10,000 pt
-            </span>
-          </button>
+        {/* 1連 / 10連 ボタン（立体） */}
+        <div style={{display:'flex',gap:12}}>
+          <Spin3DButton
+            enabled={pts>=1000&&!ptsLoading}
+            onClick={()=>spin('single')}
+            face={GOLD_BTN} edge={GOLD_BTN_DK}
+            rim="rgba(255,238,170,.9)" textCol="#3a2600"
+            title="1連ガチャ" sub="1,000 pt" />
+          <Spin3DButton
+            enabled={pts>=10000&&!ptsLoading}
+            onClick={()=>spin('multi')}
+            face={RED_BTN} edge={RED_BTN_DK}
+            rim="rgba(255,200,200,.9)" textCol="#fff5f5"
+            title="10連ガチャ" sub="10,000 pt" />
         </div>
       </div>
     </AppShell>
