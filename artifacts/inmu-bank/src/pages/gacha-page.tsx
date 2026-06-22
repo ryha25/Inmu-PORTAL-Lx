@@ -118,7 +118,7 @@ const CSS=`
 /* ════ Background ════ */
 function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:boolean}) {
   return (
-    <div style={{height:'100dvh',display:'flex',flexDirection:'column',
+    <div style={{flex:1,display:'flex',flexDirection:'column',
       backgroundImage:`url(${jackpot?jackpotBg:bgImg})`,
       backgroundSize:'cover',backgroundPosition:'center top',position:'relative',overflow:'hidden'}}>
       <div style={{position:'absolute',inset:0,pointerEvents:'none',
@@ -656,71 +656,77 @@ export function GachaPage() {
                   background:'radial-gradient(ellipse,rgba(218,165,32,.22) 0%,transparent 68%)',
                   animation:'ga-glow 1.4s ease-in-out infinite',pointerEvents:'none'}}/>
 
-                {/* ── LEVER ASSEMBLY (centered) ── */}
-                <div style={{position:'absolute',left:'50%',top:'8%',transform:'translateX(-50%)'}}>
+                {/* ── LEVER ASSEMBLY (centered, 3D metallic quality) ── */}
+                <div style={{position:'absolute',left:'50%',top:'5%',transform:'translateX(-50%)'}}>
 
-                  {/* Cylindrical post (tall, gold metallic) */}
+                  {/* Cylindrical post — deep metallic gold gradient for 3D cylinder look */}
                   <div style={{
-                    width:54,height:196,borderRadius:14,position:'relative',
-                    background:'linear-gradient(90deg,#1a0e00 0%,#8a5c00 12%,#d4a020 26%,#ffe060 36%,#d4a020 50%,#8a5c00 66%,#1e1000 100%)',
-                    boxShadow:'inset -6px 0 16px rgba(0,0,0,.62),inset 5px 0 10px rgba(255,230,80,.18),6px 0 26px rgba(0,0,0,.7)'
+                    width:56,height:210,borderRadius:16,position:'relative',
+                    background:'linear-gradient(90deg,#040200 0%,#1c1000 4%,#3a2200 9%,#6a3c00 14%,#a06010 20%,#c88820 26%,#e8b830 31%,#ffe860 36%,#fff8d0 40%,#ffe860 44%,#e0a820 50%,#b87800 57%,#8a5200 64%,#5a3200 72%,#2a1800 82%,#100800 92%,#040200 100%)',
+                    boxShadow:'inset -8px 0 20px rgba(0,0,0,.7),inset 8px 0 12px rgba(255,230,80,.12),10px 0 32px rgba(0,0,0,.8),-2px 0 8px rgba(0,0,0,.6)'
                   }}>
 
-                    {/* Decorative rings on post */}
-                    {[0,1,2].map(i=>(
+                    {/* Decorative metallic bands on post */}
+                    {[0,1,2,3].map(i=>(
                       <div key={i} style={{
-                        position:'absolute',left:-5,top:28+i*54,width:64,height:16,
-                        borderRadius:8,
-                        background:'linear-gradient(180deg,#ffe068 0%,#c89000 60%,#8a5c00 100%)',
-                        boxShadow:'0 0 10px rgba(218,165,32,.55),inset 0 2px 4px rgba(255,255,180,.3)'
+                        position:'absolute',left:-7,top:22+i*48,width:70,height:18,
+                        borderRadius:9,
+                        background:'linear-gradient(180deg,#0a0600 0%,#3a2400 10%,#8a5800 22%,#c89010 34%,#ffe060 44%,#fff8c8 50%,#ffe060 56%,#c89010 66%,#8a5800 78%,#3a2400 90%,#0a0600 100%)',
+                        boxShadow:'0 0 14px rgba(218,165,32,.6),0 3px 8px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,200,.4)'
                       }}/>
                     ))}
 
-                    {/* ── LEVER ARM (rotates from near top of post) ── */}
+                    {/* ── LEVER ARM (pivots from post top-right) ── */}
                     <div style={{
-                      position:'absolute',top:22,left:'100%',
-                      transformOrigin:'0px 15px',
+                      position:'absolute',top:20,left:'100%',
+                      transformOrigin:'0px 14px',
                       animation:'ga-leverrot2 .92s ease-in-out .1s forwards'
                     }}>
-                      {/* Arm rod */}
+                      {/* Arm rod — cylindrical tube */}
                       <div style={{
-                        width:118,height:22,borderRadius:11,
-                        background:'linear-gradient(180deg,#ffe068 0%,#c89000 46%,#7a4a00 100%)',
-                        boxShadow:'0 5px 20px rgba(0,0,0,.65)',position:'relative'
+                        width:122,height:24,borderRadius:12,
+                        background:'linear-gradient(180deg,#080400 0%,#3a2200 8%,#8a5800 18%,#c89010 30%,#ffe060 42%,#fff8c0 50%,#ffe060 58%,#c09000 70%,#8a5800 82%,#3a2200 94%,#080400 100%)',
+                        boxShadow:'0 6px 24px rgba(0,0,0,.72),0 2px 6px rgba(0,0,0,.5)',position:'relative'
                       }}>
-                        {/* Large knob at end of arm */}
+                        {/* Arm knob — 3D metallic sphere with specular highlight */}
                         <div style={{
-                          position:'absolute',right:-30,top:-22,
-                          width:66,height:66,borderRadius:'50%',
-                          background:'radial-gradient(ellipse at 32% 26%,#fff8d0 0%,#ffe060 18%,#c89000 42%,#7a4a00 70%,#2a1400 100%)',
-                          boxShadow:'0 0 38px rgba(218,165,32,.94),0 6px 18px rgba(0,0,0,.7),inset -4px -4px 12px rgba(0,0,0,.5)'
-                        }}/>
+                          position:'absolute',right:-32,top:-23,
+                          width:70,height:70,borderRadius:'50%',
+                          background:'radial-gradient(ellipse at 28% 22%,#ffffff 0%,#fff8e0 5%,#ffe860 15%,#daa820 34%,#b07000 55%,#7a4800 74%,#2a1400 94%)',
+                          boxShadow:'0 0 44px rgba(218,165,32,.96),0 8px 22px rgba(0,0,0,.78),inset -5px -5px 14px rgba(0,0,0,.6),inset 2px 2px 6px rgba(255,255,200,.4)'
+                        }}>
+                          {/* Sphere secondary highlight */}
+                          <div style={{position:'absolute',top:12,left:14,width:12,height:7,borderRadius:'50%',background:'rgba(255,255,255,.35)',transform:'rotate(-30deg)'}}/>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Bottom knob of post */}
+                    {/* Bottom knob — large 3D metallic sphere */}
                     <div style={{
-                      position:'absolute',bottom:-20,left:'50%',transform:'translateX(-50%)',
-                      width:74,height:44,borderRadius:'50%',
-                      background:'radial-gradient(ellipse at 34% 28%,#fff8d0 0%,#ffe060 18%,#c89000 42%,#7a4a00 72%)',
-                      boxShadow:'0 0 26px rgba(218,165,32,.8),0 6px 16px rgba(0,0,0,.65),inset -3px -3px 10px rgba(0,0,0,.5)'
-                    }}/>
+                      position:'absolute',bottom:-26,left:'50%',transform:'translateX(-50%)',
+                      width:76,height:76,borderRadius:'50%',
+                      background:'radial-gradient(ellipse at 28% 22%,#ffffff 0%,#fff8e0 5%,#ffe860 15%,#daa820 34%,#b07000 55%,#7a4800 74%,#2a1400 94%)',
+                      boxShadow:'0 0 32px rgba(218,165,32,.84),0 8px 20px rgba(0,0,0,.75),inset -5px -5px 14px rgba(0,0,0,.6),inset 2px 2px 6px rgba(255,255,200,.4)'
+                    }}>
+                      <div style={{position:'absolute',top:13,left:14,width:13,height:8,borderRadius:'50%',background:'rgba(255,255,255,.38)',transform:'rotate(-30deg)'}}/>
+                    </div>
                   </div>
 
-                  {/* Large curved rotation arrow */}
+                  {/* Large rotation arrow — bold & glowing */}
                   <div style={{
-                    position:'absolute',bottom:-46,right:-88,
-                    fontSize:92,lineHeight:1,color:'rgba(218,165,32,.86)',fontWeight:900,
-                    textShadow:'0 0 28px rgba(218,165,32,.72)',
-                    transform:'scaleX(.88)'
+                    position:'absolute',bottom:-54,right:-96,
+                    fontSize:100,lineHeight:1,
+                    color:'rgba(218,165,32,.9)',fontWeight:900,
+                    textShadow:'0 0 32px rgba(218,165,32,.8),0 0 64px rgba(218,165,32,.4)',
+                    transform:'scaleX(.86)'
                   }}>↷</div>
                 </div>
 
                 {/* Gold sparkles */}
-                {[{l:'68%',t:'28%'},{l:'78%',t:'42%'},{l:'62%',t:'52%'},{l:'72%',t:'60%'}].map((p,i)=>(
+                {[{l:'68%',t:'26%'},{l:'80%',t:'40%'},{l:'62%',t:'54%'},{l:'76%',t:'64%'}].map((p,i)=>(
                   <span key={i} style={{position:'absolute',left:p.l,top:p.t,
-                    fontSize:13+i*2,color:'#ffd700',
-                    textShadow:'0 0 12px rgba(255,215,0,.95)',
+                    fontSize:14+i*2,color:'#ffd700',
+                    textShadow:'0 0 14px rgba(255,215,0,.98)',
                     animation:`ga-sparkle ${.52+i*.18}s ease-in-out ${i*.14}s infinite`}}>✦</span>
                 ))}
               </div>
@@ -751,66 +757,72 @@ export function GachaPage() {
                     animation:`ga-particle ${1.6+i*.28}s ease-in-out ${i*.34}s infinite`}}/>
                 ))}
 
-                {/* Light beam — BOTTOM to TOP (beam source is below) */}
-                <div style={{position:'absolute',left:'calc(50% - 42px)',bottom:0,
-                  width:84,height:'96%',
-                  background:'linear-gradient(0deg,rgba(255,220,80,.72) 0%,rgba(218,165,32,.44) 28%,rgba(180,120,10,.22) 58%,rgba(100,60,0,.08) 78%,transparent 96%)',
-                  filter:'blur(4px)',
-                  animation:'ga-spotlight 3s ease-in-out infinite'}}/>
-
-                {/* Bright core beam */}
-                <div style={{position:'absolute',left:'calc(50% - 14px)',bottom:0,
-                  width:28,height:'88%',
-                  background:'linear-gradient(0deg,rgba(255,245,180,.88) 0%,rgba(255,215,0,.55) 28%,rgba(218,165,32,.22) 60%,transparent 90%)'}}/>
+                {/* ── Cone light beam — wide at ground, narrows going up ── */}
+                {/* Outer soft cone */}
+                <div style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
+                  width:'92%',height:'90%',zIndex:1,
+                  background:'linear-gradient(0deg,rgba(218,165,32,.62) 0%,rgba(218,165,32,.36) 22%,rgba(180,140,10,.18) 50%,rgba(120,90,0,.06) 72%,transparent 88%)',
+                  clipPath:'polygon(14% 100%, 86% 100%, 58% 0%, 42% 0%)',
+                  filter:'blur(14px)'}}/>
+                {/* Mid cone */}
+                <div style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
+                  width:'68%',height:'88%',zIndex:1,
+                  background:'linear-gradient(0deg,rgba(255,230,100,.78) 0%,rgba(255,200,50,.52) 20%,rgba(218,165,32,.26) 50%,rgba(160,120,0,.08) 72%,transparent 88%)',
+                  clipPath:'polygon(22% 100%, 78% 100%, 56% 0%, 44% 0%)',
+                  filter:'blur(7px)'}}/>
+                {/* Bright core */}
+                <div style={{position:'absolute',bottom:0,left:'calc(50% - 18px)',
+                  width:36,height:'82%',zIndex:1,
+                  background:'linear-gradient(0deg,rgba(255,255,200,.92) 0%,rgba(255,240,120,.68) 20%,rgba(218,165,32,.38) 55%,transparent 84%)'}}/>
 
                 {/* Orbiting INMU coins */}
                 {[0,-0.65,-1.3,-1.95].map((delay,i)=>(
                   <div key={i} style={{
-                    position:'absolute',left:'50%',top:'46%',
+                    position:'absolute',left:'50%',top:'44%',zIndex:6,
                     animation:`ga-orbit ${2.6+i*.18}s linear ${delay}s infinite`}}>
                     <img src={coinImg} style={{
                       position:'absolute',left:52+i*10,top:-14,
                       width:28,height:28,borderRadius:'50%',objectFit:'cover',
                       border:`${i<2?2:1.5}px solid #daa520`,
-                      boxShadow:`0 0 ${14+i*4}px rgba(218,165,32,${i<2?.88:.7})`}}/>
+                      boxShadow:`0 0 ${16+i*4}px rgba(218,165,32,${i<2?.9:.72})`}}/>
                   </div>
                 ))}
 
-                {/* Circular ground rings (light converges here) */}
-                {[210,162,118].map((w,i)=>(
-                  <div key={i} style={{position:'absolute',bottom:10-i*3,left:'50%',
+                {/* Circular ground rings */}
+                {[214,166,122].map((w,i)=>(
+                  <div key={i} style={{position:'absolute',bottom:8-i*3,left:'50%',
                     transform:'translateX(-50%)',
-                    width:w,height:Math.round(w*.18),borderRadius:'50%',
-                    border:`${2-i*.55}px solid rgba(218,165,32,${.72-i*.18})`,
-                    boxShadow:`0 0 ${22-i*5}px rgba(218,165,32,${.52-i*.1}),inset 0 0 ${10-i*2}px rgba(218,165,32,.18)`}}/>
+                    width:w,height:Math.round(w*.17),borderRadius:'50%',
+                    border:`${2.2-i*.6}px solid rgba(218,165,32,${.78-i*.2})`,
+                    boxShadow:`0 0 ${24-i*5}px rgba(218,165,32,${.55-i*.12}),inset 0 0 ${12-i*3}px rgba(218,165,32,.2)`,
+                    zIndex:2}}/>
                 ))}
 
-                {/* Ground glow */}
-                <div style={{position:'absolute',bottom:0,left:'8%',width:'84%',height:42,
-                  background:'radial-gradient(ellipse,rgba(218,165,32,.62) 0%,rgba(218,165,32,.25) 48%,transparent 70%)',
-                  filter:'blur(8px)'}}/>
+                {/* Ground glow pool */}
+                <div style={{position:'absolute',bottom:0,left:'6%',width:'88%',height:48,
+                  background:'radial-gradient(ellipse,rgba(255,200,0,.68) 0%,rgba(218,165,32,.32) 44%,transparent 70%)',
+                  filter:'blur(9px)',zIndex:2}}/>
 
-                {/* Glass orb materializes — transparent glass sphere with mascot + inner glow */}
+                {/* ── Amber glass orb materializes (warm golden glow) ── */}
                 <div style={{position:'absolute',bottom:'22%',left:'50%',transform:'translateX(-50%)',
                   animation:'ga-reveal .7s ease-out .32s both',zIndex:8}}>
-                  <div style={{position:'relative',width:100,height:100,borderRadius:'50%',
-                    background:'radial-gradient(ellipse at 36% 30%, rgba(255,255,255,.72) 0%, rgba(220,235,255,.3) 22%, rgba(160,190,230,.1) 46%, rgba(80,110,180,.08) 70%, rgba(15,20,50,.18) 100%)',
-                    border:'1.5px solid rgba(180,210,255,.32)',
-                    boxShadow:'0 0 56px rgba(218,165,32,.82),0 0 24px rgba(218,165,32,.48),inset 0 -3px 14px rgba(100,140,220,.14),inset 4px 4px 12px rgba(255,255,255,.26)'}}>
-                    {/* Top-left glass highlight */}
-                    <div style={{position:'absolute',top:9,left:13,width:26,height:15,borderRadius:'50%',
-                      background:'rgba(255,255,255,.6)',transform:'rotate(-24deg)'}}/>
-                    {/* Secondary small highlight */}
-                    <div style={{position:'absolute',top:22,left:10,width:10,height:6,borderRadius:'50%',
-                      background:'rgba(255,255,255,.36)',transform:'rotate(-18deg)'}}/>
-                    {/* Inner gold glow (bottom center) */}
-                    <div style={{position:'absolute',bottom:14,left:'50%',transform:'translateX(-50%)',
+                  <div style={{position:'relative',width:96,height:96,borderRadius:'50%',
+                    background:'radial-gradient(ellipse at 34% 28%, rgba(255,255,220,.92) 0%, rgba(255,220,100,.68) 22%, rgba(220,150,20,.44) 46%, rgba(140,80,0,.30) 68%, rgba(50,25,0,.52) 100%)',
+                    border:'1.5px solid rgba(255,200,80,.44)',
+                    boxShadow:'0 0 56px rgba(218,165,32,.88),0 0 28px rgba(255,180,0,.62),inset -4px -4px 16px rgba(80,40,0,.52),inset 4px 4px 10px rgba(255,240,120,.34)'}}>
+                    {/* Specular highlight */}
+                    <div style={{position:'absolute',top:9,left:13,width:24,height:14,borderRadius:'50%',
+                      background:'rgba(255,255,255,.65)',transform:'rotate(-24deg)'}}/>
+                    <div style={{position:'absolute',top:21,left:10,width:9,height:5,borderRadius:'50%',
+                      background:'rgba(255,255,255,.4)',transform:'rotate(-18deg)'}}/>
+                    {/* Inner amber glow */}
+                    <div style={{position:'absolute',bottom:12,left:'50%',transform:'translateX(-50%)',
                       width:40,height:20,borderRadius:'50%',
-                      background:'rgba(218,165,32,.38)',filter:'blur(5px)'}}/>
-                    {/* Mascot inside orb */}
-                    <div style={{position:'absolute',inset:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      background:'rgba(255,180,0,.48)',filter:'blur(5px)'}}/>
+                    {/* Mascot */}
+                    <div style={{position:'absolute',inset:9,display:'flex',alignItems:'center',justifyContent:'center'}}>
                       <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
-                        opacity:.8,filter:'drop-shadow(0 2px 8px rgba(0,0,0,.6))'}}/>
+                        opacity:.82,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
                     </div>
                   </div>
                 </div>
@@ -860,30 +872,40 @@ export function GachaPage() {
                     opacity:.6}}/>
                 ))}
 
-                {/* Falling glass orb + mascot — transparent glass sphere */}
+                {/* Falling amber glass orb + mascot */}
                 <div style={{position:'absolute',left:0,right:0,
                   display:'flex',justifyContent:'center',zIndex:8,
                   animation:'ga-capland 1.05s ease-in forwards'}}>
-                  <div style={{position:'relative',width:110,height:110,borderRadius:'50%',
-                    background:'radial-gradient(ellipse at 36% 30%, rgba(255,255,255,.7) 0%, rgba(215,232,255,.28) 22%, rgba(150,185,230,.1) 46%, rgba(70,105,175,.07) 70%, rgba(10,18,45,.16) 100%)',
-                    border:'1.5px solid rgba(180,210,255,.35)',
-                    boxShadow:'0 0 66px rgba(218,165,32,.92),0 0 30px rgba(218,165,32,.55),inset 0 -3px 16px rgba(100,140,220,.13),inset 4px 4px 14px rgba(255,255,255,.28)'}}>
-                    {/* Top-left glass highlight */}
-                    <div style={{position:'absolute',top:11,left:15,width:28,height:17,borderRadius:'50%',
-                      background:'rgba(255,255,255,.62)',transform:'rotate(-24deg)'}}/>
-                    {/* Secondary highlight */}
-                    <div style={{position:'absolute',top:24,left:11,width:11,height:7,borderRadius:'50%',
-                      background:'rgba(255,255,255,.38)',transform:'rotate(-18deg)'}}/>
-                    {/* Inner gold glow */}
-                    <div style={{position:'absolute',bottom:16,left:'50%',transform:'translateX(-50%)',
-                      width:44,height:22,borderRadius:'50%',
-                      background:'rgba(218,165,32,.42)',filter:'blur(5px)'}}/>
+                  <div style={{position:'relative',width:112,height:112,borderRadius:'50%',
+                    background:'radial-gradient(ellipse at 34% 28%, rgba(255,255,220,.94) 0%, rgba(255,220,100,.70) 22%, rgba(220,150,20,.46) 46%, rgba(140,80,0,.30) 68%, rgba(50,25,0,.54) 100%)',
+                    border:'1.5px solid rgba(255,200,80,.46)',
+                    boxShadow:'0 0 68px rgba(218,165,32,.92),0 0 32px rgba(255,180,0,.65),inset -5px -5px 18px rgba(80,40,0,.54),inset 4px 4px 12px rgba(255,240,120,.36)'}}>
+                    {/* Specular highlight */}
+                    <div style={{position:'absolute',top:11,left:15,width:28,height:16,borderRadius:'50%',
+                      background:'rgba(255,255,255,.68)',transform:'rotate(-24deg)'}}/>
+                    <div style={{position:'absolute',top:24,left:11,width:11,height:6,borderRadius:'50%',
+                      background:'rgba(255,255,255,.42)',transform:'rotate(-18deg)'}}/>
+                    {/* Inner amber glow */}
+                    <div style={{position:'absolute',bottom:14,left:'50%',transform:'translateX(-50%)',
+                      width:46,height:22,borderRadius:'50%',
+                      background:'rgba(255,180,0,.5)',filter:'blur(5px)'}}/>
                     {/* Mascot inside */}
                     <div style={{position:'absolute',inset:11,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <img src={mascotImg} style={{width:62,height:'auto',objectFit:'contain',
-                        opacity:.82,filter:'drop-shadow(0 2px 8px rgba(0,0,0,.65))'}}/>
+                      <img src={mascotImg} style={{width:64,height:'auto',objectFit:'contain',
+                        opacity:.84,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
                     </div>
                   </div>
+                  {/* Star-burst impact rays radiating from base of orb */}
+                  {Array.from({length:8},(_,i)=>(
+                    <div key={i} style={{
+                      position:'absolute',bottom:-4,left:'50%',
+                      width:2,height:36+i%3*8,
+                      background:'linear-gradient(0deg,rgba(255,200,0,.85) 0%,rgba(218,165,32,.55) 50%,transparent 100%)',
+                      transform:`translateX(-50%) rotate(${i*45}deg)`,
+                      transformOrigin:'50% 100%',
+                      filter:'blur(.6px)',
+                      animation:`ga-glowtext ${.7+i*.08}s ease-in-out ${i*.06}s infinite`}}/>
+                  ))}
                 </div>
 
                 {/* Shockwave rings on landing */}
