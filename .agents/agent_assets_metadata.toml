@@ -24,3 +24,9 @@ id = "jfqlkvX06FmadwrIWuacP"
 uri = "file://attached_assets/generated_images/gacha-jackpot-bg.png"
 type = "image"
 title = "gacha jackpot background"
+
+[[generated]]
+id = "2bdtHel4xdByXxgWisR5P"
+uri = "file://attached_assets/generated_images/ultra_premium_gacha_capsule_2dd9.png"
+type = "image"
+title = "generated_image"
