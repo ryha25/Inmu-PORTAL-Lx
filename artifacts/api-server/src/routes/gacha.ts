@@ -15,7 +15,6 @@ const PRIZES = [
 ] as const;
 type Prize = (typeof PRIZES)[number];
 
-// 確定演出の発生確率（1/114）
 const GUARANTEED_RATE = 1 / 114;
 
 function rollPrize(): Prize {
@@ -39,7 +38,7 @@ function rollMany(count: number, guaranteed: boolean): Prize[] {
   return results;
 }
 
-// ── DB テーブル初期化 + 列追加マイグレーション ──
+// ── DB テーブル初期化 ──
 async function ensureTable() {
   try {
     await pool.query(`
@@ -59,7 +58,6 @@ async function ensureTable() {
         "createdAt"      TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
-    // 新列（既存テーブル用マイグレーション）
     await pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "isFree"        BOOLEAN NOT NULL DEFAULT false`);
     await pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "txHash"        TEXT`);
     await pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "solWallet"     TEXT`);
@@ -68,17 +66,41 @@ async function ensureTable() {
     console.warn("[Gacha] ensureTable:", e instanceof Error ? e.message : e);
   }
 }
+
+// ── INMU当選個別管理テーブル（1当選=1行）──
+async function ensureInmuWinsTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "gachaInmuWins" (
+        id                  SERIAL PRIMARY KEY,
+        "spinId"            INTEGER NOT NULL,
+        "userId"            TEXT    NOT NULL,
+        "pullType"          TEXT    NOT NULL,
+        "inmuAmount"        INTEGER NOT NULL DEFAULT 10000,
+        "inmuSentStatus"    TEXT    NOT NULL DEFAULT 'pending',
+        "inmuSentAt"        TIMESTAMP,
+        "inmuSentByAdminId" TEXT,
+        "txHash"            TEXT,
+        "solWallet"         TEXT,
+        "failureReason"     TEXT,
+        "createdAt"         TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+  } catch (e) {
+    console.warn("[Gacha] ensureInmuWinsTable:", e instanceof Error ? e.message : e);
+  }
+}
+
 ensureTable();
+ensureInmuWinsTable();
 
 // ── JST 今日の開始時刻（UTC）を返す ──
 function jstTodayStartUtc(): Date {
   const jstOffset = 9 * 3600 * 1000;
   const nowJst = new Date(Date.now() + jstOffset);
-  // JST での年月日
   const y = nowJst.getUTCFullYear();
   const m = nowJst.getUTCMonth();
   const d = nowJst.getUTCDate();
-  // JST 00:00:00 → UTC に変換
   return new Date(Date.UTC(y, m, d, 0, 0, 0) - jstOffset);
 }
 
@@ -151,17 +173,27 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
     await db.insert(pointsTable).values(pointsRows);
 
     const resultsJson = prizeResults.map(p => ({ prizeId: p.id, label: p.label, type: p.type, amount: p.amount }));
-    await pool.query(
+    const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
-       VALUES ($1,$2,$3::jsonb,$4,$5,$6,'pending',$7,$8,false)`,
+       VALUES ($1,$2,$3::jsonb,$4,$5,$6,'pending',$7,$8,false) RETURNING id`,
       [userId, pullType, JSON.stringify(resultsJson), totalPoints, hasInmu, inmuCount, wasGuaranteed, costPoints],
     );
+    const spinId = spinRows[0].id as number;
 
-    if (hasInmu) {
+    // INMU当選ごとに個別行を挿入
+    if (inmuCount > 0) {
+      for (let i = 0; i < inmuCount; i++) {
+        await pool.query(
+          `INSERT INTO "gachaInmuWins" ("spinId","userId","pullType","inmuAmount","inmuSentStatus")
+           VALUES ($1,$2,$3,10000,'pending')`,
+          [spinId, userId, pullType],
+        );
+      }
+
       const dname = profile.displayName || userId;
       await db.insert(notificationsTable).values([
-        { userId, type: "gacha_inmu_win", title: "🎉 10,000 INMU 当選！", message: "10,000 INMU が当選しました。報酬は後日運営より送金されます。今しばらくお待ちください。" },
-        { userId: "admin", type: "gacha_inmu_admin", title: "🎰 INMU当選通知", message: `${dname} がガチャで 10,000 INMU を当選しました（${pullType === "multi" ? "10連" : "1連"} / ${inmuCount}個 / 未送金）` },
+        { userId, type: "gacha_inmu_win", title: "🎉 10,000 INMU 当選！", message: `10,000 INMU が${inmuCount > 1 ? ` ${inmuCount}個` : ""}当選しました。報酬は後日運営より送金されます。今しばらくお待ちください。` },
+        { userId: "admin", type: "gacha_inmu_admin", title: "🎰 INMU当選通知", message: `${dname} がガチャで 10,000 INMU を${inmuCount > 1 ? ` ${inmuCount}個` : ""}当選しました（${pullType === "multi" ? "10連" : "1連"} / 未送金）` },
       ]);
     }
 
@@ -176,7 +208,6 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
 router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
 
-  // 今日の無料ガチャ使用済チェック（JST基準）
   const todayStart = jstTodayStartUtc();
   const { rows: checkRows } = await pool.query(
     `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2`,
@@ -202,7 +233,6 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
   const currentPoints = Number(profile.monthlyPoints);
 
   try {
-    // ポイント報酬があればのみ付与（無料なので消費なし）
     if (totalPoints > 0) {
       await db.update(profileTable).set({
         monthlyPoints: sql`${profileTable.monthlyPoints} + ${totalPoints}`,
@@ -215,13 +245,20 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
     }
 
     const resultsJson = prizeResults.map(p => ({ prizeId: p.id, label: p.label, type: p.type, amount: p.amount }));
-    await pool.query(
+    const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
-       VALUES ($1,'free',$2::jsonb,$3,$4,$5,'pending',$6,0,true)`,
+       VALUES ($1,'free',$2::jsonb,$3,$4,$5,'pending',$6,0,true) RETURNING id`,
       [userId, JSON.stringify(resultsJson), totalPoints, hasInmu, inmuCount, wasGuaranteed],
     );
+    const spinId = spinRows[0].id as number;
 
-    if (hasInmu) {
+    if (inmuCount > 0) {
+      await pool.query(
+        `INSERT INTO "gachaInmuWins" ("spinId","userId","pullType","inmuAmount","inmuSentStatus")
+         VALUES ($1,$2,'free',10000,'pending')`,
+        [spinId, userId],
+      );
+
       const dname = profile.displayName || userId;
       await db.insert(notificationsTable).values([
         { userId, type: "gacha_inmu_win", title: "🎉 10,000 INMU 当選！", message: "10,000 INMU が当選しました。報酬は後日運営より送金されます。今しばらくお待ちください。" },
@@ -253,13 +290,32 @@ router.get("/gacha/history", requireAuth, async (req, res): Promise<void> => {
 });
 
 // ── GET /api/admin/gacha/results ──
+// gachaInmuWins から取得（1当選=1行）
 router.get("/admin/gacha/results", requireAdmin, async (_req, res): Promise<void> => {
   try {
     const { rows } = await pool.query(
-      `SELECT g.*, p."displayName", p."solWallet"
-       FROM "gachaResults" g
-       LEFT JOIN profile p ON p."userId" = g."userId"
-       ORDER BY g."createdAt" DESC LIMIT 500`,
+      `SELECT
+         w.id,
+         w."spinId",
+         w."userId",
+         w."inmuAmount",
+         w."inmuSentStatus",
+         w."inmuSentAt",
+         w."inmuSentByAdminId",
+         w."txHash",
+         w."solWallet",
+         w."failureReason",
+         w."createdAt",
+         g."pullType",
+         g."isFree",
+         g."wasGuaranteed",
+         p."displayName",
+         p."solWallet" AS "profileSolWallet"
+       FROM "gachaInmuWins" w
+       JOIN "gachaResults" g ON g.id = w."spinId"
+       LEFT JOIN profile p ON p."userId" = w."userId"
+       ORDER BY w."createdAt" DESC
+       LIMIT 500`,
     );
     res.json(rows);
   } catch (e) {
@@ -269,7 +325,7 @@ router.get("/admin/gacha/results", requireAdmin, async (_req, res): Promise<void
 });
 
 // ── PUT /api/admin/gacha/results/:id/mark-sent ──
-// Phantom 署名完了後に txHash を受け取り、送金済みとして記録する
+// gachaInmuWins の id を対象に txHash で送金済み記録
 router.put("/admin/gacha/results/:id/mark-sent", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -280,22 +336,21 @@ router.put("/admin/gacha/results/:id/mark-sent", requireAdmin, async (req, res):
 
   try {
     const { rows } = await pool.query(
-      `SELECT "userId","inmuCount","inmuSentStatus" FROM "gachaResults" WHERE id=$1`,
+      `SELECT "userId","inmuAmount","inmuSentStatus" FROM "gachaInmuWins" WHERE id=$1`,
       [id],
     );
     if (!rows.length) { res.status(404).json({ error: "Not found" }); return; }
-    const row = rows[0] as { userId: string; inmuCount: number; inmuSentStatus: string };
+    const row = rows[0] as { userId: string; inmuAmount: number; inmuSentStatus: string };
 
     if (row.inmuSentStatus === "sent") {
       res.status(400).json({ error: "既に送金済みです" });
       return;
     }
 
-    const inmuAmount = row.inmuCount * 10000;
+    const inmuAmount = row.inmuAmount ?? 10000;
 
-    // gachaResults 更新
     await pool.query(
-      `UPDATE "gachaResults"
+      `UPDATE "gachaInmuWins"
        SET "inmuSentStatus"='sent', "inmuSentAt"=NOW(), "inmuSentByAdminId"=$1,
            "txHash"=$2, "solWallet"=$3, "failureReason"=NULL
        WHERE id=$4`,
@@ -341,7 +396,7 @@ router.put("/admin/gacha/results/:id/mark-failed", requireAdmin, async (req, res
   const { failureReason } = req.body as { failureReason?: string };
   try {
     await pool.query(
-      `UPDATE "gachaResults" SET "inmuSentStatus"='failed', "failureReason"=$1 WHERE id=$2 AND "inmuSentStatus" != 'sent'`,
+      `UPDATE "gachaInmuWins" SET "inmuSentStatus"='failed', "failureReason"=$1 WHERE id=$2 AND "inmuSentStatus" != 'sent'`,
       [failureReason ?? "送金失敗", id],
     );
     res.json({ ok: true });
@@ -352,13 +407,12 @@ router.put("/admin/gacha/results/:id/mark-failed", requireAdmin, async (req, res
 });
 
 // ── PUT /api/admin/gacha/results/:id/reset-pending ──
-// 送金失敗した当選を再送金可能状態（pending）に戻す
 router.put("/admin/gacha/results/:id/reset-pending", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     await pool.query(
-      `UPDATE "gachaResults" SET "inmuSentStatus"='pending', "failureReason"=NULL WHERE id=$1 AND "inmuSentStatus"='failed'`,
+      `UPDATE "gachaInmuWins" SET "inmuSentStatus"='pending', "failureReason"=NULL WHERE id=$1 AND "inmuSentStatus"='failed'`,
       [id],
     );
     res.json({ ok: true });

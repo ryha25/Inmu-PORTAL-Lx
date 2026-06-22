@@ -1,47 +1,56 @@
 ---
 name: Gacha feature implementation
-description: gachaResults table schema, free daily gacha, Phantom INMU send flow, DB migration pattern
+description: gachaResults + gachaInmuWins tables; free daily gacha; bulk Phantom INMU send; per-win tracking
 ---
 
-## gachaResults table
-- Created via `CREATE TABLE IF NOT EXISTS` in gacha.ts `ensureTable()` at module init
-- New columns added via `ALTER TABLE ADD COLUMN IF NOT EXISTS` (safe migration pattern):
-  - `isFree BOOLEAN DEFAULT false` — marks free daily gacha
-  - `txHash TEXT` — Solana tx signature after admin sends INMU
-  - `solWallet TEXT` — recipient wallet recorded at send time
-  - `failureReason TEXT` — stored when inmuSentStatus='failed'
-- inmuSentStatus values: `'pending'` | `'sent'` | `'failed'` (frontend-only: `'sending'`)
+## テーブル構成
 
-## Prizes & probabilities
-- 880/80/30/10 per 1000 (pts100/pts1000/pts5000/inmu10k)
-- GUARANTEED_RATE = 1/114 for jackpot screen
+### gachaResults（スピン単位）
+- 1スピン = 1行
+- `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ADD COLUMN IF NOT EXISTS` で安全マイグレーション
+- 列: id, userId, pullType, results(JSONB), totalPoints, hasInmu, inmuCount, inmuSentStatus, wasGuaranteed, costPoints, isFree, txHash, solWallet, failureReason, createdAt
 
-## Free daily gacha (JST-based reset)
+### gachaInmuWins（INMU当選個別管理）⭐ 新設
+- **1当選 = 1行**（10連でINMU×2なら2行）
+- 管理画面・送金処理はこのテーブルを対象にする
+- 列: id, spinId(→gachaResults.id), userId, pullType, inmuAmount(常に10000), inmuSentStatus, inmuSentAt, inmuSentByAdminId, txHash, solWallet, failureReason, createdAt
+- 既存 gachaResults 当選は手動 INSERT で移行済（新スピンは自動 insert）
+
+## 確率・ガチャ仕様
+- 880/80/30/10 per 1000（pts100/pts1000/pts5000/inmu10k）
+- GUARANTEED_RATE = 1/114
+
+## 無料ガチャ（JST基準日次リセット）
 - `GET /api/gacha/free-status` → `{ used, nextReset }`
-- `POST /api/gacha/free-spin` → same response shape as regular spin
-- Uses `jstTodayStartUtc()` helper for JST 00:00 boundary check
-- No points consumed; only point rewards are given (no cost deducted)
-- Saved with `pullType='free'`, `costPoints=0`, `isFree=true`
+- `POST /api/gacha/free-spin` → 通常と同じレスポンス形状
+- pullType='free', costPoints=0, isFree=true
 
-## Admin Phantom INMU send flow
-- `markGachaSent(row: GachaResultRow)` in admin-panel.tsx does full Phantom wallet flow:
-  1. Check solWallet exists
-  2. Connect Phantom
-  3. Build SPL token transfer tx (inmuCount × 10000 INMU, TOKEN_2022_PROGRAM_ID)
-  4. Sign + send via phantom.signTransaction + connection.sendRawTransaction
-  5. On success: call `PUT /api/admin/gacha/results/:id/mark-sent` with `{ txHash, solWallet }`
-  6. On user reject: revert local state to 'pending' (no DB write)
-  7. On other error: call `PUT /api/admin/gacha/results/:id/mark-failed`, local state='failed'
-- `markGachaRetry(id)` calls `PUT /api/admin/gacha/results/:id/reset-pending` to reset 'failed'→'pending'
+## 管理 API エンドポイント
+- `GET /api/admin/gacha/results` → **gachaInmuWins** JOIN gachaResults JOIN profile
+  - profileSolWallet（profile最新）/ solWallet（送金済時に記録）の両方を返す
+- `PUT /api/admin/gacha/results/:id/mark-sent` → gachaInmuWins.id を対象
+  - txHash + solWallet 必須; transactions/profile/notifications も更新
+- `PUT /api/admin/gacha/results/:id/mark-failed`
+- `PUT /api/admin/gacha/results/:id/reset-pending`（failed→pending）
 
-## mark-sent side effects (backend)
-- Updates gachaResults: status='sent', txHash, solWallet, inmuSentAt, inmuSentByAdminId
-- Inserts into transactionsTable with type='gacha_reward', amount=inmuCount*10000, txHash
-- Updates profileTable: balance + totalReceived + inmuAmount
-- Inserts notification to user
+## 管理 UI（admin-panel.tsx）
 
-## Transaction type
-- `gacha_reward` added to TX_TYPE_LABEL ('ガチャ報酬') and TX_INCOME_TYPES in admin-panel.tsx
+### GachaResultRow 型
+- id = gachaInmuWins.id, spinId = gachaResults.id
+- profileSolWallet（最新）/ solWallet（送金済のみ）
+- inmuAmount = 10000 固定, hasInmu/inmuCount は不要で削除
 
-## drizzle-kit push
-- Blocked by TTY — use raw SQL `ALTER TABLE ADD COLUMN IF NOT EXISTS` for all migrations
+### チェックボックス一括送金
+- `gachaSelectedIds: Set<number>` + `bulkSending: boolean` state
+- 全選択/全解除ボタン → sendableInFiltered（pending/failed かつ wallet あり）を対象
+- `markGachaBulkSent(rows)`: 選択行を **1つの Solana TX** にまとめる
+  - 各行に transfer instruction を追加 → 1回の Phantom 署名
+  - 成功後: 全行に同一 txHash で mark-sent を個別 API call
+  - ユーザーキャンセル → pending に戻す
+  - エラー → 全行 mark-failed
+- `markGachaSent(row)`: 個別送金（1当選1TX）は引き続き利用可能
+- フィルタ切り替え時にチェック選択はリセット
+
+## drizzle-kit push 禁止
+- TTY エラーになるため使用不可
+- 全マイグレーションは raw SQL `ALTER TABLE ADD COLUMN IF NOT EXISTS` か `CREATE TABLE IF NOT EXISTS`

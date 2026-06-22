@@ -218,21 +218,19 @@ const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
 }
 
 type GachaResultRow = {
-  id: number
+  id: number              // gachaInmuWins.id（当選個別ID）
+  spinId: number          // gachaResults.id（スピンID）
   userId: string
   displayName: string | null
-  solWallet: string | null
+  profileSolWallet: string | null   // profile テーブルの最新ウォレット
+  solWallet: string | null          // 送金時に使ったウォレット（送金済時のみ）
   pullType: string
   isFree: boolean
-  results: Array<{ prizeId: string; label: string; type: 'points'|'inmu'; amount: number }>
-  totalPoints: number
-  hasInmu: boolean
-  inmuCount: number
+  inmuAmount: number      // 常に 10000
   inmuSentStatus: 'pending' | 'sending' | 'sent' | 'failed'
   inmuSentAt: string | null
   inmuSentByAdminId: string | null
   wasGuaranteed: boolean
-  costPoints: number
   txHash: string | null
   failureReason: string | null
   createdAt: string
@@ -576,7 +574,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [gachaResults, setGachaResults] = useState<GachaResultRow[]>([])
   const [gachaLoading, setGachaLoading] = useState(false)
   const [gachaFetched, setGachaFetched] = useState(false)
-  const [gachaFilter, setGachaFilter] = useState<'all'|'inmu_pending'|'inmu_sent'|'inmu_failed'>('inmu_pending')
+  const [gachaFilter, setGachaFilter] = useState<'inmu_pending'|'inmu_sent'|'inmu_failed'>('inmu_pending')
+  const [gachaSelectedIds, setGachaSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkSending, setBulkSending] = useState(false)
 
   const loadGachaResults = useCallback(async () => {
     if (gachaFetched) return
@@ -600,8 +600,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     finally { setGachaLoading(false) }
   }
 
+  // ── 個別 Phantom 送金（1当選 = 1 TX）──
   async function markGachaSent(row: GachaResultRow) {
-    if (!row.solWallet) {
+    const wallet = row.profileSolWallet ?? row.solWallet
+    if (!wallet) {
       toast.error('この当選者はSOLウォレットが未設定です。ユーザーにウォレット登録を依頼してください。')
       return
     }
@@ -620,7 +622,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       return
     }
 
-    const inmuAmount = row.inmuCount * 10000
+    const inmuAmount = row.inmuAmount ?? 10000
     const rawAmount  = Math.floor(inmuAmount * Math.pow(10, INMU_DECIMALS))
     const toastId    = `gacha-send-${row.id}`
 
@@ -634,7 +636,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const adminPubkey = new PublicKey(resp.publicKey.toString())
       toast.dismiss(toastId)
 
-      const toPubkey = new PublicKey(row.solWallet)
+      const toPubkey = new PublicKey(wallet)
       const fromATA  = await getAssociatedTokenAddress(INMU_MINT_PUBKEY, adminPubkey, false, TOKEN_2022_PROGRAM_ID)
       const toATA    = await getAssociatedTokenAddress(INMU_MINT_PUBKEY, toPubkey,   false, TOKEN_2022_PROGRAM_ID)
 
@@ -657,10 +659,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
       try { await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed') } catch { /* best-effort */ }
 
-      await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: row.solWallet })
+      await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
 
       setGachaResults(p => p.map(r => r.id === row.id
-        ? { ...r, inmuSentStatus: 'sent', txHash: signature, inmuSentAt: new Date().toISOString() }
+        ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallet, inmuSentAt: new Date().toISOString() }
         : r
       ))
       toast.success(`✅ ${inmuAmount.toLocaleString()} INMU 送金完了！`)
@@ -677,6 +679,126 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         setGachaResults(p => p.map(r => r.id === row.id ? { ...r, inmuSentStatus: 'failed', failureReason: msg } : r))
         toast.error(`送金失敗: ${msg}`)
       }
+    }
+  }
+
+  // ── 一括 Phantom 送金（選択した全当選を1つの TX にまとめる）──
+  async function markGachaBulkSent(selectedRows: GachaResultRow[]) {
+    const sendable = selectedRows.filter(r =>
+      (r.inmuSentStatus === 'pending' || r.inmuSentStatus === 'failed') &&
+      (r.profileSolWallet ?? r.solWallet)
+    )
+    const noWallet = selectedRows.filter(r => !(r.profileSolWallet ?? r.solWallet))
+
+    if (noWallet.length > 0) {
+      toast.warning(`${noWallet.length}件はウォレット未設定のためスキップします`)
+    }
+    if (sendable.length === 0) {
+      toast.error('送金可能な当選がありません（ウォレット未設定または送金済）')
+      return
+    }
+
+    const phantom = getPhantom()
+    if (!phantom) {
+      if (isMobile()) {
+        toast.info('Phantomアプリに切り替えています…')
+        setTimeout(() => openPhantomBrowser(), 600)
+      } else {
+        toast.error('Phantom ウォレットが見つかりません。Phantom拡張機能をインストールしてください。', {
+          action: { label: 'Phantomをインストール', onClick: () => window.open('https://phantom.app/', '_blank') },
+          duration: 8000,
+        })
+      }
+      return
+    }
+
+    setBulkSending(true)
+    const toastId = 'gacha-bulk-send'
+    // 対象を全て「sending」表示に
+    setGachaResults(p => p.map(r =>
+      sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'sending' } : r
+    ))
+
+    try {
+      const connection = new Connection(getAdminRpcUrl(), 'confirmed')
+
+      toast.loading('Phantom に接続中…', { id: toastId })
+      const resp = await phantom.connect()
+      const adminPubkey = new PublicKey(resp.publicKey.toString())
+      const fromATA = await getAssociatedTokenAddress(INMU_MINT_PUBKEY, adminPubkey, false, TOKEN_2022_PROGRAM_ID)
+      toast.dismiss(toastId)
+
+      // 1つの TX に全 transfer 命令をまとめる
+      const tx = new Transaction()
+      for (const row of sendable) {
+        const wallet = row.profileSolWallet ?? row.solWallet!
+        const toPubkey = new PublicKey(wallet)
+        const toATA = await getAssociatedTokenAddress(INMU_MINT_PUBKEY, toPubkey, false, TOKEN_2022_PROGRAM_ID)
+        const rawAmount = Math.floor((row.inmuAmount ?? 10000) * Math.pow(10, INMU_DECIMALS))
+        tx.add(
+          createAssociatedTokenAccountIdempotentInstruction(adminPubkey, toATA, toPubkey, INMU_MINT_PUBKEY, TOKEN_2022_PROGRAM_ID),
+          createTransferInstruction(fromATA, toATA, adminPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID),
+        )
+      }
+      tx.feePayer = adminPubkey
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+      tx.recentBlockhash = blockhash
+
+      toast.loading(`Phantom で署名してください（${sendable.length}件 まとめて送金）…`, { id: toastId })
+      const signedTx = await phantom.signTransaction(tx)
+      toast.dismiss(toastId)
+
+      toast.loading('Solana へ送信中…', { id: toastId })
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false, maxRetries: 3 })
+      toast.dismiss(toastId)
+
+      try { await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed') } catch { /* best-effort */ }
+
+      // 全件を mark-sent（同一 txHash で各 ID を個別に記録）
+      const sentAt = new Date().toISOString()
+      let successCount = 0
+      for (const row of sendable) {
+        const wallet = row.profileSolWallet ?? row.solWallet!
+        try {
+          await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
+          setGachaResults(p => p.map(r => r.id === row.id
+            ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallet, inmuSentAt: sentAt }
+            : r
+          ))
+          successCount++
+        } catch {
+          // API 失敗は個別に failed 扱い（TX は成功しているので DB だけ再試行可能）
+          setGachaResults(p => p.map(r => r.id === row.id
+            ? { ...r, inmuSentStatus: 'failed', failureReason: 'DB記録失敗（TX成功）' }
+            : r
+          ))
+        }
+      }
+      setGachaSelectedIds(new Set())
+      toast.success(`✅ 一括送金完了！ ${successCount}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
+
+    } catch (e: unknown) {
+      toast.dismiss(toastId)
+      const msg = e instanceof Error ? e.message : '不明なエラー'
+
+      if (msg === 'User rejected the request.') {
+        // キャンセル → pending に戻す
+        setGachaResults(p => p.map(r =>
+          sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'pending' } : r
+        ))
+        toast.info('一括送金をキャンセルしました')
+      } else {
+        // 全件 failed
+        for (const row of sendable) {
+          await api(`/admin/gacha/results/${row.id}/mark-failed`, 'PUT', { failureReason: msg }).catch(() => {})
+        }
+        setGachaResults(p => p.map(r =>
+          sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'failed', failureReason: msg } : r
+        ))
+        toast.error(`一括送金失敗: ${msg}`)
+      }
+    } finally {
+      setBulkSending(false)
     }
   }
 
@@ -1990,31 +2112,36 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           {gachaLoading && <p className="text-sm text-muted-foreground text-center py-6">読み込み中…</p>}
 
           {!gachaLoading && (() => {
-            const totalSpins    = gachaResults.length
-            const inmuPending   = gachaResults.filter(r => r.hasInmu && r.inmuSentStatus === 'pending')
-            const inmuSending   = gachaResults.filter(r => r.hasInmu && r.inmuSentStatus === 'sending')
-            const inmuSent      = gachaResults.filter(r => r.hasInmu && r.inmuSentStatus === 'sent')
-            const inmuFailed    = gachaResults.filter(r => r.hasInmu && r.inmuSentStatus === 'failed')
-            const totalPtsGiven = gachaResults.reduce((s, r) => s + (r.totalPoints ?? 0), 0)
+            const inmuPending = gachaResults.filter(r => r.inmuSentStatus === 'pending')
+            const inmuSending = gachaResults.filter(r => r.inmuSentStatus === 'sending')
+            const inmuSent    = gachaResults.filter(r => r.inmuSentStatus === 'sent')
+            const inmuFailed  = gachaResults.filter(r => r.inmuSentStatus === 'failed')
 
-            const filtered = gachaFilter === 'all'
-              ? gachaResults
-              : gachaFilter === 'inmu_pending'
-                ? [...inmuSending, ...inmuPending]
-                : gachaFilter === 'inmu_failed'
-                  ? inmuFailed
-                  : inmuSent
+            const filtered = gachaFilter === 'inmu_pending'
+              ? [...inmuSending, ...inmuPending]
+              : gachaFilter === 'inmu_failed'
+                ? inmuFailed
+                : inmuSent
+
+            // 選択中の pending/failed 行（送金可能なもの）
+            const selectedSendable = filtered.filter(r =>
+              gachaSelectedIds.has(r.id) &&
+              (r.inmuSentStatus === 'pending' || r.inmuSentStatus === 'failed')
+            )
+            // フィルタ中の送金可能行
+            const sendableInFiltered = filtered.filter(r =>
+              r.inmuSentStatus === 'pending' || r.inmuSentStatus === 'failed'
+            )
 
             return (
               <>
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { label: '総スピン数',    value: totalSpins },
-                    { label: 'ポイント付与合計', value: `${totalPtsGiven.toLocaleString()}pt` },
-                    { label: '未送金INMU',    value: inmuPending.length + inmuSending.length, cls: (inmuPending.length + inmuSending.length) > 0 ? 'text-yellow-400' : undefined },
-                    { label: '送金済みINMU',  value: inmuSent.length,    cls: 'text-green-400' },
-                    { label: '送金失敗',       value: inmuFailed.length,  cls: inmuFailed.length > 0 ? 'text-red-400' : undefined },
+                    { label: '当選総数',     value: gachaResults.length },
+                    { label: '未送金INMU',   value: inmuPending.length + inmuSending.length, cls: (inmuPending.length + inmuSending.length) > 0 ? 'text-yellow-400' : undefined },
+                    { label: '送金済みINMU', value: inmuSent.length,   cls: 'text-green-400' },
+                    { label: '送金失敗',     value: inmuFailed.length, cls: inmuFailed.length > 0 ? 'text-red-400' : undefined },
                   ].map(({ label, value, cls }) => (
                     <div key={label} className="rounded-lg border border-border bg-card p-3 text-center">
                       <p className="text-xs text-muted-foreground">{label}</p>
@@ -2025,14 +2152,14 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
                 {/* Filter + Refresh */}
                 <div className="flex gap-1.5 items-center flex-wrap">
-                  {(['inmu_pending', 'inmu_sent', 'inmu_failed', 'all'] as const).map(f => (
+                  {(['inmu_pending', 'inmu_sent', 'inmu_failed'] as const).map(f => (
                     <button
                       key={f}
                       type="button"
-                      onClick={() => setGachaFilter(f)}
+                      onClick={() => { setGachaFilter(f); setGachaSelectedIds(new Set()) }}
                       className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${gachaFilter === f ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
                     >
-                      {f === 'all' ? '全結果' : f === 'inmu_pending' ? '🏆 未送金INMU' : f === 'inmu_sent' ? '✅ 送金済INMU' : '❌ 送金失敗'}
+                      {f === 'inmu_pending' ? `🏆 未送金 (${inmuPending.length + inmuSending.length})` : f === 'inmu_sent' ? `✅ 送金済 (${inmuSent.length})` : `❌ 送金失敗 (${inmuFailed.length})`}
                     </button>
                   ))}
                   <button type="button" onClick={reloadGachaResults} className="text-xs px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:text-foreground transition-colors ml-auto">
@@ -2040,19 +2167,52 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                   </button>
                 </div>
 
+                {/* 一括操作バー（未送金・失敗フィルタ時のみ表示）*/}
+                {(gachaFilter === 'inmu_pending' || gachaFilter === 'inmu_failed') && sendableInFiltered.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap p-2.5 rounded-lg border border-border bg-card">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allIds = new Set(sendableInFiltered.map(r => r.id))
+                        const allSelected = sendableInFiltered.every(r => gachaSelectedIds.has(r.id))
+                        setGachaSelectedIds(allSelected ? new Set() : allIds)
+                      }}
+                      className="text-xs px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {sendableInFiltered.every(r => gachaSelectedIds.has(r.id)) ? '☑ 全解除' : '☐ 全選択'}
+                    </button>
+                    {gachaSelectedIds.size > 0 && (
+                      <>
+                        <span className="text-xs text-muted-foreground">{gachaSelectedIds.size}件選択中</span>
+                        <Button
+                          size="sm"
+                          className="h-8 px-3 text-xs bg-green-800 hover:bg-green-700 text-white ml-auto"
+                          disabled={bulkSending || selectedSendable.length === 0}
+                          onClick={() => markGachaBulkSent(selectedSendable)}
+                        >
+                          {bulkSending ? '送金中…' : `💸 選択した ${selectedSendable.length}件 をまとめて送金`}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* Results list */}
                 {filtered.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-8 border border-dashed border-border rounded-lg">
-                    {gachaFilter === 'inmu_pending' ? '未送金のINMU当選はありません 🎉' : gachaFilter === 'inmu_sent' ? '送金済みのINMUはまだありません' : gachaFilter === 'inmu_failed' ? '送金失敗はありません' : 'ガチャ結果がありません'}
+                    {gachaFilter === 'inmu_pending' ? '未送金のINMU当選はありません 🎉' : gachaFilter === 'inmu_sent' ? '送金済みのINMUはまだありません' : '送金失敗はありません'}
                   </p>
                 )}
                 <div className="flex flex-col gap-2">
                   {filtered.map(row => {
-                    const isPending  = row.hasInmu && row.inmuSentStatus === 'pending'
-                    const isSending  = row.hasInmu && row.inmuSentStatus === 'sending'
-                    const isSent     = row.hasInmu && row.inmuSentStatus === 'sent'
-                    const isFailed   = row.hasInmu && row.inmuSentStatus === 'failed'
-                    const inmuAmount = row.inmuCount * 10000
+                    const isPending = row.inmuSentStatus === 'pending'
+                    const isSending = row.inmuSentStatus === 'sending'
+                    const isSent    = row.inmuSentStatus === 'sent'
+                    const isFailed  = row.inmuSentStatus === 'failed'
+                    const inmuAmount = row.inmuAmount ?? 10000
+                    const wallet    = row.profileSolWallet ?? row.solWallet
+                    const canSelect = isPending || isFailed
+                    const isSelected = gachaSelectedIds.has(row.id)
 
                     const cardBorder = isSent ? 'border-green-500/30 bg-green-950/5'
                       : isFailed ? 'border-red-500/30 bg-red-950/10'
@@ -2061,8 +2221,30 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                       : ''
 
                     return (
-                      <Card key={row.id} className={`p-3 border-border ${row.hasInmu ? cardBorder : ''}`}>
-                        <div className="flex items-start justify-between gap-2">
+                      <Card key={row.id} className={`p-3 border-border ${cardBorder} ${isSelected ? 'ring-1 ring-primary' : ''}`}>
+                        <div className="flex items-start gap-2">
+                          {/* チェックボックス */}
+                          {canSelect && (
+                            <button
+                              type="button"
+                              className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                              onClick={() => {
+                                setGachaSelectedIds(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(row.id)) next.delete(row.id)
+                                  else next.add(row.id)
+                                  return next
+                                })
+                              }}
+                            >
+                              {isSelected
+                                ? <CheckSquare className="size-4 text-primary" />
+                                : <Square className="size-4" />
+                              }
+                            </button>
+                          )}
+                          {!canSelect && <div className="w-4 shrink-0" />}
+
                           <div className="flex-1 min-w-0">
                             {/* ヘッダー行 */}
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -2072,42 +2254,38 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                               </span>
                               {row.isFree && <span className="text-[10px] text-emerald-400 px-1 py-0.5 rounded bg-emerald-950/40 border border-emerald-700">🎁 無料</span>}
                               {row.wasGuaranteed && <span className="text-[10px] text-yellow-400 px-1 py-0.5 rounded bg-yellow-950/40 border border-yellow-700">✨確定</span>}
-                              {row.hasInmu && (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold
-                                  ${isSent    ? 'text-green-400 border-green-700 bg-green-950/30'
-                                  : isFailed  ? 'text-red-400 border-red-700 bg-red-950/30'
-                                  : isSending ? 'text-blue-400 border-blue-700 bg-blue-950/30'
-                                  : 'text-yellow-300 border-yellow-600 bg-yellow-950/40'}`}>
-                                  🏆 {inmuAmount.toLocaleString()} INMU {isSent ? '送金済' : isFailed ? '送金失敗' : isSending ? '送金中…' : '未送金'}
-                                </span>
-                              )}
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold
+                                ${isSent    ? 'text-green-400 border-green-700 bg-green-950/30'
+                                : isFailed  ? 'text-red-400 border-red-700 bg-red-950/30'
+                                : isSending ? 'text-blue-400 border-blue-700 bg-blue-950/30'
+                                : 'text-yellow-300 border-yellow-600 bg-yellow-950/40'}`}>
+                                🏆 {inmuAmount.toLocaleString()} INMU {isSent ? '送金済' : isFailed ? '送金失敗' : isSending ? '送金中…' : '未送金'}
+                              </span>
+                              <span className="text-[9px] text-muted-foreground ml-auto">Win#{row.id}</span>
                             </div>
 
-                            {/* 日時・コスト */}
+                            {/* 日時 */}
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {new Date(row.createdAt).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                              {row.costPoints > 0 ? ` — 消費 ${row.costPoints.toLocaleString()}pt` : ' — 無料ガチャ'}
-                              {row.totalPoints > 0 && ` / 付与 +${row.totalPoints.toLocaleString()}pt`}
+                              {new Date(row.createdAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              {' — '}スピンID: {row.spinId}
                             </p>
 
                             {/* 送金先ウォレット */}
-                            {row.hasInmu && (
-                              <p className="text-[10px] mt-0.5">
-                                <span className="text-muted-foreground">送金先: </span>
-                                {row.solWallet
-                                  ? <span className="font-mono text-foreground">{row.solWallet.slice(0, 8)}…{row.solWallet.slice(-8)}</span>
-                                  : <span className="text-red-400">⚠️ ウォレット未設定</span>
-                                }
-                              </p>
-                            )}
+                            <p className="text-[10px] mt-0.5">
+                              <span className="text-muted-foreground">送金先: </span>
+                              {wallet
+                                ? <span className="font-mono text-foreground">{wallet.slice(0, 8)}…{wallet.slice(-8)}</span>
+                                : <span className="text-red-400">⚠️ ウォレット未設定</span>
+                              }
+                            </p>
 
                             {/* 送金完了情報 */}
                             {isSent && row.inmuSentAt && (
                               <p className="text-[10px] text-green-400 mt-0.5">
-                                送金済: {new Date(row.inmuSentAt).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                送金済: {new Date(row.inmuSentAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                               </p>
                             )}
-                            {isSent && row.txHash && (
+                            {row.txHash && (
                               <p className="text-[10px] mt-0.5">
                                 <span className="text-muted-foreground">txHash: </span>
                                 <a
@@ -2127,17 +2305,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                                 失敗: {row.failureReason.slice(0, 80)}
                               </p>
                             )}
-
-                            {/* 結果詳細 */}
-                            {gachaFilter === 'all' && row.results.length > 0 && (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {row.results.slice(0, 10).map((r, i) => (
-                                  <span key={i} className={`text-[9px] px-1 py-0.5 rounded border ${r.type === 'inmu' ? 'border-yellow-600 text-yellow-300 bg-yellow-950/30' : 'border-border text-muted-foreground'}`}>
-                                    {r.label}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                           </div>
 
                           {/* アクションボタン */}
@@ -2147,9 +2314,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                                 size="sm"
                                 className={`h-8 px-2.5 text-xs ${isFailed ? 'bg-orange-700 hover:bg-orange-600' : 'bg-green-800 hover:bg-green-700'} text-white`}
                                 onClick={() => markGachaSent(row)}
-                                disabled={!row.solWallet}
+                                disabled={!wallet || bulkSending}
                               >
-                                {isFailed ? '🔁 再送金' : '💸 Phantom送金'}
+                                {isFailed ? '🔁 再送金' : '💸 送金'}
                               </Button>
                             )}
                             {isFailed && (
