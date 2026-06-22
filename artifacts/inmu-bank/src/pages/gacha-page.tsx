@@ -19,9 +19,9 @@ type HistRow = { id:number; pullType:string; results:Prize[]; totalPoints:number
 /* ─── capsule color configs (image 5 reference) ─── */
 const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;label:string}> = {
   pts100: {
-    top:'radial-gradient(ellipse at 33% 28%, rgba(240,250,255,.97) 0%, rgba(185,215,242,.65) 42%, rgba(130,172,215,.22) 72%)',
-    bot:'radial-gradient(ellipse at 67% 72%, rgba(215,240,255,.92) 0%, rgba(165,205,232,.55) 42%, rgba(110,155,200,.18) 72%)',
-    glow:'rgba(180,222,255,.5)', border:'rgba(200,232,255,.5)', label:'100pt',
+    top:'radial-gradient(ellipse at 33% 28%, rgba(232,238,248,.98) 0%, rgba(168,182,202,.96) 38%, rgba(108,126,150,.74) 68%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(200,214,230,.97) 0%, rgba(148,165,188,.92) 38%, rgba(86,106,132,.68) 68%)',
+    glow:'rgba(155,178,208,.64)', border:'rgba(182,200,222,.70)', label:'100pt',
   },
   pts1000: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(135,192,255,.98) 0%, rgba(25,85,218,.93) 42%, rgba(6,35,165,.68) 72%)',
@@ -47,7 +47,7 @@ const BALLS = [
   { id:'inmu10k', label:'10,000 INMU', rate:'1%',  color:'rgba(255,215,0,.9)'   },
 ]
 const PHASE_MS: Partial<Record<Phase,number>> = {
-  guaranteed:2000, inserting:950, lever:850, space:950, falling:950, opening:900,
+  guaranteed:2000, inserting:1250, lever:1050, space:1350, falling:1150, opening:900,
 }
 const BG_STARS = Array.from({length:28},(_,i)=>({
   x:`${(i*41.7+8)%90}%`,y:`${(i*63.1+5)%90}%`,s:1+(i%4)*.9,dur:2.8+(i%6)*1.1,delay:(i*.6)%7
@@ -102,10 +102,11 @@ const CSS=`
   @keyframes ga-jppulse  {0%,100%{text-shadow:0 0 8px rgba(255,215,0,.35)}50%{text-shadow:0 0 48px rgba(255,215,0,1),0 0 96px rgba(218,165,32,.9)}}
   @keyframes ga-drift    {0%{opacity:0;transform:translateY(14px)scale(.8)}30%,70%{opacity:.88}100%{opacity:0;transform:translateY(-42px)scale(.5)}}
   @keyframes ga-machinepulse{0%,100%{filter:drop-shadow(0 24px 72px rgba(0,0,0,.98)) drop-shadow(0 0 22px rgba(184,134,11,.22))}50%{filter:drop-shadow(0 24px 72px rgba(0,0,0,.98)) drop-shadow(0 0 60px rgba(218,165,32,.82))}}
-  @keyframes ga-coinfall    {0%{top:-20%;transform:rotate(0deg);opacity:.55}70%{opacity:1}100%{top:3%;transform:rotate(400deg);opacity:1}}
+  @keyframes ga-coinfall    {0%{top:-20%;transform:rotate(0deg);opacity:.55}70%{opacity:1}100%{top:4%;transform:rotate(400deg);opacity:1}}
   @keyframes ga-leverrot2   {0%{transform:rotate(-8deg)}100%{transform:rotate(62deg)}}
-  @keyframes ga-emit        {0%{transform:scale(.28)translate(0,0);opacity:0}25%{opacity:1}100%{transform:scale(1.1)translate(9%,-24%);opacity:1}}
-  @keyframes ga-capfall     {0%{transform:translate(0,0)scale(1);opacity:1}100%{transform:translate(0,130%)scale(.6);opacity:.2}}
+  @keyframes ga-orbit       {from{transform:rotate(0deg) translateX(60px) rotate(0deg)}to{transform:rotate(360deg) translateX(60px) rotate(-360deg)}}
+  @keyframes ga-shockwave   {0%{transform:translateX(-50%) scale(.12);opacity:.88}100%{transform:translateX(-50%) scale(3.4);opacity:0}}
+  @keyframes ga-capland     {0%{top:-110px}72%{top:204px}83%{top:190px}91%{top:202px}100%{top:197px}}
   .ga-pulse{animation:ga-pulse 2.2s ease-in-out infinite}
   .ga-floatslow{animation:ga-floatslow 3.4s ease-in-out infinite}
   .ga-reveal{animation:ga-reveal .42s ease-out forwards}
@@ -576,152 +577,231 @@ export function GachaPage() {
             </div>
           )}
 
-          {/* ════ Phases 2-5: Machine-centered animation (machine always visible) ════ */}
-          {(phase==='inserting'||phase==='lever'||phase==='space'||phase==='falling')&&(
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6,width:'100%'}}>
+          {/* ════ Phase 2: COIN INSERT — machine fullscreen + vignette zoom on slot ════ */}
+          {phase==='inserting'&&(
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
+              <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
+                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>コイン投入</p>
 
-              {/* Phase label */}
-              <p className="ga-pulse" style={{fontSize:15,fontWeight:800,color:'#daa520',
-                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>
-                {phase==='inserting'?'コイン投入':phase==='lever'?'レバー回転':phase==='space'?'カプセル排出':'カプセル落下'}
-              </p>
-
-              {/* ── Machine image + overlay (machine always displayed) ── */}
-              <div style={{position:'relative',width:'min(264px,68vw)',overflow:'visible'}}>
+              <div style={{position:'relative',width:'min(290px,74vw)',margin:'0 auto'}}>
                 <img src={machineImg} alt="" style={{width:'100%',height:'auto',display:'block',
-                  filter:'drop-shadow(0 18px 56px rgba(0,0,0,.98)) drop-shadow(0 0 32px rgba(184,134,11,.5))'}}/>
-
-                {/* ──── OVERLAY 1: Coin Insert ──── */}
-                {phase==='inserting'&&<>
-                  {/* Glow at coin slot (top of dome ~6-11%) */}
-                  <div style={{position:'absolute',left:'18%',top:'5%',width:'64%',height:'10%',
-                    background:'radial-gradient(ellipse,rgba(218,165,32,.68) 0%,transparent 65%)',
-                    animation:'ga-glowtext 1s ease-in-out infinite',pointerEvents:'none'}}/>
-                  {/* INMU coin: falls from above into slot */}
-                  <img src={coinImg} style={{
-                    position:'absolute',left:'calc(50% - 42px)',top:0,
-                    width:84,height:84,borderRadius:'50%',objectFit:'cover',
-                    border:'3px solid #daa520',
-                    boxShadow:'0 0 52px rgba(218,165,32,.98),0 0 20px rgba(218,165,32,.5)',
-                    animation:'ga-coinfall .95s ease-in forwards',
+                  filter:'drop-shadow(0 18px 60px rgba(0,0,0,.98)) drop-shadow(0 0 32px rgba(184,134,11,.52))'}}/>
+                {/* Vignette: spotlight on coin slot top (9% y) */}
+                <div style={{position:'absolute',inset:0,pointerEvents:'none',
+                  background:'radial-gradient(ellipse 58% 26% at 50% 9%, transparent 0%, rgba(0,0,0,0) 32%, rgba(0,0,0,.78) 68%, rgba(0,0,0,.95) 100%)'}}/>
+                {/* Slot glow */}
+                <div style={{position:'absolute',left:'16%',top:'4%',width:'68%',height:'13%',
+                  background:'radial-gradient(ellipse,rgba(218,165,32,.74) 0%,transparent 64%)',
+                  animation:'ga-glowtext 1s ease-in-out infinite',pointerEvents:'none'}}/>
+                {/* Falling INMU coin */}
+                <img src={coinImg} style={{
+                  position:'absolute',left:'calc(50% - 46px)',
+                  width:92,height:92,borderRadius:'50%',objectFit:'cover',
+                  border:'3.5px solid #daa520',
+                  boxShadow:'0 0 64px rgba(218,165,32,.98),0 0 24px rgba(255,215,0,.6)',
+                  animation:'ga-coinfall 1.1s ease-in forwards',
+                  pointerEvents:'none'}}/>
+                {/* Sparkles at slot */}
+                {[{l:'34%',t:'11%'},{l:'50%',t:'8%'},{l:'63%',t:'12%'}].map((p,i)=>(
+                  <div key={i} style={{position:'absolute',left:p.l,top:p.t,
+                    width:6,height:6,borderRadius:'50%',
+                    background:'rgba(255,215,0,.95)',boxShadow:'0 0 11px rgba(218,165,32,.9)',
+                    animation:`ga-particle ${.42+i*.1}s ease-in-out ${i*.12+.68}s infinite`,
                     pointerEvents:'none'}}/>
-                  {/* Sparkles at slot */}
-                  {[{l:'32%',t:'9%'},{l:'50%',t:'6%'},{l:'64%',t:'10%'}].map((p,i)=>(
-                    <div key={i} style={{position:'absolute',left:p.l,top:p.t,
-                      width:5,height:5,borderRadius:'50%',
-                      background:'rgba(255,215,0,.92)',boxShadow:'0 0 9px rgba(218,165,32,.9)',
-                      animation:`ga-particle ${.45+i*.1}s ease-in-out ${i*.12+.65}s infinite`,
-                      pointerEvents:'none'}}/>
-                  ))}
-                </>}
-
-                {/* ──── OVERLAY 2: Lever Rotation ──── */}
-                {phase==='lever'&&<>
-                  {/* Area glow on lever (right side ~74-92% x, 57-72% y) */}
-                  <div style={{position:'absolute',left:'60%',top:'54%',width:'40%',height:'22%',
-                    background:'radial-gradient(ellipse at 40% 50%,rgba(218,165,32,.75) 0%,transparent 62%)',
-                    animation:'ga-glowtext .9s ease-in-out infinite',pointerEvents:'none'}}/>
-                  {/* CSS lever arm rotating */}
-                  <div style={{position:'absolute',left:'76%',top:'63%',
-                    transformOrigin:'6px 8px',
-                    animation:'ga-leverrot2 .8s ease-in-out .1s forwards',
-                    pointerEvents:'none'}}>
-                    <div style={{width:55,height:15,
-                      background:'linear-gradient(180deg,#ffe066 0%,#8a6200 100%)',
-                      borderRadius:8,
-                      boxShadow:'0 0 18px rgba(218,165,32,.88)'}}/>
-                    {/* End sphere */}
-                    <div style={{position:'absolute',right:-10,top:-11,
-                      width:36,height:36,borderRadius:'50%',
-                      background:'radial-gradient(ellipse at 34% 30%,#ffe880,#c89010 50%,#5a3a00)',
-                      boxShadow:'0 0 22px rgba(218,165,32,.92)'}}/>
-                  </div>
-                  {/* Rotation arrow */}
-                  <div style={{position:'absolute',left:'73%',top:'52%',
-                    fontSize:30,color:'rgba(218,165,32,.85)',lineHeight:1,fontWeight:900,
-                    animation:'ga-glowtext .9s ease-in-out infinite',pointerEvents:'none'}}>↻</div>
-                  {/* Gold sparkles */}
-                  {[{l:'75%',t:'50%'},{l:'88%',t:'58%'},{l:'82%',t:'70%'}].map((p,i)=>(
-                    <span key={i} style={{position:'absolute',left:p.l,top:p.t,
-                      fontSize:13,color:'#ffd700',
-                      textShadow:'0 0 12px rgba(255,215,0,.95)',
-                      animation:`ga-sparkle ${.5+i*.18}s ease-in-out ${i*.15}s infinite`,
-                      pointerEvents:'none'}}>✦</span>
-                  ))}
-                </>}
-
-                {/* ──── OVERLAY 3: Capsule Emit (from dispenser ~y:79-85%) ──── */}
-                {phase==='space'&&<>
-                  {/* Dispenser glow */}
-                  <div style={{position:'absolute',left:'24%',top:'74%',width:'52%',height:'10%',
-                    background:'radial-gradient(ellipse,rgba(218,165,32,.75) 0%,transparent 62%)',
-                    animation:'ga-glowtext .85s ease-in-out infinite',pointerEvents:'none'}}/>
-                  {/* Light rays from dispenser */}
-                  {[-25,0,25].map((a,i)=>(
-                    <div key={i} style={{
-                      position:'absolute',left:'calc(50% - 2px)',top:'80%',
-                      width:4,height:'18%',borderRadius:2,
-                      background:`linear-gradient(180deg,rgba(218,165,32,.75),transparent)`,
-                      transformOrigin:'top center',transform:`rotate(${a}deg)`,
-                      boxShadow:'0 0 7px rgba(218,165,32,.72)',
-                      animation:`ga-particle ${.45+i*.08}s ease-in-out ${i*.08}s infinite`,
-                      pointerEvents:'none'}}/>
-                  ))}
-                  {/* Emitting capsule */}
-                  <div style={{position:'absolute',left:'calc(50% - 38px)',top:'68%',
-                    animation:'ga-emit .95s ease-out forwards',zIndex:9,pointerEvents:'none'}}>
-                    <PrizeCapsule prizeId="pts100" size={76}/>
-                  </div>
-                  {/* Gold particles */}
-                  {[{l:'38%',t:'72%'},{l:'56%',t:'70%'},{l:'43%',t:'65%'},{l:'52%',t:'67%'}].map((p,i)=>(
-                    <div key={i} style={{position:'absolute',left:p.l,top:p.t,
-                      width:4,height:4,borderRadius:'50%',
-                      background:'rgba(255,215,0,.9)',boxShadow:'0 0 8px rgba(218,165,32,.85)',
-                      animation:`ga-particle ${.5+i*.1}s ease-in-out ${i*.1}s infinite`,
-                      pointerEvents:'none'}}/>
-                  ))}
-                </>}
-
-                {/* ──── OVERLAY 4: Capsule Falling ──── */}
-                {phase==='falling'&&<>
-                  {/* Light pillar from dispenser downward */}
-                  <div style={{position:'absolute',left:'calc(50% - 16px)',top:'77%',
-                    width:32,height:'28%',
-                    background:'linear-gradient(180deg,rgba(218,165,32,.65) 0%,rgba(218,165,32,.18) 60%,transparent)',
-                    filter:'blur(5px)',
-                    animation:'ga-glowtext 1.2s ease-in-out infinite',pointerEvents:'none'}}/>
-                  {/* Falling capsule */}
-                  <div style={{position:'absolute',left:'calc(50% - 38px)',top:'65%',
-                    zIndex:9,
-                    animation:'ga-capfall .95s ease-in forwards',pointerEvents:'none'}}>
-                    <div style={{position:'relative',width:76,height:76}}>
-                      <PrizeCapsule prizeId="pts100" size={76}/>
-                      {/* Mascot inside capsule */}
-                      <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',
-                        justifyContent:'center',zIndex:2}}>
-                        <img src={mascotImg} style={{width:42,height:'auto',objectFit:'contain',opacity:.82}}/>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Ground glow */}
-                  <div style={{position:'absolute',left:'22%',top:'90%',width:'56%',height:'7%',
-                    background:'radial-gradient(ellipse,rgba(218,165,32,.58) 0%,transparent 68%)',
-                    filter:'blur(5px)',pointerEvents:'none'}}/>
-                  {/* Ground ring */}
-                  <div style={{position:'absolute',left:'calc(50% - 46px)',top:'90%',
-                    width:92,height:14,borderRadius:'50%',
-                    border:'1.5px solid rgba(218,165,32,.52)',
-                    boxShadow:'0 0 18px rgba(218,165,32,.44)',pointerEvents:'none'}}/>
-                </>}
+                ))}
               </div>
 
-              {/* Description */}
-              <p style={{fontSize:11,color:'rgba(218,165,32,.68)',margin:0,
-                textAlign:'center',letterSpacing:'0.1em',lineHeight:1.5}}>
-                {phase==='inserting'?'INMUコインを投入します':
-                 phase==='lever'?'レバーを回すとガチャが動き出します':
-                 phase==='space'?'排出口からカプセルが飛び出します':
-                 'カプセルが光の柱とともに落下します'}
+              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em'}}>
+                INMUコインを投入します
+              </p>
+            </div>
+          )}
+
+          {/* ════ Phase 3: LEVER — machine + spotlight on lever + CSS lever arm ════ */}
+          {phase==='lever'&&(
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
+              <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
+                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>レバー回転</p>
+
+              <div style={{position:'relative',width:'min(290px,74vw)',margin:'0 auto',
+                animation:'ga-shake .5s ease-out .42s both'}}>
+                <img src={machineImg} alt="" style={{width:'100%',height:'auto',display:'block',
+                  filter:'drop-shadow(0 18px 60px rgba(0,0,0,.98)) drop-shadow(0 0 32px rgba(184,134,11,.52))'}}/>
+                {/* Vignette: spotlight on lever (82% x, 63% y) */}
+                <div style={{position:'absolute',inset:0,pointerEvents:'none',
+                  background:'radial-gradient(ellipse 40% 24% at 82% 63%, transparent 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,.82) 66%, rgba(0,0,0,.96) 100%)'}}/>
+                {/* Lever glow */}
+                <div style={{position:'absolute',left:'64%',top:'55%',width:'34%',height:'18%',
+                  background:'radial-gradient(ellipse at 40% 50%,rgba(218,165,32,.84) 0%,transparent 62%)',
+                  animation:'ga-glowtext .88s ease-in-out infinite',pointerEvents:'none'}}/>
+                {/* CSS lever arm */}
+                <div style={{position:'absolute',left:'76%',top:'63%',
+                  transformOrigin:'6px 8px',
+                  animation:'ga-leverrot2 .88s ease-in-out .15s forwards',
+                  pointerEvents:'none'}}>
+                  <div style={{width:52,height:14,
+                    background:'linear-gradient(180deg,#ffe066 0%,#8a6200 100%)',
+                    borderRadius:7,boxShadow:'0 0 20px rgba(218,165,32,.9)'}}/>
+                  <div style={{position:'absolute',right:-9,top:-10,
+                    width:32,height:32,borderRadius:'50%',
+                    background:'radial-gradient(ellipse at 34% 30%,#ffe880,#c89010 50%,#5a3a00)',
+                    boxShadow:'0 0 26px rgba(218,165,32,.95)'}}/>
+                </div>
+                {/* ↻ rotation arrow */}
+                <div style={{position:'absolute',left:'71%',top:'51%',
+                  fontSize:30,color:'rgba(218,165,32,.88)',lineHeight:1,fontWeight:900,
+                  animation:'ga-glowtext .9s ease-in-out infinite',pointerEvents:'none'}}>↻</div>
+                {/* Sparkles */}
+                {[{l:'75%',t:'50%'},{l:'88%',t:'59%'},{l:'81%',t:'71%'}].map((p,i)=>(
+                  <span key={i} style={{position:'absolute',left:p.l,top:p.t,
+                    fontSize:14,color:'#ffd700',
+                    textShadow:'0 0 12px rgba(255,215,0,.95)',
+                    animation:`ga-sparkle ${.5+i*.18}s ease-in-out ${i*.15}s infinite`,
+                    pointerEvents:'none'}}>✦</span>
+                ))}
+              </div>
+
+              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em'}}>
+                レバーを回すとガチャが動き出します
+              </p>
+            </div>
+          )}
+
+          {/* ════ Phase 4: SPACE — cosmic scene, light pillar, orbiting coins, capsule ════ */}
+          {phase==='space'&&(
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
+              <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
+                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>カプセル排出</p>
+
+              <div style={{width:'100%',maxWidth:340,height:310,borderRadius:20,overflow:'hidden',
+                border:'1px solid rgba(184,134,11,.46)',position:'relative',
+                background:'radial-gradient(ellipse at 50% 28%, rgba(60,12,130,.92) 0%, rgba(20,4,60,.95) 42%, rgba(2,1,14,.99) 70%)',
+                boxShadow:'inset 0 2px 0 rgba(255,255,255,.04),0 0 34px rgba(0,0,0,.8)'}}>
+
+                {/* Stars */}
+                {Array.from({length:22},(_,i)=>(
+                  <div key={i} style={{position:'absolute',
+                    left:`${(i*43.7+5)%84+6}%`,top:`${(i*61.3+11)%72+6}%`,
+                    width:1+(i%3)*.75,height:1+(i%3)*.75,borderRadius:'50%',
+                    background:'rgba(255,255,255,.88)',
+                    animation:`ga-particle ${1.6+i*.32}s ease-in-out ${i*.38}s infinite`}}/>
+                ))}
+
+                {/* Central light pillar */}
+                <div style={{position:'absolute',left:'calc(50% - 38px)',top:0,
+                  width:76,height:'100%',
+                  background:'linear-gradient(180deg,rgba(255,230,100,.58) 0%,rgba(218,165,32,.25) 48%,rgba(218,165,32,.1) 74%,transparent 94%)',
+                  animation:'ga-spotlight 3s ease-in-out infinite'}}/>
+
+                {/* Orbiting coins (4 coins staggered by -delay) */}
+                {[0,-0.65,-1.3,-1.95].map((delay,i)=>(
+                  <div key={i} style={{
+                    position:'absolute',left:'50%',top:'42%',
+                    animation:`ga-orbit ${2.6+i*.18}s linear ${delay}s infinite`}}>
+                    <img src={coinImg} style={{
+                      position:'absolute',left:50+i*9,top:-13,
+                      width:26,height:26,borderRadius:'50%',objectFit:'cover',
+                      border:`${i<2?2:1.5}px solid #daa520`,
+                      boxShadow:`0 0 ${12+i*3}px rgba(218,165,32,${i<2?.85:.68})`}}/>
+                  </div>
+                ))}
+
+                {/* Ground rings */}
+                {[198,153,112].map((w,i)=>(
+                  <div key={i} style={{position:'absolute',bottom:18-i*4,left:'50%',
+                    transform:'translateX(-50%)',
+                    width:w,height:Math.round(w*.17),borderRadius:'50%',
+                    border:`${1.8-i*.5}px solid rgba(218,165,32,${.65-i*.18})`,
+                    boxShadow:`0 0 ${16-i*4}px rgba(218,165,32,${.42-i*.1})`}}/>
+                ))}
+
+                {/* Ground glow */}
+                <div style={{position:'absolute',bottom:0,left:'10%',width:'80%',height:38,
+                  background:'radial-gradient(ellipse,rgba(218,165,32,.5) 0%,transparent 68%)',
+                  filter:'blur(7px)'}}/>
+
+                {/* Materializing capsule */}
+                <div style={{position:'absolute',bottom:52,left:'50%',transform:'translateX(-50%)',
+                  animation:'ga-reveal .68s ease-out .28s both',zIndex:8}}>
+                  <PrizeCapsule prizeId="pts100" size={92}/>
+                </div>
+
+                {/* Gold particles */}
+                {[{l:'32%',t:'26%',s:4.2},{l:'65%',t:'30%',s:3.2},{l:'20%',t:'44%',s:3.5},{l:'76%',t:'38%',s:3}].map((p,i)=>(
+                  <div key={i} style={{position:'absolute',left:p.l,top:p.t,
+                    width:p.s,height:p.s,borderRadius:'50%',
+                    background:'rgba(255,215,0,.92)',
+                    boxShadow:`0 0 ${p.s*2.6}px rgba(218,165,32,.88)`,
+                    animation:`ga-particle ${1.4+i*.35}s ease-in-out ${i*.28}s infinite`}}/>
+                ))}
+              </div>
+
+              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,textAlign:'center',letterSpacing:'0.12em'}}>
+                宇宙の神秘の中、カプセルが排出されます
+              </p>
+            </div>
+          )}
+
+          {/* ════ Phase 5: FALLING — light pillar, capsule falls, lands, shockwave ════ */}
+          {phase==='falling'&&(
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
+              <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
+                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>カプセル落下</p>
+
+              <div style={{width:'100%',maxWidth:340,height:310,borderRadius:20,overflow:'hidden',
+                border:'1px solid rgba(184,134,11,.38)',position:'relative',
+                background:'radial-gradient(ellipse at 50% 96%, rgba(218,165,32,.28) 0%, transparent 44%), #020108',
+                boxShadow:'0 0 32px rgba(0,0,0,.78)'}}>
+
+                {/* Central light pillar (narrow vertical beam) */}
+                <div style={{position:'absolute',left:'calc(50% - 26px)',top:0,
+                  width:52,height:'100%',
+                  background:'linear-gradient(180deg,rgba(218,165,32,.44) 0%,rgba(218,165,32,.18) 58%,rgba(218,165,32,.06) 84%,transparent)',
+                  animation:'ga-spotlight 2.8s ease-in-out infinite'}}/>
+
+                {/* Speed lines */}
+                {[-80,-48,48,80].map((x,i)=>(
+                  <div key={i} style={{position:'absolute',
+                    left:`calc(50% + ${x}px)`,top:0,
+                    width:1.5,height:'100%',
+                    background:'linear-gradient(180deg,transparent 0%,rgba(218,165,32,.2) 28%,rgba(218,165,32,.2) 72%,transparent 100%)',
+                    opacity:.55}}/>
+                ))}
+
+                {/* Falling capsule + mascot (ga-capland animation on top property) */}
+                <div style={{position:'absolute',left:0,right:0,
+                  display:'flex',justifyContent:'center',zIndex:8,
+                  animation:'ga-capland 1.05s ease-in forwards'}}>
+                  <div style={{position:'relative',width:100,height:100}}>
+                    <PrizeCapsule prizeId="pts100" size={100}/>
+                    <div style={{position:'absolute',inset:0,display:'flex',
+                      alignItems:'center',justifyContent:'center',zIndex:2}}>
+                      <img src={mascotImg} style={{width:54,height:'auto',objectFit:'contain',opacity:.88}}/>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Shockwave rings (3 waves at landing, delayed) */}
+                {[0,.16,.32].map((d,i)=>(
+                  <div key={i} style={{
+                    position:'absolute',bottom:10,left:'50%',
+                    width:88+i*56,height:14+i*10,
+                    borderRadius:'50%',
+                    border:`${2-i*.55}px solid rgba(218,165,32,${.74-i*.2})`,
+                    boxShadow:`0 0 ${12-i*3}px rgba(218,165,32,${.46-i*.12})`,
+                    opacity:0,
+                    animation:`ga-shockwave .88s ease-out ${.76+d}s both`}}/>
+                ))}
+
+                {/* Ground impact glow */}
+                <div style={{position:'absolute',bottom:0,left:'12%',width:'76%',height:36,
+                  background:'radial-gradient(ellipse,rgba(218,165,32,.54) 0%,transparent 68%)',
+                  filter:'blur(7px)',
+                  animation:'ga-glowtext 1.8s ease-in-out .72s infinite'}}/>
+              </div>
+
+              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em'}}>
+                カプセルが光の柱とともに落下します
               </p>
             </div>
           )}
@@ -853,67 +933,77 @@ export function GachaPage() {
   )
 }
 
-/* ════ JACKPOT SCREEN (10,000 INMU) ════ */
+/* ════ JACKPOT SCREEN (10,000 INMU) — multi-step sequential reveal ════ */
 function JackpotScreen({ pts, onReset, profile, unread }:{
   pts:number; onReset:()=>void;
   profile:{role?:string;displayName?:string}|null;
   unread:number
 }) {
-  const [flash,setFlash]=useState(false)
-  const [shaking,setShaking]=useState(false)
-  const [show,setShow]=useState(false)
+  const [step,setStep]=useState(0)
+  const [flash,setFlash]=useState(true)
 
   useEffect(()=>{
     playJackpotSE()
-    setFlash(true);setShaking(true)
-    setTimeout(()=>setFlash(false),920)
-    setTimeout(()=>setShaking(false),560)
-    setTimeout(()=>setShow(true),420)
+    const ts=[
+      setTimeout(()=>setFlash(false),900),
+      setTimeout(()=>setStep(1),320),    // JACKPOT title
+      setTimeout(()=>setStep(2),980),    // gold capsule + burst glow
+      setTimeout(()=>setStep(3),1680),   // capsule opens (split)
+      setTimeout(()=>setStep(4),2080),   // mascot burst from capsule
+      setTimeout(()=>setStep(5),2600),   // multiple mascots jumping
+      setTimeout(()=>setStep(6),3200),   // 10,000 INMU display
+      setTimeout(()=>setStep(7),4100),   // back button
+    ]
+    return()=>ts.forEach(clearTimeout)
   },[])
 
   return (
     <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
       <style>{CSS}</style>
-      {flash&&<div style={{position:'fixed',inset:0,zIndex:9999,pointerEvents:'none',
-        background:'radial-gradient(circle at 50% 40%,rgba(255,255,200,.98) 0%,rgba(218,165,32,.88) 38%,transparent 68%)',
-        animation:'ga-goldflash .92s ease-out forwards'}}/>}
-      <div className={shaking?'ga-shake':''}>
-        <PageBg jackpot>
-          {/* Rising coins */}
-          <div style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:4,overflow:'hidden'}}>
-            {COIN_RISES.map((c,i)=>(
-              <div key={i} style={{position:'absolute',bottom:'-8%',left:c.x,
-                animation:`ga-coinrise ${c.dur}s ease-in ${c.delay}s infinite`}}>
-                <img src={coinImg} style={{width:c.sz,height:c.sz,borderRadius:'50%',objectFit:'cover',
-                  border:'2px solid #daa520',boxShadow:'0 0 12px rgba(218,165,32,.8)',opacity:.88}}/>
-              </div>
-            ))}
-          </div>
-          {/* Particles */}
-          <div style={{position:'absolute',inset:0,pointerEvents:'none',overflow:'hidden',zIndex:3}}>
-            {JP_PARTICLES.map((p,i)=>(
-              <div key={i} style={{position:'absolute',left:p.x,top:p.y,
-                width:p.s,height:p.s,borderRadius:'50%',
-                background:'rgba(255,215,0,.88)',
-                boxShadow:`0 0 ${p.s*2.8}px rgba(218,165,32,.7)`,
-                animation:`ga-drift ${p.dur}s ease-in-out ${p.delay}s infinite`}}/>
-            ))}
-          </div>
-          {/* Rings */}
-          <div style={{position:'absolute',top:'40%',left:'50%',zIndex:3,pointerEvents:'none'}}>
-            {[0,1,2,3,4].map(i=>(
-              <div key={i} style={{position:'absolute',
-                width:78+i*68,height:78+i*68,borderRadius:'50%',
-                border:`${Math.max(.6,1.8-i*.3)}px solid rgba(218,165,32,${.55-i*.08})`,
-                animation:`ga-ring 2s ease-out ${i*.4}s infinite`}}/>
-            ))}
-          </div>
 
-          <div style={{position:'relative',zIndex:6,display:'flex',
-            flexDirection:'column',alignItems:'center',
-            padding:'20px 18px',gap:18,minHeight:'100dvh'}}>
-            {/* Title */}
-            <div style={{textAlign:'center',marginTop:6}}>
+      {/* Full-screen gold flash */}
+      {flash&&<div style={{position:'fixed',inset:0,zIndex:9999,pointerEvents:'none',
+        background:'radial-gradient(circle at 50% 42%,rgba(255,255,200,.98) 0%,rgba(218,165,32,.88) 38%,transparent 68%)',
+        animation:'ga-goldflash .9s ease-out forwards'}}/>}
+
+      <PageBg jackpot>
+        {/* Rising coins */}
+        <div style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:4,overflow:'hidden'}}>
+          {COIN_RISES.map((c,i)=>(
+            <div key={i} style={{position:'absolute',bottom:'-8%',left:c.x,
+              animation:`ga-coinrise ${c.dur}s ease-in ${c.delay}s infinite`}}>
+              <img src={coinImg} style={{width:c.sz,height:c.sz,borderRadius:'50%',objectFit:'cover',
+                border:'2px solid #daa520',boxShadow:'0 0 12px rgba(218,165,32,.8)',opacity:.88}}/>
+            </div>
+          ))}
+        </div>
+        {/* Particles */}
+        <div style={{position:'absolute',inset:0,pointerEvents:'none',overflow:'hidden',zIndex:3}}>
+          {JP_PARTICLES.map((p,i)=>(
+            <div key={i} style={{position:'absolute',left:p.x,top:p.y,
+              width:p.s,height:p.s,borderRadius:'50%',
+              background:'rgba(255,215,0,.88)',
+              boxShadow:`0 0 ${p.s*2.8}px rgba(218,165,32,.7)`,
+              animation:`ga-drift ${p.dur}s ease-in-out ${p.delay}s infinite`}}/>
+          ))}
+        </div>
+        {/* Rings */}
+        <div style={{position:'absolute',top:'40%',left:'50%',zIndex:3,pointerEvents:'none'}}>
+          {[0,1,2,3,4].map(i=>(
+            <div key={i} style={{position:'absolute',
+              width:78+i*68,height:78+i*68,borderRadius:'50%',
+              border:`${Math.max(.6,1.8-i*.3)}px solid rgba(218,165,32,${.55-i*.08})`,
+              animation:`ga-ring 2s ease-out ${i*.4}s infinite`}}/>
+          ))}
+        </div>
+
+        <div style={{position:'relative',zIndex:6,display:'flex',
+          flexDirection:'column',alignItems:'center',
+          padding:'14px 18px',gap:14,minHeight:'100dvh',overflowY:'auto'}}>
+
+          {/* Step 1: JACKPOT title */}
+          {step>=1&&(
+            <div className="ga-reveal" style={{textAlign:'center',marginTop:4}}>
               <h1 style={{margin:0,fontSize:'min(10vw,36px)',fontWeight:900,
                 fontFamily:'Georgia,serif',letterSpacing:'0.12em',color:'#ffd700',
                 animation:'ga-jppulse 1.3s ease-in-out infinite, ga-jpzoom .52s ease-out forwards',opacity:0}}>
@@ -926,46 +1016,102 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Gold capsule */}
-            {show&&(
-              <div className="ga-reveal" style={{display:'flex',flexDirection:'column',
-                alignItems:'center',gap:16}}>
-                <div style={{position:'relative'}}>
-                  <div style={{position:'absolute',inset:-22,borderRadius:'50%',
-                    background:'radial-gradient(circle,rgba(255,250,100,.5) 0%,rgba(218,165,32,.28) 42%,transparent 70%)',
-                    animation:'ga-glow 1.1s ease-in-out infinite'}}/>
-                  <PrizeCapsule prizeId="inmu10k" size={172} open/>
+          {/* Step 2: Gold capsule burst */}
+          {step===2&&(
+            <div className="ga-reveal" style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div style={{position:'relative'}}>
+                <div style={{position:'absolute',inset:-32,borderRadius:'50%',
+                  background:'radial-gradient(circle,rgba(255,250,80,.68) 0%,rgba(218,165,32,.36) 42%,transparent 68%)',
+                  animation:'ga-glow .8s ease-in-out infinite'}}/>
+                <div style={{position:'absolute',inset:-52,borderRadius:'50%',
+                  animation:'ga-burst .65s ease-out forwards',opacity:0,
+                  background:'radial-gradient(circle,rgba(255,255,120,.52) 0%,transparent 60%)'}}/>
+                <PrizeCapsule prizeId="inmu10k" size={168}/>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Capsule opening */}
+          {step===3&&(
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+              <div style={{position:'relative',height:200,width:200,
+                display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
+                <div style={{position:'absolute',inset:-28,borderRadius:'50%',
+                  background:'radial-gradient(circle,rgba(255,255,180,.9) 0%,rgba(218,165,32,.68) 36%,transparent 62%)',
+                  animation:'ga-burst .72s ease-out .05s forwards',opacity:0}}/>
+                {[0,1,2].map(i=>(
+                  <div key={i} style={{position:'absolute',
+                    width:68+i*58,height:68+i*58,borderRadius:'50%',
+                    border:`1px solid rgba(218,165,32,${.55-i*.15})`,
+                    animation:`ga-ring ${.48+i*.24}s ease-out ${.12+i*.14}s forwards`}}/>
+                ))}
+                <div style={{position:'absolute',width:155,height:78,
+                  borderRadius:'78px 78px 0 0',overflow:'hidden',
+                  top:14,transformOrigin:'bottom center',
+                  animation:'ga-split-t .6s ease-out .1s forwards',
+                  boxShadow:'0 -8px 32px rgba(218,165,32,.7)',zIndex:5}}>
+                  <PrizeCapsule prizeId="inmu10k" size={155}/>
                 </div>
-                {/* Prize panel */}
-                <div style={{textAlign:'center',
-                  background:'linear-gradient(135deg,rgba(26,12,2,.96),rgba(36,20,4,.96))',
-                  border:'2px solid rgba(218,165,32,.72)',borderRadius:22,
-                  padding:'16px 28px',backdropFilter:'blur(10px)',
-                  boxShadow:'inset 0 1px 0 rgba(255,255,255,.12),0 0 44px rgba(218,165,32,.38)'}}>
-                  <p style={{margin:0,fontWeight:900,fontSize:22,color:'#ffd700',letterSpacing:'0.04em',
-                    textShadow:'0 0 28px rgba(255,215,0,.95)'}}>
-                    🏆 おめでとうございます！
-                  </p>
-                  <p style={{margin:'7px 0 0',fontSize:13,color:'rgba(253,230,138,.8)',lineHeight:1.7}}>
-                    10,000 INMU を獲得しました！<br/>報酬は後日運営より送金されます。
-                  </p>
+                <div style={{position:'absolute',width:155,height:78,
+                  borderRadius:'0 0 78px 78px',overflow:'hidden',
+                  top:110,transformOrigin:'top center',
+                  animation:'ga-split-b .6s ease-out .1s forwards',
+                  boxShadow:'0 8px 32px rgba(218,165,32,.58)',zIndex:5}}>
+                  <PrizeCapsule prizeId="inmu10k" size={155}/>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Mascot jump x3 */}
-            <div style={{display:'flex',gap:14,alignItems:'flex-end',justifyContent:'center'}}>
-              {[{s:86,d:'0s'},{s:110,d:'.26s'},{s:86,d:'.52s'}].map((m,i)=>(
+          {/* Step 4: Mascot bursts from capsule */}
+          {step===4&&(
+            <div className="ga-reveal" style={{display:'flex',flexDirection:'column',
+              alignItems:'center',gap:6}}>
+              <img src={mascotImg} style={{
+                width:110,height:'auto',objectFit:'contain',
+                filter:'drop-shadow(0 0 32px rgba(218,165,32,.88)) drop-shadow(-2px 8px 18px rgba(0,0,0,.8))',
+                animation:'ga-popin .42s ease-out both'}}/>
+            </div>
+          )}
+
+          {/* Step 5+: Multiple mascots jumping */}
+          {step>=5&&(
+            <div style={{display:'flex',gap:12,alignItems:'flex-end',justifyContent:'center'}}>
+              {[{s:82,d:'0s'},{s:108,d:'.24s'},{s:82,d:'.48s'}].map((m,i)=>(
                 <img key={i} src={mascotImg} style={{
                   width:m.s,height:'auto',objectFit:'contain',
                   filter:'drop-shadow(-2px 8px 18px rgba(0,0,0,.8)) drop-shadow(0 0 16px rgba(218,165,32,.55))',
                   animation:`ga-bounce .82s ease-in-out ${m.d} infinite`}}/>
               ))}
             </div>
+          )}
 
-            {/* Points */}
-            <div style={{background:'linear-gradient(135deg,rgba(16,8,2,.96),rgba(24,14,2,.96))',
+          {/* Step 6+: 10,000 INMU display */}
+          {step>=6&&(
+            <div className="ga-reveal" style={{textAlign:'center',
+              background:'linear-gradient(135deg,rgba(26,12,2,.96),rgba(36,20,4,.96))',
+              border:'2px solid rgba(218,165,32,.72)',borderRadius:22,
+              padding:'16px 28px',backdropFilter:'blur(10px)',
+              boxShadow:'inset 0 1px 0 rgba(255,255,255,.12),0 0 44px rgba(218,165,32,.38)'}}>
+              <p style={{margin:0,fontWeight:900,fontSize:22,color:'#ffd700',letterSpacing:'0.04em',
+                textShadow:'0 0 28px rgba(255,215,0,.95)'}}>
+                🏆 おめでとうございます！
+              </p>
+              <p style={{margin:'6px 0 0',fontSize:16,fontWeight:900,color:'#ffe566',
+                textShadow:'0 0 18px rgba(255,215,0,.78)'}}>
+                10,000 INMU 獲得！
+              </p>
+              <p style={{margin:'5px 0 0',fontSize:11,color:'rgba(253,230,138,.72)',lineHeight:1.6}}>
+                報酬は後日運営より送金されます
+              </p>
+            </div>
+          )}
+
+          {/* Step 6+: Points counter */}
+          {step>=6&&(
+            <div className="ga-reveal" style={{background:'linear-gradient(135deg,rgba(16,8,2,.96),rgba(24,14,2,.96))',
               border:'1px solid rgba(184,134,11,.58)',borderRadius:14,
               padding:'10px 22px',display:'flex',alignItems:'center',gap:12,
               boxShadow:'inset 0 1px 0 rgba(255,255,255,.08),0 4px 16px rgba(0,0,0,.5)'}}>
@@ -980,9 +1126,11 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Back button */}
-            <button type="button" onClick={onReset}
+          {/* Step 7: Back button */}
+          {step>=7&&(
+            <button type="button" onClick={onReset} className="ga-reveal"
               style={{background:'linear-gradient(160deg,#ffe680 0%,#d4a017 30%,#7a5500 100%)',
                 border:'none',borderRadius:20,padding:'14px 48px',
                 color:'#2a1800',fontWeight:900,fontSize:15,cursor:'pointer',letterSpacing:'0.06em',
@@ -990,9 +1138,10 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
                 marginBottom:28}}>
               ガチャ画面へ戻る
             </button>
-          </div>
-        </PageBg>
-      </div>
+          )}
+
+        </div>
+      </PageBg>
     </AppShell>
   )
 }
