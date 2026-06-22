@@ -103,10 +103,11 @@ const CSS=`
   @keyframes ga-drift    {0%{opacity:0;transform:translateY(14px)scale(.8)}30%,70%{opacity:.88}100%{opacity:0;transform:translateY(-42px)scale(.5)}}
   @keyframes ga-machinepulse{0%,100%{filter:drop-shadow(0 24px 72px rgba(0,0,0,.98)) drop-shadow(0 0 22px rgba(184,134,11,.22))}50%{filter:drop-shadow(0 24px 72px rgba(0,0,0,.98)) drop-shadow(0 0 60px rgba(218,165,32,.82))}}
   @keyframes ga-coinfall    {0%{top:-20%;transform:rotate(0deg);opacity:.55}70%{opacity:1}100%{top:4%;transform:rotate(400deg);opacity:1}}
-  @keyframes ga-leverrot2   {0%{transform:rotate(-8deg)}100%{transform:rotate(62deg)}}
+  @keyframes ga-coinfall2   {0%{top:-96px;transform:rotate(-12deg);opacity:.65}20%{opacity:1}100%{top:6px;transform:rotate(340deg)}}
+  @keyframes ga-leverrot2   {0%{transform:rotate(-8deg)}100%{transform:rotate(58deg)}}
   @keyframes ga-orbit       {from{transform:rotate(0deg) translateX(60px) rotate(0deg)}to{transform:rotate(360deg) translateX(60px) rotate(-360deg)}}
   @keyframes ga-shockwave   {0%{transform:translateX(-50%) scale(.12);opacity:.88}100%{transform:translateX(-50%) scale(3.4);opacity:0}}
-  @keyframes ga-capland     {0%{top:-110px}72%{top:204px}83%{top:190px}91%{top:202px}100%{top:197px}}
+  @keyframes ga-capland     {0%{top:-120px}72%{top:188px}83%{top:174px}91%{top:186px}100%{top:181px}}
   .ga-pulse{animation:ga-pulse 2.2s ease-in-out infinite}
   .ga-floatslow{animation:ga-floatslow 3.4s ease-in-out infinite}
   .ga-reveal{animation:ga-reveal .42s ease-out forwards}
@@ -577,36 +578,61 @@ export function GachaPage() {
             </div>
           )}
 
-          {/* ════ Phase 2: COIN INSERT — machine fullscreen + vignette zoom on slot ════ */}
+          {/* ════ Phase 2: COIN INSERT — machine top close-up, coin falls into slot ════ */}
           {phase==='inserting'&&(
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
                 letterSpacing:'0.22em',margin:0,textAlign:'center'}}>コイン投入</p>
 
-              <div style={{position:'relative',width:'min(290px,74vw)',margin:'0 auto'}}>
-                <img src={machineImg} alt="" style={{width:'100%',height:'auto',display:'block',
-                  filter:'drop-shadow(0 18px 60px rgba(0,0,0,.98)) drop-shadow(0 0 32px rgba(184,134,11,.52))'}}/>
-                {/* Vignette: spotlight on coin slot top (9% y) */}
+              {/* Machine cropped to show only the top dome area */}
+              <div style={{width:'100%',maxWidth:340,height:252,borderRadius:20,overflow:'hidden',
+                position:'relative',
+                background:'radial-gradient(ellipse at 50% 110%, rgba(218,165,32,.38) 0%, transparent 44%), #040101',
+                border:'1px solid rgba(184,134,11,.4)',
+                boxShadow:'0 0 32px rgba(0,0,0,.8)'}}>
+
+                {/* Machine image — only top portion visible */}
+                <img src={machineImg} alt="" style={{
+                  position:'absolute',
+                  width:'min(296px,76vw)',
+                  left:'50%',transform:'translateX(-50%)',
+                  top:0,
+                  filter:'drop-shadow(0 4px 32px rgba(0,0,0,.9))'}}/>
+
+                {/* Focus vignette: spotlight on coin slot (~12% from machine top ≈ 46px) */}
                 <div style={{position:'absolute',inset:0,pointerEvents:'none',
-                  background:'radial-gradient(ellipse 58% 26% at 50% 9%, transparent 0%, rgba(0,0,0,0) 32%, rgba(0,0,0,.78) 68%, rgba(0,0,0,.95) 100%)'}}/>
-                {/* Slot glow */}
-                <div style={{position:'absolute',left:'16%',top:'4%',width:'68%',height:'13%',
-                  background:'radial-gradient(ellipse,rgba(218,165,32,.74) 0%,transparent 64%)',
+                  background:'radial-gradient(ellipse 62% 38% at 50% 22%, transparent 0%, rgba(0,0,0,0) 36%, rgba(0,0,0,.78) 72%, rgba(0,0,0,.96) 100%)'}}/>
+
+                {/* Coin slot golden glow */}
+                <div style={{position:'absolute',left:'16%',top:'12%',width:'68%',height:'20%',
+                  background:'radial-gradient(ellipse,rgba(218,165,32,.86) 0%,transparent 62%)',
                   animation:'ga-glowtext 1s ease-in-out infinite',pointerEvents:'none'}}/>
-                {/* Falling INMU coin */}
+
+                {/* INMU coin — falls from above container into slot */}
                 <img src={coinImg} style={{
                   position:'absolute',left:'calc(50% - 46px)',
                   width:92,height:92,borderRadius:'50%',objectFit:'cover',
                   border:'3.5px solid #daa520',
-                  boxShadow:'0 0 64px rgba(218,165,32,.98),0 0 24px rgba(255,215,0,.6)',
-                  animation:'ga-coinfall 1.1s ease-in forwards',
+                  boxShadow:'0 0 68px rgba(218,165,32,.98),0 0 28px rgba(255,215,0,.65)',
+                  animation:'ga-coinfall2 1.15s ease-in forwards',
                   pointerEvents:'none'}}/>
-                {/* Sparkles at slot */}
-                {[{l:'34%',t:'11%'},{l:'50%',t:'8%'},{l:'63%',t:'12%'}].map((p,i)=>(
+
+                {/* Sparkles at the slot */}
+                {[{l:'34%',t:'22%'},{l:'50%',t:'18%'},{l:'64%',t:'23%'}].map((p,i)=>(
                   <div key={i} style={{position:'absolute',left:p.l,top:p.t,
                     width:6,height:6,borderRadius:'50%',
-                    background:'rgba(255,215,0,.95)',boxShadow:'0 0 11px rgba(218,165,32,.9)',
-                    animation:`ga-particle ${.42+i*.1}s ease-in-out ${i*.12+.68}s infinite`,
+                    background:'rgba(255,215,0,.95)',boxShadow:'0 0 12px rgba(218,165,32,.92)',
+                    animation:`ga-particle ${.42+i*.1}s ease-in-out ${i*.12+.72}s infinite`,
+                    pointerEvents:'none'}}/>
+                ))}
+
+                {/* Extra gold rays from slot */}
+                {[-18,0,18].map((a,i)=>(
+                  <div key={i} style={{position:'absolute',left:'calc(50% - 1.5px)',top:'22%',
+                    width:3,height:'14%',borderRadius:2,
+                    background:'linear-gradient(180deg,rgba(218,165,32,.7),transparent)',
+                    transformOrigin:'top center',transform:`rotate(${a}deg)`,
+                    animation:`ga-particle ${.5+i*.1}s ease-in-out ${i*.1}s infinite`,
                     pointerEvents:'none'}}/>
                 ))}
               </div>
@@ -617,47 +643,89 @@ export function GachaPage() {
             </div>
           )}
 
-          {/* ════ Phase 3: LEVER — machine + spotlight on lever + CSS lever arm ════ */}
+          {/* ════ Phase 3: LEVER — CSS-only lever mechanism close-up ════ */}
           {phase==='lever'&&(
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
                 letterSpacing:'0.22em',margin:0,textAlign:'center'}}>レバー回転</p>
 
-              <div style={{position:'relative',width:'min(290px,74vw)',margin:'0 auto',
-                animation:'ga-shake .5s ease-out .42s both'}}>
-                <img src={machineImg} alt="" style={{width:'100%',height:'auto',display:'block',
-                  filter:'drop-shadow(0 18px 60px rgba(0,0,0,.98)) drop-shadow(0 0 32px rgba(184,134,11,.52))'}}/>
-                {/* Vignette: spotlight on lever (82% x, 63% y) */}
-                <div style={{position:'absolute',inset:0,pointerEvents:'none',
-                  background:'radial-gradient(ellipse 40% 24% at 82% 63%, transparent 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,.82) 66%, rgba(0,0,0,.96) 100%)'}}/>
-                {/* Lever glow */}
-                <div style={{position:'absolute',left:'64%',top:'55%',width:'34%',height:'18%',
-                  background:'radial-gradient(ellipse at 40% 50%,rgba(218,165,32,.84) 0%,transparent 62%)',
-                  animation:'ga-glowtext .88s ease-in-out infinite',pointerEvents:'none'}}/>
-                {/* CSS lever arm */}
-                <div style={{position:'absolute',left:'76%',top:'63%',
-                  transformOrigin:'6px 8px',
-                  animation:'ga-leverrot2 .88s ease-in-out .15s forwards',
-                  pointerEvents:'none'}}>
-                  <div style={{width:52,height:14,
-                    background:'linear-gradient(180deg,#ffe066 0%,#8a6200 100%)',
-                    borderRadius:7,boxShadow:'0 0 20px rgba(218,165,32,.9)'}}/>
-                  <div style={{position:'absolute',right:-9,top:-10,
-                    width:32,height:32,borderRadius:'50%',
-                    background:'radial-gradient(ellipse at 34% 30%,#ffe880,#c89010 50%,#5a3a00)',
-                    boxShadow:'0 0 26px rgba(218,165,32,.95)'}}/>
+              <div style={{width:'100%',maxWidth:340,height:290,borderRadius:20,overflow:'hidden',
+                position:'relative',
+                background:'radial-gradient(ellipse at 46% 38%, rgba(55,32,4,.88) 0%, rgba(10,5,1,.98) 58%)',
+                border:'1px solid rgba(184,134,11,.42)',
+                boxShadow:'0 0 32px rgba(0,0,0,.82)'}}>
+
+                {/* Ambient gold glow around lever */}
+                <div style={{position:'absolute',left:'30%',top:'14%',width:'40%',height:'55%',
+                  background:'radial-gradient(ellipse,rgba(218,165,32,.22) 0%,transparent 68%)',
+                  animation:'ga-glow 1.4s ease-in-out infinite',pointerEvents:'none'}}/>
+
+                {/* ── LEVER ASSEMBLY (centered) ── */}
+                <div style={{position:'absolute',left:'50%',top:'8%',transform:'translateX(-50%)'}}>
+
+                  {/* Cylindrical post (tall, gold metallic) */}
+                  <div style={{
+                    width:54,height:196,borderRadius:14,position:'relative',
+                    background:'linear-gradient(90deg,#1a0e00 0%,#8a5c00 12%,#d4a020 26%,#ffe060 36%,#d4a020 50%,#8a5c00 66%,#1e1000 100%)',
+                    boxShadow:'inset -6px 0 16px rgba(0,0,0,.62),inset 5px 0 10px rgba(255,230,80,.18),6px 0 26px rgba(0,0,0,.7)'
+                  }}>
+
+                    {/* Decorative rings on post */}
+                    {[0,1,2].map(i=>(
+                      <div key={i} style={{
+                        position:'absolute',left:-5,top:28+i*54,width:64,height:16,
+                        borderRadius:8,
+                        background:'linear-gradient(180deg,#ffe068 0%,#c89000 60%,#8a5c00 100%)',
+                        boxShadow:'0 0 10px rgba(218,165,32,.55),inset 0 2px 4px rgba(255,255,180,.3)'
+                      }}/>
+                    ))}
+
+                    {/* ── LEVER ARM (rotates from near top of post) ── */}
+                    <div style={{
+                      position:'absolute',top:22,left:'100%',
+                      transformOrigin:'0px 15px',
+                      animation:'ga-leverrot2 .92s ease-in-out .1s forwards'
+                    }}>
+                      {/* Arm rod */}
+                      <div style={{
+                        width:118,height:22,borderRadius:11,
+                        background:'linear-gradient(180deg,#ffe068 0%,#c89000 46%,#7a4a00 100%)',
+                        boxShadow:'0 5px 20px rgba(0,0,0,.65)',position:'relative'
+                      }}>
+                        {/* Large knob at end of arm */}
+                        <div style={{
+                          position:'absolute',right:-30,top:-22,
+                          width:66,height:66,borderRadius:'50%',
+                          background:'radial-gradient(ellipse at 32% 26%,#fff8d0 0%,#ffe060 18%,#c89000 42%,#7a4a00 70%,#2a1400 100%)',
+                          boxShadow:'0 0 38px rgba(218,165,32,.94),0 6px 18px rgba(0,0,0,.7),inset -4px -4px 12px rgba(0,0,0,.5)'
+                        }}/>
+                      </div>
+                    </div>
+
+                    {/* Bottom knob of post */}
+                    <div style={{
+                      position:'absolute',bottom:-20,left:'50%',transform:'translateX(-50%)',
+                      width:74,height:44,borderRadius:'50%',
+                      background:'radial-gradient(ellipse at 34% 28%,#fff8d0 0%,#ffe060 18%,#c89000 42%,#7a4a00 72%)',
+                      boxShadow:'0 0 26px rgba(218,165,32,.8),0 6px 16px rgba(0,0,0,.65),inset -3px -3px 10px rgba(0,0,0,.5)'
+                    }}/>
+                  </div>
+
+                  {/* Large curved rotation arrow */}
+                  <div style={{
+                    position:'absolute',bottom:-46,right:-88,
+                    fontSize:92,lineHeight:1,color:'rgba(218,165,32,.86)',fontWeight:900,
+                    textShadow:'0 0 28px rgba(218,165,32,.72)',
+                    transform:'scaleX(.88)'
+                  }}>↷</div>
                 </div>
-                {/* ↻ rotation arrow */}
-                <div style={{position:'absolute',left:'71%',top:'51%',
-                  fontSize:30,color:'rgba(218,165,32,.88)',lineHeight:1,fontWeight:900,
-                  animation:'ga-glowtext .9s ease-in-out infinite',pointerEvents:'none'}}>↻</div>
-                {/* Sparkles */}
-                {[{l:'75%',t:'50%'},{l:'88%',t:'59%'},{l:'81%',t:'71%'}].map((p,i)=>(
+
+                {/* Gold sparkles */}
+                {[{l:'68%',t:'28%'},{l:'78%',t:'42%'},{l:'62%',t:'52%'},{l:'72%',t:'60%'}].map((p,i)=>(
                   <span key={i} style={{position:'absolute',left:p.l,top:p.t,
-                    fontSize:14,color:'#ffd700',
+                    fontSize:13+i*2,color:'#ffd700',
                     textShadow:'0 0 12px rgba(255,215,0,.95)',
-                    animation:`ga-sparkle ${.5+i*.18}s ease-in-out ${i*.15}s infinite`,
-                    pointerEvents:'none'}}>✦</span>
+                    animation:`ga-sparkle ${.52+i*.18}s ease-in-out ${i*.14}s infinite`}}>✦</span>
                 ))}
               </div>
 
@@ -667,7 +735,7 @@ export function GachaPage() {
             </div>
           )}
 
-          {/* ════ Phase 4: SPACE — cosmic scene, light pillar, orbiting coins, capsule ════ */}
+          {/* ════ Phase 4: SPACE — cosmic scene, beam from below, coins orbit, glass orb ════ */}
           {phase==='space'&&(
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
@@ -675,64 +743,81 @@ export function GachaPage() {
 
               <div style={{width:'100%',maxWidth:340,height:310,borderRadius:20,overflow:'hidden',
                 border:'1px solid rgba(184,134,11,.46)',position:'relative',
-                background:'radial-gradient(ellipse at 50% 28%, rgba(60,12,130,.92) 0%, rgba(20,4,60,.95) 42%, rgba(2,1,14,.99) 70%)',
-                boxShadow:'inset 0 2px 0 rgba(255,255,255,.04),0 0 34px rgba(0,0,0,.8)'}}>
+                background:'radial-gradient(ellipse at 50% 92%, rgba(218,165,32,.32) 0%, rgba(80,20,0,.62) 28%, rgba(24,4,60,.88) 55%, rgba(2,1,16,.99) 80%)',
+                boxShadow:'inset 0 2px 0 rgba(255,255,255,.04),0 0 34px rgba(0,0,0,.82)'}}>
 
                 {/* Stars */}
-                {Array.from({length:22},(_,i)=>(
+                {Array.from({length:26},(_,i)=>(
                   <div key={i} style={{position:'absolute',
-                    left:`${(i*43.7+5)%84+6}%`,top:`${(i*61.3+11)%72+6}%`,
-                    width:1+(i%3)*.75,height:1+(i%3)*.75,borderRadius:'50%',
-                    background:'rgba(255,255,255,.88)',
-                    animation:`ga-particle ${1.6+i*.32}s ease-in-out ${i*.38}s infinite`}}/>
+                    left:`${(i*43.7+5)%88+4}%`,top:`${(i*61.3+11)%78+4}%`,
+                    width:1+(i%4)*.7,height:1+(i%4)*.7,borderRadius:'50%',
+                    background:`rgba(255,255,255,${.5+i%3*.24})`,
+                    animation:`ga-particle ${1.6+i*.28}s ease-in-out ${i*.34}s infinite`}}/>
                 ))}
 
-                {/* Central light pillar */}
-                <div style={{position:'absolute',left:'calc(50% - 38px)',top:0,
-                  width:76,height:'100%',
-                  background:'linear-gradient(180deg,rgba(255,230,100,.58) 0%,rgba(218,165,32,.25) 48%,rgba(218,165,32,.1) 74%,transparent 94%)',
+                {/* Light beam — BOTTOM to TOP (beam source is below) */}
+                <div style={{position:'absolute',left:'calc(50% - 42px)',bottom:0,
+                  width:84,height:'96%',
+                  background:'linear-gradient(0deg,rgba(255,220,80,.72) 0%,rgba(218,165,32,.44) 28%,rgba(180,120,10,.22) 58%,rgba(100,60,0,.08) 78%,transparent 96%)',
+                  filter:'blur(4px)',
                   animation:'ga-spotlight 3s ease-in-out infinite'}}/>
 
-                {/* Orbiting coins (4 coins staggered by -delay) */}
+                {/* Bright core beam */}
+                <div style={{position:'absolute',left:'calc(50% - 14px)',bottom:0,
+                  width:28,height:'88%',
+                  background:'linear-gradient(0deg,rgba(255,245,180,.88) 0%,rgba(255,215,0,.55) 28%,rgba(218,165,32,.22) 60%,transparent 90%)'}}/>
+
+                {/* Orbiting INMU coins */}
                 {[0,-0.65,-1.3,-1.95].map((delay,i)=>(
                   <div key={i} style={{
-                    position:'absolute',left:'50%',top:'42%',
+                    position:'absolute',left:'50%',top:'46%',
                     animation:`ga-orbit ${2.6+i*.18}s linear ${delay}s infinite`}}>
                     <img src={coinImg} style={{
-                      position:'absolute',left:50+i*9,top:-13,
-                      width:26,height:26,borderRadius:'50%',objectFit:'cover',
+                      position:'absolute',left:52+i*10,top:-14,
+                      width:28,height:28,borderRadius:'50%',objectFit:'cover',
                       border:`${i<2?2:1.5}px solid #daa520`,
-                      boxShadow:`0 0 ${12+i*3}px rgba(218,165,32,${i<2?.85:.68})`}}/>
+                      boxShadow:`0 0 ${14+i*4}px rgba(218,165,32,${i<2?.88:.7})`}}/>
                   </div>
                 ))}
 
-                {/* Ground rings */}
-                {[198,153,112].map((w,i)=>(
-                  <div key={i} style={{position:'absolute',bottom:18-i*4,left:'50%',
+                {/* Circular ground rings (light converges here) */}
+                {[210,162,118].map((w,i)=>(
+                  <div key={i} style={{position:'absolute',bottom:10-i*3,left:'50%',
                     transform:'translateX(-50%)',
-                    width:w,height:Math.round(w*.17),borderRadius:'50%',
-                    border:`${1.8-i*.5}px solid rgba(218,165,32,${.65-i*.18})`,
-                    boxShadow:`0 0 ${16-i*4}px rgba(218,165,32,${.42-i*.1})`}}/>
+                    width:w,height:Math.round(w*.18),borderRadius:'50%',
+                    border:`${2-i*.55}px solid rgba(218,165,32,${.72-i*.18})`,
+                    boxShadow:`0 0 ${22-i*5}px rgba(218,165,32,${.52-i*.1}),inset 0 0 ${10-i*2}px rgba(218,165,32,.18)`}}/>
                 ))}
 
                 {/* Ground glow */}
-                <div style={{position:'absolute',bottom:0,left:'10%',width:'80%',height:38,
-                  background:'radial-gradient(ellipse,rgba(218,165,32,.5) 0%,transparent 68%)',
-                  filter:'blur(7px)'}}/>
+                <div style={{position:'absolute',bottom:0,left:'8%',width:'84%',height:42,
+                  background:'radial-gradient(ellipse,rgba(218,165,32,.62) 0%,rgba(218,165,32,.25) 48%,transparent 70%)',
+                  filter:'blur(8px)'}}/>
 
-                {/* Materializing capsule */}
-                <div style={{position:'absolute',bottom:52,left:'50%',transform:'translateX(-50%)',
-                  animation:'ga-reveal .68s ease-out .28s both',zIndex:8}}>
-                  <PrizeCapsule prizeId="pts100" size={92}/>
+                {/* Glass orb materializes (with mascot inside) */}
+                <div style={{position:'absolute',bottom:'24%',left:'50%',transform:'translateX(-50%)',
+                  animation:'ga-reveal .7s ease-out .32s both',zIndex:8}}>
+                  <div style={{position:'relative',width:96,height:96,borderRadius:'50%',
+                    background:'radial-gradient(ellipse at 32% 26%,rgba(255,255,220,.88) 0%,rgba(255,200,60,.55) 28%,rgba(200,120,0,.38) 52%,rgba(80,40,0,.65) 76%,rgba(20,8,0,.82) 100%)',
+                    boxShadow:'0 0 58px rgba(218,165,32,.92),0 0 26px rgba(255,200,0,.6),inset -4px -4px 18px rgba(80,40,0,.6),inset 5px 5px 14px rgba(255,240,120,.32)'}}>
+                    {/* Glass highlight */}
+                    <div style={{position:'absolute',top:8,left:12,width:26,height:16,borderRadius:'50%',
+                      background:'rgba(255,255,255,.42)',transform:'rotate(-22deg)'}}/>
+                    {/* Mascot inside orb */}
+                    <div style={{position:'absolute',inset:8,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
+                        opacity:.82,filter:'drop-shadow(0 2px 6px rgba(0,0,0,.55))'}}/>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Gold particles */}
-                {[{l:'32%',t:'26%',s:4.2},{l:'65%',t:'30%',s:3.2},{l:'20%',t:'44%',s:3.5},{l:'76%',t:'38%',s:3}].map((p,i)=>(
+                {/* Gold sparkle particles */}
+                {[{l:'28%',t:'22%',s:4},{l:'68%',t:'28%',s:3.2},{l:'18%',t:'46%',s:3.5},{l:'78%',t:'36%',s:3},{l:'38%',t:'14%',s:2.8}].map((p,i)=>(
                   <div key={i} style={{position:'absolute',left:p.l,top:p.t,
                     width:p.s,height:p.s,borderRadius:'50%',
                     background:'rgba(255,215,0,.92)',
-                    boxShadow:`0 0 ${p.s*2.6}px rgba(218,165,32,.88)`,
-                    animation:`ga-particle ${1.4+i*.35}s ease-in-out ${i*.28}s infinite`}}/>
+                    boxShadow:`0 0 ${p.s*2.8}px rgba(218,165,32,.88)`,
+                    animation:`ga-particle ${1.4+i*.32}s ease-in-out ${i*.26}s infinite`}}/>
                 ))}
               </div>
 
@@ -742,7 +827,7 @@ export function GachaPage() {
             </div>
           )}
 
-          {/* ════ Phase 5: FALLING — light pillar, capsule falls, lands, shockwave ════ */}
+          {/* ════ Phase 5: FALLING — glass orb falls through starfield, lands with shockwave ════ */}
           {phase==='falling'&&(
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
@@ -750,58 +835,74 @@ export function GachaPage() {
 
               <div style={{width:'100%',maxWidth:340,height:310,borderRadius:20,overflow:'hidden',
                 border:'1px solid rgba(184,134,11,.38)',position:'relative',
-                background:'radial-gradient(ellipse at 50% 96%, rgba(218,165,32,.28) 0%, transparent 44%), #020108',
-                boxShadow:'0 0 32px rgba(0,0,0,.78)'}}>
+                background:'radial-gradient(ellipse at 50% 98%, rgba(218,165,32,.34) 0%, rgba(100,50,0,.48) 22%, transparent 46%), #010008',
+                boxShadow:'0 0 32px rgba(0,0,0,.82)'}}>
 
-                {/* Central light pillar (narrow vertical beam) */}
-                <div style={{position:'absolute',left:'calc(50% - 26px)',top:0,
-                  width:52,height:'100%',
-                  background:'linear-gradient(180deg,rgba(218,165,32,.44) 0%,rgba(218,165,32,.18) 58%,rgba(218,165,32,.06) 84%,transparent)',
-                  animation:'ga-spotlight 2.8s ease-in-out infinite'}}/>
-
-                {/* Speed lines */}
-                {[-80,-48,48,80].map((x,i)=>(
+                {/* Stars (more prominent here) */}
+                {Array.from({length:32},(_,i)=>(
                   <div key={i} style={{position:'absolute',
-                    left:`calc(50% + ${x}px)`,top:0,
-                    width:1.5,height:'100%',
-                    background:'linear-gradient(180deg,transparent 0%,rgba(218,165,32,.2) 28%,rgba(218,165,32,.2) 72%,transparent 100%)',
-                    opacity:.55}}/>
+                    left:`${(i*37.3+8)%86+5}%`,top:`${(i*53.8+14)%82+5}%`,
+                    width:1+(i%4)*.8,height:1+(i%4)*.8,borderRadius:'50%',
+                    background:`rgba(255,255,255,${.45+i%4*.18})`,
+                    animation:`ga-particle ${1.8+i*.22}s ease-in-out ${i*.28}s infinite`}}/>
                 ))}
 
-                {/* Falling capsule + mascot (ga-capland animation on top property) */}
+                {/* Faint vertical light trails (speed lines) */}
+                {[-66,-38,38,66].map((x,i)=>(
+                  <div key={i} style={{position:'absolute',
+                    left:`calc(50% + ${x}px - 1px)`,top:0,
+                    width:1.5,height:'100%',
+                    background:'linear-gradient(180deg,transparent 0%,rgba(218,165,32,.16) 30%,rgba(218,165,32,.16) 70%,transparent 100%)',
+                    opacity:.6}}/>
+                ))}
+
+                {/* Falling glass orb + mascot */}
                 <div style={{position:'absolute',left:0,right:0,
                   display:'flex',justifyContent:'center',zIndex:8,
                   animation:'ga-capland 1.05s ease-in forwards'}}>
-                  <div style={{position:'relative',width:100,height:100}}>
-                    <PrizeCapsule prizeId="pts100" size={100}/>
-                    <div style={{position:'absolute',inset:0,display:'flex',
-                      alignItems:'center',justifyContent:'center',zIndex:2}}>
-                      <img src={mascotImg} style={{width:54,height:'auto',objectFit:'contain',opacity:.88}}/>
+                  <div style={{position:'relative',width:108,height:108,borderRadius:'50%',
+                    background:'radial-gradient(ellipse at 32% 26%,rgba(255,255,220,.9) 0%,rgba(255,200,60,.58) 28%,rgba(200,120,0,.4) 52%,rgba(80,40,0,.68) 76%,rgba(20,8,0,.85) 100%)',
+                    boxShadow:'0 0 64px rgba(218,165,32,.94),0 0 32px rgba(255,200,0,.65),inset -4px -4px 18px rgba(80,40,0,.62),inset 5px 5px 14px rgba(255,240,120,.34)'}}>
+                    {/* Glass highlight */}
+                    <div style={{position:'absolute',top:10,left:14,width:28,height:18,borderRadius:'50%',
+                      background:'rgba(255,255,255,.44)',transform:'rotate(-22deg)'}}/>
+                    {/* Mascot inside */}
+                    <div style={{position:'absolute',inset:9,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <img src={mascotImg} style={{width:60,height:'auto',objectFit:'contain',
+                        opacity:.85,filter:'drop-shadow(0 2px 6px rgba(0,0,0,.6))'}}/>
                     </div>
                   </div>
                 </div>
 
-                {/* Shockwave rings (3 waves at landing, delayed) */}
+                {/* Shockwave rings on landing */}
                 {[0,.16,.32].map((d,i)=>(
                   <div key={i} style={{
-                    position:'absolute',bottom:10,left:'50%',
-                    width:88+i*56,height:14+i*10,
+                    position:'absolute',bottom:8,left:'50%',
+                    width:86+i*58,height:14+i*10,
                     borderRadius:'50%',
-                    border:`${2-i*.55}px solid rgba(218,165,32,${.74-i*.2})`,
-                    boxShadow:`0 0 ${12-i*3}px rgba(218,165,32,${.46-i*.12})`,
+                    border:`${2-i*.55}px solid rgba(218,165,32,${.76-i*.2})`,
+                    boxShadow:`0 0 ${14-i*3}px rgba(218,165,32,${.48-i*.12})`,
                     opacity:0,
-                    animation:`ga-shockwave .88s ease-out ${.76+d}s both`}}/>
+                    animation:`ga-shockwave .9s ease-out ${.76+d}s both`}}/>
                 ))}
 
                 {/* Ground impact glow */}
-                <div style={{position:'absolute',bottom:0,left:'12%',width:'76%',height:36,
-                  background:'radial-gradient(ellipse,rgba(218,165,32,.54) 0%,transparent 68%)',
-                  filter:'blur(7px)',
-                  animation:'ga-glowtext 1.8s ease-in-out .72s infinite'}}/>
+                <div style={{position:'absolute',bottom:0,left:'10%',width:'80%',height:38,
+                  background:'radial-gradient(ellipse,rgba(218,165,32,.58) 0%,transparent 68%)',
+                  filter:'blur(8px)',
+                  animation:'ga-glowtext 2s ease-in-out .74s infinite'}}/>
+
+                {/* Impact sparkles */}
+                {[{l:'32%',b:'6%'},{l:'68%',b:'4%'},{l:'42%',b:'10%'},{l:'58%',b:'8%'}].map((p,i)=>(
+                  <div key={i} style={{position:'absolute',left:p.l,bottom:p.b,
+                    fontSize:12,color:'#ffd700',
+                    textShadow:'0 0 10px rgba(255,215,0,.9)',
+                    animation:`ga-sparkle ${.5+i*.16}s ease-in-out ${.8+i*.12}s infinite`}}>✦</div>
+                ))}
               </div>
 
               <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em'}}>
-                カプセルが光の柱とともに落下します
+                カプセルが下へ落ちていきます
               </p>
             </div>
           )}
