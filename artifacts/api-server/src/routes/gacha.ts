@@ -289,6 +289,23 @@ router.get("/gacha/history", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
+// ── GET /api/admin/gacha/spins ──
+// gachaResults から全スピン一覧（結果バッジ付き）
+router.get("/admin/gacha/spins", requireAdmin, async (_req, res): Promise<void> => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT g.*, p."displayName"
+       FROM "gachaResults" g
+       LEFT JOIN profile p ON p."userId" = g."userId"
+       ORDER BY g."createdAt" DESC LIMIT 500`,
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error("[Gacha/Admin] spins error:", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 // ── GET /api/admin/gacha/results ──
 // gachaInmuWins から取得（1当選=1行）
 router.get("/admin/gacha/results", requireAdmin, async (_req, res): Promise<void> => {
