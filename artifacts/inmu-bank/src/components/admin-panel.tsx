@@ -217,6 +217,22 @@ const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
   event_end_date:     'date',
 }
 
+type GachaResultRow = {
+  id: number
+  userId: string
+  displayName: string | null
+  pullType: string
+  results: Array<{ prizeId: string; label: string; type: 'points'|'inmu'; amount: number }>
+  totalPoints: number
+  hasInmu: boolean
+  inmuCount: number
+  inmuSentStatus: string
+  inmuSentAt: string | null
+  wasGuaranteed: boolean
+  costPoints: number
+  createdAt: string
+}
+
 function formatSettingDisplay(key: string, value: string): string {
   if (SYSTEM_SETTING_TYPE[key] === 'boolean') return value === 'true' ? '✅ 有効' : '❌ 無効'
   if (SYSTEM_SETTING_TYPE[key] === 'date') return value || '未設定'
@@ -551,12 +567,47 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     } catch { /* ignore */ }
   }, [users])
 
+  const loadGachaResults = useCallback(async () => {
+    if (gachaFetched) return
+    setGachaLoading(true)
+    try {
+      const data = await api('/admin/gacha/results', 'GET') as GachaResultRow[]
+      setGachaResults(Array.isArray(data) ? data : [])
+      setGachaFetched(true)
+    } catch { toast.error('ガチャデータの取得に失敗しました') }
+    finally { setGachaLoading(false) }
+  }, [api, gachaFetched])
+
+  async function reloadGachaResults() {
+    setGachaFetched(false)
+    setGachaLoading(true)
+    try {
+      const data = await api('/admin/gacha/results', 'GET') as GachaResultRow[]
+      setGachaResults(Array.isArray(data) ? data : [])
+      setGachaFetched(true)
+    } catch { toast.error('ガチャデータの取得に失敗しました') }
+    finally { setGachaLoading(false) }
+  }
+
+  async function markGachaSent(id: number) {
+    try {
+      await api(`/admin/gacha/results/${id}/mark-sent`, 'PUT')
+      setGachaResults(p => p.map(r => r.id === id ? { ...r, inmuSentStatus: 'sent', inmuSentAt: new Date().toISOString() } : r))
+      toast.success('送金済みにしました')
+    } catch { toast.error('更新に失敗しました') }
+  }
+
   // ── システム設定 ──
   const [systemSettings, setSystemSettings] = useState<SystemSettingRow[]>([])
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [editingSettingKey, setEditingSettingKey] = useState<string | null>(null)
   const [settingEditValue, setSettingEditValue] = useState('')
   const [settingSaving, setSettingSaving] = useState(false)
+  const [gachaResults, setGachaResults] = useState<GachaResultRow[]>([])
+  const [gachaLoading, setGachaLoading] = useState(false)
+  const [gachaFetched, setGachaFetched] = useState(false)
+  const [gachaFilter, setGachaFilter] = useState<'all'|'inmu_pending'|'inmu_sent'>('inmu_pending')
+
   const [emergencySearch, setEmergencySearch] = useState('')
   const [emergencyUserId, setEmergencyUserId] = useState<string | null>(null)
   const [emergencyForm, setEmergencyForm] = useState({ password: '', passcode: '', passwordEnabled: false, passcodeEnabled: false })
@@ -959,11 +1010,12 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       </div>
 
       <Tabs defaultValue="users">
-        <TabsList className="grid w-full grid-cols-4 h-auto gap-0.5">
+        <TabsList className="grid w-full grid-cols-5 h-auto gap-0.5">
           <TabsTrigger value="users" className="text-xs py-1.5">Users</TabsTrigger>
           <TabsTrigger value="actions" className="text-xs py-1.5">Actions</TabsTrigger>
           <TabsTrigger value="audit" className="text-xs py-1.5">Audit</TabsTrigger>
           <TabsTrigger value="missions" className="text-xs py-1.5">Mission</TabsTrigger>
+          <TabsTrigger value="gacha" className="text-xs py-1.5" onClick={loadGachaResults}>🎰 ガチャ</TabsTrigger>
           <TabsTrigger value="emergency" className="text-xs py-1.5" onClick={async () => {
             try { const d = await api('/admin/emergency-auth', 'GET'); setEmergencyList(Array.isArray(d) ? d : []) } catch { setEmergencyList([]) }
           }}>緊急</TabsTrigger>
@@ -1844,6 +1896,118 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 })}
             </div>
           )}
+        </TabsContent>
+
+        {/* ── ガチャ管理 ── */}
+        <TabsContent value="gacha" className="flex flex-col gap-4 mt-3">
+          {gachaLoading && <p className="text-sm text-muted-foreground text-center py-6">読み込み中…</p>}
+
+          {!gachaLoading && (() => {
+            const totalSpins   = gachaResults.length
+            const inmuPending  = gachaResults.filter(r => r.hasInmu && r.inmuSentStatus === 'pending')
+            const inmuSent     = gachaResults.filter(r => r.hasInmu && r.inmuSentStatus === 'sent')
+            const totalPtsGiven = gachaResults.reduce((s, r) => s + (r.totalPoints ?? 0), 0)
+
+            const filtered = gachaFilter === 'all'
+              ? gachaResults
+              : gachaFilter === 'inmu_pending'
+                ? inmuPending
+                : inmuSent
+
+            return (
+              <>
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: '総スピン数',    value: totalSpins },
+                    { label: 'ポイント付与合計', value: `${totalPtsGiven.toLocaleString()}pt` },
+                    { label: '未送金INMU',    value: inmuPending.length, cls: inmuPending.length > 0 ? 'text-yellow-400' : undefined },
+                    { label: '送金済みINMU',  value: inmuSent.length,    cls: 'text-green-400' },
+                  ].map(({ label, value, cls }) => (
+                    <div key={label} className="rounded-lg border border-border bg-card p-3 text-center">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className={`text-xl font-bold mt-0.5 ${cls ?? ''}`}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Filter + Refresh */}
+                <div className="flex gap-1.5 items-center flex-wrap">
+                  {(['inmu_pending', 'inmu_sent', 'all'] as const).map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setGachaFilter(f)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${gachaFilter === f ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                    >
+                      {f === 'all' ? '全結果' : f === 'inmu_pending' ? '🏆 未送金INMU' : '✅ 送金済INMU'}
+                    </button>
+                  ))}
+                  <button type="button" onClick={reloadGachaResults} className="text-xs px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:text-foreground transition-colors ml-auto">
+                    ↻ 更新
+                  </button>
+                </div>
+
+                {/* Results list */}
+                {filtered.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8 border border-dashed border-border rounded-lg">
+                    {gachaFilter === 'inmu_pending' ? '未送金のINMU当選はありません 🎉' : gachaFilter === 'inmu_sent' ? '送金済みのINMUはまだありません' : 'ガチャ結果がありません'}
+                  </p>
+                )}
+                <div className="flex flex-col gap-2">
+                  {filtered.map(row => {
+                    const isPending = row.hasInmu && row.inmuSentStatus === 'pending'
+                    return (
+                      <Card key={row.id} className={`p-3 border-border ${row.hasInmu ? (isPending ? 'border-yellow-500/40 bg-yellow-950/10' : 'border-green-500/30 bg-green-950/5') : ''}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-bold">{row.displayName || row.userId.slice(0, 12)}</span>
+                              <span className="text-[10px] text-muted-foreground">{row.pullType === 'multi' ? '10連' : '1連'}</span>
+                              {row.wasGuaranteed && <span className="text-[10px] text-yellow-400 px-1 py-0.5 rounded bg-yellow-950/40 border border-yellow-700">✨確定</span>}
+                              {row.hasInmu && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${isPending ? 'text-yellow-300 border-yellow-600 bg-yellow-950/40' : 'text-green-400 border-green-700 bg-green-950/30'}`}>
+                                  🏆 ×{row.inmuCount} {isPending ? '未送金' : '送金済'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {new Date(row.createdAt).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              {' — '}消費 {row.costPoints.toLocaleString()}pt
+                              {row.totalPoints > 0 && ` / 付与 +${row.totalPoints.toLocaleString()}pt`}
+                            </p>
+                            {row.inmuSentAt && (
+                              <p className="text-[10px] text-green-400 mt-0.5">
+                                送金済: {new Date(row.inmuSentAt).toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            )}
+                            {gachaFilter === 'all' && row.results.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {row.results.slice(0, 10).map((r, i) => (
+                                  <span key={i} className={`text-[9px] px-1 py-0.5 rounded border ${r.type === 'inmu' ? 'border-yellow-600 text-yellow-300 bg-yellow-950/30' : 'border-border text-muted-foreground'}`}>
+                                    {r.label}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {isPending && (
+                            <Button
+                              size="sm"
+                              className="h-8 px-2.5 text-xs shrink-0 bg-green-800 hover:bg-green-700 text-white"
+                              onClick={() => markGachaSent(row.id)}
+                            >
+                              送金済にする
+                            </Button>
+                          )}
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </>
+            )
+          })()}
         </TabsContent>
       </Tabs>
 

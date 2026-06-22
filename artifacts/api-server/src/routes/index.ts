@@ -22,6 +22,7 @@ import purchaseRequestsRouter from "./purchase-requests";
 import systemSettingsRouter from "./system-settings";
 import searchUsersRouter from "./search-users";
 import gameInviteRouter from "./game-invite";
+import gachaRouter from "./gacha";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(purchaseRequestsRouter);
 router.use(systemSettingsRouter);
 router.use(searchUsersRouter);
 router.use(gameInviteRouter);
+router.use(gachaRouter);
 
 export default router;

@@ -759,7 +759,14 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
       startAt?: string | null;
       endAt?: string | null;
       status?: string;
-      stages?: Array<{ id: number; title?: string; description?: string; points?: number; conditionValue?: number | null }>;
+      stages?: Array<{
+        id?: number;              // 0 or missing = 新規ステージ
+        title?: string;
+        description?: string;
+        points?: number;
+        conditionValue?: number | null;
+        stageStatus?: string;     // ステージ個別ステータス（省略時は status を適用）
+      }>;
     };
   if (!Array.isArray(stages) || stages.length === 0) {
     res.status(400).json({ error: "stages array required" }); return;
@@ -767,29 +774,61 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
   if (stages.some(s => !s.title?.trim())) {
     res.status(400).json({ error: "All stages must have a title" }); return;
   }
-  const VALID_STATUSES_U = new Set(["active", "inactive", "draft"]);
-  const missionStatus = status && VALID_STATUSES_U.has(status) ? status : undefined;
-  const validType = type && VALID_MISSION_TYPES.has(type) ? type : undefined;
+  const VALID_S = new Set(["active", "inactive", "draft"]);
+  const chainStatus = status && VALID_S.has(status) ? status : "active";
+  const validType   = type && VALID_MISSION_TYPES.has(type) ? type : undefined;
   const condTypeVal = conditionType === "none" ? null : conditionType;
+
   try {
-    await Promise.all(
-      stages.map(({ id, title, description, points, conditionValue }) =>
-        db.update(missionsTable).set({
-          ...(title !== undefined && { title: title!.trim() }),
-          ...(description !== undefined && { description: description?.trim() || null }),
-          ...(points !== undefined && { points }),
-          ...(conditionValue !== undefined && { conditionValue: conditionValue != null ? String(conditionValue) : null }),
-          ...(validType && { type: validType }),
+    // ステージを順番通りに処理し prerequisiteMissionId を再リンク
+    const processedIds: number[] = [];
+
+    for (let i = 0; i < stages.length; i++) {
+      const s = stages[i];
+      const prevId       = i === 0 ? null : processedIds[i - 1];
+      const stageStatus  = s.stageStatus && VALID_S.has(s.stageStatus) ? s.stageStatus : chainStatus;
+
+      if (s.id && s.id > 0) {
+        // 既存ステージを更新
+        await db.update(missionsTable).set({
+          ...(s.title       !== undefined && { title:          s.title!.trim() }),
+          ...(s.description !== undefined && { description:    s.description?.trim() || null }),
+          ...(s.points      !== undefined && { points:         s.points }),
+          ...(s.conditionValue !== undefined && { conditionValue: s.conditionValue != null ? String(s.conditionValue) : null }),
+          ...(validType   && { type: validType }),
           ...(condTypeVal !== undefined && { conditionType: condTypeVal || null }),
-          ...(linkUrl !== undefined && { linkUrl: linkUrl?.trim() || null }),
-          ...(startAt !== undefined && { startAt: startAt ? new Date(startAt) : null }),
-          ...(endAt !== undefined && { endAt: endAt ? new Date(endAt) : null }),
-          ...(missionStatus !== undefined && { status: missionStatus, isActive: missionStatus === "active" }),
-        }).where(eq(missionsTable.id, id))
-      )
-    );
-    res.json({ ok: true, rootId });
-  } catch {
+          ...(linkUrl     !== undefined && { linkUrl:  linkUrl?.trim() || null }),
+          ...(startAt     !== undefined && { startAt: startAt ? new Date(startAt) : null }),
+          ...(endAt       !== undefined && { endAt:   endAt   ? new Date(endAt)   : null }),
+          status:    stageStatus,
+          isActive:  stageStatus === "active",
+          prerequisiteMissionId: prevId,
+        }).where(eq(missionsTable.id, s.id));
+        processedIds.push(s.id);
+      } else {
+        // 新規ステージを作成（後から追加された段階）
+        const [newM] = await db.insert(missionsTable).values({
+          title:         s.title!.trim(),
+          description:   s.description?.trim() || null,
+          points:        s.points ?? 0,
+          conditionValue: s.conditionValue != null ? String(s.conditionValue) : null,
+          type:          validType ?? "achievement",
+          conditionType: condTypeVal || null,
+          linkUrl:       linkUrl?.trim() || null,
+          startAt:       startAt ? new Date(startAt) : null,
+          endAt:         endAt   ? new Date(endAt)   : null,
+          status:        stageStatus,
+          isActive:      stageStatus === "active",
+          prerequisiteMissionId: prevId,
+          displayOrder:  0,
+        }).returning({ id: missionsTable.id });
+        processedIds.push(newM.id);
+      }
+    }
+
+    res.json({ ok: true, rootId, stageIds: processedIds });
+  } catch (e) {
+    console.error("[ChainUpdate]", e);
     res.status(500).json({ error: "Internal error" });
   }
 });

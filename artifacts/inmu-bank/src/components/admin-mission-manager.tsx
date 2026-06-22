@@ -135,7 +135,7 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
   /* Chain group edit */
   const [editChainRootId, setEditChainRootId] = useState<number | null>(null)
   const [editChainMeta, setEditChainMeta] = useState({ type: 'daily', conditionType: 'none', linkUrl: '', startAt: '', endAt: '', status: 'active' as MissionStatus })
-  const [editChainStages, setEditChainStages] = useState<(StageForm & { id: number })[]>([])
+  const [editChainStages, setEditChainStages] = useState<(StageForm & { id: number; disabled: boolean })[]>([])
 
   /* Section expand/collapse */
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['daily']))
@@ -212,6 +212,7 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
       description: m.description ?? '',
       points: String(m.points),
       conditionValue: m.conditionValue ?? '',
+      disabled: m.status === 'inactive',
     })))
     setFormOpen(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -287,11 +288,12 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
         endAt: editChainMeta.endAt || null,
         status: editChainMeta.status,
         stages: editChainStages.map(s => ({
-          id: s.id,
+          ...(s.id > 0 ? { id: s.id } : {}),
           title: s.title.trim(),
           description: s.description.trim() || null,
           points: Number(s.points) || 0,
           conditionValue: (condTypeVal && !NO_VALUE_COND.has(condTypeVal) && s.conditionValue) ? Number(s.conditionValue) : null,
+          stageStatus: s.disabled ? 'inactive' : editChainMeta.status,
         })),
       })
       toast.success('チェーンを更新しました')
@@ -347,6 +349,24 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
       await loadMissions()
       toast.success('無効化しました')
     } catch { toast.error('無効化に失敗しました') }
+  }
+
+  /* ── Chain stage reorder / disable helpers ── */
+  function moveStageUp(i: number) {
+    if (i <= 0) return
+    setEditChainStages(p => { const a = [...p]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; return a })
+  }
+  function moveStageDown(i: number) {
+    setEditChainStages(p => {
+      if (i >= p.length - 1) return p
+      const a = [...p]; [a[i], a[i + 1]] = [a[i + 1], a[i]]; return a
+    })
+  }
+  function toggleStageDisabled(i: number) {
+    setEditChainStages(p => p.map((s, idx) => idx === i ? { ...s, disabled: !s.disabled } : s))
+  }
+  function addStageToChain() {
+    setEditChainStages(p => [...p, { id: 0, title: '', description: '', points: '', conditionValue: '', disabled: false }])
   }
 
   /* ────────────────────────────────────────────────
@@ -571,8 +591,36 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
           <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-background p-3">
             <p className="text-xs font-semibold text-muted-foreground">ステージ一覧</p>
             {editChainStages.map((s, i) => (
-              <div key={s.id} className="flex flex-col gap-1.5 rounded-md border border-border bg-card p-2">
-                <span className="text-xs font-bold text-primary">Lv{i + 1}</span>
+              <div key={s.id !== 0 ? s.id : `new-${i}`} className={`flex flex-col gap-1.5 rounded-md border bg-card p-2 transition-opacity ${s.disabled ? 'opacity-55 border-red-500/30' : 'border-border'}`}>
+                {/* stage header */}
+                <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-bold text-primary">Lv{i + 1}</span>
+                    {s.id === 0 && <span className="text-[9px] text-chart-5 px-1 py-0.5 rounded bg-chart-5/10">新規</span>}
+                    {s.disabled && <span className="text-[9px] text-red-400 px-1 py-0.5 rounded bg-red-500/10">無効</span>}
+                  </div>
+                  <div className="flex gap-0.5 items-center">
+                    <Button type="button" size="sm" variant="ghost" className="size-6 p-0 text-muted-foreground" onClick={() => moveStageUp(i)} disabled={i === 0} title="上に移動">
+                      <ArrowUp className="size-3" />
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" className="size-6 p-0 text-muted-foreground" onClick={() => moveStageDown(i)} disabled={i === editChainStages.length - 1} title="下に移動">
+                      <ArrowDown className="size-3" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => toggleStageDisabled(i)}
+                      className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors ${s.disabled ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : 'border-border text-muted-foreground hover:text-foreground'}`}
+                      title={s.disabled ? 'このステージを有効化' : 'このステージを無効化'}
+                    >
+                      {s.disabled ? '有効化' : '無効化'}
+                    </button>
+                    {s.id === 0 && (
+                      <Button type="button" size="sm" variant="ghost" className="size-6 p-0 text-destructive hover:text-destructive" onClick={() => setEditChainStages(p => p.filter((_, idx) => idx !== i))} title="削除">
+                        <Trash2 className="size-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
                 <Input placeholder="タイトル *" value={s.title} onChange={e => setEditChainStages(p => p.map((x, idx) => idx === i ? { ...x, title: e.target.value } : x))} className="min-h-9 text-sm" />
                 <Input placeholder="説明（任意）" value={s.description} onChange={e => setEditChainStages(p => p.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} className="min-h-9 text-sm" />
                 <div className="flex gap-2">
@@ -583,6 +631,9 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
                 </div>
               </div>
             ))}
+            <button type="button" onClick={addStageToChain} className="text-xs text-primary hover:underline text-left mt-0.5 py-1">
+              + ステージを追加
+            </button>
           </div>
           <div className="flex gap-2">
             <Button onClick={saveChainEdit} disabled={loading} className="flex-1 min-h-10 gap-2">

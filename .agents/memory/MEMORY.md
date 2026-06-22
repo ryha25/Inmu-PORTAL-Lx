@@ -1,1 +1,2 @@
 - [INMU PORTAL project structure](inmu-portal-structure.md) — api-server + inmu-bank artifacts; both require DATABASE_URL and SESSION_SECRET env vars
+- [Gacha feature implementation](gacha-feature.md) — gachaResults table via raw pool.query CREATE TABLE IF NOT EXISTS at route init; prizes 880/80/30/10 per 1000; 5% guaranteed INMU; chain-update now supports new stages (id=0) + per-stage stageStatus + sequential prerequisiteMissionId re-linking
