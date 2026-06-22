@@ -118,9 +118,9 @@ const CSS=`
 /* ════ Background ════ */
 function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:boolean}) {
   return (
-    <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column',
+    <div style={{height:'100dvh',display:'flex',flexDirection:'column',
       backgroundImage:`url(${jackpot?jackpotBg:bgImg})`,
-      backgroundSize:'cover',backgroundPosition:'center top',position:'relative'}}>
+      backgroundSize:'cover',backgroundPosition:'center top',position:'relative',overflow:'hidden'}}>
       <div style={{position:'absolute',inset:0,pointerEvents:'none',
         background:jackpot?'rgba(6,2,0,.38)':'rgba(2,1,10,.55)'}} />
       {/* stars */}
@@ -382,100 +382,96 @@ export function GachaPage() {
     <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
       <style>{CSS}</style>
       <PageBg>
-        <div style={{paddingBottom:'max(172px,calc(env(safe-area-inset-bottom)+162px))'}}>
+        {/* ── Fixed non-scrolling layout matching reference screen 3 ── */}
+        <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden'}}>
 
-          {/* Title */}
-          <div style={{textAlign:'center',padding:'14px 16px 0'}}>
-            <h1 className="ga-pulse" style={{margin:0,fontSize:26,fontWeight:900,color:'#daa520',
+          {/* Title (compact) */}
+          <div style={{textAlign:'center',padding:'4px 16px 0',flexShrink:0}}>
+            <h1 className="ga-pulse" style={{margin:0,fontSize:22,fontWeight:900,color:'#daa520',
               fontFamily:'Georgia,serif',letterSpacing:'0.16em',
               textShadow:'0 2px 22px rgba(218,165,32,.82)'}}>
               ✦ INMU GACHA ✦
             </h1>
-            <p style={{margin:'4px 0 0',fontSize:10,color:'rgba(218,165,32,.48)',
+            <p style={{margin:'1px 0 0',fontSize:9,color:'rgba(218,165,32,.42)',
               letterSpacing:'0.14em',fontWeight:600}}>— PREMIUM CAPSULE MACHINE —</p>
           </div>
 
-          {/* ── Machine + Mascot + Rate Panel ── */}
-          <div style={{position:'relative',display:'flex',justifyContent:'center',
-            paddingTop:8,paddingBottom:0}}>
+          {/* ── Machine + Mascot + Rate Panel — flex:1, fills all available space ── */}
+          <div style={{flex:1,position:'relative',display:'flex',
+            justifyContent:'center',alignItems:'center',minHeight:0,overflow:'hidden'}}>
             <img src={machineImg} alt="INMU GACHA Machine"
               className="ga-machinepulse"
-              style={{width:'min(310px,79vw)',height:'auto',display:'block',
+              style={{maxHeight:'100%',width:'auto',maxWidth:'82vw',
+                display:'block',objectFit:'contain',
                 filter:'drop-shadow(0 22px 66px rgba(0,0,0,.98)) drop-shadow(0 0 30px rgba(184,134,11,.3))'}}/>
             {/* Mascot bottom-left */}
-            <div className="ga-floatslow" style={{position:'absolute',bottom:'-2%',left:'3%',zIndex:8}}>
+            <div className="ga-floatslow" style={{position:'absolute',bottom:0,left:'2%',zIndex:8}}>
               <img src={mascotImg} alt="INMUくん" style={{
-                width:'min(108px,27vw)',height:'auto',objectFit:'contain',
+                width:'min(100px,24vw)',height:'auto',objectFit:'contain',
                 filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))'}}/>
             </div>
             {/* Rate panel */}
             <RatePanel />
           </div>
 
-          {/* ── History ── */}
-          <div style={{padding:'10px 14px 0'}}>
-            <div style={{background:'linear-gradient(135deg,rgba(12,6,2,.92),rgba(6,3,16,.92))',
-              border:'1px solid rgba(184,134,11,.4)',borderRadius:12,
-              backdropFilter:'blur(8px)',
-              boxShadow:'inset 0 1px 0 rgba(255,255,255,.04)'}}>
-              <button type="button" onClick={()=>setHistOpen(o=>!o)}
-                style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',
-                  padding:'10px 14px',cursor:'pointer',background:'none',border:'none'}}>
-                <span style={{fontSize:12,fontWeight:700,color:'rgba(218,165,32,.88)',letterSpacing:'0.08em'}}>ガチャ履歴</span>
-                <div style={{display:'flex',alignItems:'center',gap:4}}>
-                  <span style={{fontSize:11,color:'rgba(218,165,32,.55)'}}>もっと見る</span>
-                  <ChevronRight size={13} color="rgba(218,165,32,.55)"/>
-                </div>
-              </button>
-              {histOpen&&(
-                <div style={{borderTop:'1px solid rgba(184,134,11,.22)'}}>
-                  {history.length===0
-                    ?<p style={{textAlign:'center',fontSize:11,color:'rgba(255,255,255,.3)',padding:'14px 0',margin:0}}>
-                        ガチャ履歴がありません
-                      </p>
-                    :history.slice(0,4).map((row,i)=>{
-                        const label=row.hasInmu?'10,000 INMUを獲得しました!'
-                          :row.totalPoints>0?`${row.totalPoints.toLocaleString()} ptを獲得しました`
-                          :`${row.costPoints.toLocaleString()}pt 消費`
-                        const time=new Date(row.createdAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
-                        return (
-                          <div key={row.id} style={{display:'flex',alignItems:'center',
-                            padding:'8px 14px',
-                            borderBottom:i<Math.min(history.length-1,3)?'1px solid rgba(184,134,11,.12)':'none'}}>
-                            <span style={{fontSize:10,color:'rgba(255,255,255,.55)',minWidth:68,flexShrink:0}}>
-                              {profile?.displayName??'ユーザー'}
-                            </span>
-                            <span style={{fontSize:10,color:row.hasInmu?'#ffd700':'rgba(255,255,255,.72)',
-                              flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                              marginLeft:4}}>
-                              {label}
-                            </span>
-                            <span style={{fontSize:10,color:'rgba(255,255,255,.32)',flexShrink:0,marginLeft:6}}>
-                              {time}
-                            </span>
-                          </div>
-                        )
-                      })}
-                </div>
-              )}
+          {/* ── Bottom controls (non-fixed, natural flex child) ── */}
+          <div style={{flexShrink:0,
+            background:'linear-gradient(to top,rgba(2,1,10,.99) 84%,transparent)',
+            backdropFilter:'blur(16px)',
+            padding:`6px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))`}}>
+
+            {/* Buttons */}
+            <div style={{display:'flex',gap:10,marginBottom:8}}>
+              <OrnateButton gold enabled={pts>=1000&&!ptsLoading}
+                onClick={()=>spin('single')} label="1連ガチャ" price="1,000 pt"/>
+              <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading}
+                onClick={()=>spin('multi')} label="10連ガチャ" price="10,000 pt"/>
+            </div>
+
+            {/* Points */}
+            <PointsPanel pts={pts} loading={ptsLoading}/>
+
+            {/* Compact history (no toggle) */}
+            <div style={{marginTop:7,
+              background:'linear-gradient(135deg,rgba(12,6,2,.92),rgba(6,3,16,.92))',
+              border:'1px solid rgba(184,134,11,.4)',borderRadius:10,
+              backdropFilter:'blur(8px)'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                padding:'6px 12px 4px'}}>
+                <span style={{fontSize:11,fontWeight:700,color:'rgba(218,165,32,.88)',letterSpacing:'0.08em'}}>ガチャ履歴</span>
+                <span style={{fontSize:10,color:'rgba(218,165,32,.5)'}}>もっと見る ›</span>
+              </div>
+              <div style={{borderTop:'1px solid rgba(184,134,11,.15)'}}>
+                {history.length===0
+                  ?<p style={{textAlign:'center',fontSize:10,color:'rgba(255,255,255,.3)',padding:'6px 0',margin:0}}>
+                      ガチャ履歴がありません
+                    </p>
+                  :history.slice(0,3).map((row,i)=>{
+                      const label=row.hasInmu?'10,000 INMUを獲得しました！'
+                        :row.totalPoints>0?`${row.totalPoints.toLocaleString()} ptを獲得しました`
+                        :`${row.costPoints.toLocaleString()}pt 消費`
+                      const time=new Date(row.createdAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
+                      return (
+                        <div key={row.id} style={{display:'flex',alignItems:'center',
+                          padding:'5px 12px',
+                          borderBottom:i<Math.min(history.length-1,2)?'1px solid rgba(184,134,11,.1)':'none'}}>
+                          <span style={{fontSize:9,color:'rgba(255,255,255,.5)',minWidth:60,flexShrink:0}}>
+                            {profile?.displayName??'ユーザー'}
+                          </span>
+                          <span style={{fontSize:9,color:row.hasInmu?'#ffd700':'rgba(255,255,255,.7)',
+                            flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginLeft:4}}>
+                            {label}
+                          </span>
+                          <span style={{fontSize:9,color:'rgba(255,255,255,.3)',flexShrink:0,marginLeft:6}}>
+                            {time}
+                          </span>
+                        </div>
+                      )
+                    })}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* ── Fixed Footer ── */}
-        <div style={{position:'fixed',bottom:0,left:0,right:0,
-          background:'linear-gradient(to top,rgba(2,1,10,.99) 78%,transparent)',
-          backdropFilter:'blur(16px)',zIndex:50,
-          padding:`10px 14px max(30px,calc(env(safe-area-inset-bottom)+14px))`}}>
-          {/* Buttons */}
-          <div style={{display:'flex',gap:10,marginBottom:10}}>
-            <OrnateButton gold enabled={pts>=1000&&!ptsLoading}
-              onClick={()=>spin('single')} label="1連ガチャ" price="1,000 pt"/>
-            <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading}
-              onClick={()=>spin('multi')} label="10連ガチャ" price="10,000 pt"/>
-          </div>
-          {/* Points panel */}
-          <PointsPanel pts={pts} loading={ptsLoading}/>
         </div>
       </PageBg>
     </AppShell>
@@ -794,19 +790,27 @@ export function GachaPage() {
                   background:'radial-gradient(ellipse,rgba(218,165,32,.62) 0%,rgba(218,165,32,.25) 48%,transparent 70%)',
                   filter:'blur(8px)'}}/>
 
-                {/* Glass orb materializes (with mascot inside) */}
-                <div style={{position:'absolute',bottom:'24%',left:'50%',transform:'translateX(-50%)',
+                {/* Glass orb materializes — transparent glass sphere with mascot + inner glow */}
+                <div style={{position:'absolute',bottom:'22%',left:'50%',transform:'translateX(-50%)',
                   animation:'ga-reveal .7s ease-out .32s both',zIndex:8}}>
-                  <div style={{position:'relative',width:96,height:96,borderRadius:'50%',
-                    background:'radial-gradient(ellipse at 32% 26%,rgba(255,255,220,.88) 0%,rgba(255,200,60,.55) 28%,rgba(200,120,0,.38) 52%,rgba(80,40,0,.65) 76%,rgba(20,8,0,.82) 100%)',
-                    boxShadow:'0 0 58px rgba(218,165,32,.92),0 0 26px rgba(255,200,0,.6),inset -4px -4px 18px rgba(80,40,0,.6),inset 5px 5px 14px rgba(255,240,120,.32)'}}>
-                    {/* Glass highlight */}
-                    <div style={{position:'absolute',top:8,left:12,width:26,height:16,borderRadius:'50%',
-                      background:'rgba(255,255,255,.42)',transform:'rotate(-22deg)'}}/>
+                  <div style={{position:'relative',width:100,height:100,borderRadius:'50%',
+                    background:'radial-gradient(ellipse at 36% 30%, rgba(255,255,255,.72) 0%, rgba(220,235,255,.3) 22%, rgba(160,190,230,.1) 46%, rgba(80,110,180,.08) 70%, rgba(15,20,50,.18) 100%)',
+                    border:'1.5px solid rgba(180,210,255,.32)',
+                    boxShadow:'0 0 56px rgba(218,165,32,.82),0 0 24px rgba(218,165,32,.48),inset 0 -3px 14px rgba(100,140,220,.14),inset 4px 4px 12px rgba(255,255,255,.26)'}}>
+                    {/* Top-left glass highlight */}
+                    <div style={{position:'absolute',top:9,left:13,width:26,height:15,borderRadius:'50%',
+                      background:'rgba(255,255,255,.6)',transform:'rotate(-24deg)'}}/>
+                    {/* Secondary small highlight */}
+                    <div style={{position:'absolute',top:22,left:10,width:10,height:6,borderRadius:'50%',
+                      background:'rgba(255,255,255,.36)',transform:'rotate(-18deg)'}}/>
+                    {/* Inner gold glow (bottom center) */}
+                    <div style={{position:'absolute',bottom:14,left:'50%',transform:'translateX(-50%)',
+                      width:40,height:20,borderRadius:'50%',
+                      background:'rgba(218,165,32,.38)',filter:'blur(5px)'}}/>
                     {/* Mascot inside orb */}
-                    <div style={{position:'absolute',inset:8,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <div style={{position:'absolute',inset:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
                       <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
-                        opacity:.82,filter:'drop-shadow(0 2px 6px rgba(0,0,0,.55))'}}/>
+                        opacity:.8,filter:'drop-shadow(0 2px 8px rgba(0,0,0,.6))'}}/>
                     </div>
                   </div>
                 </div>
@@ -856,20 +860,28 @@ export function GachaPage() {
                     opacity:.6}}/>
                 ))}
 
-                {/* Falling glass orb + mascot */}
+                {/* Falling glass orb + mascot — transparent glass sphere */}
                 <div style={{position:'absolute',left:0,right:0,
                   display:'flex',justifyContent:'center',zIndex:8,
                   animation:'ga-capland 1.05s ease-in forwards'}}>
-                  <div style={{position:'relative',width:108,height:108,borderRadius:'50%',
-                    background:'radial-gradient(ellipse at 32% 26%,rgba(255,255,220,.9) 0%,rgba(255,200,60,.58) 28%,rgba(200,120,0,.4) 52%,rgba(80,40,0,.68) 76%,rgba(20,8,0,.85) 100%)',
-                    boxShadow:'0 0 64px rgba(218,165,32,.94),0 0 32px rgba(255,200,0,.65),inset -4px -4px 18px rgba(80,40,0,.62),inset 5px 5px 14px rgba(255,240,120,.34)'}}>
-                    {/* Glass highlight */}
-                    <div style={{position:'absolute',top:10,left:14,width:28,height:18,borderRadius:'50%',
-                      background:'rgba(255,255,255,.44)',transform:'rotate(-22deg)'}}/>
+                  <div style={{position:'relative',width:110,height:110,borderRadius:'50%',
+                    background:'radial-gradient(ellipse at 36% 30%, rgba(255,255,255,.7) 0%, rgba(215,232,255,.28) 22%, rgba(150,185,230,.1) 46%, rgba(70,105,175,.07) 70%, rgba(10,18,45,.16) 100%)',
+                    border:'1.5px solid rgba(180,210,255,.35)',
+                    boxShadow:'0 0 66px rgba(218,165,32,.92),0 0 30px rgba(218,165,32,.55),inset 0 -3px 16px rgba(100,140,220,.13),inset 4px 4px 14px rgba(255,255,255,.28)'}}>
+                    {/* Top-left glass highlight */}
+                    <div style={{position:'absolute',top:11,left:15,width:28,height:17,borderRadius:'50%',
+                      background:'rgba(255,255,255,.62)',transform:'rotate(-24deg)'}}/>
+                    {/* Secondary highlight */}
+                    <div style={{position:'absolute',top:24,left:11,width:11,height:7,borderRadius:'50%',
+                      background:'rgba(255,255,255,.38)',transform:'rotate(-18deg)'}}/>
+                    {/* Inner gold glow */}
+                    <div style={{position:'absolute',bottom:16,left:'50%',transform:'translateX(-50%)',
+                      width:44,height:22,borderRadius:'50%',
+                      background:'rgba(218,165,32,.42)',filter:'blur(5px)'}}/>
                     {/* Mascot inside */}
-                    <div style={{position:'absolute',inset:9,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <img src={mascotImg} style={{width:60,height:'auto',objectFit:'contain',
-                        opacity:.85,filter:'drop-shadow(0 2px 6px rgba(0,0,0,.6))'}}/>
+                    <div style={{position:'absolute',inset:11,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <img src={mascotImg} style={{width:62,height:'auto',objectFit:'contain',
+                        opacity:.82,filter:'drop-shadow(0 2px 8px rgba(0,0,0,.65))'}}/>
                     </div>
                   </div>
                 </div>
