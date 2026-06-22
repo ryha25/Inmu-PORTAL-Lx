@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "AZ_XhKJkjxyCFeRq1x2MM"
+uri = "file://attached_assets/generated_images/gacha-machine.png"
+type = "image"
+title = "gacha machine"
+
+[[generated]]
+id = "ZJj_2vGV_5vaHKDu0Y-ee"
+uri = "file://attached_assets/generated_images/gacha-bg.png"
+type = "image"
+title = "gacha background"
+
+[[generated]]
+id = "2GGmcIAjLS8EWVTHZeBGP"
+uri = "file://attached_assets/generated_images/gacha-capsule.png"
+type = "image"
+title = "gacha capsule"
+
+[[generated]]
+id = "jfqlkvX06FmadwrIWuacP"
+uri = "file://attached_assets/generated_images/gacha-jackpot-bg.png"
+type = "image"
+title = "gacha jackpot background"
