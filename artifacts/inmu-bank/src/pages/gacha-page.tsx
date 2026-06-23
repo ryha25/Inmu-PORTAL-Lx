@@ -112,10 +112,15 @@ const CSS=`
   @keyframes ga-machinepulse{0%,100%{filter:drop-shadow(0 24px 72px rgba(0,0,0,.98)) drop-shadow(0 0 22px rgba(184,134,11,.22))}50%{filter:drop-shadow(0 24px 72px rgba(0,0,0,.98)) drop-shadow(0 0 60px rgba(218,165,32,.82))}}
   @keyframes ga-coinfall    {0%{top:-20%;transform:rotate(0deg);opacity:.55}70%{opacity:1}100%{top:4%;transform:rotate(400deg);opacity:1}}
   @keyframes ga-coinfall2   {0%{top:-96px;transform:rotate(-12deg);opacity:.65}20%{opacity:1}100%{top:6px;transform:rotate(340deg)}}
+  @keyframes ga-coininsert-full{0%{top:-22%;left:50%;transform:translateX(-50%) rotate(-24deg) scale(1.08);opacity:0}18%{opacity:1}72%{top:55%;left:50%;transform:translateX(-50%) rotate(360deg) scale(.72);opacity:1}92%{top:71%;left:50%;transform:translateX(-50%) rotate(510deg) scale(.42);opacity:.92}100%{top:74%;left:50%;transform:translateX(-50%) rotate(560deg) scale(.18);opacity:0}}
   @keyframes ga-leverrot2   {0%{transform:rotate(-8deg)}100%{transform:rotate(58deg)}}
+  @keyframes ga-forelever    {0%{transform:rotate(-34deg)}18%{transform:rotate(-34deg)}68%{transform:rotate(42deg)}82%{transform:rotate(36deg)}100%{transform:rotate(44deg)}}
   @keyframes ga-orbit       {from{transform:rotate(0deg) translateX(60px) rotate(0deg)}to{transform:rotate(360deg) translateX(60px) rotate(-360deg)}}
   @keyframes ga-shockwave   {0%{transform:translateX(-50%) scale(.12);opacity:.88}100%{transform:translateX(-50%) scale(3.4);opacity:0}}
   @keyframes ga-capland     {0%{top:-120px}72%{top:188px}83%{top:174px}91%{top:186px}100%{top:181px}}
+  @keyframes ga-capportal    {0%{transform:translate(-50%,-50%) scale(.35) rotate(-18deg);opacity:0;filter:blur(5px)}22%{opacity:1;filter:blur(0)}68%{transform:translate(-50%,-50%) scale(1.12) rotate(14deg);opacity:1}100%{transform:translate(-50%,-50%) scale(.82) rotate(26deg);opacity:.82}}
+  @keyframes ga-capdropfull  {0%{top:-22%;transform:translateX(-50%) scale(.72) rotate(-20deg);opacity:0}18%{opacity:1}72%{top:48%;transform:translateX(-50%) scale(1.18) rotate(18deg);opacity:1}88%{top:44%;transform:translateX(-50%) scale(1.05) rotate(10deg)}100%{top:48%;transform:translateX(-50%) scale(1.1) rotate(14deg)}}
+  @keyframes ga-capopenfore  {0%{transform:translate(-50%,-50%) scale(.7);opacity:0}18%{opacity:1}52%{transform:translate(-50%,-50%) scale(1.08)}100%{transform:translate(-50%,-50%) scale(1.2)}}
   @keyframes ga-capglint    {0%{transform:translateX(-130%) rotate(-18deg);opacity:0}28%{opacity:.9}100%{transform:translateX(155%) rotate(-18deg);opacity:0}}
   @keyframes ga-rayfall     {0%{transform:translateY(-38px);opacity:0}28%,72%{opacity:.78}100%{transform:translateY(42px);opacity:0}}
   @keyframes ga-vortex      {from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
@@ -820,11 +825,12 @@ export function GachaPage() {
 
                 {/* INMU coin — falls from above container into slot */}
                 <img src={coinImg} style={{
-                  position:'absolute',left:'calc(50% - 46px)',
-                  width:120,height:120,borderRadius:'50%',objectFit:'cover',
+                  position:'absolute',left:'50%',
+                  width:136,height:136,borderRadius:'50%',objectFit:'cover',
                   border:'3.5px solid #daa520',
                   boxShadow:'0 0 68px rgba(218,165,32,.98),0 0 28px rgba(255,215,0,.65)',
-                  animation:'ga-coinfall2 1.15s ease-in forwards',
+                  animation:'ga-coininsert-full 1.52s cubic-bezier(.18,.76,.2,1) forwards',
+                  zIndex:14,
                   pointerEvents:'none'}}/>
 
                 {/* Sparkles at the slot */}
@@ -861,6 +867,25 @@ export function GachaPage() {
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
                 letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
                 position:'relative',zIndex:12}}>レバー回転</p>
+              <div style={{position:'absolute',left:'28%',top:'36%',width:260,height:160,zIndex:48,
+                pointerEvents:'none',filter:'drop-shadow(0 0 34px rgba(255,190,50,.72)) drop-shadow(0 16px 24px rgba(0,0,0,.82))'}}>
+                <div style={{position:'absolute',left:0,top:58,width:72,height:72,borderRadius:'50%',
+                  background:'radial-gradient(circle at 35% 28%,#fff7c8 0%,#d8a01c 28%,#7a4500 66%,#160800 100%)',
+                  border:'2px solid rgba(255,225,120,.55)',boxShadow:'inset -7px -7px 14px rgba(0,0,0,.55),0 0 24px rgba(218,165,32,.7)'}}/>
+                <div style={{position:'absolute',left:36,top:92,transformOrigin:'0 50%',
+                  animation:'ga-forelever 1.58s cubic-bezier(.2,.82,.18,1) forwards'}}>
+                  <div style={{width:176,height:24,borderRadius:999,
+                    background:'linear-gradient(180deg,#1b0b00 0%,#a96a00 22%,#fff0a0 48%,#d39a14 62%,#4a2500 100%)',
+                    border:'1px solid rgba(255,230,140,.42)',
+                    boxShadow:'inset 0 2px 2px rgba(255,255,220,.45),0 8px 18px rgba(0,0,0,.7)'}}/>
+                  <div style={{position:'absolute',right:-48,top:-31,width:86,height:86,borderRadius:'50%',
+                    background:'radial-gradient(circle at 30% 22%,#fff 0%,#fff0a8 8%,#f0b62b 30%,#9a5a00 62%,#210c00 100%)',
+                    boxShadow:'inset -10px -10px 20px rgba(0,0,0,.56),0 0 48px rgba(255,202,54,.9),0 12px 22px rgba(0,0,0,.78)'}}>
+                    <div style={{position:'absolute',top:15,left:18,width:20,height:11,borderRadius:'50%',
+                      background:'rgba(255,255,255,.58)',transform:'rotate(-26deg)'}}/>
+                  </div>
+                </div>
+              </div>
 
               <div style={{width:'100%',flex:1,minHeight:0,borderRadius:0,overflow:'hidden',
                 position:'relative',
@@ -995,6 +1020,13 @@ export function GachaPage() {
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
                 letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
                 position:'relative',zIndex:12}}>カプセル排出</p>
+              <div style={{position:'absolute',left:'50%',top:'58%',zIndex:48,pointerEvents:'none',
+                animation:'ga-capportal 2.05s cubic-bezier(.18,.78,.24,1) forwards'}}>
+                <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={148}/>
+                <div style={{position:'absolute',inset:-30,borderRadius:'50%',
+                  background:'radial-gradient(circle,rgba(255,230,100,.46),rgba(218,165,32,.16) 42%,transparent 70%)',
+                  filter:'blur(8px)',animation:'ga-stageflash .8s ease-in-out infinite'}}/>
+              </div>
 
               <div style={{width:'100%',flex:1,minHeight:0,borderRadius:0,overflow:'hidden',
                 border:'none',position:'relative',
@@ -1133,6 +1165,13 @@ export function GachaPage() {
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
                 letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
                 position:'relative',zIndex:12}}>カプセル落下</p>
+              <div style={{position:'absolute',left:'50%',zIndex:48,pointerEvents:'none',
+                animation:'ga-capdropfull 1.95s cubic-bezier(.22,.72,.18,1) forwards'}}>
+                <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={164}/>
+                <div style={{position:'absolute',inset:-26,borderRadius:'50%',
+                  background:'radial-gradient(circle,rgba(255,240,140,.38),rgba(218,165,32,.18) 44%,transparent 72%)',
+                  filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
+              </div>
 
               <div style={{width:'100%',flex:1,minHeight:0,borderRadius:0,overflow:'hidden',
                 border:'none',position:'relative',
@@ -1253,8 +1292,11 @@ export function GachaPage() {
               alignItems:'center',justifyContent:'center',gap:16,
               background:'radial-gradient(circle at 50% 42%,rgba(218,165,32,.18),transparent 58%)'}}>
               <p style={{fontSize:14,fontWeight:800,color:'#daa520',letterSpacing:'0.18em',margin:0,
+                position:'relative',zIndex:52,
                 animation:'ga-glowtext 1.1s ease-in-out infinite'}}>カプセル開封中…</p>
               <div style={{position:'relative',height:'min(72vw,360px)',width:'min(72vw,360px)',
+                zIndex:52,
+                animation:'ga-capopenfore .8s ease-out forwards',
                 display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
                 <div style={{position:'absolute',inset:-24,borderRadius:'50%',
                   background:'radial-gradient(circle,rgba(255,255,180,.9) 0%,rgba(218,165,32,.65) 36%,transparent 62%)',
