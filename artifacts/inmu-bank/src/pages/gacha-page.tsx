@@ -319,15 +319,17 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
 
       {kind==='opening'&&(
         <div style={{position:'absolute',left:'50%',top:'48%',transform:'translate(-50%,-50%)',
-          width:250,height:300,display:'flex',alignItems:'center',justifyContent:'center',
-          animation:'ga-premiumopen 1.15s ease-out forwards'}}>
-          <div style={{position:'absolute',inset:-20,borderRadius:'50%',
-            background:'radial-gradient(circle,rgba(255,235,150,.78),rgba(218,165,32,.32) 42%,transparent 70%)',
-            filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
-          <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
-          <img src={mascotImg} style={{position:'absolute',width:88,height:'auto',bottom:82,
-            filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
-            animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
+          width:250,height:300,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+            animation:'ga-premiumopen 1.15s ease-out forwards'}}>
+            <div style={{position:'absolute',inset:-20,borderRadius:'50%',
+              background:'radial-gradient(circle,rgba(255,235,150,.78),rgba(218,165,32,.32) 42%,transparent 70%)',
+              filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
+            <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
+            <img src={mascotImg} style={{position:'absolute',width:88,height:'auto',bottom:82,
+              filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
+              animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
+          </div>
         </div>
       )}
 
@@ -1025,7 +1027,7 @@ export function GachaPage() {
           )}
 
           {/* ════ Phase 3: LEVER — CSS-only lever mechanism close-up ════ */}
-          {phase==='lever'&&(
+          {false&&phase==='lever'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
@@ -1178,7 +1180,7 @@ export function GachaPage() {
           )}
 
           {/* ════ Phase 4: SPACE — cosmic scene, beam from below, coins orbit, glass orb ════ */}
-          {phase==='space'&&(
+          {false&&phase==='space'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
@@ -1323,7 +1325,7 @@ export function GachaPage() {
           )}
 
           {/* ════ Phase 5: FALLING — glass orb falls through starfield, lands with shockwave ════ */}
-          {phase==='falling'&&(
+          {false&&phase==='falling'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
@@ -1451,7 +1453,7 @@ export function GachaPage() {
           )}
 
           {/* ════ Phase 6: OPENING ════ */}
-          {phase==='opening'&&(
+          {false&&phase==='opening'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'center',justifyContent:'center',gap:16,
               background:'radial-gradient(circle at 50% 42%,rgba(218,165,32,.18),transparent 58%)'}}>
