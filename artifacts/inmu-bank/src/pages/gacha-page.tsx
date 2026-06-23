@@ -10,6 +10,15 @@ import mascotImg   from '@assets/generated_images/mascot-v2-nobg.png'
 import coinImg     from '@assets/IMG_6637_1782097134955.jpeg'
 import bgImg       from '@assets/generated_images/gacha-bg.png'
 import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
+import flowLeverImg from '@assets/generated_images/flow-lever.jpg'
+import flowSpaceImg from '@assets/generated_images/flow-space.jpg'
+import flowFallImg from '@assets/generated_images/flow-fall.jpg'
+import flowResult100Img from '@assets/generated_images/flow-result-100.jpg'
+import flowResult1000Img from '@assets/generated_images/flow-result-1000.jpg'
+import flowResult5000Img from '@assets/generated_images/flow-result-5000.jpg'
+import flowResultInmuImg from '@assets/generated_images/flow-result-inmu.jpg'
+import flowResultSpecialImg from '@assets/generated_images/flow-result-special.jpg'
+import flowResultAllImg from '@assets/generated_images/flow-result-all.jpg'
 
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
@@ -59,6 +68,13 @@ const JP_PARTICLES = Array.from({length:48},(_,i)=>({
 const COIN_RISES = Array.from({length:12},(_,i)=>({
   x:`${(i*8.3+5)%86}%`,sz:20+(i%4)*9,delay:(i*.28)%3.2,dur:1.8+(i%4)*.6
 }))
+
+function resultFlowImage(prizeId:string, special=false) {
+  if (special || prizeId === 'inmu10k') return special ? flowResultSpecialImg : flowResultInmuImg
+  if (prizeId === 'pts1000') return flowResult1000Img
+  if (prizeId === 'pts5000') return flowResult5000Img
+  return flowResult100Img
+}
 
 /* ─── SE ─── */
 function playJackpotSE() {
@@ -181,6 +197,53 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
     dur:1.15+(i%6)*.12,
   }))
   const isCosmic = kind !== 'lever'
+  const sceneImg: string | null =
+    kind === 'lever' ? flowLeverImg :
+    kind === 'space' ? flowSpaceImg :
+    kind === 'falling' ? flowFallImg :
+    kind === 'opening' ? resultFlowImage(prizeId, guaranteed) :
+    null
+
+  if (sceneImg) {
+    const pan =
+      kind === 'lever' ? {x:'2%',y:'0%',scale:1.1} :
+      kind === 'space' ? {x:'0%',y:'-2%',scale:1.08} :
+      kind === 'falling' ? {x:'0%',y:'3%',scale:1.1} :
+      {x:'0%',y:'-1%',scale:1.08}
+    return (
+      <div style={{position:'absolute',inset:0,zIndex,pointerEvents:'none',
+        overflow:'hidden',background:'#02010a',animation:'ga-cutfade .35s ease-out both'}}>
+        <img src={sceneImg} alt="" style={{
+          position:'absolute',inset:0,width:'100%',height:'100%',
+          objectFit:'cover',objectPosition:'center center',
+          transform:`scale(${pan.scale}) translate(${pan.x},${pan.y})`,
+          filter:'saturate(1.08) contrast(1.05)',
+          animation:'ga-cutken 2.8s ease-out forwards',
+          '--ga-pan-x':pan.x,'--ga-pan-y':pan.y,
+        } as CSSProperties}/>
+        <div style={{position:'absolute',inset:0,
+          background:kind==='lever'
+            ? 'linear-gradient(90deg,rgba(0,0,0,.02),rgba(0,0,0,.20) 72%,rgba(0,0,0,.55))'
+            : 'linear-gradient(180deg,rgba(0,0,0,.02),rgba(0,0,0,.06) 52%,rgba(0,0,0,.20))'}}/>
+        {kind!=='lever'&&(
+          <div style={{position:'absolute',top:'-8%',bottom:'-6%',left:'50%',width:'16%',
+            transform:'translateX(-50%)',
+            background:'linear-gradient(90deg,transparent,rgba(255,218,92,.25),rgba(255,255,210,.38),rgba(255,218,92,.25),transparent)',
+            filter:'blur(12px)',mixBlendMode:'screen',animation:'ga-cutbeam 1.8s ease-in-out infinite'}}/>
+        )}
+        <div style={{position:'absolute',top:'-16%',left:'-24%',width:'42%',height:'136%',
+          background:'linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent)',
+          filter:'blur(5px)',mixBlendMode:'screen',animation:'ga-cutsweep 2.2s ease-in-out .1s both'}}/>
+        {stars.slice(0, kind==='lever'?12:26).map((s,i)=>(
+          <div key={`flow-s${i}`} style={{position:'absolute',left:s.left,top:s.top,
+            width:s.size,height:s.size,borderRadius:'50%',
+            background:i%3===0?'rgba(255,255,255,.85)':'rgba(255,215,0,.84)',
+            boxShadow:'0 0 12px rgba(255,215,0,.78)',
+            animation:`ga-cutstar ${1.35+(i%6)*.16}s ease-in-out ${s.delay}s infinite`}}/>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div style={{position:'absolute',inset:0,zIndex,pointerEvents:'none',
@@ -1486,6 +1549,10 @@ export function GachaPage() {
               padding:'56px 18px 20px',
               overflow:'hidden',
               background:'radial-gradient(circle at 50% 28%,rgba(255,215,0,.24),transparent 32%),radial-gradient(ellipse at 50% 91%,rgba(218,165,32,.28),rgba(68,25,0,.28) 34%,rgba(0,0,8,.96) 74%),#02010a'}}>
+              <img src={resultFlowImage(result.results[0]?.prizeId??'pts100', result.wasGuaranteed)} alt=""
+                style={{position:'absolute',inset:0,width:'100%',height:'100%',
+                  objectFit:'cover',objectPosition:'center center',zIndex:1,
+                  filter:'saturate(1.08) contrast(1.05)'}}/>
               <div style={{position:'absolute',left:'50%',top:'16%',bottom:0,width:46,
                 transform:'translateX(-50%)',
                 background:'linear-gradient(180deg,transparent,rgba(255,215,0,.58),rgba(255,245,180,.82),rgba(255,215,0,.46),transparent)',
@@ -1511,8 +1578,7 @@ export function GachaPage() {
               {result.results.map((prize)=>{
                 const c=CAPSULE[prize.prizeId]??CAPSULE.pts100
                 return (
-                  <div key={prize.prizeId} style={{width:'100%',display:'flex',
-                    flexDirection:'column',alignItems:'center',gap:14,position:'relative',zIndex:2}}>
+                  <div key={prize.prizeId} style={{display:'none'}}>
                     <div style={{position:'relative'}}>
                       <ResultCapsuleReveal prizeId={prize.prizeId} size={230}/>
                       {prize.prizeId==='inmu10k'&&(
