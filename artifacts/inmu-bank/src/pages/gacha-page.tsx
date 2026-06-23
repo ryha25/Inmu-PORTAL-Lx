@@ -644,7 +644,8 @@ export function GachaPage() {
 
   /* ════ ANIMATION + RESULT SCREENS ════ */
   return (
-    <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
+    <div style={{position:'fixed',inset:0,zIndex:9000,display:'flex',flexDirection:'column',
+      background:'#02010a',overflow:'hidden'}}>
       <style>{CSS}</style>
 
       {/* Opening flash */}
@@ -653,56 +654,26 @@ export function GachaPage() {
         animation:'ga-goldflash .68s ease-out forwards'}}/>}
 
       <PageBg>
-        {/* ── Phase header ── */}
-        <div style={{padding:'14px 16px 8px',display:'flex',alignItems:'center',
-          justifyContent:'space-between'}}>
-          <div>
-            <h1 className="ga-pulse" style={{margin:0,fontSize:17,fontWeight:900,color:'#daa520',
-              fontFamily:'Georgia,serif',letterSpacing:'0.1em'}}>✦ INMU GACHA ✦</h1>
-            <p style={{margin:0,fontSize:11,color:'rgba(255,255,255,.42)',marginTop:1}}>
-              所持: <strong style={{color:'#ffd700'}}>{pts.toLocaleString()} pt</strong>
-            </p>
-          </div>
+        <div style={{flex:1,display:'flex',flexDirection:'column',
+          alignItems:'stretch',justifyContent:'stretch',padding:0,gap:0,
+          position:'relative',minHeight:0,overflow:'hidden'}}>
           {phase==='done'&&(
             <button type="button" onClick={reset}
-              style={{background:'rgba(255,255,255,.06)',backdropFilter:'blur(8px)',
-                border:'1px solid rgba(218,165,32,.38)',borderRadius:12,
-                padding:'9px 14px',color:'#daa520',fontSize:12,cursor:'pointer',fontWeight:700}}>
+              style={{position:'absolute',top:12,right:12,zIndex:40,
+                background:'rgba(5,3,12,.72)',backdropFilter:'blur(12px)',
+                border:'1px solid rgba(218,165,32,.48)',borderRadius:12,
+                padding:'9px 14px',color:'#daa520',fontSize:12,cursor:'pointer',fontWeight:800,
+                boxShadow:'0 6px 24px rgba(0,0,0,.55)'}}>
               ガチャ画面へ戻る
             </button>
           )}
-        </div>
-
-        {/* ── Phase step indicators ── */}
-        <div style={{display:'flex',justifyContent:'center',gap:8,marginBottom:8}}>
-          {(['inserting','lever','space','falling'] as Phase[]).map((p,i)=>{
-            const order=['inserting','lever','space','falling','opening','done']
-            const current=order.indexOf(phase)
-            const step=order.indexOf(p)
-            const active=current>=step
-            return (
-              <div key={p} style={{display:'flex',alignItems:'center',gap:3}}>
-                <div style={{width:22,height:22,borderRadius:'50%',
-                  background:active?'rgba(218,165,32,.9)':'rgba(255,255,255,.1)',
-                  border:`1.5px solid ${active?'#ffd700':'rgba(255,255,255,.2)'}`,
-                  display:'flex',alignItems:'center',justifyContent:'center',
-                  fontSize:10,fontWeight:900,color:active?'#1a0e00':'rgba(255,255,255,.3)',
-                  transition:'all .3s'}}>
-                  {i+1}
-                </div>
-                {i<3&&<div style={{width:16,height:1,background:active&&current>step?'rgba(218,165,32,.6)':'rgba(255,255,255,.12)'}}/>}
-              </div>
-            )
-          })}
-        </div>
-
-        <div style={{flex:1,display:'flex',flexDirection:'column',
-          alignItems:'center',justifyContent:'center',padding:'0 20px',gap:16}}>
 
           {/* ════ Phase 1: GUARANTEED ════ */}
           {phase==='guaranteed'&&(
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:18}}>
-              <div style={{position:'relative',width:'100%',height:220,
+            <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
+              alignItems:'center',justifyContent:'center',gap:18,padding:'18px 0',
+              background:'radial-gradient(ellipse at 50% 44%,rgba(218,165,32,.16),transparent 58%)'}}>
+              <div style={{position:'relative',width:'100%',flex:1,minHeight:0,
                 display:'flex',alignItems:'center',justifyContent:'center'}}>
                 {[0,1,2].map(i=>(
                   <div key={i} style={{position:'absolute',top:'50%',left:'50%',
@@ -741,21 +712,23 @@ export function GachaPage() {
 
           {/* ════ Phase 2: COIN INSERT — machine top close-up, coin falls into slot ════ */}
           {phase==='inserting'&&(
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
+            <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
+              alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
-                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>コイン投入</p>
+                letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
+                position:'relative',zIndex:12}}>コイン投入</p>
 
               {/* Machine cropped to show only the top dome area */}
-              <div style={{width:'100%',maxWidth:340,height:252,borderRadius:20,overflow:'hidden',
+              <div style={{width:'100%',flex:1,minHeight:0,borderRadius:0,overflow:'hidden',
                 position:'relative',
                 background:'radial-gradient(ellipse at 50% 110%, rgba(218,165,32,.38) 0%, transparent 44%), #040101',
-                border:'1px solid rgba(184,134,11,.4)',
-                boxShadow:'0 0 32px rgba(0,0,0,.8)'}}>
+                border:'none',
+                boxShadow:'inset 0 0 90px rgba(0,0,0,.9),0 0 32px rgba(0,0,0,.8)'}}>
 
                 {/* Machine image — only top portion visible */}
                 <img src={machineImg} alt="" style={{
                   position:'absolute',
-                  width:'min(296px,76vw)',
+                  width:'min(520px,118vw)',
                   left:'50%',transform:'translateX(-50%)',
                   top:0,
                   opacity:.34,
@@ -793,7 +766,7 @@ export function GachaPage() {
                 {/* INMU coin — falls from above container into slot */}
                 <img src={coinImg} style={{
                   position:'absolute',left:'calc(50% - 46px)',
-                  width:92,height:92,borderRadius:'50%',objectFit:'cover',
+                  width:120,height:120,borderRadius:'50%',objectFit:'cover',
                   border:'3.5px solid #daa520',
                   boxShadow:'0 0 68px rgba(218,165,32,.98),0 0 28px rgba(255,215,0,.65)',
                   animation:'ga-coinfall2 1.15s ease-in forwards',
@@ -819,7 +792,8 @@ export function GachaPage() {
                 ))}
               </div>
 
-              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em'}}>
+              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em',
+                textAlign:'center',padding:'8px 0 14px'}}>
                 INMUコインを投入します
               </p>
             </div>
@@ -827,15 +801,17 @@ export function GachaPage() {
 
           {/* ════ Phase 3: LEVER — CSS-only lever mechanism close-up ════ */}
           {phase==='lever'&&(
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
+            <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
+              alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
-                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>レバー回転</p>
+                letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
+                position:'relative',zIndex:12}}>レバー回転</p>
 
-              <div style={{width:'100%',maxWidth:340,height:290,borderRadius:20,overflow:'hidden',
+              <div style={{width:'100%',flex:1,minHeight:0,borderRadius:0,overflow:'hidden',
                 position:'relative',
                 background:'radial-gradient(ellipse at 72% 38%, rgba(108,69,9,.42) 0%, transparent 44%), linear-gradient(135deg,#010101 0%,#090603 46%,#1b1003 100%)',
-                border:'1px solid rgba(184,134,11,.56)',
-                boxShadow:'inset 0 1px 0 rgba(255,236,150,.12),inset 0 -18px 42px rgba(0,0,0,.8),0 0 34px rgba(0,0,0,.88)'}}>
+                border:'none',
+                boxShadow:'inset 0 1px 0 rgba(255,236,150,.12),inset 0 -34px 80px rgba(0,0,0,.86),inset 0 0 90px rgba(0,0,0,.75),0 0 34px rgba(0,0,0,.88)'}}>
 
                 {/* Ambient gold glow around lever */}
                 <div style={{position:'absolute',left:'18%',top:'8%',width:'72%',height:'72%',
@@ -950,7 +926,8 @@ export function GachaPage() {
                 ))}
               </div>
 
-              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em'}}>
+              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em',
+                textAlign:'center',padding:'8px 0 14px'}}>
                 レバーを回すとガチャが動き出します
               </p>
             </div>
@@ -958,14 +935,16 @@ export function GachaPage() {
 
           {/* ════ Phase 4: SPACE — cosmic scene, beam from below, coins orbit, glass orb ════ */}
           {phase==='space'&&(
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
+            <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
+              alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
-                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>カプセル排出</p>
+                letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
+                position:'relative',zIndex:12}}>カプセル排出</p>
 
-              <div style={{width:'100%',maxWidth:340,height:310,borderRadius:20,overflow:'hidden',
-                border:'1px solid rgba(184,134,11,.46)',position:'relative',
+              <div style={{width:'100%',flex:1,minHeight:0,borderRadius:0,overflow:'hidden',
+                border:'none',position:'relative',
                 background:'radial-gradient(ellipse at 50% 92%, rgba(218,165,32,.32) 0%, rgba(80,20,0,.62) 28%, rgba(24,4,60,.88) 55%, rgba(2,1,16,.99) 80%)',
-                boxShadow:'inset 0 2px 0 rgba(255,255,255,.04),0 0 34px rgba(0,0,0,.82)'}}>
+                boxShadow:'inset 0 2px 0 rgba(255,255,255,.04),inset 0 0 90px rgba(0,0,0,.86),0 0 34px rgba(0,0,0,.82)'}}>
 
                 {/* Stars */}
                 {Array.from({length:26},(_,i)=>(
@@ -977,7 +956,7 @@ export function GachaPage() {
                 ))}
 
                 {/* Galaxy vortex at the capsule gate, matching the reference's cosmic discharge */}
-                <div style={{position:'absolute',left:'50%',top:'18%',width:210,height:76,
+                <div style={{position:'absolute',left:'50%',top:'15%',width:280,height:100,
                   transform:'translate(-50%,-50%)',zIndex:3,pointerEvents:'none'}}>
                   {[0,1,2,3].map(i=>(
                     <div key={i} style={{position:'absolute',left:'50%',top:'50%',
@@ -996,13 +975,13 @@ export function GachaPage() {
                 {/* ── Cone light beam — wide at ground, narrows going up ── */}
                 {/* Outer soft cone */}
                 <div style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
-                  width:'92%',height:'90%',zIndex:1,
+                  width:'112%',height:'96%',zIndex:1,
                   background:'linear-gradient(0deg,rgba(218,165,32,.62) 0%,rgba(218,165,32,.36) 22%,rgba(180,140,10,.18) 50%,rgba(120,90,0,.06) 72%,transparent 88%)',
                   clipPath:'polygon(14% 100%, 86% 100%, 58% 0%, 42% 0%)',
                   filter:'blur(14px)'}}/>
                 {/* Mid cone */}
                 <div style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
-                  width:'68%',height:'88%',zIndex:1,
+                  width:'82%',height:'94%',zIndex:1,
                   background:'linear-gradient(0deg,rgba(255,230,100,.78) 0%,rgba(255,200,50,.52) 20%,rgba(218,165,32,.26) 50%,rgba(160,120,0,.08) 72%,transparent 88%)',
                   clipPath:'polygon(22% 100%, 78% 100%, 56% 0%, 44% 0%)',
                   filter:'blur(7px)'}}/>
@@ -1054,7 +1033,7 @@ export function GachaPage() {
                 {/* ── Amber glass orb materializes (warm golden glow) ── */}
                 <div style={{position:'absolute',bottom:'22%',left:'50%',transform:'translateX(-50%)',
                   animation:'ga-reveal .7s ease-out .32s both',zIndex:8}}>
-                  <div style={{position:'relative',width:96,height:96,borderRadius:'50%',
+                  <div style={{position:'relative',width:122,height:122,borderRadius:'50%',
                     background:'radial-gradient(ellipse at 34% 28%, rgba(255,255,220,.92) 0%, rgba(255,220,100,.68) 22%, rgba(220,150,20,.44) 46%, rgba(140,80,0,.30) 68%, rgba(50,25,0,.52) 100%)',
                     border:'1.5px solid rgba(255,200,80,.44)',
                     boxShadow:'0 0 56px rgba(218,165,32,.88),0 0 28px rgba(255,180,0,.62),inset -4px -4px 16px rgba(80,40,0,.52),inset 4px 4px 10px rgba(255,240,120,.34)'}}>
@@ -1069,7 +1048,7 @@ export function GachaPage() {
                       background:'rgba(255,180,0,.48)',filter:'blur(5px)'}}/>
                     {/* Mascot */}
                     <div style={{position:'absolute',inset:9,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
+                      <img src={mascotImg} style={{width:68,height:'auto',objectFit:'contain',
                         opacity:.82,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
                     </div>
                   </div>
@@ -1085,7 +1064,8 @@ export function GachaPage() {
                 ))}
               </div>
 
-              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,textAlign:'center',letterSpacing:'0.12em'}}>
+              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,textAlign:'center',
+                letterSpacing:'0.12em',padding:'8px 0 14px'}}>
                 宇宙の神秘の中、カプセルが排出されます
               </p>
             </div>
@@ -1093,14 +1073,16 @@ export function GachaPage() {
 
           {/* ════ Phase 5: FALLING — glass orb falls through starfield, lands with shockwave ════ */}
           {phase==='falling'&&(
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}}>
+            <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
+              alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
-                letterSpacing:'0.22em',margin:0,textAlign:'center'}}>カプセル落下</p>
+                letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
+                position:'relative',zIndex:12}}>カプセル落下</p>
 
-              <div style={{width:'100%',maxWidth:340,height:310,borderRadius:20,overflow:'hidden',
-                border:'1px solid rgba(184,134,11,.38)',position:'relative',
+              <div style={{width:'100%',flex:1,minHeight:0,borderRadius:0,overflow:'hidden',
+                border:'none',position:'relative',
                 background:'radial-gradient(ellipse at 50% 98%, rgba(218,165,32,.34) 0%, rgba(100,50,0,.48) 22%, transparent 46%), #010008',
-                boxShadow:'0 0 32px rgba(0,0,0,.82)'}}>
+                boxShadow:'inset 0 0 90px rgba(0,0,0,.86),0 0 32px rgba(0,0,0,.82)'}}>
 
                 {/* Stars (more prominent here) */}
                 {Array.from({length:32},(_,i)=>(
@@ -1135,7 +1117,7 @@ export function GachaPage() {
                 <div style={{position:'absolute',left:0,right:0,
                   display:'flex',justifyContent:'center',zIndex:8,
                   animation:'ga-capland 1.05s ease-in forwards'}}>
-                  <div style={{position:'relative',width:112,height:112,borderRadius:'50%',
+                  <div style={{position:'relative',width:138,height:138,borderRadius:'50%',
                     background:'radial-gradient(ellipse at 34% 28%, rgba(255,255,220,.94) 0%, rgba(255,220,100,.70) 22%, rgba(220,150,20,.46) 46%, rgba(140,80,0,.30) 68%, rgba(50,25,0,.54) 100%)',
                     border:'1.5px solid rgba(255,200,80,.46)',
                     boxShadow:'0 0 68px rgba(218,165,32,.92),0 0 32px rgba(255,180,0,.65),inset -5px -5px 18px rgba(80,40,0,.54),inset 4px 4px 12px rgba(255,240,120,.36)'}}>
@@ -1150,7 +1132,7 @@ export function GachaPage() {
                       background:'rgba(255,180,0,.5)',filter:'blur(5px)'}}/>
                     {/* Mascot inside */}
                     <div style={{position:'absolute',inset:11,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <img src={mascotImg} style={{width:64,height:'auto',objectFit:'contain',
+                      <img src={mascotImg} style={{width:80,height:'auto',objectFit:'contain',
                         opacity:.84,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
                     </div>
                   </div>
@@ -1203,7 +1185,8 @@ export function GachaPage() {
                 ))}
               </div>
 
-              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em'}}>
+              <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em',
+                textAlign:'center',padding:'8px 0 14px'}}>
                 カプセルが下へ落ちていきます
               </p>
             </div>
@@ -1211,10 +1194,12 @@ export function GachaPage() {
 
           {/* ════ Phase 6: OPENING ════ */}
           {phase==='opening'&&(
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+            <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
+              alignItems:'center',justifyContent:'center',gap:16,
+              background:'radial-gradient(circle at 50% 42%,rgba(218,165,32,.18),transparent 58%)'}}>
               <p style={{fontSize:14,fontWeight:800,color:'#daa520',letterSpacing:'0.18em',margin:0,
                 animation:'ga-glowtext 1.1s ease-in-out infinite'}}>カプセル開封中…</p>
-              <div style={{position:'relative',height:220,width:220,
+              <div style={{position:'relative',height:'min(72vw,360px)',width:'min(72vw,360px)',
                 display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
                 <div style={{position:'absolute',inset:-24,borderRadius:'50%',
                   background:'radial-gradient(circle,rgba(255,255,180,.9) 0%,rgba(218,165,32,.65) 36%,transparent 62%)',
@@ -1226,20 +1211,20 @@ export function GachaPage() {
                     animation:`ga-ring ${.5+i*.26}s ease-out ${.16+i*.14}s forwards`}}/>
                 ))}
                 {/* Top half */}
-                <div style={{position:'absolute',width:128,height:64,
-                  borderRadius:'64px 64px 0 0',overflow:'hidden',
-                  top:32,transformOrigin:'bottom center',
+                <div style={{position:'absolute',width:190,height:95,
+                  borderRadius:'95px 95px 0 0',overflow:'hidden',
+                  top:'20%',transformOrigin:'bottom center',
                   animation:'ga-split-t .62s ease-out .12s forwards',
                   boxShadow:'0 -8px 30px rgba(218,165,32,.65)',zIndex:5}}>
-                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={128} showLabel={false}/>
+                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={190} showLabel={false}/>
                 </div>
                 {/* Bottom half */}
-                <div style={{position:'absolute',width:128,height:64,
-                  borderRadius:'0 0 64px 64px',overflow:'hidden',
-                  top:116,transformOrigin:'top center',
+                <div style={{position:'absolute',width:190,height:95,
+                  borderRadius:'0 0 95px 95px',overflow:'hidden',
+                  top:'48%',transformOrigin:'top center',
                   animation:'ga-split-b .62s ease-out .12s forwards',
                   boxShadow:'0 8px 30px rgba(218,165,32,.55)',zIndex:5}}>
-                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={128} showLabel={false}/>
+                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={190} showLabel={false}/>
                 </div>
               </div>
             </div>
@@ -1248,7 +1233,10 @@ export function GachaPage() {
           {/* ════ DONE: Single result ════ */}
           {phase==='done'&&result&&!isMulti&&(
             <div className="ga-reveal" style={{
-              display:'flex',flexDirection:'column',alignItems:'center',gap:14,width:'100%',maxWidth:320}}>
+              position:'absolute',inset:0,display:'flex',flexDirection:'column',
+              alignItems:'center',justifyContent:'center',gap:14,width:'100%',
+              padding:'56px 18px 20px',
+              background:'radial-gradient(circle at 50% 36%,rgba(218,165,32,.14),transparent 58%)'}}>
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',margin:0,
                   animation:'ga-glowtext 1.5s ease-in-out infinite'}}>✨ 確定演出が発動しました！</p>
@@ -1293,7 +1281,9 @@ export function GachaPage() {
           {/* ════ DONE: Multi result (10連) ════ */}
           {phase==='done'&&result&&isMulti&&(
             <div className="ga-reveal" style={{
-              display:'flex',flexDirection:'column',gap:14,width:'100%',maxWidth:340}}>
+              position:'absolute',inset:0,display:'flex',flexDirection:'column',
+              justifyContent:'center',gap:14,width:'100%',padding:'56px 18px 20px',
+              background:'radial-gradient(circle at 50% 36%,rgba(218,165,32,.14),transparent 58%)'}}>
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',textAlign:'center',margin:0}}>
                   ✨ 確定演出が発動しました！
@@ -1338,7 +1328,7 @@ export function GachaPage() {
 
         </div>
       </PageBg>
-    </AppShell>
+    </div>
   )
 }
 
