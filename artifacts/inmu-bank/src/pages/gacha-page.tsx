@@ -149,7 +149,7 @@ function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:b
 }
 
 /* ════ Prize Capsule: CSS-drawn colored capsule (image 5 reference) ════ */
-function PrizeCapsule({ prizeId, size=96, open=false }:{prizeId:string;size?:number;open?:boolean}) {
+function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:string;size?:number;open?:boolean;showLabel?:boolean}) {
   const c = CAPSULE[prizeId] ?? CAPSULE.pts100
   const r = size/2
   const sep = open ? Math.max(7, size*.1) : 0
@@ -207,15 +207,17 @@ function PrizeCapsule({ prizeId, size=96, open=false }:{prizeId:string;size?:num
           </div>
         </>
       )}
-      <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
-        minWidth:size*.66,padding:`${Math.max(1,size*.018)}px ${Math.max(4,size*.048)}px`,
-        borderRadius:999,textAlign:'center',zIndex:7,
-        color:isJackpot?'#3a2100':'#fff',
-        fontSize:labelSize,fontWeight:900,lineHeight:1.05,whiteSpace:'pre-line',
-        fontFamily:'system-ui, sans-serif',
-        textShadow:isJackpot?'0 1px 0 rgba(255,255,255,.55),0 0 14px rgba(255,215,0,.9)':'0 2px 5px rgba(0,0,0,.82),0 0 10px rgba(255,255,255,.22)'}}>
-        {c.label}
-      </div>
+      {showLabel&&(
+        <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
+          minWidth:size*.66,padding:`${Math.max(1,size*.018)}px ${Math.max(4,size*.048)}px`,
+          borderRadius:999,textAlign:'center',zIndex:7,
+          color:isJackpot?'#3a2100':'#fff',
+          fontSize:labelSize,fontWeight:900,lineHeight:1.05,whiteSpace:'pre-line',
+          fontFamily:'system-ui, sans-serif',
+          textShadow:isJackpot?'0 1px 0 rgba(255,255,255,.55),0 0 14px rgba(255,215,0,.9)':'0 2px 5px rgba(0,0,0,.82),0 0 10px rgba(255,255,255,.22)'}}>
+          {c.label}
+        </div>
+      )}
       {isJackpot&&size>=120&&(
         <img src={mascotImg} style={{position:'absolute',left:'50%',top:'55%',
           width:size*.34,height:'auto',objectFit:'contain',transform:'translate(-50%,-50%)',
@@ -712,6 +714,7 @@ export function GachaPage() {
                   width:'min(296px,76vw)',
                   left:'50%',transform:'translateX(-50%)',
                   top:0,
+                  opacity:.34,
                   filter:'drop-shadow(0 4px 32px rgba(0,0,0,.9))'}}/>
 
                 {/* Focus vignette: spotlight on coin slot (~12% from machine top ≈ 46px) */}
@@ -722,6 +725,26 @@ export function GachaPage() {
                 <div style={{position:'absolute',left:'16%',top:'12%',width:'68%',height:'20%',
                   background:'radial-gradient(ellipse,rgba(218,165,32,.86) 0%,transparent 62%)',
                   animation:'ga-glowtext 1s ease-in-out infinite',pointerEvents:'none'}}/>
+
+                {/* Ornate insertion mouth, made dominant so the scene reads differently from the old machine close-up */}
+                <div style={{position:'absolute',left:'50%',bottom:24,transform:'translateX(-50%)',
+                  width:'76%',height:96,zIndex:4,pointerEvents:'none'}}>
+                  <div style={{position:'absolute',left:'50%',bottom:16,transform:'translateX(-50%)',
+                    width:'100%',height:54,borderRadius:'50%',
+                    background:'radial-gradient(ellipse at 50% 38%, rgba(0,0,0,.98) 0%, rgba(5,2,0,.96) 46%, rgba(95,54,0,.88) 64%, rgba(218,165,32,.9) 76%, rgba(255,224,92,.95) 84%, rgba(80,42,0,.92) 100%)',
+                    border:'2px solid rgba(255,215,100,.82)',
+                    boxShadow:'0 0 36px rgba(218,165,32,.78), inset 0 0 22px rgba(0,0,0,.9)'}}/>
+                  <div style={{position:'absolute',left:'50%',bottom:35,transform:'translateX(-50%)',
+                    width:'72%',height:28,borderRadius:'50%',
+                    background:'radial-gradient(ellipse, rgba(0,0,0,1) 0%, rgba(0,0,0,.94) 58%, rgba(255,210,70,.2) 100%)',
+                    boxShadow:'inset 0 0 18px rgba(0,0,0,1), 0 0 24px rgba(255,215,0,.48)'}}/>
+                  {[0,1,2,3,4].map(i=>(
+                    <div key={i} style={{position:'absolute',left:`${18+i*16}%`,bottom:38,
+                      width:2,height:70+i%2*18,borderRadius:2,
+                      background:'linear-gradient(0deg,rgba(255,230,130,.9),rgba(218,165,32,.38),transparent)',
+                      filter:'blur(.4px)',animation:`ga-rayfall ${1.1+i*.08}s ease-in-out ${i*.12}s infinite`}}/>
+                  ))}
+                </div>
 
                 {/* INMU coin — falls from above container into slot */}
                 <img src={coinImg} style={{
@@ -1086,20 +1109,20 @@ export function GachaPage() {
                     animation:`ga-ring ${.5+i*.26}s ease-out ${.16+i*.14}s forwards`}}/>
                 ))}
                 {/* Top half */}
-                <div style={{position:'absolute',width:150,height:75,
-                  borderRadius:'75px 75px 0 0',overflow:'hidden',
-                  top:18,transformOrigin:'bottom center',
+                <div style={{position:'absolute',width:128,height:64,
+                  borderRadius:'64px 64px 0 0',overflow:'hidden',
+                  top:32,transformOrigin:'bottom center',
                   animation:'ga-split-t .62s ease-out .12s forwards',
                   boxShadow:'0 -8px 30px rgba(218,165,32,.65)',zIndex:5}}>
-                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={150}/>
+                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={128} showLabel={false}/>
                 </div>
                 {/* Bottom half */}
-                <div style={{position:'absolute',width:150,height:75,
-                  borderRadius:'0 0 75px 75px',overflow:'hidden',
-                  top:111,transformOrigin:'top center',
+                <div style={{position:'absolute',width:128,height:64,
+                  borderRadius:'0 0 64px 64px',overflow:'hidden',
+                  top:116,transformOrigin:'top center',
                   animation:'ga-split-b .62s ease-out .12s forwards',
                   boxShadow:'0 8px 30px rgba(218,165,32,.55)',zIndex:5}}>
-                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={150}/>
+                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={128} showLabel={false}/>
                 </div>
               </div>
             </div>
