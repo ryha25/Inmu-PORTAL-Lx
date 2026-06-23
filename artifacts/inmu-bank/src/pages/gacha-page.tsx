@@ -235,24 +235,65 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
   )
 }
 
+function RateOrb({ id }:{id:string}) {
+  const c = CAPSULE[id] ?? CAPSULE.pts100
+  const isJackpot = id === 'inmu10k'
+  return (
+    <div style={{position:'relative',width:26,height:26,borderRadius:'50%',flexShrink:0,
+      background:`${c.top}, ${c.bot}`,
+      border:`1px solid ${isJackpot?'rgba(255,224,120,.9)':c.border}`,
+      boxShadow:`0 0 12px ${c.glow}, inset -4px -4px 9px rgba(0,0,0,.45), inset 3px 3px 6px rgba(255,255,255,.34)`,
+      overflow:'hidden'}}>
+      <div style={{position:'absolute',left:0,right:0,top:'47%',height:3,
+        background:isJackpot
+          ? 'linear-gradient(90deg,rgba(85,42,0,.8),rgba(255,232,130,.95),rgba(85,42,0,.8))'
+          : 'linear-gradient(90deg,rgba(5,8,16,.72),rgba(255,255,255,.46),rgba(5,8,16,.72))',
+        boxShadow:`0 0 7px ${c.glow}`}}/>
+      <div style={{position:'absolute',top:4,left:5,width:9,height:6,borderRadius:'50%',
+        background:'rgba(255,255,255,.82)',filter:'blur(.2px)',transform:'rotate(-24deg)'}}/>
+      <div style={{position:'absolute',top:12,left:4,width:4,height:3,borderRadius:'50%',
+        background:'rgba(255,255,255,.34)',transform:'rotate(-20deg)'}}/>
+      {isJackpot&&(
+        <div style={{position:'absolute',inset:5,borderRadius:'50%',
+          background:'radial-gradient(circle,rgba(255,246,160,.76) 0%,rgba(218,165,32,.28) 42%,transparent 70%)',
+          boxShadow:'0 0 10px rgba(255,215,0,.8)'}}/>
+      )}
+    </div>
+  )
+}
+
 /* ════ Rate Panel overlay ════ */
 function RatePanel() {
   return (
-    <div style={{position:'absolute',top:'28%',right:0,zIndex:10,width:104,
-      background:'linear-gradient(160deg,rgba(8,4,22,.97),rgba(14,7,2,.97))',
-      border:'1px solid rgba(184,134,11,.55)',borderRadius:'12px 0 0 12px',
-      padding:'10px 8px 10px 10px',
+    <div style={{position:'absolute',top:'22%',right:0,zIndex:10,width:132,
+      background:'linear-gradient(180deg,rgba(8,5,1,.98),rgba(1,1,1,.98) 52%,rgba(10,5,1,.98))',
+      border:'1.5px solid rgba(218,165,32,.68)',borderRadius:'8px 0 0 8px',
+      padding:'12px 10px 12px 12px',
       backdropFilter:'blur(14px)',
-      boxShadow:'inset 0 1px 0 rgba(255,255,255,.07),-3px 0 28px rgba(0,0,0,.65)'}}>
-      <p style={{margin:'0 0 8px',fontSize:9,color:'rgba(218,165,32,.88)',
-        textAlign:'center',letterSpacing:'0.22em',fontWeight:700}}>排出率</p>
+      boxShadow:'inset 0 1px 0 rgba(255,238,160,.12),inset 0 -1px 0 rgba(0,0,0,.9),-4px 0 30px rgba(0,0,0,.74),0 0 18px rgba(218,165,32,.16)'}}>
+      {(['tl','tr','bl','br'] as const).map(pos=>(
+        <div key={pos} style={{position:'absolute',
+          top:pos[0]==='t'?5:undefined,bottom:pos[0]==='b'?5:undefined,
+          left:pos[1]==='l'?5:undefined,right:pos[1]==='r'?5:undefined,
+          width:12,height:12,
+          borderTop:pos[0]==='t'?'1px solid rgba(255,218,110,.72)':'none',
+          borderBottom:pos[0]==='b'?'1px solid rgba(255,218,110,.72)':'none',
+          borderLeft:pos[1]==='l'?'1px solid rgba(255,218,110,.72)':'none',
+          borderRight:pos[1]==='r'?'1px solid rgba(255,218,110,.72)':'none'}}/>
+      ))}
+      <p style={{margin:'0 0 12px',fontSize:16,color:'#e8c65a',
+        textAlign:'center',letterSpacing:'0.1em',fontWeight:900,
+        textShadow:'0 0 12px rgba(218,165,32,.58)'}}>排出率</p>
       {BALLS.map(b=>(
-        <div key={b.id} style={{display:'flex',alignItems:'center',gap:5,marginBottom:6}}>
-          <div style={{width:18,height:18,borderRadius:'50%',flexShrink:0,
-            background:b.color,boxShadow:`0 0 7px ${b.color}`}} />
-          <div>
-            <p style={{fontSize:8,color:'rgba(218,165,32,.75)',fontWeight:700,margin:0,whiteSpace:'nowrap'}}>{b.label}</p>
-            <p style={{fontSize:13,color:'#ffd700',fontWeight:900,fontFamily:'monospace',margin:0}}>{b.rate}</p>
+        <div key={b.id} style={{display:'flex',alignItems:'center',gap:8,marginBottom:11}}>
+          <RateOrb id={b.id}/>
+          <div style={{minWidth:0}}>
+            <p style={{fontSize:12,color:'rgba(255,246,210,.96)',fontWeight:800,margin:0,whiteSpace:'nowrap',
+              lineHeight:1.05,textShadow:'0 1px 3px rgba(0,0,0,.85)'}}>
+              {b.id==='inmu10k'?'10,000INMU':b.label}
+            </p>
+            <p style={{fontSize:16,color:'#b9ff9c',fontWeight:900,fontFamily:'monospace',margin:'2px 0 0',
+              lineHeight:1,textShadow:'0 0 9px rgba(120,255,120,.32)'}}>{b.rate}</p>
           </div>
         </div>
       ))}
