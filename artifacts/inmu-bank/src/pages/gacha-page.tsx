@@ -10,12 +10,6 @@ import mascotImg   from '@assets/generated_images/mascot-v2-nobg.png'
 import coinImg     from '@assets/IMG_6637_1782097134955.jpeg'
 import bgImg       from '@assets/generated_images/gacha-bg.png'
 import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
-import capsuleBlueClosedImg from '@assets/generated_images/capsule-blue-closed.png'
-import capsuleBlueOpenImg from '@assets/generated_images/capsule-blue-open.png'
-import capsulePurpleClosedImg from '@assets/generated_images/capsule-purple-closed.png'
-import capsulePurpleOpenImg from '@assets/generated_images/capsule-purple-open.png'
-import capsuleGoldClosedImg from '@assets/generated_images/capsule-gold-closed.png'
-import capsuleGoldOpenImg from '@assets/generated_images/capsule-gold-open.png'
 
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
@@ -26,9 +20,9 @@ type HistRow = { id:number; pullType:string; isFree:boolean; results:Prize[]; to
 /* ─── capsule color configs (image 5 reference) ─── */
 const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;label:string}> = {
   pts100: {
-    top:'radial-gradient(ellipse at 33% 28%, rgba(232,238,248,.98) 0%, rgba(168,182,202,.96) 38%, rgba(108,126,150,.74) 68%)',
-    bot:'radial-gradient(ellipse at 67% 72%, rgba(200,214,230,.97) 0%, rgba(148,165,188,.92) 38%, rgba(86,106,132,.68) 68%)',
-    glow:'rgba(155,178,208,.64)', border:'rgba(182,200,222,.70)', label:'100pt',
+    top:'radial-gradient(ellipse at 33% 28%, rgba(255,255,232,.84) 0%, rgba(255,228,142,.46) 34%, rgba(218,165,32,.24) 62%, rgba(92,48,0,.18) 82%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(255,238,172,.58) 0%, rgba(218,165,32,.32) 38%, rgba(104,54,0,.22) 74%)',
+    glow:'rgba(255,205,90,.54)', border:'rgba(255,226,150,.64)', label:'100pt',
   },
   pts1000: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(135,192,255,.98) 0%, rgba(25,85,218,.93) 42%, rgba(6,35,165,.68) 72%)',
@@ -319,69 +313,14 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30 }:{
   )
 }
 
-function premiumCapsuleSrc(prizeId:string, open=false) {
-  if (prizeId === 'pts1000') return open ? capsuleBlueOpenImg : capsuleBlueClosedImg
-  if (prizeId === 'pts5000') return open ? capsulePurpleOpenImg : capsulePurpleClosedImg
-  if (prizeId === 'inmu10k') return open ? capsuleGoldOpenImg : capsuleGoldClosedImg
-  return open ? capsuleGoldOpenImg : capsuleGoldClosedImg
-}
-
-function PremiumCapsule({ prizeId, size=170, open=false, style }: {
-  prizeId:string; size?:number; open?:boolean; style?:CSSProperties
-}) {
-  return (
-    <img src={premiumCapsuleSrc(prizeId, open)} alt="" style={{
-      width:size,height:'auto',objectFit:'contain',
-      filter:'drop-shadow(0 0 24px rgba(255,215,0,.42)) drop-shadow(0 10px 22px rgba(0,0,0,.75))',
-      ...style,
-    }}/>
-  )
-}
-
-function GlassCapsule({ size=170, open=false, style }: {
-  size?:number; open?:boolean; style?:CSSProperties
-}) {
-  const topY = open ? -size*.18 : 0
-  const bottomY = open ? size*.2 : 0
-  return (
-    <div style={{position:'relative',width:size,height:open?size*1.08:size,
-      filter:'drop-shadow(0 0 28px rgba(255,205,90,.42)) drop-shadow(0 12px 24px rgba(0,0,0,.78))',
-      ...style}}>
-      <div style={{position:'absolute',left:0,top:topY,width:size,height:size/2,
-        borderRadius:`${size/2}px ${size/2}px 0 0`,
-        background:'radial-gradient(ellipse at 32% 22%,rgba(255,255,255,.82),rgba(255,232,170,.28) 24%,rgba(218,165,32,.20) 52%,rgba(80,38,0,.18) 100%)',
-        border:'1.4px solid rgba(255,226,150,.58)',borderBottom:'none',
-        boxShadow:'inset 0 5px 12px rgba(255,255,255,.32),inset 0 -10px 18px rgba(85,42,0,.28),0 0 28px rgba(218,165,32,.42)',
-        transition:'transform .3s ease'}}/>
-      <div style={{position:'absolute',left:0,top:size/2+bottomY,width:size,height:size/2,
-        borderRadius:`0 0 ${size/2}px ${size/2}px`,
-        background:'radial-gradient(ellipse at 62% 78%,rgba(255,240,185,.52),rgba(218,165,32,.24) 34%,rgba(80,38,0,.24) 100%)',
-        border:'1.4px solid rgba(255,226,150,.58)',borderTop:'none',
-        boxShadow:'inset 0 -8px 18px rgba(0,0,0,.28),inset 0 8px 16px rgba(255,230,150,.22),0 0 28px rgba(218,165,32,.38)'}}/>
-      <div style={{position:'absolute',left:'6%',top:'12%',width:'31%',height:'16%',
-        borderRadius:'50%',background:'rgba(255,255,255,.68)',transform:'rotate(-20deg)'}}/>
-      <div style={{position:'absolute',left:'7%',top:'26%',width:'12%',height:'7%',
-        borderRadius:'50%',background:'rgba(255,255,255,.38)',transform:'rotate(-20deg)'}}/>
-      <div style={{position:'absolute',left:'3%',right:'3%',top:size/2-1+bottomY*.28,height:3,
-        borderRadius:999,
-        background:'linear-gradient(90deg,transparent,rgba(255,236,160,.9),rgba(255,185,20,.72),rgba(255,236,160,.9),transparent)',
-        boxShadow:'0 0 13px rgba(255,215,0,.72)'}}/>
-      <div style={{position:'absolute',inset:0,overflow:'hidden',borderRadius:'50%'}}>
-        <div style={{position:'absolute',top:'8%',bottom:'8%',left:'-45%',width:'38%',
-          background:'linear-gradient(90deg,transparent,rgba(255,255,255,.46),transparent)',
-          filter:'blur(2px)',animation:'ga-capglint 2.1s ease-in-out infinite'}}/>
-      </div>
-    </div>
-  )
-}
-
 function CapsuleVisual({ prizeId, size=170, open=false, style }: {
   prizeId:string; size?:number; open?:boolean; style?:CSSProperties
 }) {
-  if (prizeId === 'pts100') {
-    return <GlassCapsule size={size} open={open} style={style}/>
-  }
-  return <PremiumCapsule prizeId={prizeId} size={size} open={open} style={style}/>
+  return (
+    <div style={style}>
+      <PrizeCapsule prizeId={prizeId} size={size} open={open} showLabel={false}/>
+    </div>
+  )
 }
 
 function ResultCapsuleReveal({ prizeId, size=210 }: {prizeId:string; size?:number}) {
@@ -915,10 +854,10 @@ export function GachaPage() {
               ガチャ画面へ戻る
             </button>
           )}
-          {phase==='lever'&&<GeneratedScene kind="lever"/>}
-          {phase==='space'&&<GeneratedScene kind="space"/>}
-          {phase==='falling'&&<GeneratedScene kind="falling" guaranteed={result?.wasGuaranteed}/>}
-          {phase==='opening'&&<GeneratedScene kind="opening" guaranteed={result?.wasGuaranteed}/>}
+          {phase==='lever'&&<GeneratedScene kind="lever" zIndex={70}/>}
+          {phase==='space'&&<GeneratedScene kind="space" zIndex={70}/>}
+          {phase==='falling'&&<GeneratedScene kind="falling" guaranteed={result?.wasGuaranteed} zIndex={70}/>}
+          {phase==='opening'&&<GeneratedScene kind="opening" guaranteed={result?.wasGuaranteed} zIndex={70}/>}
 
           {/* ════ Phase 1: GUARANTEED ════ */}
           {phase==='guaranteed'&&(
