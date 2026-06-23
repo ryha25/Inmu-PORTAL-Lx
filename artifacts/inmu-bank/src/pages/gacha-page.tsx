@@ -165,8 +165,8 @@ function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:b
   )
 }
 
-function GeneratedScene({ kind, guaranteed=false, zIndex=30 }:{
-  kind:'lever'|'space'|'falling'|'opening'; guaranteed?:boolean; zIndex?:number
+function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:{
+  kind:'lever'|'space'|'falling'|'opening'; guaranteed?:boolean; zIndex?:number; prizeId?:string
 }) {
   const stars = Array.from({length:kind==='lever'?22:44},(_,i)=>({
     left:`${(i*37.3+9)%92}%`,
@@ -200,56 +200,66 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30 }:{
 
       {kind==='lever'&&(
         <>
-          <div style={{position:'absolute',left:'-17%',top:'-8%',width:'62%',height:'118%',
-            borderRadius:'0 48% 48% 0',
-            background:'linear-gradient(90deg,#070706 0%,#11100d 38%,#2a1a08 52%,#0b0805 100%)',
-            borderRight:'2px solid rgba(218,165,32,.52)',
-            boxShadow:'inset -18px 0 46px rgba(218,165,32,.28),18px 0 48px rgba(0,0,0,.78)'}}/>
-          {[9,31,56,82].map((top,i)=>(
-            <div key={i} style={{position:'absolute',left:'-12%',top:`${top}%`,width:'56%',height:9,
-              background:'linear-gradient(90deg,rgba(80,35,0,.2),rgba(255,210,96,.88),rgba(90,45,0,.3))',
-              boxShadow:'0 0 18px rgba(218,165,32,.34),inset 0 1px 0 rgba(255,255,255,.28)'}}/>
-          ))}
-          {Array.from({length:16},(_,i)=>(
-            <div key={i} style={{position:'absolute',left:`${3+(i%4)*9}%`,top:`${12+Math.floor(i/4)*18}%`,
-              width:42,height:2,borderRadius:999,
-              background:'linear-gradient(90deg,transparent,rgba(218,165,32,.6),transparent)',
-              transform:`rotate(${i%2?34:-28}deg)`,
-              opacity:.55}}/>
-          ))}
-          <div style={{position:'absolute',left:'28%',top:'39%',width:122,height:122,borderRadius:'50%',
-            transform:'translate(-50%,-50%)',
-            background:'radial-gradient(circle at 35% 30%,#fff2a8,#d89619 28%,#6a2c00 62%,#080403 100%)',
-            boxShadow:'0 0 36px rgba(218,165,32,.72),inset 0 0 24px rgba(0,0,0,.78)'}}/>
-          <div style={{position:'absolute',left:'28%',top:'39%',width:'48%',height:18,
-            transform:'translateY(-50%)',
-            background:'linear-gradient(180deg,#fff0a8,#d69216 42%,#713400 100%)',
-            borderRadius:999,boxShadow:'0 0 28px rgba(218,165,32,.85),inset 0 2px 6px rgba(255,255,255,.38)',
-            animation:'ga-forelever 1.35s cubic-bezier(.22,.82,.2,1) forwards',
-            transformOrigin:'0% 50%'}}/>
-          <div style={{position:'absolute',left:'70%',top:'39%',width:84,height:84,borderRadius:'50%',
-            transform:'translate(-50%,-50%)',
-            background:'radial-gradient(circle at 32% 28%,#fff8c8,#f0b51b 28%,#9d5200 66%,#3b1700 100%)',
-            boxShadow:'0 0 48px rgba(255,185,0,.92),inset -8px -10px 16px rgba(85,35,0,.55)',
-            animation:'ga-capopenfore 1.35s cubic-bezier(.22,.82,.2,1) forwards'}}/>
-          <div style={{position:'absolute',left:'18%',bottom:'4%',width:110,height:150,
-            border:'3px solid rgba(218,165,32,.72)',borderBottom:'none',
-            borderRadius:'54px 54px 0 0',
-            background:'linear-gradient(180deg,rgba(0,0,0,.85),rgba(218,165,32,.12))',
-            boxShadow:'0 0 36px rgba(218,165,32,.24),inset 0 0 18px rgba(0,0,0,.9)'}}/>
           <div style={{position:'absolute',inset:0,
-            background:'linear-gradient(90deg,transparent 0%,rgba(255,230,160,.24) 46%,transparent 68%)',
-            filter:'blur(10px)',animation:'ga-cutsweep 1.6s ease-out both'}}/>
+            background:'radial-gradient(ellipse at 80% 44%,rgba(218,165,32,.16),transparent 48%),linear-gradient(90deg,#050302 0%,#080503 48%,#020101 100%)'}}/>
+          <div style={{position:'absolute',left:'-22%',top:'-5%',width:'58%',height:'112%',
+            borderRadius:'0 42% 42% 0',
+            background:'linear-gradient(90deg,#050505 0%,#11100d 18%,#050504 34%,#2a1705 50%,#060403 70%,#010101 100%)',
+            borderRight:'2px solid rgba(255,194,76,.55)',
+            boxShadow:'inset -18px 0 44px rgba(218,165,32,.22),22px 0 70px rgba(0,0,0,.86)'}}/>
+          {[6,31,58,86].map((top,i)=>(
+            <div key={i} style={{position:'absolute',left:'-18%',top:`${top}%`,width:'61%',height:10,
+              background:'linear-gradient(180deg,#2c1400,#d59b20 34%,#ffe3a0 50%,#7d4000 100%)',
+              boxShadow:'0 0 18px rgba(218,165,32,.42),inset 0 1px 0 rgba(255,255,255,.24)'}}/>
+          ))}
+          {Array.from({length:22},(_,i)=>(
+            <div key={i} style={{position:'absolute',left:`${2+(i%5)*7}%`,top:`${13+Math.floor(i/5)*18}%`,
+              width:50,height:2,borderRadius:999,
+              background:'linear-gradient(90deg,transparent,rgba(255,185,70,.64),transparent)',
+              transform:`rotate(${i%2?42:-34}deg)`,opacity:.52}}/>
+          ))}
+          <div style={{position:'absolute',left:'17%',top:'73%',width:116,height:164,
+            border:'4px solid rgba(218,165,32,.78)',borderBottom:'none',
+            borderRadius:'58px 58px 0 0',
+            background:'linear-gradient(180deg,rgba(0,0,0,.96),rgba(218,165,32,.06))',
+            boxShadow:'0 0 36px rgba(218,165,32,.26),inset 0 0 22px rgba(0,0,0,.92)'}}/>
+          <div style={{position:'absolute',left:'30%',top:'38%',width:134,height:134,borderRadius:'50%',
+            transform:'translate(-50%,-50%)',
+            background:'radial-gradient(circle at 34% 28%,#fff4b8 0%,#d99b1a 18%,#7b4100 44%,#140700 68%,#020101 100%)',
+            border:'2px solid rgba(255,210,105,.42)',
+            boxShadow:'0 0 42px rgba(218,165,32,.74),inset 0 0 30px rgba(0,0,0,.88)'}}/>
+          <div style={{position:'absolute',left:'30%',top:'38%',transformOrigin:'0% 50%',
+            animation:'ga-forelever 1.42s cubic-bezier(.2,.82,.18,1) forwards'}}>
+            <div style={{position:'absolute',left:0,top:-12,width:218,height:24,borderRadius:999,
+              background:'linear-gradient(180deg,#080200,#593000 12%,#d49818 36%,#fff0ad 50%,#bd790a 66%,#160800 100%)',
+              border:'1px solid rgba(255,220,120,.38)',
+              boxShadow:'0 0 24px rgba(218,165,32,.52),0 10px 24px rgba(0,0,0,.78),inset 0 2px 2px rgba(255,255,220,.34)'}}/>
+            <div style={{position:'absolute',left:178,top:-43,width:92,height:92,borderRadius:'50%',
+              background:'radial-gradient(circle at 30% 22%,#fff 0%,#fff5c8 7%,#f4bd32 26%,#a46200 58%,#2b1000 100%)',
+              boxShadow:'0 0 55px rgba(255,190,40,.96),0 14px 28px rgba(0,0,0,.82),inset -10px -12px 18px rgba(0,0,0,.62)'}}>
+              <div style={{position:'absolute',top:15,left:19,width:22,height:12,borderRadius:'50%',
+                background:'rgba(255,255,255,.55)',transform:'rotate(-28deg)'}}/>
+            </div>
+          </div>
+          <div style={{position:'absolute',left:'30%',top:'60%',width:82,height:82,borderRadius:'50%',
+            transform:'translate(-50%,-50%)',
+            background:'radial-gradient(circle at 30% 24%,#fff5bd 0%,#e1a51e 26%,#8a4a00 61%,#1e0a00 100%)',
+            boxShadow:'0 0 38px rgba(218,165,32,.72),inset -8px -10px 16px rgba(0,0,0,.62)'}}/>
+          <div style={{position:'absolute',left:'18%',right:'6%',bottom:'0%',height:'28%',
+            background:'linear-gradient(180deg,transparent,rgba(218,165,32,.08),rgba(0,0,0,.25))'}}/>
+          <div style={{position:'absolute',inset:0,
+            background:'linear-gradient(90deg,transparent 0%,rgba(255,226,140,.24) 45%,transparent 66%)',
+            filter:'blur(8px)',animation:'ga-cutsweep 1.85s ease-out both'}}/>
         </>
       )}
 
       {isCosmic&&(
         <>
-          <div style={{position:'absolute',left:'50%',top:'16%',width:280,height:110,
+          <div style={{position:'absolute',left:'50%',top:'16%',width:360,height:132,
             transform:'translate(-50%,-50%)'}}>
             {[0,1,2,3].map(i=>(
               <div key={i} style={{position:'absolute',left:'50%',top:'50%',
-                width:86+i*52,height:24+i*13,borderRadius:'50%',
+                width:96+i*66,height:26+i*16,borderRadius:'50%',
                 border:`${2-i*.25}px solid rgba(${i%2?170:255},${i%2?76:205},${i%2?255:40},${.62-i*.09})`,
                 boxShadow:`0 0 ${20+i*8}px rgba(${i%2?170:255},${i%2?76:205},${i%2?255:40},${.48-i*.08})`,
                 animation:`ga-vortex ${3.8+i*.6}s linear ${i*.1}s infinite`}}/>
@@ -260,10 +270,10 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30 }:{
               boxShadow:'0 0 60px rgba(255,215,0,.95),0 0 92px rgba(170,80,255,.5)',
               animation:'ga-stageflash .9s ease-in-out infinite'}}/>
           </div>
-          <div style={{position:'absolute',bottom:'0%',left:'50%',width:'115%',height:'100%',
+          <div style={{position:'absolute',bottom:'0%',left:'50%',width:'118%',height:'98%',
             transform:'translateX(-50%)',
-            clipPath:'polygon(13% 100%,87% 100%,57% 0,43% 0)',
-            background:'linear-gradient(0deg,rgba(255,215,0,.68),rgba(218,165,32,.42) 28%,rgba(255,230,120,.18) 58%,transparent 90%)',
+            clipPath:'polygon(10% 100%,90% 100%,57% 0,43% 0)',
+            background:'linear-gradient(0deg,rgba(255,215,0,.78),rgba(218,165,32,.50) 28%,rgba(255,230,120,.20) 58%,transparent 91%)',
             filter:'blur(13px)',animation:'ga-cutbeam 1.6s ease-in-out infinite'}}/>
           <div style={{position:'absolute',bottom:0,left:'50%',width:38,height:'86%',
             transform:'translateX(-50%)',
@@ -276,7 +286,7 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30 }:{
               filter:'blur(.35px)',opacity:0,
               animation:`ga-goldrain ${r.dur}s ease-in-out ${r.delay}s infinite`}}/>
           ))}
-          {[230,178,130].map((w,i)=>(
+          {[256,198,142].map((w,i)=>(
             <div key={i} style={{position:'absolute',bottom:14-i*4,left:'50%',
               transform:'translateX(-50%)',width:w,height:w*.17,borderRadius:'50%',
               border:`${2.2-i*.5}px solid rgba(255,215,0,${.78-i*.18})`,
@@ -287,16 +297,39 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30 }:{
 
       {kind==='space'&&BALLS.filter(b=>b.id!=='pts100').map((b,i)=>(
         <div key={b.id} style={{position:'absolute',
-          left:['12%','72%','82%'][i],top:['67%','34%','68%'][i],
-          width:72,height:72,borderRadius:'50%',
-          background:`radial-gradient(circle at 30% 24%,rgba(255,255,255,.9),${b.color} 36%,rgba(0,0,0,.28) 82%)`,
-          border:'1px solid rgba(255,255,255,.38)',
-          boxShadow:`0 0 38px ${b.color},inset 0 0 18px rgba(0,0,0,.46)`,
-          animation:`ga-rayfall ${1.4+i*.16}s ease-in-out ${i*.1}s infinite`}}>
-          <div style={{position:'absolute',left:0,right:0,top:'50%',height:2,
-            background:'rgba(255,255,255,.46)',boxShadow:'0 0 8px rgba(255,255,255,.7)'}}/>
+          left:['13%','76%','82%'][i],top:['69%','34%','69%'][i],
+          animation:`ga-rayfall ${1.55+i*.18}s ease-in-out ${i*.12}s infinite`}}>
+          <PrizeCapsule prizeId={b.id} size={76} showLabel={false}/>
         </div>
       ))}
+
+      {kind==='space'&&(
+        <div style={{position:'absolute',left:'50%',top:'58%',transform:'translate(-50%,-50%)',
+          animation:'ga-capportal 2.05s cubic-bezier(.18,.78,.24,1) forwards'}}>
+          <PrizeCapsule prizeId={prizeId} size={128} showLabel={false}/>
+        </div>
+      )}
+
+      {kind==='falling'&&(
+        <div style={{position:'absolute',left:'50%',top:'48%',transform:'translate(-50%,-50%)',
+          animation:'ga-capdropfull 2s cubic-bezier(.22,.72,.18,1) forwards'}}>
+          <PrizeCapsule prizeId={prizeId} size={154} showLabel={false}/>
+        </div>
+      )}
+
+      {kind==='opening'&&(
+        <div style={{position:'absolute',left:'50%',top:'48%',transform:'translate(-50%,-50%)',
+          width:250,height:300,display:'flex',alignItems:'center',justifyContent:'center',
+          animation:'ga-premiumopen 1.15s ease-out forwards'}}>
+          <div style={{position:'absolute',inset:-20,borderRadius:'50%',
+            background:'radial-gradient(circle,rgba(255,235,150,.78),rgba(218,165,32,.32) 42%,transparent 70%)',
+            filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
+          <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
+          <img src={mascotImg} style={{position:'absolute',width:88,height:'auto',bottom:82,
+            filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
+            animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
+        </div>
+      )}
 
       {(kind==='falling'||kind==='opening')&&guaranteed&&(
         <>
@@ -855,9 +888,9 @@ export function GachaPage() {
             </button>
           )}
           {phase==='lever'&&<GeneratedScene kind="lever" zIndex={70}/>}
-          {phase==='space'&&<GeneratedScene kind="space" zIndex={70}/>}
-          {phase==='falling'&&<GeneratedScene kind="falling" guaranteed={result?.wasGuaranteed} zIndex={70}/>}
-          {phase==='opening'&&<GeneratedScene kind="opening" guaranteed={result?.wasGuaranteed} zIndex={70}/>}
+          {phase==='space'&&<GeneratedScene kind="space" prizeId={result?.results[0]?.prizeId??'pts100'} zIndex={70}/>}
+          {phase==='falling'&&<GeneratedScene kind="falling" prizeId={result?.results[0]?.prizeId??'pts100'} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
+          {phase==='opening'&&<GeneratedScene kind="opening" prizeId={result?.results[0]?.prizeId??'pts100'} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
 
           {/* ════ Phase 1: GUARANTEED ════ */}
           {phase==='guaranteed'&&(
@@ -1449,7 +1482,26 @@ export function GachaPage() {
               position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'center',justifyContent:'center',gap:14,width:'100%',
               padding:'56px 18px 20px',
-              background:'radial-gradient(circle at 50% 18%,rgba(255,215,0,.26),transparent 30%),radial-gradient(ellipse at 50% 88%,rgba(218,165,32,.28),rgba(68,25,0,.34) 32%,rgba(0,0,8,.92) 74%),#02010a'}}>
+              overflow:'hidden',
+              background:'radial-gradient(circle at 50% 28%,rgba(255,215,0,.24),transparent 32%),radial-gradient(ellipse at 50% 91%,rgba(218,165,32,.28),rgba(68,25,0,.28) 34%,rgba(0,0,8,.96) 74%),#02010a'}}>
+              <div style={{position:'absolute',left:'50%',top:'16%',bottom:0,width:46,
+                transform:'translateX(-50%)',
+                background:'linear-gradient(180deg,transparent,rgba(255,215,0,.58),rgba(255,245,180,.82),rgba(255,215,0,.46),transparent)',
+                filter:'blur(2px)',animation:'ga-stageflash 1.2s ease-in-out infinite'}}/>
+              {[250,190,132].map((w,i)=>(
+                <div key={i} style={{position:'absolute',bottom:34-i*6,left:'50%',
+                  transform:'translateX(-50%)',width:w,height:w*.17,borderRadius:'50%',
+                  border:`${2.2-i*.5}px solid rgba(255,215,0,${.72-i*.16})`,
+                  boxShadow:`0 0 ${24-i*5}px rgba(218,165,32,${.54-i*.11})`}}/>
+              ))}
+              {Array.from({length:30},(_,i)=>(
+                <div key={i} style={{position:'absolute',
+                  left:`${(i*37+5)%92}%`,top:`${(i*53+9)%86}%`,
+                  width:1+(i%5)*.7,height:1+(i%5)*.7,borderRadius:'50%',
+                  background:i%4===0?'rgba(255,255,255,.9)':'rgba(255,215,0,.82)',
+                  boxShadow:'0 0 12px rgba(255,215,0,.72)',
+                  animation:`ga-cutstar ${1.4+(i%6)*.16}s ease-in-out ${i*.08}s infinite`}}/>
+              ))}
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',margin:0,
                   animation:'ga-glowtext 1.5s ease-in-out infinite'}}>✨ 確定演出が発動しました！</p>
@@ -1458,7 +1510,7 @@ export function GachaPage() {
                 const c=CAPSULE[prize.prizeId]??CAPSULE.pts100
                 return (
                   <div key={prize.prizeId} style={{width:'100%',display:'flex',
-                    flexDirection:'column',alignItems:'center',gap:14}}>
+                    flexDirection:'column',alignItems:'center',gap:14,position:'relative',zIndex:2}}>
                     <div style={{position:'relative'}}>
                       <ResultCapsuleReveal prizeId={prize.prizeId} size={230}/>
                       {prize.prizeId==='inmu10k'&&(
@@ -1469,8 +1521,8 @@ export function GachaPage() {
                     </div>
                     {/* Prize panel */}
                     <div style={{width:'100%',textAlign:'center',
-                      background:'linear-gradient(135deg,rgba(10,5,2,.94),rgba(6,3,18,.94))',
-                      border:`1.5px solid ${c.border}`,borderRadius:18,
+                      background:'linear-gradient(135deg,rgba(10,5,2,.82),rgba(6,3,18,.88))',
+                      border:`1.5px solid ${c.border}`,borderRadius:12,
                       padding:'16px 20px',backdropFilter:'blur(12px)',
                       boxShadow:`inset 0 1px 0 rgba(255,255,255,.06),0 0 38px ${c.glow}1e`}}>
                       <p style={{margin:0,fontWeight:900,fontSize:24,
@@ -1495,14 +1547,27 @@ export function GachaPage() {
           {phase==='done'&&result&&isMulti&&(
             <div className="ga-reveal" style={{
               position:'absolute',inset:0,display:'flex',flexDirection:'column',
-              justifyContent:'center',gap:14,width:'100%',padding:'56px 18px 20px',
-              background:'radial-gradient(circle at 50% 10%,rgba(255,215,0,.20),transparent 26%),radial-gradient(ellipse at 50% 90%,rgba(218,165,32,.20),rgba(0,0,8,.94) 62%),#02010a'}}>
+              justifyContent:'center',gap:12,width:'100%',padding:'54px 18px 18px',
+              overflow:'hidden',
+              border:'1px solid rgba(218,165,32,.45)',
+              boxShadow:'inset 0 0 0 1px rgba(255,215,0,.12)',
+              background:'radial-gradient(circle at 50% 10%,rgba(255,215,0,.18),transparent 26%),radial-gradient(ellipse at 50% 90%,rgba(218,165,32,.18),rgba(0,0,8,.96) 62%),#02010a'}}>
+              <div style={{position:'absolute',inset:8,border:'1px solid rgba(218,165,32,.32)',
+                pointerEvents:'none'}}/>
+              <div style={{position:'relative',zIndex:2}}>
+                <h2 style={{margin:0,fontFamily:'Georgia,serif',fontSize:26,letterSpacing:'0.08em',
+                  color:'#daa520',textShadow:'0 0 20px rgba(218,165,32,.46)'}}>INMU GACHA</h2>
+                <p style={{margin:'4px 0 0',fontSize:14,color:'rgba(255,255,255,.68)'}}>
+                  所持: <b style={{color:'#ffd700'}}>{result.newPoints.toLocaleString()} pt</b>
+                </p>
+              </div>
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',textAlign:'center',margin:0}}>
                   ✨ 確定演出が発動しました！
                 </p>
               )}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'18px 8px',
+                position:'relative',zIndex:2}}>
                 {result.results.map((prize,i)=>{
                   const c=CAPSULE[prize.prizeId]??CAPSULE.pts100
                   return (
@@ -1511,12 +1576,19 @@ export function GachaPage() {
                       opacity:i<revIdx?1:0,
                       animation:i<revIdx?'ga-card .3s ease-out forwards':'none',
                       position:'relative'}}>
-                      <div style={{position:'absolute',top:7,left:'50%',transform:'translateX(-50%)',
+                      <div style={{width:26,height:26,borderRadius:'50%',
+                        display:'flex',alignItems:'center',justifyContent:'center',
+                        background:'radial-gradient(circle at 35% 25%,#fff2a0,#daa520 42%,#7b4300 100%)',
+                        color:'#160900',fontSize:13,fontWeight:900,
+                        boxShadow:'0 0 14px rgba(218,165,32,.55)'}}>
+                        {i+1}
+                      </div>
+                      <div style={{position:'absolute',top:29,left:'50%',transform:'translateX(-50%)',
                         width:54,height:54,borderRadius:'50%',
                         background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
                         opacity:prize.prizeId==='inmu10k' ? .55 : .24,
                         filter:'blur(2px)',pointerEvents:'none'}}/>
-                      <CapsuleVisual prizeId={prize.prizeId} size={72} open/>
+                      <CapsuleVisual prizeId={prize.prizeId} size={74} open/>
                       <p style={{fontSize:8,fontWeight:800,color:c.border,
                         margin:0,textAlign:'center',lineHeight:1.2}}>
                         {c.label}
@@ -1526,7 +1598,8 @@ export function GachaPage() {
                 })}
               </div>
               {result.totalPoints>0&&(
-                <p style={{margin:0,fontSize:15,color:'#ffd700',textAlign:'center',fontWeight:900,
+                <p style={{margin:0,fontSize:20,color:'#ffd700',textAlign:'center',fontWeight:900,
+                  position:'relative',zIndex:2,
                   textShadow:'0 0 22px rgba(255,215,0,.75)'}}>
                   合計 +{result.totalPoints.toLocaleString()} pt 獲得！
                 </p>
@@ -1581,7 +1654,7 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
 
       <PageBg jackpot>
         {(step===2||step===3||step===4||step===5)&&(
-          <GeneratedScene kind={step===2?'falling':'opening'} guaranteed zIndex={2}/>
+          <GeneratedScene kind={step===2?'falling':'opening'} prizeId="inmu10k" guaranteed zIndex={2}/>
         )}
         {/* Rising coins */}
         <div style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:4,overflow:'hidden'}}>
