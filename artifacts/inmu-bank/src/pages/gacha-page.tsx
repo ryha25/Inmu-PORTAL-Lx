@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import type { CSSProperties } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
@@ -54,7 +55,7 @@ const BALLS = [
   { id:'inmu10k', label:'10,000 INMU', rate:'1%',  color:'rgba(255,215,0,.9)'   },
 ]
 const PHASE_MS: Partial<Record<Phase,number>> = {
-  guaranteed:2000, inserting:1250, lever:1050, space:1350, falling:1150, opening:900,
+  guaranteed:2600, inserting:1600, lever:1800, space:2300, falling:2200, opening:1800,
 }
 const BG_STARS = Array.from({length:28},(_,i)=>({
   x:`${(i*41.7+8)%90}%`,y:`${(i*63.1+5)%90}%`,s:1+(i%4)*.9,dur:2.8+(i%6)*1.1,delay:(i*.6)%7
@@ -120,6 +121,11 @@ const CSS=`
   @keyframes ga-vortex      {from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
   @keyframes ga-goldrain    {0%{transform:translateY(-70px);opacity:0}18%{opacity:.9}82%{opacity:.75}100%{transform:translateY(105px);opacity:0}}
   @keyframes ga-stageflash  {0%,100%{opacity:.28;transform:scale(.96)}50%{opacity:.86;transform:scale(1.04)}}
+  @keyframes ga-cutken      {0%{transform:scale(1.08) translate3d(0,0,0);filter:saturate(1.05) contrast(1.04)}100%{transform:scale(1.18) translate3d(var(--ga-pan-x,0),var(--ga-pan-y,0),0);filter:saturate(1.18) contrast(1.1)}}
+  @keyframes ga-cutfade     {0%{opacity:0}12%{opacity:1}86%{opacity:1}100%{opacity:.92}}
+  @keyframes ga-cutbeam     {0%{opacity:.15;transform:translateX(-50%) scaleY(.78)}44%{opacity:.72;transform:translateX(-50%) scaleY(1.08)}100%{opacity:.28;transform:translateX(-50%) scaleY(.96)}}
+  @keyframes ga-cutsweep    {0%{transform:translateX(-140%) rotate(14deg);opacity:0}26%{opacity:.45}64%{opacity:.16}100%{transform:translateX(160%) rotate(14deg);opacity:0}}
+  @keyframes ga-cutstar     {0%{opacity:0;transform:translateY(24px) scale(.55)}34%,72%{opacity:1}100%{opacity:0;transform:translateY(-42px) scale(1.18)}}
   .ga-pulse{animation:ga-pulse 2.2s ease-in-out infinite}
   .ga-floatslow{animation:ga-floatslow 3.4s ease-in-out infinite}
   .ga-reveal{animation:ga-reveal .42s ease-out forwards}
@@ -158,14 +164,40 @@ function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:b
   )
 }
 
-function SceneCut({ src, shade=.1 }:{src:string;shade?:number}) {
+function SceneCut({ src, shade=.1, motion='center' }:{src:string;shade?:number;motion?:'left'|'right'|'up'|'down'|'center'}) {
+  const pan =
+    motion==='left'  ? {x:'-4%',y:'0%'} :
+    motion==='right' ? {x:'4%',y:'0%'} :
+    motion==='up'    ? {x:'0%',y:'-4%'} :
+    motion==='down'  ? {x:'0%',y:'4%'} :
+    {x:'0%',y:'0%'}
+  const imageStyle = {
+    position:'absolute',inset:0,width:'100%',height:'100%',
+    objectFit:'cover',objectPosition:'center center',
+    animation:'ga-cutken 2.6s ease-out forwards',
+    '--ga-pan-x':pan.x,'--ga-pan-y':pan.y,
+  } as CSSProperties
   return (
     <div style={{position:'absolute',inset:0,zIndex:30,pointerEvents:'none',
-      background:'#02010a',overflow:'hidden'}}>
-      <img src={src} alt="" style={{position:'absolute',inset:0,width:'100%',height:'100%',
-        objectFit:'cover',objectPosition:'center center'}}/>
+      background:'#02010a',overflow:'hidden',animation:'ga-cutfade .45s ease-out both'}}>
+      <img src={src} alt="" style={imageStyle}/>
       <div style={{position:'absolute',inset:0,
         background:`linear-gradient(180deg,rgba(0,0,0,${shade}) 0%,rgba(0,0,0,.02) 42%,rgba(0,0,0,.18) 100%)`}}/>
+      <div style={{position:'absolute',top:'-8%',bottom:'-8%',left:'50%',width:'18%',
+        transform:'translateX(-50%)',transformOrigin:'50% 0%',
+        background:'linear-gradient(90deg,transparent,rgba(255,218,92,.32),rgba(255,255,210,.52),rgba(255,218,92,.32),transparent)',
+        filter:'blur(10px)',mixBlendMode:'screen',animation:'ga-cutbeam 1.6s ease-in-out infinite'}}/>
+      <div style={{position:'absolute',top:'-18%',left:'-20%',width:'42%',height:'140%',
+        background:'linear-gradient(90deg,transparent,rgba(255,255,255,.42),transparent)',
+        filter:'blur(4px)',mixBlendMode:'screen',animation:'ga-cutsweep 1.8s ease-in-out .2s both'}}/>
+      {Array.from({length:18},(_,i)=>(
+        <div key={i} style={{position:'absolute',
+          left:`${(i*31+9)%92}%`,top:`${(i*47+12)%88}%`,
+          width:1+(i%4),height:1+(i%4),borderRadius:'50%',
+          background:i%3===0?'rgba(255,255,255,.92)':'rgba(255,215,0,.88)',
+          boxShadow:'0 0 10px rgba(255,215,0,.82)',
+          animation:`ga-cutstar ${1.4+(i%5)*.18}s ease-in-out ${i*.09}s infinite`}}/>
+      ))}
     </div>
   )
 }
@@ -472,7 +504,7 @@ export function GachaPage() {
 
   useEffect(()=>{
     if(phase==='done'&&result&&result.results.length>1&&revIdx<result.results.length){
-      const t=setTimeout(()=>setRevIdx(i=>i+1),155);return()=>clearTimeout(t)
+      const t=setTimeout(()=>setRevIdx(i=>i+1),360);return()=>clearTimeout(t)
     }
     return undefined
   },[phase,result,revIdx])
@@ -686,10 +718,10 @@ export function GachaPage() {
               ガチャ画面へ戻る
             </button>
           )}
-          {phase==='lever'&&<SceneCut src={cutLeverImg} shade={0}/>}
-          {phase==='space'&&<SceneCut src={cutOrbitImg} shade={0}/>}
-          {phase==='falling'&&<SceneCut src={result?.wasGuaranteed?cutGuaranteedFallImg:cutCapsuleImg} shade={0}/>}
-          {phase==='opening'&&<SceneCut src={result?.wasGuaranteed?cutGuaranteedOpenImg:cutOpenImg} shade={0}/>}
+          {phase==='lever'&&<SceneCut src={cutLeverImg} shade={0} motion="right"/>}
+          {phase==='space'&&<SceneCut src={cutOrbitImg} shade={0} motion="up"/>}
+          {phase==='falling'&&<SceneCut src={result?.wasGuaranteed?cutGuaranteedFallImg:cutCapsuleImg} shade={0} motion="down"/>}
+          {phase==='opening'&&<SceneCut src={result?.wasGuaranteed?cutGuaranteedOpenImg:cutOpenImg} shade={0} motion="up"/>}
 
           {/* ════ Phase 1: GUARANTEED ════ */}
           {phase==='guaranteed'&&(
@@ -1259,7 +1291,7 @@ export function GachaPage() {
               position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'center',justifyContent:'center',gap:14,width:'100%',
               padding:'56px 18px 20px',
-              backgroundImage:`linear-gradient(180deg,rgba(0,0,0,.34),rgba(0,0,0,.54)),url(${cutResultImg})`,
+              backgroundImage:`radial-gradient(circle at 50% 30%,rgba(218,165,32,.22),rgba(0,0,0,.38) 42%,rgba(0,0,0,.82) 100%),url(${cutOpenImg})`,
               backgroundSize:'cover',backgroundPosition:'center center'}}>
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',margin:0,
@@ -1369,14 +1401,14 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
   useEffect(()=>{
     playJackpotSE()
     const ts=[
-      setTimeout(()=>setFlash(false),900),
-      setTimeout(()=>setStep(1),320),    // JACKPOT title
-      setTimeout(()=>setStep(2),980),    // gold capsule + burst glow
-      setTimeout(()=>setStep(3),1680),   // capsule opens (split)
-      setTimeout(()=>setStep(4),2080),   // mascot burst from capsule
-      setTimeout(()=>setStep(5),2600),   // multiple mascots jumping
-      setTimeout(()=>setStep(6),3200),   // 10,000 INMU display
-      setTimeout(()=>setStep(7),4100),   // back button
+      setTimeout(()=>setFlash(false),1100),
+      setTimeout(()=>setStep(1),420),    // JACKPOT title
+      setTimeout(()=>setStep(2),1300),   // gold capsule + burst glow
+      setTimeout(()=>setStep(3),2700),   // capsule opens (split)
+      setTimeout(()=>setStep(4),3900),   // mascot burst from capsule
+      setTimeout(()=>setStep(5),4700),   // multiple mascots jumping
+      setTimeout(()=>setStep(6),5600),   // 10,000 INMU display
+      setTimeout(()=>setStep(7),7000),   // back button
     ]
     return()=>ts.forEach(clearTimeout)
   },[])
