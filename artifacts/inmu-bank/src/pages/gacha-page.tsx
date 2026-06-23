@@ -17,6 +17,14 @@ import cutOpenImg from '@assets/generated_images/gacha-cut-open.jpg'
 import cutResultImg from '@assets/generated_images/gacha-cut-result.jpg'
 import cutGuaranteedFallImg from '@assets/generated_images/gacha-cut-guaranteed-fall.jpg'
 import cutGuaranteedOpenImg from '@assets/generated_images/gacha-cut-guaranteed-open.jpg'
+import capsuleSilverClosedImg from '@assets/generated_images/capsule-silver-closed.png'
+import capsuleSilverOpenImg from '@assets/generated_images/capsule-silver-open.png'
+import capsuleBlueClosedImg from '@assets/generated_images/capsule-blue-closed.png'
+import capsuleBlueOpenImg from '@assets/generated_images/capsule-blue-open.png'
+import capsulePurpleClosedImg from '@assets/generated_images/capsule-purple-closed.png'
+import capsulePurpleOpenImg from '@assets/generated_images/capsule-purple-open.png'
+import capsuleGoldClosedImg from '@assets/generated_images/capsule-gold-closed.png'
+import capsuleGoldOpenImg from '@assets/generated_images/capsule-gold-open.png'
 
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
@@ -121,6 +129,9 @@ const CSS=`
   @keyframes ga-capportal    {0%{transform:translate(-50%,-50%) scale(.35) rotate(-18deg);opacity:0;filter:blur(5px)}22%{opacity:1;filter:blur(0)}68%{transform:translate(-50%,-50%) scale(1.12) rotate(14deg);opacity:1}100%{transform:translate(-50%,-50%) scale(.82) rotate(26deg);opacity:.82}}
   @keyframes ga-capdropfull  {0%{top:-22%;transform:translateX(-50%) scale(.72) rotate(-20deg);opacity:0}18%{opacity:1}72%{top:48%;transform:translateX(-50%) scale(1.18) rotate(18deg);opacity:1}88%{top:44%;transform:translateX(-50%) scale(1.05) rotate(10deg)}100%{top:48%;transform:translateX(-50%) scale(1.1) rotate(14deg)}}
   @keyframes ga-capopenfore  {0%{transform:translate(-50%,-50%) scale(.7);opacity:0}18%{opacity:1}52%{transform:translate(-50%,-50%) scale(1.08)}100%{transform:translate(-50%,-50%) scale(1.2)}}
+  @keyframes ga-premiumclosed{0%,48%{opacity:1;transform:scale(1) rotate(-4deg);filter:brightness(1.05)}70%,100%{opacity:0;transform:scale(.72) rotate(14deg);filter:brightness(2.2) blur(2px)}}
+  @keyframes ga-premiumopen  {0%,42%{opacity:0;transform:translateY(18px) scale(.82);filter:brightness(2) blur(4px)}66%{opacity:1;transform:translateY(0) scale(1.12);filter:brightness(1.35) blur(0)}100%{opacity:1;transform:translateY(0) scale(1);filter:brightness(1)}}
+  @keyframes ga-resultflare  {0%{opacity:0;transform:scale(.2)}42%{opacity:.95;transform:scale(1.15)}100%{opacity:0;transform:scale(2.4)}}
   @keyframes ga-capglint    {0%{transform:translateX(-130%) rotate(-18deg);opacity:0}28%{opacity:.9}100%{transform:translateX(155%) rotate(-18deg);opacity:0}}
   @keyframes ga-rayfall     {0%{transform:translateY(-38px);opacity:0}28%,72%{opacity:.78}100%{transform:translateY(42px);opacity:0}}
   @keyframes ga-vortex      {from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
@@ -203,6 +214,40 @@ function SceneCut({ src, shade=.1, motion='center' }:{src:string;shade?:number;m
           boxShadow:'0 0 10px rgba(255,215,0,.82)',
           animation:`ga-cutstar ${1.4+(i%5)*.18}s ease-in-out ${i*.09}s infinite`}}/>
       ))}
+    </div>
+  )
+}
+
+function premiumCapsuleSrc(prizeId:string, open=false) {
+  if (prizeId === 'pts1000') return open ? capsuleBlueOpenImg : capsuleBlueClosedImg
+  if (prizeId === 'pts5000') return open ? capsulePurpleOpenImg : capsulePurpleClosedImg
+  if (prizeId === 'inmu10k') return open ? capsuleGoldOpenImg : capsuleGoldClosedImg
+  return open ? capsuleSilverOpenImg : capsuleSilverClosedImg
+}
+
+function PremiumCapsule({ prizeId, size=170, open=false, style }: {
+  prizeId:string; size?:number; open?:boolean; style?:CSSProperties
+}) {
+  return (
+    <img src={premiumCapsuleSrc(prizeId, open)} alt="" style={{
+      width:size,height:'auto',objectFit:'contain',
+      filter:'drop-shadow(0 0 24px rgba(255,215,0,.42)) drop-shadow(0 10px 22px rgba(0,0,0,.75))',
+      ...style,
+    }}/>
+  )
+}
+
+function ResultCapsuleReveal({ prizeId, size=210 }: {prizeId:string; size?:number}) {
+  return (
+    <div style={{position:'relative',width:size,height:size*1.18,display:'flex',
+      alignItems:'center',justifyContent:'center'}}>
+      <div style={{position:'absolute',inset:-24,borderRadius:'50%',
+        background:'radial-gradient(circle,rgba(255,255,210,.9),rgba(218,165,32,.48) 36%,transparent 64%)',
+        animation:'ga-resultflare 1.35s ease-out .22s forwards',opacity:0}}/>
+      <PremiumCapsule prizeId={prizeId} size={size*.9} open={false}
+        style={{position:'absolute',animation:'ga-premiumclosed 1.15s ease-out forwards'}}/>
+      <PremiumCapsule prizeId={prizeId} size={size} open
+        style={{position:'absolute',animation:'ga-premiumopen 1.15s ease-out forwards'}}/>
     </div>
   )
 }
@@ -1022,7 +1067,7 @@ export function GachaPage() {
                 position:'relative',zIndex:12}}>カプセル排出</p>
               <div style={{position:'absolute',left:'50%',top:'58%',zIndex:48,pointerEvents:'none',
                 animation:'ga-capportal 2.05s cubic-bezier(.18,.78,.24,1) forwards'}}>
-                <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={148}/>
+                <PremiumCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={170}/>
                 <div style={{position:'absolute',inset:-30,borderRadius:'50%',
                   background:'radial-gradient(circle,rgba(255,230,100,.46),rgba(218,165,32,.16) 42%,transparent 70%)',
                   filter:'blur(8px)',animation:'ga-stageflash .8s ease-in-out infinite'}}/>
@@ -1167,7 +1212,7 @@ export function GachaPage() {
                 position:'relative',zIndex:12}}>カプセル落下</p>
               <div style={{position:'absolute',left:'50%',zIndex:48,pointerEvents:'none',
                 animation:'ga-capdropfull 1.95s cubic-bezier(.22,.72,.18,1) forwards'}}>
-                <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={164}/>
+                <PremiumCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={190}/>
                 <div style={{position:'absolute',inset:-26,borderRadius:'50%',
                   background:'radial-gradient(circle,rgba(255,240,140,.38),rgba(218,165,32,.18) 44%,transparent 72%)',
                   filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
@@ -1307,22 +1352,7 @@ export function GachaPage() {
                     border:`1px solid rgba(218,165,32,${.52-i*.14})`,
                     animation:`ga-ring ${.5+i*.26}s ease-out ${.16+i*.14}s forwards`}}/>
                 ))}
-                {/* Top half */}
-                <div style={{position:'absolute',width:190,height:95,
-                  borderRadius:'95px 95px 0 0',overflow:'hidden',
-                  top:'20%',transformOrigin:'bottom center',
-                  animation:'ga-split-t .62s ease-out .12s forwards',
-                  boxShadow:'0 -8px 30px rgba(218,165,32,.65)',zIndex:5}}>
-                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={190} showLabel={false}/>
-                </div>
-                {/* Bottom half */}
-                <div style={{position:'absolute',width:190,height:95,
-                  borderRadius:'0 0 95px 95px',overflow:'hidden',
-                  top:'48%',transformOrigin:'top center',
-                  animation:'ga-split-b .62s ease-out .12s forwards',
-                  boxShadow:'0 8px 30px rgba(218,165,32,.55)',zIndex:5}}>
-                  <PrizeCapsule prizeId={result?.results[0]?.prizeId??'pts100'} size={190} showLabel={false}/>
-                </div>
+                <ResultCapsuleReveal prizeId={result?.results[0]?.prizeId??'pts100'} size={230}/>
               </div>
             </div>
           )}
@@ -1345,7 +1375,7 @@ export function GachaPage() {
                   <div key={prize.prizeId} style={{width:'100%',display:'flex',
                     flexDirection:'column',alignItems:'center',gap:14}}>
                     <div style={{position:'relative'}}>
-                      <PrizeCapsule prizeId={prize.prizeId} size={160} open/>
+                      <ResultCapsuleReveal prizeId={prize.prizeId} size={230}/>
                       {prize.prizeId==='inmu10k'&&(
                         <div style={{position:'absolute',inset:-18,borderRadius:'50%',
                           background:`radial-gradient(circle,${c.glow} 0%,transparent 65%)`,
@@ -1402,7 +1432,7 @@ export function GachaPage() {
                         background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
                         opacity:prize.prizeId==='inmu10k' ? .55 : .24,
                         filter:'blur(2px)',pointerEvents:'none'}}/>
-                      <PrizeCapsule prizeId={prize.prizeId} size={58} open/>
+                      <PremiumCapsule prizeId={prize.prizeId} size={72} open/>
                       <p style={{fontSize:8,fontWeight:800,color:c.border,
                         margin:0,textAlign:'center',lineHeight:1.2}}>
                         {c.label}
