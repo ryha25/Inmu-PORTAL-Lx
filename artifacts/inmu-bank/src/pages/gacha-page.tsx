@@ -9,6 +9,13 @@ import mascotImg   from '@assets/generated_images/mascot-v2-nobg.png'
 import coinImg     from '@assets/IMG_6637_1782097134955.jpeg'
 import bgImg       from '@assets/generated_images/gacha-bg.png'
 import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
+import cutLeverImg from '@assets/generated_images/gacha-cut-lever.jpg'
+import cutOrbitImg from '@assets/generated_images/gacha-cut-orbit.jpg'
+import cutCapsuleImg from '@assets/generated_images/gacha-cut-capsule.jpg'
+import cutOpenImg from '@assets/generated_images/gacha-cut-open.jpg'
+import cutResultImg from '@assets/generated_images/gacha-cut-result.jpg'
+import cutGuaranteedFallImg from '@assets/generated_images/gacha-cut-guaranteed-fall.jpg'
+import cutGuaranteedOpenImg from '@assets/generated_images/gacha-cut-guaranteed-open.jpg'
 
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
@@ -147,6 +154,18 @@ function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:b
       <div style={{position:'relative',zIndex:5,display:'flex',flexDirection:'column',flex:1}}>
         {children}
       </div>
+    </div>
+  )
+}
+
+function SceneCut({ src, shade=.1 }:{src:string;shade?:number}) {
+  return (
+    <div style={{position:'absolute',inset:0,zIndex:30,pointerEvents:'none',
+      background:'#02010a',overflow:'hidden'}}>
+      <img src={src} alt="" style={{position:'absolute',inset:0,width:'100%',height:'100%',
+        objectFit:'cover',objectPosition:'center center'}}/>
+      <div style={{position:'absolute',inset:0,
+        background:`linear-gradient(180deg,rgba(0,0,0,${shade}) 0%,rgba(0,0,0,.02) 42%,rgba(0,0,0,.18) 100%)`}}/>
     </div>
   )
 }
@@ -659,7 +678,7 @@ export function GachaPage() {
           position:'relative',minHeight:0,overflow:'hidden'}}>
           {phase==='done'&&(
             <button type="button" onClick={reset}
-              style={{position:'absolute',top:12,right:12,zIndex:40,
+              style={{position:'absolute',top:12,right:12,zIndex:60,
                 background:'rgba(5,3,12,.72)',backdropFilter:'blur(12px)',
                 border:'1px solid rgba(218,165,32,.48)',borderRadius:12,
                 padding:'9px 14px',color:'#daa520',fontSize:12,cursor:'pointer',fontWeight:800,
@@ -667,6 +686,10 @@ export function GachaPage() {
               ガチャ画面へ戻る
             </button>
           )}
+          {phase==='lever'&&<SceneCut src={cutLeverImg} shade={0}/>}
+          {phase==='space'&&<SceneCut src={cutOrbitImg} shade={0}/>}
+          {phase==='falling'&&<SceneCut src={result?.wasGuaranteed?cutGuaranteedFallImg:cutCapsuleImg} shade={0}/>}
+          {phase==='opening'&&<SceneCut src={result?.wasGuaranteed?cutGuaranteedOpenImg:cutOpenImg} shade={0}/>}
 
           {/* ════ Phase 1: GUARANTEED ════ */}
           {phase==='guaranteed'&&(
@@ -1236,7 +1259,8 @@ export function GachaPage() {
               position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'center',justifyContent:'center',gap:14,width:'100%',
               padding:'56px 18px 20px',
-              background:'radial-gradient(circle at 50% 36%,rgba(218,165,32,.14),transparent 58%)'}}>
+              backgroundImage:`linear-gradient(180deg,rgba(0,0,0,.34),rgba(0,0,0,.54)),url(${cutResultImg})`,
+              backgroundSize:'cover',backgroundPosition:'center center'}}>
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',margin:0,
                   animation:'ga-glowtext 1.5s ease-in-out infinite'}}>✨ 確定演出が発動しました！</p>
@@ -1283,7 +1307,8 @@ export function GachaPage() {
             <div className="ga-reveal" style={{
               position:'absolute',inset:0,display:'flex',flexDirection:'column',
               justifyContent:'center',gap:14,width:'100%',padding:'56px 18px 20px',
-              background:'radial-gradient(circle at 50% 36%,rgba(218,165,32,.14),transparent 58%)'}}>
+              backgroundImage:`linear-gradient(180deg,rgba(0,0,0,.24),rgba(0,0,0,.5)),url(${cutResultImg})`,
+              backgroundSize:'cover',backgroundPosition:'center center'}}>
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',textAlign:'center',margin:0}}>
                   ✨ 確定演出が発動しました！
@@ -1357,7 +1382,8 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
   },[])
 
   return (
-    <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
+    <div style={{position:'fixed',inset:0,zIndex:9000,display:'flex',flexDirection:'column',
+      background:'#02010a',overflow:'hidden'}}>
       <style>{CSS}</style>
 
       {/* Full-screen gold flash */}
@@ -1366,6 +1392,15 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
         animation:'ga-goldflash .9s ease-out forwards'}}/>}
 
       <PageBg jackpot>
+        {(step===2||step===3||step===4||step===5)&&(
+          <div style={{position:'absolute',inset:0,zIndex:2,pointerEvents:'none',overflow:'hidden'}}>
+            <img src={step===2?cutGuaranteedFallImg:cutGuaranteedOpenImg} alt=""
+              style={{position:'absolute',inset:0,width:'100%',height:'100%',
+                objectFit:'cover',objectPosition:'center center',opacity:.96}}/>
+            <div style={{position:'absolute',inset:0,
+              background:'linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.02) 46%,rgba(0,0,0,.26))'}}/>
+          </div>
+        )}
         {/* Rising coins */}
         <div style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:4,overflow:'hidden'}}>
           {COIN_RISES.map((c,i)=>(
@@ -1541,6 +1576,6 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
 
         </div>
       </PageBg>
-    </AppShell>
+    </div>
   )
 }
