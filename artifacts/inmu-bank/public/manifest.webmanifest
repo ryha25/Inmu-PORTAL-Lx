@@ -1,0 +1,17 @@
+{
+  "name": "INMU PORTAL",
+  "short_name": "INMU",
+  "description": "INMU PORTAL",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#02010a",
+  "theme_color": "#d4a017",
+  "icons": [
+    {
+      "src": "/app-icon.jpg",
+      "sizes": "1024x1024",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
