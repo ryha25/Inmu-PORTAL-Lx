@@ -10,15 +10,6 @@ import mascotImg   from '@assets/generated_images/mascot-v2-nobg.png'
 import coinImg     from '@assets/IMG_6637_1782097134955.jpeg'
 import bgImg       from '@assets/generated_images/gacha-bg.png'
 import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
-import flowLeverImg from '@assets/generated_images/flow-lever.jpg'
-import flowSpaceImg from '@assets/generated_images/flow-space.jpg'
-import flowFallImg from '@assets/generated_images/flow-fall.jpg'
-import flowResult100Img from '@assets/generated_images/flow-result-100.jpg'
-import flowResult1000Img from '@assets/generated_images/flow-result-1000.jpg'
-import flowResult5000Img from '@assets/generated_images/flow-result-5000.jpg'
-import flowResultInmuImg from '@assets/generated_images/flow-result-inmu.jpg'
-import flowResultSpecialImg from '@assets/generated_images/flow-result-special.jpg'
-import flowResultAllImg from '@assets/generated_images/flow-result-all.jpg'
 
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
@@ -29,9 +20,9 @@ type HistRow = { id:number; pullType:string; isFree:boolean; results:Prize[]; to
 /* ─── capsule color configs (image 5 reference) ─── */
 const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;label:string}> = {
   pts100: {
-    top:'radial-gradient(ellipse at 33% 28%, rgba(255,255,232,.84) 0%, rgba(255,228,142,.46) 34%, rgba(218,165,32,.24) 62%, rgba(92,48,0,.18) 82%)',
-    bot:'radial-gradient(ellipse at 67% 72%, rgba(255,238,172,.58) 0%, rgba(218,165,32,.32) 38%, rgba(104,54,0,.22) 74%)',
-    glow:'rgba(255,205,90,.54)', border:'rgba(255,226,150,.64)', label:'100pt',
+    top:'radial-gradient(ellipse at 33% 28%, rgba(255,255,255,.98) 0%, rgba(210,216,222,.95) 30%, rgba(75,80,88,.86) 58%, rgba(10,11,14,.90) 82%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(235,240,246,.95) 0%, rgba(130,138,150,.86) 36%, rgba(22,24,30,.90) 76%)',
+    glow:'rgba(210,220,235,.62)', border:'rgba(235,242,250,.78)', label:'100pt',
   },
   pts1000: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(135,192,255,.98) 0%, rgba(25,85,218,.93) 42%, rgba(6,35,165,.68) 72%)',
@@ -68,13 +59,6 @@ const JP_PARTICLES = Array.from({length:48},(_,i)=>({
 const COIN_RISES = Array.from({length:12},(_,i)=>({
   x:`${(i*8.3+5)%86}%`,sz:20+(i%4)*9,delay:(i*.28)%3.2,dur:1.8+(i%4)*.6
 }))
-
-function resultFlowImage(prizeId:string, special=false) {
-  if (special || prizeId === 'inmu10k') return special ? flowResultSpecialImg : flowResultInmuImg
-  if (prizeId === 'pts1000') return flowResult1000Img
-  if (prizeId === 'pts5000') return flowResult5000Img
-  return flowResult100Img
-}
 
 /* ─── SE ─── */
 function playJackpotSE() {
@@ -197,53 +181,6 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
     dur:1.15+(i%6)*.12,
   }))
   const isCosmic = kind !== 'lever'
-  const sceneImg: string | null =
-    kind === 'lever' ? flowLeverImg :
-    kind === 'space' ? flowSpaceImg :
-    kind === 'falling' ? flowFallImg :
-    kind === 'opening' ? resultFlowImage(prizeId, guaranteed) :
-    null
-
-  if (sceneImg) {
-    const pan =
-      kind === 'lever' ? {x:'2%',y:'0%',scale:1.1} :
-      kind === 'space' ? {x:'0%',y:'-2%',scale:1.08} :
-      kind === 'falling' ? {x:'0%',y:'3%',scale:1.1} :
-      {x:'0%',y:'-1%',scale:1.08}
-    return (
-      <div style={{position:'absolute',inset:0,zIndex,pointerEvents:'none',
-        overflow:'hidden',background:'#02010a',animation:'ga-cutfade .35s ease-out both'}}>
-        <img src={sceneImg} alt="" style={{
-          position:'absolute',inset:0,width:'100%',height:'100%',
-          objectFit:'cover',objectPosition:'center center',
-          transform:`scale(${pan.scale}) translate(${pan.x},${pan.y})`,
-          filter:'saturate(1.08) contrast(1.05)',
-          animation:'ga-cutken 2.8s ease-out forwards',
-          '--ga-pan-x':pan.x,'--ga-pan-y':pan.y,
-        } as CSSProperties}/>
-        <div style={{position:'absolute',inset:0,
-          background:kind==='lever'
-            ? 'linear-gradient(90deg,rgba(0,0,0,.02),rgba(0,0,0,.20) 72%,rgba(0,0,0,.55))'
-            : 'linear-gradient(180deg,rgba(0,0,0,.02),rgba(0,0,0,.06) 52%,rgba(0,0,0,.20))'}}/>
-        {kind!=='lever'&&(
-          <div style={{position:'absolute',top:'-8%',bottom:'-6%',left:'50%',width:'16%',
-            transform:'translateX(-50%)',
-            background:'linear-gradient(90deg,transparent,rgba(255,218,92,.25),rgba(255,255,210,.38),rgba(255,218,92,.25),transparent)',
-            filter:'blur(12px)',mixBlendMode:'screen',animation:'ga-cutbeam 1.8s ease-in-out infinite'}}/>
-        )}
-        <div style={{position:'absolute',top:'-16%',left:'-24%',width:'42%',height:'136%',
-          background:'linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent)',
-          filter:'blur(5px)',mixBlendMode:'screen',animation:'ga-cutsweep 2.2s ease-in-out .1s both'}}/>
-        {stars.slice(0, kind==='lever'?12:26).map((s,i)=>(
-          <div key={`flow-s${i}`} style={{position:'absolute',left:s.left,top:s.top,
-            width:s.size,height:s.size,borderRadius:'50%',
-            background:i%3===0?'rgba(255,255,255,.85)':'rgba(255,215,0,.84)',
-            boxShadow:'0 0 12px rgba(255,215,0,.78)',
-            animation:`ga-cutstar ${1.35+(i%6)*.16}s ease-in-out ${s.delay}s infinite`}}/>
-        ))}
-      </div>
-    )
-  }
 
   return (
     <div style={{position:'absolute',inset:0,zIndex,pointerEvents:'none',
@@ -460,8 +397,8 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
       <div style={{width:size,height:r,
         borderRadius:`${r}px ${r}px 0 0`,
         background:`${c.top}, linear-gradient(135deg,rgba(255,255,255,.42),transparent 34%)`,
-        border:`1.5px solid ${rimColor}`,borderBottom:'none',
-        boxShadow:`0 -4px 22px ${c.glow},inset 0 2px 12px rgba(255,255,255,.52),inset 0 -8px 12px rgba(0,0,0,.34)`,
+        border:`1.8px solid ${rimColor}`,borderBottom:'none',
+        boxShadow:`0 -4px 24px ${c.glow},inset 0 3px 14px rgba(255,255,255,.58),inset 0 -9px 14px rgba(0,0,0,.42)`,
         transform:`translateY(${-sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
         <div style={{position:'absolute',top:size*.1,left:size*.16,width:size*.28,height:size*.12,
           borderRadius:'50%',background:'rgba(255,255,255,.74)',filter:'blur(.2px)',
@@ -473,8 +410,8 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
       <div style={{width:size,height:r,
         borderRadius:`0 0 ${r}px ${r}px`,
         background:c.bot,
-        border:`1.5px solid ${rimColor}`,borderTop:'none',
-        boxShadow:`0 6px 24px ${c.glow},inset 0 8px 12px rgba(0,0,0,.32),inset 0 -2px 8px rgba(255,255,255,.24)`,
+        border:`1.8px solid ${rimColor}`,borderTop:'none',
+        boxShadow:`0 6px 24px ${c.glow},inset 0 9px 14px rgba(0,0,0,.38),inset 0 -3px 9px rgba(255,255,255,.28)`,
         transform:`translateY(${sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
         <div style={{position:'absolute',bottom:size*.08,right:size*.13,width:size*.2,height:size*.08,
           borderRadius:'50%',background:'rgba(255,255,255,.2)',filter:'blur(1px)',
@@ -1549,10 +1486,6 @@ export function GachaPage() {
               padding:'56px 18px 20px',
               overflow:'hidden',
               background:'radial-gradient(circle at 50% 28%,rgba(255,215,0,.24),transparent 32%),radial-gradient(ellipse at 50% 91%,rgba(218,165,32,.28),rgba(68,25,0,.28) 34%,rgba(0,0,8,.96) 74%),#02010a'}}>
-              <img src={resultFlowImage(result.results[0]?.prizeId??'pts100', result.wasGuaranteed)} alt=""
-                style={{position:'absolute',inset:0,width:'100%',height:'100%',
-                  objectFit:'cover',objectPosition:'center center',zIndex:1,
-                  filter:'saturate(1.08) contrast(1.05)'}}/>
               <div style={{position:'absolute',left:'50%',top:'16%',bottom:0,width:46,
                 transform:'translateX(-50%)',
                 background:'linear-gradient(180deg,transparent,rgba(255,215,0,.58),rgba(255,245,180,.82),rgba(255,215,0,.46),transparent)',
@@ -1578,7 +1511,8 @@ export function GachaPage() {
               {result.results.map((prize)=>{
                 const c=CAPSULE[prize.prizeId]??CAPSULE.pts100
                 return (
-                  <div key={prize.prizeId} style={{display:'none'}}>
+                  <div key={prize.prizeId} style={{width:'100%',display:'flex',
+                    flexDirection:'column',alignItems:'center',gap:14,position:'relative',zIndex:2}}>
                     <div style={{position:'relative'}}>
                       <ResultCapsuleReveal prizeId={prize.prizeId} size={230}/>
                       {prize.prizeId==='inmu10k'&&(
@@ -1615,8 +1549,9 @@ export function GachaPage() {
           {phase==='done'&&result&&isMulti&&(
             <div className="ga-reveal" style={{
               position:'absolute',inset:0,display:'flex',flexDirection:'column',
-              justifyContent:'center',gap:12,width:'100%',padding:'54px 18px 18px',
+              justifyContent:'center',gap:10,width:'100%',padding:'42px 10px 14px',
               overflow:'hidden',
+              boxSizing:'border-box',
               border:'1px solid rgba(218,165,32,.45)',
               boxShadow:'inset 0 0 0 1px rgba(255,215,0,.12)',
               background:'radial-gradient(circle at 50% 10%,rgba(255,215,0,.18),transparent 26%),radial-gradient(ellipse at 50% 90%,rgba(218,165,32,.18),rgba(0,0,8,.96) 62%),#02010a'}}>
@@ -1634,8 +1569,8 @@ export function GachaPage() {
                   ✨ 確定演出が発動しました！
                 </p>
               )}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'18px 8px',
-                position:'relative',zIndex:2}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:'10px 4px',
+                width:'100%',position:'relative',zIndex:2,boxSizing:'border-box'}}>
                 {result.results.map((prize,i)=>{
                   const c=CAPSULE[prize.prizeId]??CAPSULE.pts100
                   return (
@@ -1643,11 +1578,11 @@ export function GachaPage() {
                       alignItems:'center',gap:3,
                       opacity:i<revIdx?1:0,
                       animation:i<revIdx?'ga-card .3s ease-out forwards':'none',
-                      position:'relative'}}>
-                      <div style={{width:26,height:26,borderRadius:'50%',
+                      position:'relative',minWidth:0,overflow:'visible'}}>
+                      <div style={{width:22,height:22,borderRadius:'50%',
                         display:'flex',alignItems:'center',justifyContent:'center',
                         background:'radial-gradient(circle at 35% 25%,#fff2a0,#daa520 42%,#7b4300 100%)',
-                        color:'#160900',fontSize:13,fontWeight:900,
+                        color:'#160900',fontSize:11,fontWeight:900,
                         boxShadow:'0 0 14px rgba(218,165,32,.55)'}}>
                         {i+1}
                       </div>
@@ -1656,8 +1591,8 @@ export function GachaPage() {
                         background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
                         opacity:prize.prizeId==='inmu10k' ? .55 : .24,
                         filter:'blur(2px)',pointerEvents:'none'}}/>
-                      <CapsuleVisual prizeId={prize.prizeId} size={74} open/>
-                      <p style={{fontSize:8,fontWeight:800,color:c.border,
+                      <CapsuleVisual prizeId={prize.prizeId} size={58} open/>
+                      <p style={{fontSize:7,fontWeight:800,color:c.border,
                         margin:0,textAlign:'center',lineHeight:1.2}}>
                         {c.label}
                       </p>
