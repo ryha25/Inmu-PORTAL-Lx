@@ -108,6 +108,8 @@ const CSS=`
   @keyframes ga-orbit       {from{transform:rotate(0deg) translateX(60px) rotate(0deg)}to{transform:rotate(360deg) translateX(60px) rotate(-360deg)}}
   @keyframes ga-shockwave   {0%{transform:translateX(-50%) scale(.12);opacity:.88}100%{transform:translateX(-50%) scale(3.4);opacity:0}}
   @keyframes ga-capland     {0%{top:-120px}72%{top:188px}83%{top:174px}91%{top:186px}100%{top:181px}}
+  @keyframes ga-capglint    {0%{transform:translateX(-130%) rotate(-18deg);opacity:0}28%{opacity:.9}100%{transform:translateX(155%) rotate(-18deg);opacity:0}}
+  @keyframes ga-rayfall     {0%{transform:translateY(-38px);opacity:0}28%,72%{opacity:.78}100%{transform:translateY(42px);opacity:0}}
   .ga-pulse{animation:ga-pulse 2.2s ease-in-out infinite}
   .ga-floatslow{animation:ga-floatslow 3.4s ease-in-out infinite}
   .ga-reveal{animation:ga-reveal .42s ease-out forwards}
@@ -150,25 +152,76 @@ function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:b
 function PrizeCapsule({ prizeId, size=96, open=false }:{prizeId:string;size?:number;open?:boolean}) {
   const c = CAPSULE[prizeId] ?? CAPSULE.pts100
   const r = size/2
-  const sep = open ? 10 : 0
+  const sep = open ? Math.max(7, size*.1) : 0
+  const isJackpot = prizeId === 'inmu10k'
+  const labelSize = Math.max(9, Math.min(28, size*.17))
+  const rimColor = isJackpot ? 'rgba(255,225,120,.92)' : c.border
+  const centerBand = isJackpot
+    ? 'linear-gradient(90deg,rgba(95,48,0,.72),rgba(255,229,115,.95),rgba(120,64,0,.76))'
+    : 'linear-gradient(90deg,rgba(5,8,16,.64),rgba(255,255,255,.32),rgba(5,8,16,.64))'
   return (
     <div style={{position:'relative',width:size,height:size+sep*2,display:'flex',
-      flexDirection:'column',alignItems:'center'}}>
+      flexDirection:'column',alignItems:'center',
+      filter:`drop-shadow(0 0 ${Math.max(16,size*.22)}px ${c.glow})`}}>
+      {!open&&(
+        <div style={{position:'absolute',inset:-Math.max(8,size*.08),borderRadius:'50%',
+          background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
+          opacity:isJackpot ? .42 : .22,pointerEvents:'none'}}/>
+      )}
       {/* Top half */}
       <div style={{width:size,height:r,
         borderRadius:`${r}px ${r}px 0 0`,
-        background:c.top,
-        border:`1px solid ${c.border}`,borderBottom:'none',
-        boxShadow:`0 -4px 22px ${c.glow},inset 0 2px 10px rgba(255,255,255,.38),inset 0 -4px 8px rgba(0,0,0,.32)`,
-        transform:`translateY(${-sep}px)`,flexShrink:0}} />
+        background:`${c.top}, linear-gradient(135deg,rgba(255,255,255,.42),transparent 34%)`,
+        border:`1.5px solid ${rimColor}`,borderBottom:'none',
+        boxShadow:`0 -4px 22px ${c.glow},inset 0 2px 12px rgba(255,255,255,.52),inset 0 -8px 12px rgba(0,0,0,.34)`,
+        transform:`translateY(${-sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',top:size*.1,left:size*.16,width:size*.28,height:size*.12,
+          borderRadius:'50%',background:'rgba(255,255,255,.74)',filter:'blur(.2px)',
+          transform:'rotate(-22deg)'}}/>
+        <div style={{position:'absolute',top:size*.23,left:size*.11,width:size*.12,height:size*.055,
+          borderRadius:'50%',background:'rgba(255,255,255,.38)',transform:'rotate(-18deg)'}}/>
+      </div>
       {/* Bottom half */}
       <div style={{width:size,height:r,
         borderRadius:`0 0 ${r}px ${r}px`,
         background:c.bot,
-        border:`1px solid ${c.border}`,borderTop:'none',
-        boxShadow:`0 6px 24px ${c.glow},inset 0 4px 8px rgba(0,0,0,.26),inset 0 -2px 6px rgba(255,255,255,.18)`,
-        transform:`translateY(${sep}px)`,flexShrink:0}} />
-      {prizeId==='inmu10k'&&open&&(
+        border:`1.5px solid ${rimColor}`,borderTop:'none',
+        boxShadow:`0 6px 24px ${c.glow},inset 0 8px 12px rgba(0,0,0,.32),inset 0 -2px 8px rgba(255,255,255,.24)`,
+        transform:`translateY(${sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',bottom:size*.08,right:size*.13,width:size*.2,height:size*.08,
+          borderRadius:'50%',background:'rgba(255,255,255,.2)',filter:'blur(1px)',
+          transform:'rotate(-18deg)'}}/>
+      </div>
+      {!open&&(
+        <>
+          <div style={{position:'absolute',top:`calc(50% - ${Math.max(3,size*.028)}px)`,
+            left:size*.035,right:size*.035,height:Math.max(6,size*.056),borderRadius:999,
+            background:centerBand,border:`1px solid ${rimColor}`,
+            boxShadow:`0 0 ${Math.max(10,size*.12)}px ${c.glow},inset 0 1px 0 rgba(255,255,255,.45)`,
+            zIndex:4}}/>
+          <div style={{position:'absolute',inset:0,borderRadius:'50%',overflow:'hidden',zIndex:6,
+            pointerEvents:'none'}}>
+            <div style={{position:'absolute',top:'-12%',bottom:'-12%',left:'16%',width:'24%',
+              background:'linear-gradient(90deg,transparent,rgba(255,255,255,.68),transparent)',
+              animation:'ga-capglint 2.2s ease-in-out infinite'}}/>
+          </div>
+        </>
+      )}
+      <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
+        minWidth:size*.66,padding:`${Math.max(1,size*.018)}px ${Math.max(4,size*.048)}px`,
+        borderRadius:999,textAlign:'center',zIndex:7,
+        color:isJackpot?'#3a2100':'#fff',
+        fontSize:labelSize,fontWeight:900,lineHeight:1.05,whiteSpace:'pre-line',
+        fontFamily:'system-ui, sans-serif',
+        textShadow:isJackpot?'0 1px 0 rgba(255,255,255,.55),0 0 14px rgba(255,215,0,.9)':'0 2px 5px rgba(0,0,0,.82),0 0 10px rgba(255,255,255,.22)'}}>
+        {c.label}
+      </div>
+      {isJackpot&&size>=120&&(
+        <img src={mascotImg} style={{position:'absolute',left:'50%',top:'55%',
+          width:size*.34,height:'auto',objectFit:'contain',transform:'translate(-50%,-50%)',
+          opacity:open ? .28 : .48,filter:'drop-shadow(0 2px 8px rgba(95,48,0,.8))',zIndex:5}}/>
+      )}
+      {isJackpot&&open&&(
         <div style={{position:'absolute',inset:-12,borderRadius:'50%',
           background:'radial-gradient(circle,rgba(255,250,100,.45) 0%,rgba(218,165,32,.2) 40%,transparent 68%)',
           animation:'ga-glow 1.2s ease-in-out infinite',pointerEvents:'none'}}/>
@@ -840,6 +893,14 @@ export function GachaPage() {
                 <div style={{position:'absolute',bottom:0,left:'calc(50% - 18px)',
                   width:36,height:'82%',zIndex:1,
                   background:'linear-gradient(0deg,rgba(255,255,200,.92) 0%,rgba(255,240,120,.68) 20%,rgba(218,165,32,.38) 55%,transparent 84%)'}}/>
+                {/* Falling light needles */}
+                {[-72,-48,-24,24,48,72].map((x,i)=>(
+                  <div key={i} style={{position:'absolute',
+                    left:`calc(50% + ${x}px)`,top:'8%',width:i%2?1:2,height:'74%',zIndex:3,
+                    background:'linear-gradient(180deg,transparent 0%,rgba(255,235,145,.74) 36%,rgba(218,165,32,.5) 62%,transparent 100%)',
+                    filter:'blur(.4px)',opacity:0,
+                    animation:`ga-rayfall ${1.35+i*.08}s ease-in-out ${i*.12}s infinite`}}/>
+                ))}
 
                 {/* Orbiting INMU coins */}
                 {[0,-0.65,-1.3,-1.95].map((delay,i)=>(
@@ -930,12 +991,13 @@ export function GachaPage() {
                 ))}
 
                 {/* Faint vertical light trails (speed lines) */}
-                {[-66,-38,38,66].map((x,i)=>(
+                {[-86,-66,-38,0,38,66,86].map((x,i)=>(
                   <div key={i} style={{position:'absolute',
                     left:`calc(50% + ${x}px - 1px)`,top:0,
-                    width:1.5,height:'100%',
-                    background:'linear-gradient(180deg,transparent 0%,rgba(218,165,32,.16) 30%,rgba(218,165,32,.16) 70%,transparent 100%)',
-                    opacity:.6}}/>
+                    width:i===3?3:1.5,height:'100%',
+                    background:'linear-gradient(180deg,transparent 0%,rgba(255,235,145,.26) 24%,rgba(218,165,32,.36) 58%,transparent 100%)',
+                    opacity:i===3?.9:.62,
+                    animation:`ga-rayfall ${1.1+i*.06}s ease-in-out ${i*.09}s infinite`}}/>
                 ))}
 
                 {/* Falling amber glass orb + mascot */}
