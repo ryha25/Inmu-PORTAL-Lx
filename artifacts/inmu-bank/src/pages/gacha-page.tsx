@@ -110,6 +110,9 @@ const CSS=`
   @keyframes ga-capland     {0%{top:-120px}72%{top:188px}83%{top:174px}91%{top:186px}100%{top:181px}}
   @keyframes ga-capglint    {0%{transform:translateX(-130%) rotate(-18deg);opacity:0}28%{opacity:.9}100%{transform:translateX(155%) rotate(-18deg);opacity:0}}
   @keyframes ga-rayfall     {0%{transform:translateY(-38px);opacity:0}28%,72%{opacity:.78}100%{transform:translateY(42px);opacity:0}}
+  @keyframes ga-vortex      {from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+  @keyframes ga-goldrain    {0%{transform:translateY(-70px);opacity:0}18%{opacity:.9}82%{opacity:.75}100%{transform:translateY(105px);opacity:0}}
+  @keyframes ga-stageflash  {0%,100%{opacity:.28;transform:scale(.96)}50%{opacity:.86;transform:scale(1.04)}}
   .ga-pulse{animation:ga-pulse 2.2s ease-in-out infinite}
   .ga-floatslow{animation:ga-floatslow 3.4s ease-in-out infinite}
   .ga-reveal{animation:ga-reveal .42s ease-out forwards}
@@ -789,77 +792,110 @@ export function GachaPage() {
 
               <div style={{width:'100%',maxWidth:340,height:290,borderRadius:20,overflow:'hidden',
                 position:'relative',
-                background:'radial-gradient(ellipse at 46% 38%, rgba(55,32,4,.88) 0%, rgba(10,5,1,.98) 58%)',
-                border:'1px solid rgba(184,134,11,.42)',
-                boxShadow:'0 0 32px rgba(0,0,0,.82)'}}>
+                background:'radial-gradient(ellipse at 72% 38%, rgba(108,69,9,.42) 0%, transparent 44%), linear-gradient(135deg,#010101 0%,#090603 46%,#1b1003 100%)',
+                border:'1px solid rgba(184,134,11,.56)',
+                boxShadow:'inset 0 1px 0 rgba(255,236,150,.12),inset 0 -18px 42px rgba(0,0,0,.8),0 0 34px rgba(0,0,0,.88)'}}>
 
                 {/* Ambient gold glow around lever */}
-                <div style={{position:'absolute',left:'30%',top:'14%',width:'40%',height:'55%',
-                  background:'radial-gradient(ellipse,rgba(218,165,32,.22) 0%,transparent 68%)',
+                <div style={{position:'absolute',left:'18%',top:'8%',width:'72%',height:'72%',
+                  background:'radial-gradient(ellipse,rgba(218,165,32,.22) 0%,rgba(120,72,0,.12) 38%,transparent 70%)',
                   animation:'ga-glow 1.4s ease-in-out infinite',pointerEvents:'none'}}/>
+                <div style={{position:'absolute',inset:0,pointerEvents:'none',
+                  background:'radial-gradient(ellipse at 50% 52%, transparent 0%, transparent 50%, rgba(0,0,0,.72) 100%)'}}/>
+
+                {/* Dark machine face plate */}
+                <div style={{position:'absolute',left:'17%',top:'17%',width:'43%',height:'64%',
+                  borderRadius:18,
+                  background:'linear-gradient(145deg,rgba(5,4,3,.98),rgba(26,17,6,.96) 52%,rgba(3,2,1,.98))',
+                  border:'1px solid rgba(218,165,32,.34)',
+                  boxShadow:'inset 0 2px 0 rgba(255,240,160,.08),inset -16px -12px 30px rgba(0,0,0,.78),8px 12px 30px rgba(0,0,0,.78)'}}/>
+                {[{l:'20%',t:'20%'},{l:'53%',t:'20%'},{l:'20%',t:'74%'},{l:'53%',t:'74%'}].map((b,i)=>(
+                  <div key={i} style={{position:'absolute',left:b.l,top:b.t,width:10,height:10,borderRadius:'50%',
+                    background:'radial-gradient(circle at 30% 25%,#fff2a0 0%,#d5a526 28%,#5c3500 72%,#120800 100%)',
+                    boxShadow:'0 0 8px rgba(218,165,32,.48), inset -2px -2px 3px rgba(0,0,0,.65)'}}/>
+                ))}
 
                 {/* ── LEVER ASSEMBLY (centered, 3D metallic quality) ── */}
-                <div style={{position:'absolute',left:'50%',top:'5%',transform:'translateX(-50%)'}}>
+                <div style={{position:'absolute',left:'41%',top:'7%',transform:'translateX(-50%)'}}>
 
                   {/* Cylindrical post — deep metallic gold gradient for 3D cylinder look */}
                   <div style={{
-                    width:56,height:210,borderRadius:16,position:'relative',
-                    background:'linear-gradient(90deg,#040200 0%,#1c1000 4%,#3a2200 9%,#6a3c00 14%,#a06010 20%,#c88820 26%,#e8b830 31%,#ffe860 36%,#fff8d0 40%,#ffe860 44%,#e0a820 50%,#b87800 57%,#8a5200 64%,#5a3200 72%,#2a1800 82%,#100800 92%,#040200 100%)',
-                    boxShadow:'inset -8px 0 20px rgba(0,0,0,.7),inset 8px 0 12px rgba(255,230,80,.12),10px 0 32px rgba(0,0,0,.8),-2px 0 8px rgba(0,0,0,.6)'
+                    width:62,height:214,borderRadius:18,position:'relative',
+                    background:'linear-gradient(90deg,#030100 0%,#150900 5%,#402300 13%,#8e5600 22%,#d49a22 32%,#fff1a8 42%,#c88710 52%,#7a4500 66%,#291300 84%,#050200 100%)',
+                    boxShadow:'inset -11px 0 22px rgba(0,0,0,.78),inset 9px 0 12px rgba(255,238,150,.18),12px 0 34px rgba(0,0,0,.88),-2px 0 10px rgba(255,204,80,.16)'
                   }}>
+                    <div style={{position:'absolute',left:-4,top:-6,width:70,height:22,borderRadius:'50%',
+                      background:'radial-gradient(ellipse at 40% 28%,#fff0a8 0%,#d39b21 36%,#6b3a00 70%,#120700 100%)',
+                      border:'1px solid rgba(255,224,120,.28)',
+                      boxShadow:'0 4px 14px rgba(0,0,0,.66),inset 0 2px 2px rgba(255,255,220,.24)'}}/>
+                    <div style={{position:'absolute',left:-4,bottom:-8,width:70,height:24,borderRadius:'50%',
+                      background:'radial-gradient(ellipse at 40% 28%,#fce58e 0%,#c58413 38%,#593000 72%,#0b0400 100%)',
+                      border:'1px solid rgba(255,224,120,.24)',
+                      boxShadow:'0 8px 18px rgba(0,0,0,.72),inset 0 2px 2px rgba(255,255,220,.18)'}}/>
+                    <div style={{position:'absolute',left:12,top:8,width:9,height:'92%',borderRadius:8,
+                      background:'linear-gradient(180deg,rgba(255,255,220,.38),rgba(255,220,80,.12),rgba(255,255,220,.26))',
+                      filter:'blur(.3px)'}}/>
 
                     {/* Decorative metallic bands on post */}
                     {[0,1,2,3].map(i=>(
                       <div key={i} style={{
-                        position:'absolute',left:-7,top:22+i*48,width:70,height:18,
-                        borderRadius:9,
-                        background:'linear-gradient(180deg,#0a0600 0%,#3a2400 10%,#8a5800 22%,#c89010 34%,#ffe060 44%,#fff8c8 50%,#ffe060 56%,#c89010 66%,#8a5800 78%,#3a2400 90%,#0a0600 100%)',
-                        boxShadow:'0 0 14px rgba(218,165,32,.6),0 3px 8px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,200,.4)'
+                        position:'absolute',left:-10,top:25+i*47,width:82,height:20,
+                        borderRadius:10,
+                        background:'linear-gradient(180deg,#050200 0%,#3a2300 12%,#9a6407 28%,#e6b52d 40%,#fff1a6 50%,#d59a12 62%,#805000 78%,#241000 100%)',
+                        border:'1px solid rgba(255,224,120,.2)',
+                        boxShadow:'0 0 16px rgba(218,165,32,.55),0 4px 10px rgba(0,0,0,.76),inset 0 1px 0 rgba(255,255,200,.45)'
                       }}/>
                     ))}
 
                     {/* ── LEVER ARM (pivots from post top-right) ── */}
                     <div style={{
-                      position:'absolute',top:20,left:'100%',
+                      position:'absolute',top:24,left:'88%',
                       transformOrigin:'0px 14px',
                       animation:'ga-leverrot2 .92s ease-in-out .1s forwards'
                     }}>
+                      <div style={{position:'absolute',left:-22,top:-17,width:58,height:58,borderRadius:'50%',
+                        background:'radial-gradient(circle at 32% 25%,#fff6c7 0%,#dca72a 26%,#805100 62%,#160900 100%)',
+                        border:'2px solid rgba(255,224,120,.45)',
+                        boxShadow:'0 0 28px rgba(218,165,32,.7),0 8px 18px rgba(0,0,0,.74),inset -5px -5px 10px rgba(0,0,0,.55)'}}/>
                       {/* Arm rod — cylindrical tube */}
                       <div style={{
-                        width:122,height:24,borderRadius:12,
-                        background:'linear-gradient(180deg,#080400 0%,#3a2200 8%,#8a5800 18%,#c89010 30%,#ffe060 42%,#fff8c0 50%,#ffe060 58%,#c09000 70%,#8a5800 82%,#3a2200 94%,#080400 100%)',
-                        boxShadow:'0 6px 24px rgba(0,0,0,.72),0 2px 6px rgba(0,0,0,.5)',position:'relative'
+                        width:118,height:26,borderRadius:13,
+                        background:'linear-gradient(180deg,#060200 0%,#2a1600 10%,#8f5b00 22%,#d8a21d 36%,#fff0a2 48%,#d19610 61%,#794500 78%,#160900 100%)',
+                        border:'1px solid rgba(255,224,120,.25)',
+                        boxShadow:'0 8px 26px rgba(0,0,0,.78),0 0 18px rgba(218,165,32,.32),inset 0 2px 2px rgba(255,255,220,.3)',position:'relative'
                       }}>
                         {/* Arm knob — 3D metallic sphere with specular highlight */}
                         <div style={{
-                          position:'absolute',right:-32,top:-23,
-                          width:70,height:70,borderRadius:'50%',
-                          background:'radial-gradient(ellipse at 28% 22%,#ffffff 0%,#fff8e0 5%,#ffe860 15%,#daa820 34%,#b07000 55%,#7a4800 74%,#2a1400 94%)',
-                          boxShadow:'0 0 44px rgba(218,165,32,.96),0 8px 22px rgba(0,0,0,.78),inset -5px -5px 14px rgba(0,0,0,.6),inset 2px 2px 6px rgba(255,255,200,.4)'
+                          position:'absolute',right:-43,top:-29,
+                          width:84,height:84,borderRadius:'50%',
+                          background:'radial-gradient(ellipse at 27% 21%,#ffffff 0%,#fff9df 6%,#ffe56a 16%,#d59b18 34%,#a26400 54%,#6b3a00 74%,#1c0b00 96%)',
+                          boxShadow:'0 0 50px rgba(218,165,32,.94),0 10px 24px rgba(0,0,0,.82),inset -8px -8px 18px rgba(0,0,0,.62),inset 3px 3px 8px rgba(255,255,210,.42)'
                         }}>
                           {/* Sphere secondary highlight */}
-                          <div style={{position:'absolute',top:12,left:14,width:12,height:7,borderRadius:'50%',background:'rgba(255,255,255,.35)',transform:'rotate(-30deg)'}}/>
+                          <div style={{position:'absolute',top:14,left:17,width:18,height:10,borderRadius:'50%',background:'rgba(255,255,255,.48)',transform:'rotate(-30deg)'}}/>
+                          <div style={{position:'absolute',top:28,left:28,width:8,height:5,borderRadius:'50%',background:'rgba(255,255,255,.24)',transform:'rotate(-25deg)'}}/>
                         </div>
                       </div>
                     </div>
 
                     {/* Bottom knob — large 3D metallic sphere */}
                     <div style={{
-                      position:'absolute',bottom:-26,left:'50%',transform:'translateX(-50%)',
-                      width:76,height:76,borderRadius:'50%',
-                      background:'radial-gradient(ellipse at 28% 22%,#ffffff 0%,#fff8e0 5%,#ffe860 15%,#daa820 34%,#b07000 55%,#7a4800 74%,#2a1400 94%)',
-                      boxShadow:'0 0 32px rgba(218,165,32,.84),0 8px 20px rgba(0,0,0,.75),inset -5px -5px 14px rgba(0,0,0,.6),inset 2px 2px 6px rgba(255,255,200,.4)'
+                      position:'absolute',bottom:-34,left:'50%',transform:'translateX(-50%)',
+                      width:86,height:86,borderRadius:'50%',
+                      background:'radial-gradient(ellipse at 28% 22%,#ffffff 0%,#fff8df 6%,#ffe063 16%,#d59b17 34%,#a26400 56%,#6b3a00 75%,#1b0b00 96%)',
+                      boxShadow:'0 0 38px rgba(218,165,32,.78),0 10px 24px rgba(0,0,0,.8),inset -8px -8px 18px rgba(0,0,0,.62),inset 3px 3px 8px rgba(255,255,210,.38)'
                     }}>
-                      <div style={{position:'absolute',top:13,left:14,width:13,height:8,borderRadius:'50%',background:'rgba(255,255,255,.38)',transform:'rotate(-30deg)'}}/>
+                      <div style={{position:'absolute',top:15,left:18,width:18,height:10,borderRadius:'50%',background:'rgba(255,255,255,.46)',transform:'rotate(-30deg)'}}/>
+                      <div style={{position:'absolute',top:31,left:29,width:8,height:5,borderRadius:'50%',background:'rgba(255,255,255,.24)',transform:'rotate(-25deg)'}}/>
                     </div>
                   </div>
 
                   {/* Large rotation arrow — bold & glowing */}
                   <div style={{
-                    position:'absolute',bottom:-54,right:-96,
-                    fontSize:100,lineHeight:1,
-                    color:'rgba(218,165,32,.9)',fontWeight:900,
-                    textShadow:'0 0 32px rgba(218,165,32,.8),0 0 64px rgba(218,165,32,.4)',
+                    position:'absolute',bottom:-58,right:-108,
+                    fontSize:96,lineHeight:1,
+                    color:'rgba(255,211,74,.82)',fontWeight:900,
+                    textShadow:'0 0 26px rgba(218,165,32,.86),0 0 58px rgba(218,165,32,.45)',
                     transform:'scaleX(.86)'
                   }}>↷</div>
                 </div>
@@ -899,6 +935,23 @@ export function GachaPage() {
                     animation:`ga-particle ${1.6+i*.28}s ease-in-out ${i*.34}s infinite`}}/>
                 ))}
 
+                {/* Galaxy vortex at the capsule gate, matching the reference's cosmic discharge */}
+                <div style={{position:'absolute',left:'50%',top:'18%',width:210,height:76,
+                  transform:'translate(-50%,-50%)',zIndex:3,pointerEvents:'none'}}>
+                  {[0,1,2,3].map(i=>(
+                    <div key={i} style={{position:'absolute',left:'50%',top:'50%',
+                      width:72+i*42,height:20+i*12,borderRadius:'50%',
+                      border:`${1.5-i*.18}px solid rgba(${i%2?160:218},${i%2?72:165},${i%2?255:32},${.54-i*.08})`,
+                      boxShadow:`0 0 ${18+i*5}px rgba(${i%2?160:218},${i%2?72:165},${i%2?255:32},${.42-i*.06})`,
+                      animation:`ga-vortex ${4.6+i*.8}s linear ${i*.12}s infinite`}}/>
+                  ))}
+                  <div style={{position:'absolute',left:'50%',top:'50%',width:46,height:46,borderRadius:'50%',
+                    transform:'translate(-50%,-50%)',
+                    background:'radial-gradient(circle,#fff8c8 0%,rgba(255,215,0,.86) 18%,rgba(160,70,255,.4) 46%,transparent 70%)',
+                    boxShadow:'0 0 38px rgba(255,215,0,.85),0 0 70px rgba(155,72,255,.46)',
+                    animation:'ga-stageflash 1.2s ease-in-out infinite'}}/>
+                </div>
+
                 {/* ── Cone light beam — wide at ground, narrows going up ── */}
                 {/* Outer soft cone */}
                 <div style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
@@ -916,6 +969,10 @@ export function GachaPage() {
                 <div style={{position:'absolute',bottom:0,left:'calc(50% - 18px)',
                   width:36,height:'82%',zIndex:1,
                   background:'linear-gradient(0deg,rgba(255,255,200,.92) 0%,rgba(255,240,120,.68) 20%,rgba(218,165,32,.38) 55%,transparent 84%)'}}/>
+                <div style={{position:'absolute',top:'18%',left:'calc(50% - 4px)',
+                  width:8,height:'73%',zIndex:4,borderRadius:999,
+                  background:'linear-gradient(180deg,rgba(255,255,220,.95),rgba(255,215,0,.68),transparent)',
+                  filter:'blur(1px)',animation:'ga-stageflash 1.05s ease-in-out infinite'}}/>
                 {/* Falling light needles */}
                 {[-72,-48,-24,24,48,72].map((x,i)=>(
                   <div key={i} style={{position:'absolute',
@@ -1013,6 +1070,16 @@ export function GachaPage() {
                     animation:`ga-particle ${1.8+i*.22}s ease-in-out ${i*.28}s infinite`}}/>
                 ))}
 
+                {/* Golden rain trails like the reference drop scene */}
+                {Array.from({length:18},(_,i)=>(
+                  <div key={i} style={{position:'absolute',
+                    left:`${8+(i*17)%84}%`,top:`${-18-(i%5)*18}px`,
+                    width:i%3===0?3:1.5,height:46+(i%4)*20,borderRadius:999,
+                    background:'linear-gradient(180deg,transparent 0%,rgba(255,232,130,.92) 34%,rgba(218,165,32,.48) 70%,transparent 100%)',
+                    filter:'blur(.45px)',opacity:0,
+                    animation:`ga-goldrain ${1.2+(i%5)*.18}s ease-in-out ${i*.08}s infinite`}}/>
+                ))}
+
                 {/* Faint vertical light trails (speed lines) */}
                 {[-86,-66,-38,0,38,66,86].map((x,i)=>(
                   <div key={i} style={{position:'absolute',
@@ -1076,6 +1143,15 @@ export function GachaPage() {
                   background:'radial-gradient(ellipse,rgba(218,165,32,.58) 0%,transparent 68%)',
                   filter:'blur(8px)',
                   animation:'ga-glowtext 2s ease-in-out .74s infinite'}}/>
+                <div style={{position:'absolute',bottom:18,left:'50%',transform:'translateX(-50%)',
+                  width:130,height:20,borderRadius:'50%',
+                  border:'2px solid rgba(255,215,0,.82)',
+                  boxShadow:'0 0 22px rgba(255,215,0,.78), inset 0 0 14px rgba(218,165,32,.42)',
+                  animation:'ga-stageflash 1s ease-in-out infinite'}}/>
+                <div style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
+                  width:5,height:78,borderRadius:999,
+                  background:'linear-gradient(0deg,rgba(255,215,0,.95),rgba(255,245,180,.78),transparent)',
+                  filter:'blur(.6px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
 
                 {/* Impact sparkles */}
                 {[{l:'32%',b:'6%'},{l:'68%',b:'4%'},{l:'42%',b:'10%'},{l:'58%',b:'8%'}].map((p,i)=>(
@@ -1189,7 +1265,13 @@ export function GachaPage() {
                     <div key={i} style={{display:'flex',flexDirection:'column',
                       alignItems:'center',gap:3,
                       opacity:i<revIdx?1:0,
-                      animation:i<revIdx?'ga-card .3s ease-out forwards':'none'}}>
+                      animation:i<revIdx?'ga-card .3s ease-out forwards':'none',
+                      position:'relative'}}>
+                      <div style={{position:'absolute',top:7,left:'50%',transform:'translateX(-50%)',
+                        width:54,height:54,borderRadius:'50%',
+                        background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
+                        opacity:prize.prizeId==='inmu10k' ? .55 : .24,
+                        filter:'blur(2px)',pointerEvents:'none'}}/>
                       <PrizeCapsule prizeId={prize.prizeId} size={58} open/>
                       <p style={{fontSize:8,fontWeight:800,color:c.border,
                         margin:0,textAlign:'center',lineHeight:1.2}}>
