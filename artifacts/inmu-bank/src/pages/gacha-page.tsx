@@ -107,6 +107,12 @@ const CSS=`
   @keyframes ga-drop     {0%{transform:translateY(-140px)rotate(0);opacity:0}65%{transform:translateY(6px)rotate(200deg);opacity:1}100%{transform:translateY(0)rotate(360deg);opacity:1}}
   @keyframes ga-popin    {0%{transform:scale(0)rotate(-18deg);opacity:0}65%{transform:scale(1.18)rotate(4deg);opacity:1}100%{transform:scale(1)rotate(0);opacity:1}}
   @keyframes ga-bounce   {0%,100%{transform:translateY(0)}42%{transform:translateY(-28px)scale(.96)}72%{transform:translateY(-11px)}}
+  @keyframes ga-mascotwalk{0%,100%{transform:translateX(0)}50%{transform:translateX(34px)}}
+  @keyframes ga-mascotstep{0%,100%{transform:translateY(0)rotate(-4deg)scaleX(1)}25%{transform:translateY(-7px)rotate(5deg)scaleX(.98)}50%{transform:translateY(0)rotate(4deg)scaleX(1.02)}75%{transform:translateY(-6px)rotate(-5deg)scaleX(.98)}}
+  @keyframes ga-mascotshadow{0%,100%{transform:translateX(-50%)scaleX(1);opacity:.48}25%,75%{transform:translateX(-50%)scaleX(.72);opacity:.25}50%{transform:translateX(-50%)scaleX(1.06);opacity:.42}}
+  @keyframes ga-mascotjumpin{0%{transform:translateY(68px)scale(.62)rotate(-10deg);opacity:0}48%{transform:translateY(-22px)scale(1.13)rotate(5deg);opacity:1}70%{transform:translateY(5px)scale(.96)rotate(-3deg)}100%{transform:translateY(0)scale(1)rotate(0);opacity:1}}
+  @keyframes ga-mascotcelebrate{0%,100%{transform:translateY(0)rotate(-4deg)}35%{transform:translateY(-10px)rotate(6deg)}70%{transform:translateY(-3px)rotate(-6deg)}}
+  @keyframes ga-mascotside{0%{transform:translateX(var(--ga-from,0))translateY(18px)rotate(var(--ga-rot,0deg));opacity:0}34%{opacity:1}62%{transform:translateX(0)translateY(-8px)rotate(calc(var(--ga-rot,0deg) * -1))}100%{transform:translateX(0)translateY(0)rotate(var(--ga-rot,0deg));opacity:1}}
   @keyframes ga-shimmer  {0%{transform:translateX(-100%)skewX(-22deg)}100%{transform:translateX(280%)skewX(-22deg)}}
   @keyframes ga-particle {0%,100%{opacity:0;transform:translateY(0)scale(.7)}42%,58%{opacity:1}50%{transform:translateY(-15px)scale(1.3)}}
   @keyframes ga-coinrise {0%{transform:translateY(80px)rotate(0);opacity:1}80%{opacity:.85}100%{transform:translateY(-180px)rotate(520deg);opacity:0}}
@@ -361,7 +367,8 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
               left:`${left}%`,bottom:`${i%3*9+2}%`,width:70+(i%2)*16,
               transform:`translateX(-50%) rotate(${i%2?-8:8}deg)`,
               filter:'drop-shadow(0 0 18px rgba(218,165,32,.64))',
-              animation:`ga-bounce ${1.2+i*.08}s ease-in-out ${i*.12}s infinite`}}/>
+              animation:`ga-mascotside .78s ease-out ${i*.08}s both, ga-mascotcelebrate ${1.05+i*.08}s ease-in-out ${.78+i*.1}s infinite`,
+              '--ga-from':left<50?'-76px':'76px','--ga-rot':`${i%2?-8:8}deg`} as CSSProperties}/>
           ))}
         </>
       )}
@@ -775,10 +782,15 @@ export function GachaPage() {
                 display:'block',objectFit:'contain',
                 filter:'drop-shadow(0 22px 66px rgba(0,0,0,.98)) drop-shadow(0 0 30px rgba(184,134,11,.3))'}}/>
             {/* Mascot bottom-left */}
-            <div className="ga-floatslow" style={{position:'absolute',bottom:0,left:'2%',zIndex:8}}>
+            <div style={{position:'absolute',bottom:0,left:'2%',zIndex:8,pointerEvents:'none',
+              animation:'ga-mascotwalk 5.2s ease-in-out infinite'}}>
+              <div style={{position:'absolute',left:'50%',bottom:2,width:'min(70px,17vw)',height:10,
+                borderRadius:'50%',background:'rgba(0,0,0,.55)',filter:'blur(4px)',
+                animation:'ga-mascotshadow .74s ease-in-out infinite'}}/>
               <img src={mascotImg} alt="INMUくん" style={{
                 width:'min(100px,24vw)',height:'auto',objectFit:'contain',
-                filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))'}}/>
+                filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))',
+                animation:'ga-mascotstep .74s ease-in-out infinite'}}/>
             </div>
             {/* Rate panel */}
             <RatePanel />
@@ -1558,7 +1570,7 @@ export function GachaPage() {
                       </p>
                       <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
                         filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',
-                        animation:'ga-bounce 1.1s ease-in-out infinite'}}/>
+                        animation:'ga-mascotjumpin .72s ease-out both, ga-mascotcelebrate 1.15s ease-in-out .72s infinite'}}/>
                     </div>
                   </div>
                 )
@@ -1858,5 +1870,6 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
 
 
