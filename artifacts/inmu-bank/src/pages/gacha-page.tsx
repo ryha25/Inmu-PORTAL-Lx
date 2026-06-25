@@ -315,7 +315,8 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
 
       {kind==='space'&&BALLS.filter(b=>b.id!=='pts100').map((b,i)=>(
         <div key={b.id} style={{position:'absolute',
-          left:['13%','76%','82%'][i],top:['69%','34%','69%'][i],
+          left:['13%','76%','82%','23%','67%','88%'][i] ?? '50%',
+          top:['69%','34%','69%','32%','54%','48%'][i] ?? '58%',
           animation:`ga-rayfall ${1.55+i*.18}s ease-in-out ${i*.12}s infinite`}}>
           <PrizeCapsule prizeId={b.id} size={76} showLabel={false}/>
         </div>
