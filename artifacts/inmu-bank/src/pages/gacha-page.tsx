@@ -24,10 +24,25 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     bot:'radial-gradient(ellipse at 67% 72%, rgba(235,240,246,.95) 0%, rgba(130,138,150,.86) 36%, rgba(22,24,30,.90) 76%)',
     glow:'rgba(210,220,235,.62)', border:'rgba(235,242,250,.78)', label:'100pt',
   },
+  pts300: {
+    top:'radial-gradient(ellipse at 33% 28%, rgba(255,205,236,.98) 0%, rgba(255,95,183,.92) 42%, rgba(182,20,122,.70) 74%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(255,170,220,.94) 0%, rgba(235,64,164,.88) 42%, rgba(146,12,96,.66) 74%)',
+    glow:'rgba(255,92,186,.66)', border:'rgba(255,156,216,.72)', label:'300pt',
+  },
+  pts500: {
+    top:'radial-gradient(ellipse at 33% 28%, rgba(235,255,150,.98) 0%, rgba(164,225,45,.92) 42%, rgba(86,150,10,.72) 74%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(210,250,95,.94) 0%, rgba(124,198,25,.88) 42%, rgba(58,118,7,.66) 74%)',
+    glow:'rgba(180,255,70,.64)', border:'rgba(214,255,118,.72)', label:'500pt',
+  },
   pts1000: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(135,192,255,.98) 0%, rgba(25,85,218,.93) 42%, rgba(6,35,165,.68) 72%)',
     bot:'radial-gradient(ellipse at 67% 72%, rgba(85,150,248,.93) 0%, rgba(16,65,202,.88) 42%, rgba(4,25,148,.62) 72%)',
     glow:'rgba(45,118,255,.65)', border:'rgba(75,145,255,.55)', label:'1,000pt',
+  },
+  pts3000: {
+    top:'radial-gradient(ellipse at 33% 28%, rgba(255,162,140,.98) 0%, rgba(232,48,32,.93) 42%, rgba(150,8,8,.70) 74%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(255,112,92,.94) 0%, rgba(205,30,24,.88) 42%, rgba(112,5,7,.66) 74%)',
+    glow:'rgba(255,70,50,.66)', border:'rgba(255,116,96,.72)', label:'3,000pt',
   },
   pts5000: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(212,85,255,.98) 0%, rgba(145,18,228,.9) 42%, rgba(86,2,188,.67) 72%)',
@@ -42,10 +57,13 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
 }
 
 const BALLS = [
-  { id:'pts100',  label:'100pt',       rate:'88%', color:'rgba(180,218,255,.9)' },
-  { id:'pts1000', label:'1,000pt',     rate:'8%',  color:'rgba(70,140,255,.9)'  },
-  { id:'pts5000', label:'5,000pt',     rate:'3%',  color:'rgba(180,60,255,.9)'  },
-  { id:'inmu10k', label:'10,000 INMU', rate:'1%',  color:'rgba(255,215,0,.9)'   },
+  { id:'pts100',  label:'100pt',       rate:'55%',   color:'rgba(235,242,250,.9)' },
+  { id:'pts300',  label:'300pt',       rate:'22%',   color:'rgba(255,156,216,.9)' },
+  { id:'pts500',  label:'500pt',       rate:'12%',   color:'rgba(214,255,118,.9)' },
+  { id:'pts1000', label:'1,000pt',     rate:'6%',    color:'rgba(70,140,255,.9)'  },
+  { id:'pts3000', label:'3,000pt',     rate:'3%',    color:'rgba(255,116,96,.9)'  },
+  { id:'pts5000', label:'5,000pt',     rate:'1.5%',  color:'rgba(180,60,255,.9)'  },
+  { id:'inmu10k', label:'10,000 INMU', rate:'0.5%',  color:'rgba(255,215,0,.9)'   },
 ]
 const PHASE_MS: Partial<Record<Phase,number>> = {
   guaranteed:2600, inserting:1600, lever:1800, space:2300, falling:2200, opening:1800,
@@ -1837,3 +1855,4 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
