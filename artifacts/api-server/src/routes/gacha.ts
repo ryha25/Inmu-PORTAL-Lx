@@ -6,19 +6,22 @@ import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
-// ── 確率テーブル（合計 1000）──
+// ── 確率テーブル（合計 10000）──
 const PRIZES = [
-  { id: "pts100",  label: "100ポイント",   type: "points" as const, amount: 100,   weight: 880 },
-  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1000,  weight: 80  },
-  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5000,  weight: 30  },
-  { id: "inmu10k", label: "10,000 INMU",  type: "inmu"   as const, amount: 10000, weight: 10  },
+  { id: "pts100",  label: "100ポイント",    type: "points" as const, amount: 100,   weight: 5500 },
+  { id: "pts300",  label: "300ポイント",    type: "points" as const, amount: 300,   weight: 2200 },
+  { id: "pts500",  label: "500ポイント",    type: "points" as const, amount: 500,   weight: 1200 },
+  { id: "pts1000", label: "1,000ポイント",  type: "points" as const, amount: 1000,  weight: 600  },
+  { id: "pts3000", label: "3,000ポイント",  type: "points" as const, amount: 3000,  weight: 300  },
+  { id: "pts5000", label: "5,000ポイント",  type: "points" as const, amount: 5000,  weight: 150  },
+  { id: "inmu10k", label: "10,000 INMU",   type: "inmu"   as const, amount: 10000, weight: 50   },
 ] as const;
 type Prize = (typeof PRIZES)[number];
 
 const GUARANTEED_RATE = 1 / 114;
 
 function rollPrize(): Prize {
-  const r = Math.floor(Math.random() * 1000);
+  const r = Math.floor(Math.random() * 10000);
   let acc = 0;
   for (const p of PRIZES) {
     acc += p.weight;
@@ -33,7 +36,7 @@ function rollMany(count: number, guaranteed: boolean): Prize[] {
   if (guaranteed && !results.some(r => r.type === "inmu")) {
     const lastSmall = results.map(r => r.id).lastIndexOf("pts100");
     const idx = lastSmall >= 0 ? lastSmall : results.length - 1;
-    results[idx] = PRIZES[3];
+    results[idx] = PRIZES[6];
   }
   return results;
 }
@@ -440,3 +443,4 @@ router.put("/admin/gacha/results/:id/reset-pending", requireAdmin, async (req, r
 });
 
 export default router;
+
