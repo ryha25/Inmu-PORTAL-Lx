@@ -345,9 +345,11 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
               background:'radial-gradient(circle,rgba(255,235,150,.78),rgba(218,165,32,.32) 42%,transparent 70%)',
               filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
             <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
-            <img src={mascotImg} style={{position:'absolute',width:88,height:'auto',bottom:82,
-              filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
-              animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
+            {prizeId==='inmu10k'&&(
+              <img src={mascotImg} style={{position:'absolute',width:88,height:'auto',bottom:82,
+                filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
+                animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
+            )}
           </div>
         </div>
       )}
@@ -462,10 +464,10 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
           {c.label}
         </div>
       )}
-      {isJackpot&&size>=120&&(
+      {isJackpot&&open&&size>=120&&(
         <img src={mascotImg} style={{position:'absolute',left:'50%',top:'55%',
           width:size*.34,height:'auto',objectFit:'contain',transform:'translate(-50%,-50%)',
-          opacity:open ? .28 : .48,filter:'drop-shadow(0 2px 8px rgba(95,48,0,.8))',zIndex:5}}/>
+          opacity:.28,filter:'drop-shadow(0 2px 8px rgba(95,48,0,.8))',zIndex:5}}/>
       )}
       {isJackpot&&open&&(
         <div style={{position:'absolute',inset:-12,borderRadius:'50%',
@@ -1856,4 +1858,5 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
 
