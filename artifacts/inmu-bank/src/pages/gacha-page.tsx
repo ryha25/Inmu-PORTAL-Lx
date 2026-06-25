@@ -108,7 +108,18 @@ const CSS=`
   @keyframes ga-popin    {0%{transform:scale(0)rotate(-18deg);opacity:0}65%{transform:scale(1.18)rotate(4deg);opacity:1}100%{transform:scale(1)rotate(0);opacity:1}}
   @keyframes ga-bounce   {0%,100%{transform:translateY(0)}42%{transform:translateY(-28px)scale(.96)}72%{transform:translateY(-11px)}}
   @keyframes ga-mascotwalk{0%,100%{transform:translateX(0)}50%{transform:translateX(34px)}}
-  @keyframes ga-mascotstep{0%,100%{transform:translateY(0)rotate(-4deg)scaleX(1)}25%{transform:translateY(-7px)rotate(5deg)scaleX(.98)}50%{transform:translateY(0)rotate(4deg)scaleX(1.02)}75%{transform:translateY(-6px)rotate(-5deg)scaleX(.98)}}
+  @keyframes ga-mascotbody{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  @keyframes ga-mascothead{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(5deg)}}
+  @keyframes ga-mascotarm-r{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(24deg)}}
+  @keyframes ga-mascotarm-l{0%,100%{transform:rotate(18deg)}50%{transform:rotate(-18deg)}}
+  @keyframes ga-mascotraise-r{0%{transform:rotate(38deg)}45%,100%{transform:rotate(-54deg)}}
+  @keyframes ga-mascotraise-l{0%{transform:rotate(-38deg)}45%,100%{transform:rotate(54deg)}}
+  @keyframes ga-mascotleg-r{0%,100%{transform:rotate(16deg)}50%{transform:rotate(-22deg)}}
+  @keyframes ga-mascotleg-l{0%,100%{transform:rotate(-20deg)}50%{transform:rotate(18deg)}}
+  @keyframes ga-mascottail{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(20deg)}}
+  @keyframes ga-mascotclap-r{0%,100%{transform:rotate(-32deg)}50%{transform:rotate(18deg)}}
+  @keyframes ga-mascotclap-l{0%,100%{transform:rotate(32deg)}50%{transform:rotate(-18deg)}}
+  @keyframes ga-mascotjumpbody{0%{transform:translateY(58px)scale(.74);opacity:0}46%{transform:translateY(-20px)scale(1.08);opacity:1}66%{transform:translateY(8px)scale(1.08,.86)}82%{transform:translateY(-4px)scale(.98,1.04)}100%{transform:translateY(0)scale(1);opacity:1}}
   @keyframes ga-mascotshadow{0%,100%{transform:translateX(-50%)scaleX(1);opacity:.48}25%,75%{transform:translateX(-50%)scaleX(.72);opacity:.25}50%{transform:translateX(-50%)scaleX(1.06);opacity:.42}}
   @keyframes ga-mascotjumpin{0%{transform:translateY(68px)scale(.62)rotate(-10deg);opacity:0}48%{transform:translateY(-22px)scale(1.13)rotate(5deg);opacity:1}70%{transform:translateY(5px)scale(.96)rotate(-3deg)}100%{transform:translateY(0)scale(1)rotate(0);opacity:1}}
   @keyframes ga-mascotcelebrate{0%,100%{transform:translateY(0)rotate(-4deg)}35%{transform:translateY(-10px)rotate(6deg)}70%{transform:translateY(-3px)rotate(-6deg)}}
@@ -184,6 +195,46 @@ function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:b
         animation:'ga-spotlight 5.5s ease-in-out 2.7s infinite'}}/>
       <div style={{position:'relative',zIndex:5,display:'flex',flexDirection:'column',flex:1}}>
         {children}
+      </div>
+    </div>
+  )
+}
+
+type MascotMotion = 'idle'|'walk'|'result'|'clap'
+
+function SegmentedMascot({ size=100, motion='idle', style, delay=0 }: {
+  size?:number; motion?:MascotMotion; style?:CSSProperties; delay?:number
+}) {
+  const dur = motion === 'clap' ? .52 : motion === 'walk' ? .72 : 1.25
+  const bodyAnim = motion === 'result'
+    ? `ga-mascotjumpbody .86s cubic-bezier(.2,.8,.22,1) ${delay}s both`
+    : `ga-mascotbody ${dur}s ease-in-out ${delay}s infinite`
+  const armR = motion === 'result' ? 'ga-mascotraise-r' : motion === 'clap' ? 'ga-mascotclap-r' : 'ga-mascotarm-r'
+  const armL = motion === 'result' ? 'ga-mascotraise-l' : motion === 'clap' ? 'ga-mascotclap-l' : 'ga-mascotarm-l'
+  const legR = motion === 'walk' ? 'ga-mascotleg-r' : 'ga-mascotbody'
+  const legL = motion === 'walk' ? 'ga-mascotleg-l' : 'ga-mascotbody'
+  const part = (clipPath:string, origin:string, animation:string, z=2, opacity=1) => (
+    <img src={mascotImg} alt="" aria-hidden="true" style={{
+      position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain',
+      clipPath,transformOrigin:origin,animation,opacity,zIndex:z,
+      filter:'drop-shadow(0 4px 8px rgba(0,0,0,.32))',
+      willChange:'transform',
+    }}/>
+  )
+  return (
+    <div style={{position:'relative',width:size,height:size*1.12,...style}}>
+      <div style={{position:'absolute',left:'50%',bottom:size*.03,width:size*.68,height:size*.1,
+        borderRadius:'50%',background:'rgba(0,0,0,.52)',filter:'blur(4px)',
+        transform:'translateX(-50%)',
+        animation:`ga-mascotshadow ${dur}s ease-in-out ${delay}s infinite`,zIndex:0}}/>
+      <div style={{position:'absolute',inset:0,animation:bodyAnim,transformOrigin:'50% 78%',zIndex:1}}>
+        {part('polygon(2% 58%, 30% 55%, 33% 80%, 0 88%)','24% 72%',`ga-mascottail ${dur*1.18}s ease-in-out ${delay}s infinite`,1)}
+        {part('polygon(47% 70%, 68% 70%, 72% 99%, 45% 99%)','58% 76%',`${legR} ${dur}s ease-in-out ${delay}s infinite`,2)}
+        {part('polygon(28% 70%, 50% 70%, 53% 99%, 25% 99%)','40% 76%',`${legL} ${dur}s ease-in-out ${delay+.08}s infinite`,2)}
+        {part('polygon(23% 43%, 74% 43%, 79% 85%, 19% 85%)','50% 68%','none',3)}
+        {part('polygon(67% 43%, 100% 38%, 100% 72%, 68% 74%)','70% 50%',`${armR} ${dur}s ease-in-out ${delay}s infinite`,5)}
+        {part('polygon(0 39%, 32% 43%, 32% 75%, 0 72%)','30% 52%',`${armL} ${dur}s ease-in-out ${delay+.06}s infinite`,5)}
+        {part('polygon(12% 0, 88% 0, 84% 52%, 16% 53%)','50% 48%',`ga-mascothead ${dur*1.25}s ease-in-out ${delay}s infinite`,6)}
       </div>
     </div>
   )
@@ -352,9 +403,9 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
               filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
             <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
             {prizeId==='inmu10k'&&(
-              <img src={mascotImg} style={{position:'absolute',width:88,height:'auto',bottom:82,
-                filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
-                animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
+              <SegmentedMascot motion="result" size={92}
+                style={{position:'absolute',bottom:78,
+                  filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))'}}/>
             )}
           </div>
         </div>
@@ -363,12 +414,14 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
       {(kind==='falling'||kind==='opening')&&guaranteed&&(
         <>
           {[8,82,13,86,5,91].map((left,i)=>(
-            <img key={i} src={mascotImg} style={{position:'absolute',
-              left:`${left}%`,bottom:`${i%3*9+2}%`,width:70+(i%2)*16,
+            <div key={i} style={{position:'absolute',
+              left:`${left}%`,bottom:`${i%3*9+2}%`,
               transform:`translateX(-50%) rotate(${i%2?-8:8}deg)`,
               filter:'drop-shadow(0 0 18px rgba(218,165,32,.64))',
-              animation:`ga-mascotside .78s ease-out ${i*.08}s both, ga-mascotcelebrate ${1.05+i*.08}s ease-in-out ${.78+i*.1}s infinite`,
-              '--ga-from':left<50?'-76px':'76px','--ga-rot':`${i%2?-8:8}deg`} as CSSProperties}/>
+              animation:`ga-mascotside .78s ease-out ${i*.08}s both`,
+              '--ga-from':left<50?'-76px':'76px','--ga-rot':`${i%2?-8:8}deg`} as CSSProperties}>
+              <SegmentedMascot motion="clap" size={70+(i%2)*16} delay={i*.04}/>
+            </div>
           ))}
         </>
       )}
@@ -472,9 +525,10 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
         </div>
       )}
       {isJackpot&&open&&size>=120&&(
-        <img src={mascotImg} style={{position:'absolute',left:'50%',top:'55%',
-          width:size*.34,height:'auto',objectFit:'contain',transform:'translate(-50%,-50%)',
-          opacity:.28,filter:'drop-shadow(0 2px 8px rgba(95,48,0,.8))',zIndex:5}}/>
+        <SegmentedMascot motion="idle" size={size*.34}
+          style={{position:'absolute',left:'50%',top:'55%',
+            transform:'translate(-50%,-50%)',
+            opacity:.28,filter:'drop-shadow(0 2px 8px rgba(95,48,0,.8))',zIndex:5}}/>
       )}
       {isJackpot&&open&&(
         <div style={{position:'absolute',inset:-12,borderRadius:'50%',
@@ -784,13 +838,9 @@ export function GachaPage() {
             {/* Mascot bottom-left */}
             <div style={{position:'absolute',bottom:0,left:'2%',zIndex:8,pointerEvents:'none',
               animation:'ga-mascotwalk 5.2s ease-in-out infinite'}}>
-              <div style={{position:'absolute',left:'50%',bottom:2,width:'min(70px,17vw)',height:10,
-                borderRadius:'50%',background:'rgba(0,0,0,.55)',filter:'blur(4px)',
-                animation:'ga-mascotshadow .74s ease-in-out infinite'}}/>
-              <img src={mascotImg} alt="INMUくん" style={{
-                width:'min(100px,24vw)',height:'auto',objectFit:'contain',
-                filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))',
-                animation:'ga-mascotstep .74s ease-in-out infinite'}}/>
+              <SegmentedMascot motion="walk" size={100}
+                style={{width:'min(100px,24vw)',height:'min(112px,27vw)',
+                  filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))'}}/>
             </div>
             {/* Rate panel */}
             <RatePanel />
@@ -950,7 +1000,8 @@ export function GachaPage() {
                     boxShadow:`0 0 ${i===0?44:24}px rgba(218,165,32,${i===0?.95:.7})`,
                     transform:i===0?'translate(-50%,-50%)':'translate(-50%,-50%)',
                     animation:`ga-popin .42s ease-out ${m.d} both, ga-bounce .72s ease-in-out ${500+parseInt(m.d)}ms infinite`}}>
-                    <img src={mascotImg} style={{width:'100%',height:'100%',objectFit:'contain',background:'rgba(4,2,14,.4)'}}/>
+                    <SegmentedMascot motion="clap" size={m.s}
+                      style={{background:'rgba(4,2,14,.4)'}} delay={i*.04}/>
                   </div>
                 ))}
               </div>
@@ -1334,8 +1385,8 @@ export function GachaPage() {
                       background:'rgba(255,180,0,.48)',filter:'blur(5px)'}}/>
                     {/* Mascot */}
                     <div style={{position:'absolute',inset:9,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <img src={mascotImg} style={{width:68,height:'auto',objectFit:'contain',
-                        opacity:.82,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
+                      <SegmentedMascot motion="idle" size={68}
+                        style={{opacity:.82,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
                     </div>
                   </div>
                 </div>
@@ -1425,8 +1476,8 @@ export function GachaPage() {
                       background:'rgba(255,180,0,.5)',filter:'blur(5px)'}}/>
                     {/* Mascot inside */}
                     <div style={{position:'absolute',inset:11,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <img src={mascotImg} style={{width:80,height:'auto',objectFit:'contain',
-                        opacity:.84,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
+                      <SegmentedMascot motion="idle" size={80}
+                        style={{opacity:.84,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
                     </div>
                   </div>
                   {/* Star-burst impact rays radiating from base of orb */}
@@ -1568,9 +1619,9 @@ export function GachaPage() {
                       <p style={{margin:'6px 0 10px',fontSize:12,color:'rgba(255,255,255,.5)'}}>
                         ポイントを即時付与しました
                       </p>
-                      <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
-                        filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',
-                        animation:'ga-mascotjumpin .72s ease-out both, ga-mascotcelebrate 1.15s ease-in-out .72s infinite'}}/>
+                      <SegmentedMascot motion="result" size={58}
+                        style={{margin:'0 auto',
+                          filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))'}}/>
                     </div>
                   </div>
                 )
@@ -1641,9 +1692,8 @@ export function GachaPage() {
                 </p>
               )}
               <div style={{display:'flex',justifyContent:'center'}}>
-                <img src={mascotImg} style={{width:60,height:'auto',objectFit:'contain',
-                  filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))',
-                  animation:'ga-bounce 1s ease-in-out infinite'}}/>
+                <SegmentedMascot motion="result" size={66}
+                  style={{filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))'}}/>
               </div>
             </div>
           )}
@@ -1794,10 +1844,8 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
           {step===4&&(
             <div className="ga-reveal" style={{display:'flex',flexDirection:'column',
               alignItems:'center',gap:6}}>
-              <img src={mascotImg} style={{
-                width:110,height:'auto',objectFit:'contain',
-                filter:'drop-shadow(0 0 32px rgba(218,165,32,.88)) drop-shadow(-2px 8px 18px rgba(0,0,0,.8))',
-                animation:'ga-popin .42s ease-out both'}}/>
+              <SegmentedMascot motion="result" size={116}
+                style={{filter:'drop-shadow(0 0 32px rgba(218,165,32,.88)) drop-shadow(-2px 8px 18px rgba(0,0,0,.8))'}}/>
             </div>
           )}
 
@@ -1805,10 +1853,9 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
           {step>=5&&(
             <div style={{display:'flex',gap:12,alignItems:'flex-end',justifyContent:'center'}}>
               {[{s:82,d:'0s'},{s:108,d:'.24s'},{s:82,d:'.48s'}].map((m,i)=>(
-                <img key={i} src={mascotImg} style={{
-                  width:m.s,height:'auto',objectFit:'contain',
-                  filter:'drop-shadow(-2px 8px 18px rgba(0,0,0,.8)) drop-shadow(0 0 16px rgba(218,165,32,.55))',
-                  animation:`ga-bounce .82s ease-in-out ${m.d} infinite`}}/>
+                <SegmentedMascot key={i} motion="clap" size={m.s}
+                  style={{filter:'drop-shadow(-2px 8px 18px rgba(0,0,0,.8)) drop-shadow(0 0 16px rgba(218,165,32,.55))'}}
+                  delay={parseFloat(m.d) || 0}/>
               ))}
             </div>
           )}
@@ -1870,6 +1917,7 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
 
 
 
