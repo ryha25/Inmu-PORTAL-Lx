@@ -576,7 +576,17 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
               {CONDITION_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <Input placeholder="リンクURL（任意）" value={editChainMeta.linkUrl} onChange={e => setEditChainMeta(p => ({ ...p, linkUrl: e.target.value }))} className="min-h-10" />
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">リンク候補（任意・1行に1URL）</Label>
+            <textarea
+              placeholder={'https://example.com/a\nhttps://example.com/b'}
+              value={editChainMeta.linkUrl}
+              onChange={e => setEditChainMeta(p => ({ ...p, linkUrl: e.target.value }))}
+              rows={3}
+              className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <p className="text-[10px] text-muted-foreground">候補から毎日1件が選ばれ、その日は同じリンクが表示されます。</p>
+          </div>
           <div className="flex gap-2">
             <div className="flex flex-col gap-1 flex-1">
               <Label className="text-xs text-muted-foreground">開始日時</Label>
@@ -670,7 +680,17 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
             <option value="inactive">Inactive（非公開）</option>
           </select>
         </div>
-        <Input placeholder="リンクURL（任意）" value={form.linkUrl} onChange={e => setForm(p => ({ ...p, linkUrl: e.target.value }))} className="min-h-10" />
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs text-muted-foreground">リンク候補（任意・1行に1URL）</Label>
+          <textarea
+            placeholder={'https://example.com/a\nhttps://example.com/b'}
+            value={form.linkUrl}
+            onChange={e => setForm(p => ({ ...p, linkUrl: e.target.value }))}
+            rows={3}
+            className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <p className="text-[10px] text-muted-foreground">候補から毎日1件が選ばれ、その日は同じリンクが表示されます。</p>
+        </div>
         <div className="flex gap-2">
           <select value={form.conditionType} onChange={e => setForm(p => ({ ...p, conditionType: e.target.value, conditionValue: '' }))} className={`${SELECT_CLS} flex-1`}>
             {CONDITION_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
