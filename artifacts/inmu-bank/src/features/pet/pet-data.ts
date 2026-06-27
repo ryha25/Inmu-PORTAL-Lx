@@ -18,21 +18,21 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     name: 'ニャルシアン',
     rarity: 3,
     image: nyarushianImage,
-    roomWidth: 'clamp(230px, 58%, 350px)',
+    roomWidth: 'clamp(275px, 68%, 420px)',
   },
   {
     id: 'takuya',
     name: '拓也',
     rarity: 3,
     image: takuyaImage,
-    roomWidth: 'clamp(220px, 55%, 330px)',
+    roomWidth: 'clamp(265px, 64%, 390px)',
   },
   {
     id: 'leon',
     name: 'レオン',
     rarity: 3,
     image: leonImage,
-    roomWidth: 'clamp(230px, 58%, 350px)',
+    roomWidth: 'clamp(275px, 68%, 420px)',
   },
 ]
 

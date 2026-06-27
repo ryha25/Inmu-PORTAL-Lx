@@ -18,6 +18,23 @@ const ACTIONS: Array<{ id: PetAction; label: string; icon: ElementType; tone: st
   { id: 'pet', label: 'なでる', icon: Heart, tone: 'border-fuchsia-400/50 text-fuchsia-200 shadow-[0_0_18px_rgba(232,121,249,.12)]' },
 ]
 
+const PET_ROOM_CSS = `
+  @keyframes pet-meter-shine {
+    0% { transform: translateX(-180%) skewX(-18deg); opacity: 0; }
+    18% { opacity: .85; }
+    55%, 100% { transform: translateX(420%) skewX(-18deg); opacity: 0; }
+  }
+  @keyframes pet-neon-breathe {
+    0%, 100% { filter: brightness(.9); opacity: .72; }
+    50% { filter: brightness(1.2); opacity: 1; }
+  }
+  .pet-meter-shine { animation: pet-meter-shine 3.1s ease-in-out infinite; }
+  .pet-neon-sign { animation: pet-neon-breathe 3.8s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .pet-meter-shine, .pet-neon-sign { animation: none; }
+  }
+`
+
 function StatusBar({
   label,
   value,
@@ -40,8 +57,10 @@ function StatusBar({
         <span className="flex items-center gap-1 font-semibold text-foreground/85">{icon}{label}</span>
         <span className="font-mono text-muted-foreground">{display ?? value}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full border border-white/10 bg-black/55">
-        <div className="h-full rounded-full" style={{ width: `${percent}%`, background: color }} />
+      <div className="h-2.5 overflow-hidden rounded-full border border-white/10 bg-black/55 shadow-[inset_0_1px_3px_rgba(0,0,0,.75)]">
+        <div className="relative h-full overflow-hidden rounded-full shadow-[0_0_10px_currentColor]" style={{ width: `${percent}%`, background: color }}>
+          <span className="pet-meter-shine absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+        </div>
       </div>
     </div>
   )
@@ -82,35 +101,46 @@ function PetRoom({
 }) {
   const expPercent = isMaxLevel ? 100 : Math.min(100, (exp / requiredExp) * 100)
   return (
-    <section className="relative h-[540px] overflow-hidden rounded-lg border border-fuchsia-400/25 bg-[#080611] shadow-[0_0_40px_rgba(168,85,247,.14)] sm:h-[620px]">
+    <section className="relative h-[570px] overflow-hidden rounded-lg border border-fuchsia-400/25 bg-[#080611] shadow-[0_0_46px_rgba(168,85,247,.16)] sm:h-[650px]">
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#100b20_0%,#171026_55%,#0b0811_100%)]" />
-      <div className="absolute inset-x-0 top-0 h-[58%] opacity-70 [background-image:linear-gradient(rgba(255,255,255,.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.02)_1px,transparent_1px)] [background-size:42px_42px]" />
-      <div className="absolute inset-x-0 bottom-0 h-[42%] origin-bottom [background:linear-gradient(150deg,#17101f,#08070d)] before:absolute before:inset-0 before:opacity-30 before:[background-image:repeating-linear-gradient(90deg,transparent_0,transparent_58px,rgba(192,132,252,.18)_59px,transparent_60px)]" />
+      <div className="absolute inset-x-[7%] top-0 h-[61%] border-x border-violet-300/5 opacity-80 [background-image:linear-gradient(rgba(255,255,255,.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.02)_1px,transparent_1px)] [background-size:42px_42px]" />
+      <div className="absolute bottom-[39%] left-0 top-0 w-[8%] bg-gradient-to-r from-black/55 to-violet-950/10 [clip-path:polygon(0_0,100%_7%,100%_100%,0_100%)]" />
+      <div className="absolute bottom-[39%] right-0 top-0 w-[8%] bg-gradient-to-l from-black/55 to-violet-950/10 [clip-path:polygon(0_7%,100%_0,100%_100%,0_100%)]" />
+      <div className="absolute inset-x-0 bottom-[38.5%] h-2 border-y border-violet-300/10 bg-[#23142d] shadow-[0_2px_9px_rgba(0,0,0,.7)]" />
+      <div className="absolute inset-x-0 bottom-0 h-[39%] origin-bottom [background:linear-gradient(165deg,#21142a_0%,#100b16_50%,#07060b_100%)] [clip-path:polygon(7%_0,93%_0,100%_100%,0_100%)]">
+        <div className="absolute inset-0 opacity-45 [background-image:repeating-linear-gradient(102deg,transparent_0,transparent_62px,rgba(216,180,254,.16)_63px,transparent_65px),repeating-linear-gradient(0deg,transparent_0,transparent_42px,rgba(0,0,0,.35)_43px,transparent_45px)]" />
+        <div className="absolute inset-x-[18%] bottom-0 top-[8%] rounded-[50%] border border-fuchsia-400/15 bg-[radial-gradient(ellipse,rgba(126,34,206,.24),rgba(30,18,40,.45)_48%,transparent_70%)] shadow-[inset_0_0_28px_rgba(192,38,211,.08)]" />
+      </div>
 
-      <div className="absolute left-4 top-28 h-40 w-28 overflow-hidden rounded-t-[48px] border border-violet-300/20 bg-[#060917] shadow-[inset_0_0_24px_rgba(56,189,248,.08)] sm:left-8 sm:w-36">
+      <div className="absolute left-4 top-28 h-40 w-28 overflow-hidden rounded-t-[48px] border-2 border-violet-300/15 bg-[#060917] shadow-[inset_0_0_24px_rgba(56,189,248,.1),8px_8px_18px_rgba(0,0,0,.35)] sm:left-8 sm:w-36">
         <div className="absolute inset-x-0 top-1/2 h-px bg-violet-300/15" />
+        <div className="absolute inset-y-0 left-1/2 w-px bg-violet-300/15" />
         <div className="absolute bottom-3 left-3 h-9 w-1 bg-fuchsia-400/40 shadow-[12px_-15px_0_rgba(34,211,238,.35),25px_4px_0_rgba(251,191,36,.35),42px_-24px_0_rgba(217,70,239,.3),58px_-3px_0_rgba(96,165,250,.35),74px_-18px_0_rgba(244,114,182,.3)]" />
+        <div className="absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-violet-300/10 to-transparent" />
       </div>
 
       <div className="absolute left-1/2 top-0 h-16 w-px -translate-x-1/2 bg-violet-200/20" />
-      <div className="absolute left-1/2 top-14 h-5 w-24 -translate-x-1/2 rounded-[50%] bg-amber-100/80 shadow-[0_10px_34px_12px_rgba(251,191,36,.16)]" />
+      <div className="absolute left-1/2 top-14 h-5 w-24 -translate-x-1/2 rounded-[50%] bg-amber-100/80 shadow-[0_10px_40px_15px_rgba(251,191,36,.17),0_3px_4px_rgba(0,0,0,.6)]" />
 
       <div className="absolute right-4 top-28 h-44 w-24 sm:right-8 sm:w-28">
-        <div className="absolute inset-x-0 top-0 h-2 rounded bg-violet-300/20 shadow-[0_0_16px_rgba(168,85,247,.18)]" />
-        <div className="absolute inset-x-0 top-20 h-2 rounded bg-violet-300/20" />
+        <div className="absolute bottom-0 left-2 top-0 w-2 rounded bg-[#170e21] shadow-[3px_0_6px_rgba(0,0,0,.45)]" />
+        <div className="absolute bottom-0 right-2 top-0 w-2 rounded bg-[#170e21]" />
+        <div className="absolute inset-x-0 top-0 h-2 rounded bg-violet-300/25 shadow-[0_4px_7px_rgba(0,0,0,.55),0_0_16px_rgba(168,85,247,.18)]" />
+        <div className="absolute inset-x-0 top-20 h-2 rounded bg-violet-300/25 shadow-[0_4px_7px_rgba(0,0,0,.55)]" />
         <Gem className="absolute right-7 top-5 size-9 text-fuchsia-300 drop-shadow-[0_0_10px_rgba(232,121,249,.6)]" />
-        <BookOpen className="absolute bottom-6 left-3 size-8 text-indigo-300/70" />
+        <BookOpen className="absolute bottom-6 left-3 size-8 text-indigo-300/75 drop-shadow-[0_4px_4px_rgba(0,0,0,.5)]" />
+        <div className="absolute bottom-[5.4rem] left-4 h-8 w-2 rotate-[-5deg] rounded-sm bg-cyan-500/35 shadow-[9px_2px_0_rgba(244,114,182,.3),18px_0_0_rgba(251,191,36,.28)]" />
         <div className="absolute bottom-5 right-2 size-9 rounded border border-fuchsia-300/20 bg-fuchsia-300/5 p-2">
           <PawPrint className="size-full text-fuchsia-300/50" />
         </div>
       </div>
 
-      <div className="absolute left-1/2 top-24 -translate-x-1/2 text-center text-fuchsia-300 drop-shadow-[0_0_10px_rgba(232,121,249,.75)]">
+      <div className="pet-neon-sign absolute left-1/2 top-24 -translate-x-1/2 text-center text-fuchsia-300 drop-shadow-[0_0_10px_rgba(232,121,249,.75)]">
         <PawPrint className="mx-auto size-9" />
         <p className="mt-1 text-[11px] font-black tracking-[0.22em]">INMU PET</p>
       </div>
 
-      <div className="absolute bottom-24 left-4 h-24 w-20 sm:left-8">
+      <div className="absolute bottom-24 left-4 h-24 w-20 drop-shadow-[7px_9px_7px_rgba(0,0,0,.45)] sm:left-8">
         <div className="absolute bottom-0 left-4 h-10 w-12 rounded-b-xl bg-violet-950/90 ring-1 ring-violet-400/20" />
         <Leaf className="absolute bottom-7 left-0 size-11 -rotate-[28deg] text-emerald-400/55" />
         <Leaf className="absolute bottom-10 right-0 size-11 rotate-[28deg] text-emerald-300/55" />
@@ -118,7 +148,13 @@ function PetRoom({
       </div>
 
       <div className="absolute bottom-7 left-1/2 h-20 w-[72%] -translate-x-1/2 rounded-[50%] border border-fuchsia-400/15 bg-[radial-gradient(ellipse,rgba(126,34,206,.3),rgba(24,12,35,.78)_62%,transparent_70%)]" />
-      <div className="absolute bottom-16 left-1/2 h-20 w-[52%] -translate-x-1/2 rounded-[50%] border border-violet-300/15 bg-[#24172f] shadow-[inset_0_-12px_18px_rgba(0,0,0,.55),0_8px_30px_rgba(0,0,0,.55)]" />
+      <div className="absolute bottom-16 left-1/2 h-20 w-[52%] -translate-x-1/2 rounded-[50%] border border-violet-300/15 bg-[#24172f] shadow-[inset_0_-12px_18px_rgba(0,0,0,.55),0_8px_30px_rgba(0,0,0,.55)]">
+        <span className="absolute bottom-4 right-[12%] rotate-[-12deg] text-sm font-black tracking-widest text-violet-200/10">INMU</span>
+      </div>
+      <div className="absolute bottom-9 right-5 z-10 h-7 w-16 rounded-[50%] border border-fuchsia-300/25 bg-[linear-gradient(180deg,#4b2858,#160d1d)] shadow-[inset_0_5px_8px_rgba(0,0,0,.6),0_7px_9px_rgba(0,0,0,.4)] sm:right-9">
+        <div className="absolute inset-x-2 top-1 h-2 rounded-[50%] bg-amber-300/35" />
+      </div>
+      <div className="absolute bottom-12 right-[25%] size-4 rotate-12 rounded bg-cyan-300/15 ring-1 ring-cyan-200/20" />
 
       <div className="absolute left-3 top-3 z-20 w-[168px] rounded-md border border-fuchsia-300/20 bg-black/60 p-3 backdrop-blur-md sm:left-5 sm:top-5 sm:w-[190px]">
         <div className="flex items-start justify-between gap-2">
@@ -131,18 +167,20 @@ function PetRoom({
         <div className="mt-2 flex items-center justify-between text-[9px] text-muted-foreground">
           <span>EXP</span><span className="font-mono">{isMaxLevel ? 'MAX' : `${exp} / ${requiredExp}`}</span>
         </div>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-fuchsia-400" style={{ width: `${expPercent}%` }} />
+        <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/10 shadow-[inset_0_1px_3px_rgba(0,0,0,.7)]">
+          <div className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-cyan-400 to-fuchsia-400 shadow-[0_0_10px_rgba(217,70,239,.55)]" style={{ width: `${expPercent}%` }}>
+            <span className="pet-meter-shine absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+          </div>
         </div>
       </div>
 
       <div
-        className="absolute inset-x-0 bottom-14 z-10 flex h-[68%] items-end justify-center"
+        className="absolute inset-x-0 bottom-10 z-10 flex h-[72%] items-end justify-center"
         data-pet-stage
         data-pet-id={petId}
         data-pose="idle"
       >
-        <div className="absolute bottom-2 left-1/2 h-5 w-[32%] -translate-x-1/2 rounded-[50%] bg-black/55 blur-sm" data-pet-shadow />
+        <div className="absolute bottom-1 left-1/2 h-7 w-[42%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md" data-pet-shadow />
         <img
           src={image}
           alt={name}
@@ -191,15 +229,16 @@ export function PetPage() {
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
+      <style>{PET_ROOM_CSS}</style>
       <div className="mx-auto max-w-2xl">
-        <header className="mb-4 flex items-center justify-between gap-3">
-          <div className="min-w-0">
+        <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
             <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300">
               <PawPrint className="size-3.5" />Pet room
             </p>
-            <h1 className="truncate text-2xl font-black text-white">INMU PET</h1>
+            <h1 className="text-2xl font-black text-white">INMU PET</h1>
           </div>
-          <div className="grid min-w-[195px] grid-cols-2 gap-3 rounded-lg border border-violet-300/15 bg-black/35 px-3 py-2">
+          <div className="grid w-full grid-cols-2 gap-3 rounded-lg border border-violet-300/15 bg-black/35 px-3 py-2 sm:w-auto sm:min-w-[230px]">
             <BalanceChip icon={<Coins className="size-3.5" />} label="INMU" value={balances.inmu} />
             <BalanceChip icon={<CircleDollarSign className="size-3.5" />} label="POINT" value={balances.points} />
           </div>
@@ -219,14 +258,14 @@ export function PetPage() {
 
         <section className="relative z-20 -mt-2 rounded-lg border border-violet-300/20 bg-[#0d0916]/95 p-4 shadow-[0_-10px_30px_rgba(0,0,0,.35)] backdrop-blur-md">
           <div className="flex gap-3 sm:gap-5">
-            <StatusBar label="満腹度" value={selectedStats.fullness} icon={<Utensils className="size-3.5 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
-            <StatusBar label="眠気" value={selectedStats.sleepiness} icon={<Moon className="size-3.5 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
-            <StatusBar label="愛情度" value={selectedStats.affection} icon={<Heart className="size-3.5 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
+            <StatusBar label="満腹度" value={selectedStats.fullness} icon={<Utensils className="size-4 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
+            <StatusBar label="眠気" value={selectedStats.sleepiness} icon={<Moon className="size-4 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
+            <StatusBar label="愛情度" value={selectedStats.affection} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
           </div>
         </section>
 
         <section className="mt-3 rounded-lg border border-violet-300/15 bg-[#0d0916] p-3 sm:p-4">
-          <div className="mb-3 flex min-h-5 items-center justify-between gap-3">
+          <div className="mb-3 flex min-h-5 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-bold text-fuchsia-200">お世話</h2>
             <p className="text-right text-[10px] text-cyan-200" role="status">{isFull ? '満腹なのでご飯をあげられません' : message}</p>
           </div>
@@ -241,7 +280,7 @@ export function PetPage() {
                   variant="outline"
                   disabled={disabled}
                   onClick={() => handleAction(action.id)}
-                  className={cn('h-20 flex-col gap-2 rounded-lg bg-black/35 text-sm hover:bg-white/5', action.tone)}
+                    className={cn('h-20 flex-col gap-2 rounded-lg bg-black/35 text-sm transition-all duration-100 hover:-translate-y-0.5 hover:bg-white/5 active:translate-y-0 active:scale-[.94] active:brightness-125', action.tone)}
                 >
                   <Icon className="size-6" />
                   <span className="font-bold">{action.label}</span>
@@ -256,7 +295,7 @@ export function PetPage() {
             <h2 className="text-sm font-bold text-fuchsia-200">所持キャラクター</h2>
             <span className="font-mono text-[10px] text-muted-foreground">3 / 3</span>
           </div>
-          <div className="flex snap-x gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <div className="flex snap-x snap-mandatory touch-pan-x gap-2 overflow-x-auto overscroll-x-contain pb-2 pr-4 scrollbar-none">
             {PET_DEFINITIONS.map(candidate => {
               const active = candidate.id === selectedPetId
               const stats = petStats[candidate.id]
@@ -267,7 +306,7 @@ export function PetPage() {
                   aria-pressed={active}
                   onClick={() => handleSelect(candidate.id)}
                   className={cn(
-                    'w-28 shrink-0 snap-start overflow-hidden rounded-lg border bg-[#0d0916] text-left transition-colors sm:w-32',
+                    'w-24 shrink-0 snap-start overflow-hidden rounded-lg border bg-[#0d0916] text-left transition-colors sm:w-28',
                     active ? 'border-fuchsia-400 shadow-[0_0_18px_rgba(217,70,239,.22)]' : 'border-violet-300/15 hover:border-violet-300/35',
                   )}
                 >
@@ -278,7 +317,7 @@ export function PetPage() {
                     <p className="truncate text-xs font-bold">{candidate.name}</p>
                     <div className="mt-1 flex items-center justify-between text-[9px]">
                       <span className="text-amber-300">★{candidate.rarity}</span>
-                      <span className="font-mono text-cyan-300">Lv.{stats.level}</span>
+                      <span className="rounded bg-cyan-400/10 px-1 py-0.5 font-mono font-bold text-cyan-200">Lv.{stats.level}</span>
                     </div>
                   </div>
                 </button>
