@@ -73,6 +73,35 @@ function getPeriod(type: string): string {
   return adj.toISOString().slice(0, 10);
 }
 
+function normalizeMissionLinks(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return [...new Set(
+    value
+      .split(/\r?\n/)
+      .map(link => link.trim())
+      .filter(link => /^https?:\/\//i.test(link))
+  )];
+}
+
+function serializeMissionLinks(value: string | null | undefined): string | null {
+  const links = normalizeMissionLinks(value);
+  return links.length > 0 ? links.join("\n") : null;
+}
+
+function getDailyMissionLink(missionId: number, value: string | null): string | null {
+  const links = normalizeMissionLinks(value);
+  if (links.length === 0) return null;
+
+  // The same mission keeps the same link throughout the app's JST day (04:00 reset).
+  const seed = `${getPeriod("daily")}:${missionId}`;
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return links[(hash >>> 0) % links.length];
+}
+
 function getTodayStart(): Date {
   const adj = getAdjustedNow();
   const mid = new Date(adj);
@@ -288,6 +317,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       const locked = isLocked(m);
       return {
         ...m,
+        linkUrl: getDailyMissionLink(m.id, m.linkUrl),
         locked,
         prerequisiteMissionTitle: locked && m.prerequisiteMissionId
           ? (missions.find(mx => mx.id === m.prerequisiteMissionId)?.title ?? null)
@@ -667,7 +697,7 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
       points: points ?? 0,
       startAt: startAt ? new Date(startAt) : null,
       endAt: endAt ? new Date(endAt) : null,
-      linkUrl: linkUrl?.trim() || null,
+      linkUrl: serializeMissionLinks(linkUrl),
       isActive: missionStatus === "active",
       status: missionStatus,
       conditionType: conditionType || null,
@@ -731,7 +761,7 @@ router.post("/admin/missions/chain", requireAdmin, async (req, res): Promise<voi
         points: stage.points ?? 0,
         startAt: startAt ? new Date(startAt) : null,
         endAt: endAt ? new Date(endAt) : null,
-        linkUrl: linkUrl?.trim() || null,
+        linkUrl: serializeMissionLinks(linkUrl),
         isActive: chainStatus === "active",
         status: chainStatus,
         conditionType: conditionType || null,
@@ -797,7 +827,7 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
           ...(s.conditionValue !== undefined && { conditionValue: s.conditionValue != null ? String(s.conditionValue) : null }),
           ...(validType   && { type: validType }),
           ...(condTypeVal !== undefined && { conditionType: condTypeVal || null }),
-          ...(linkUrl     !== undefined && { linkUrl:  linkUrl?.trim() || null }),
+          ...(linkUrl     !== undefined && { linkUrl: serializeMissionLinks(linkUrl) }),
           ...(startAt     !== undefined && { startAt: startAt ? new Date(startAt) : null }),
           ...(endAt       !== undefined && { endAt:   endAt   ? new Date(endAt)   : null }),
           status:    stageStatus,
@@ -814,7 +844,7 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
           conditionValue: s.conditionValue != null ? String(s.conditionValue) : null,
           type:          validType ?? "achievement",
           conditionType: condTypeVal || null,
-          linkUrl:       linkUrl?.trim() || null,
+          linkUrl:       serializeMissionLinks(linkUrl),
           startAt:       startAt ? new Date(startAt) : null,
           endAt:         endAt   ? new Date(endAt)   : null,
           status:        stageStatus,
@@ -848,7 +878,7 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
       ...(points !== undefined && { points }),
       ...(startAt !== undefined && { startAt: startAt ? new Date(startAt) : null }),
       ...(endAt !== undefined && { endAt: endAt ? new Date(endAt) : null }),
-      ...(linkUrl !== undefined && { linkUrl: linkUrl?.trim() || null }),
+      ...(linkUrl !== undefined && { linkUrl: serializeMissionLinks(linkUrl) }),
       ...(missionStatus !== undefined
         ? { status: missionStatus, isActive: missionStatus === "active" }
         : isActive !== undefined ? { isActive } : {}),
