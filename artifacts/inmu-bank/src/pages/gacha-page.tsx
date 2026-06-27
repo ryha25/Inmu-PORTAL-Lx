@@ -407,11 +407,6 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
               background:'radial-gradient(circle,rgba(255,235,150,.78),rgba(218,165,32,.32) 42%,transparent 70%)',
               filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
             <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
-            {prizeId==='inmu10k'&&(
-              <SegmentedMascot motion="result" size={92}
-                style={{position:'absolute',bottom:78,
-                  filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))'}}/>
-            )}
           </div>
         </div>
       )}
