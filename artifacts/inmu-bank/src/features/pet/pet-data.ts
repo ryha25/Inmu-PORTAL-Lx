@@ -4,6 +4,8 @@ import nyarushianHappyImage from '@assets/inmu-pet-nyarushian-happy-v1.png'
 import nyarushianHungryImage from '@assets/inmu-pet-nyarushian-hungry-v1.png'
 import nyarushianPettedImage from '@assets/inmu-pet-nyarushian-petted-v1.png'
 import nyarushianSleepyImage from '@assets/inmu-pet-nyarushian-sleepy-v1.png'
+import nyarushianWalk1Image from '@assets/inmu-pet-nyarushian-walk-1-v1.png'
+import nyarushianWalk2Image from '@assets/inmu-pet-nyarushian-walk-2-v1.png'
 import takuyaImage from '@assets/inmu-pet-takuya-v2.png'
 import takuyaBlinkImage from '@assets/inmu-pet-takuya-blink-v1.png'
 import takuyaHappyImage from '@assets/inmu-pet-takuya-happy-v1.png'
@@ -26,6 +28,10 @@ export type PetDefinition = {
   rarity: number
   image: string
   expressions: Record<PetExpression, string>
+  walk: {
+    enabled: boolean
+    frames: readonly [string, string]
+  }
   roomWidth: string
   roomTheme: 'cat' | 'dog' | 'lion'
   skill: {
@@ -53,6 +59,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       petted: nyarushianPettedImage,
       affectionate: nyarushianHappyImage,
     },
+    walk: { enabled: true, frames: [nyarushianWalk1Image, nyarushianWalk2Image] },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'cat',
     skill: { name: '幸運の肉球', effect: 'ポイント2倍' },
@@ -76,6 +83,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       petted: takuyaPettedImage,
       affectionate: takuyaHappyImage,
     },
+    walk: { enabled: false, frames: [takuyaImage, takuyaImage] },
     roomWidth: 'clamp(195px, 43%, 275px)',
     roomTheme: 'dog',
     skill: { name: '盛り上げ上手', effect: 'お世話EXPアップ' },
@@ -99,6 +107,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       petted: leonPettedImage,
       affectionate: leonHappyImage,
     },
+    walk: { enabled: false, frames: [leonImage, leonImage] },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'lion',
     skill: { name: '王者の導き', effect: '愛情度ボーナス' },

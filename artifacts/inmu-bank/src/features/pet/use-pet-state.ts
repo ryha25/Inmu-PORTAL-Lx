@@ -18,10 +18,10 @@ export type PetExpressionState = { kind: PetExpression; until: number }
 
 // 管理画面対応時はこの設定値をAPI由来へ置き換える。
 export const PET_CARE_COOLDOWNS_MS: Record<PetAction, number> = {
-  feed: 30 * 60 * 1000,
-  play: 20 * 60 * 1000,
-  sleep: 2 * 60 * 60 * 1000,
-  pet: 10 * 60 * 1000,
+  feed: 10 * 60 * 1000,
+  play: 10 * 60 * 1000,
+  sleep: 30 * 60 * 1000,
+  pet: 3 * 60 * 1000,
 }
 
 type PetSaveData = {

@@ -47,6 +47,30 @@ function formatCooldown(milliseconds: number) {
   return `あと${minutes}分${String(seconds).padStart(2, '0')}秒`
 }
 
+type WalkMotion = {
+  active: boolean
+  frame: 0 | 1
+  offsetPercent: number
+  facing: 1 | -1
+  bob: number
+}
+
+function getWalkMotion(tick: number, enabled: boolean): WalkMotion {
+  if (!enabled) return { active: false, frame: 0, offsetPercent: 0, facing: 1, bob: 0 }
+  const step = tick % 24
+  if (step <= 8) {
+    const frame = step % 2 as 0 | 1
+    return { active: true, frame, offsetPercent: -18 + (36 * step) / 8, facing: -1, bob: frame ? -4 : 0 }
+  }
+  if (step <= 11) return { active: true, frame: 0, offsetPercent: 18, facing: -1, bob: 0 }
+  if (step <= 20) {
+    const walkingStep = step - 12
+    const frame = walkingStep % 2 as 0 | 1
+    return { active: true, frame, offsetPercent: 18 - (36 * walkingStep) / 8, facing: 1, bob: frame ? -4 : 0 }
+  }
+  return { active: true, frame: 0, offsetPercent: -18, facing: 1, bob: 0 }
+}
+
 function StatusBar({
   label,
   value,
@@ -101,6 +125,7 @@ function PetRoom({
   isFull,
   message,
   cooldownRemaining,
+  walkMotion,
   onAction,
   onPet,
 }: {
@@ -114,6 +139,7 @@ function PetRoom({
   isFull: boolean
   message: string
   cooldownRemaining: Record<PetAction, number>
+  walkMotion: WalkMotion
   onAction: (action: Exclude<PetAction, 'pet'>) => void
   onPet: () => void
 }) {
@@ -199,7 +225,6 @@ function PetRoom({
         data-pet-id={petId}
         data-pose="idle"
       >
-        <div className="absolute bottom-1 left-1/2 h-7 w-[42%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md" data-pet-shadow />
         <div className="absolute left-1/2 top-[3%] z-30 flex translate-x-[30%] flex-col items-center gap-1">
           <button
             type="button"
@@ -214,11 +239,20 @@ function PetRoom({
           </button>
           {cooldownRemaining.pet > 0 && <span className="whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 font-mono text-[8px] text-fuchsia-100">{formatCooldown(cooldownRemaining.pet)}</span>}
         </div>
-        <div className="pet-character-motion relative z-10 flex max-h-full items-end justify-center" style={{ width: roomWidth }}>
+        <div
+          className={cn('relative z-10 flex max-h-full items-end justify-center', !walkMotion.active && 'pet-character-motion')}
+          style={{
+            width: roomWidth,
+            transform: walkMotion.active ? `translate3d(${walkMotion.offsetPercent}%, ${walkMotion.bob}px, 0) scaleX(${walkMotion.facing})` : undefined,
+            transition: walkMotion.active ? 'transform 280ms linear' : undefined,
+          }}
+          data-walking={walkMotion.active || undefined}
+        >
+          <div className="absolute bottom-1 left-1/2 h-7 w-[72%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md" data-pet-shadow />
           <img
             src={image}
             alt={name}
-            className={cn('max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform,opacity] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
+            className={cn('relative z-10 max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform,opacity] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
             data-pet-character
             data-expression={expression}
           />
@@ -350,6 +384,7 @@ export function PetPage() {
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
+  const [walkTick, setWalkTick] = useState(0)
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
   const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blinkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -373,6 +408,9 @@ export function PetPage() {
           : isBlinking
             ? 'blink'
             : 'default'
+  const canShowWalk = pet.walk.enabled && expression === 'default'
+  const walkMotion = getWalkMotion(walkTick, canShowWalk)
+  const displayImage = canShowWalk ? pet.walk.frames[walkMotion.frame] : pet.expressions[expression]
 
   useEffect(() => {
     fetch('/api/dashboard', { credentials: 'include' })
@@ -417,6 +455,13 @@ export function PetPage() {
       if (blinkResetTimer.current) clearTimeout(blinkResetTimer.current)
     }
   }, [selectedPetId])
+
+  useEffect(() => {
+    setWalkTick(0)
+    if (!pet.walk.enabled) return
+    const interval = setInterval(() => setWalkTick(current => (current + 1) % 24), 280)
+    return () => clearInterval(interval)
+  }, [selectedPetId, pet.walk.enabled])
 
   function handleAction(action: PetAction) {
     if (action === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return false }
@@ -463,7 +508,7 @@ export function PetPage() {
             <PetRoom
               petId={pet.id}
               name={pet.name}
-              image={pet.expressions[expression] ?? pet.expressions.default}
+              image={displayImage}
               roomWidth={pet.roomWidth}
               roomTheme={pet.roomTheme}
               expression={expression}
@@ -471,6 +516,7 @@ export function PetPage() {
               isFull={isFull}
               message={message}
               cooldownRemaining={cooldownRemaining}
+              walkMotion={walkMotion}
               onAction={action => handleAction(action)}
               onPet={handlePet}
             />
