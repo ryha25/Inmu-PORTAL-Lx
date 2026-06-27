@@ -4,8 +4,8 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
-import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetId } from '@/features/pet/pet-data'
-import { usePetState, type PetAction, type PetStats } from '@/features/pet/use-pet-state'
+import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
+import { getPetCooldownRemaining, usePetState, type PetAction, type PetStats } from '@/features/pet/use-pet-state'
 import {
   BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
   Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
@@ -27,12 +27,25 @@ const PET_ROOM_CSS = `
     0%, 100% { filter: brightness(.9); opacity: .72; }
     50% { filter: brightness(1.2); opacity: 1; }
   }
+  @keyframes pet-idle-float {
+    0%, 100% { transform: translate3d(-4px, 0, 0) rotate(-.35deg); }
+    35% { transform: translate3d(3px, -8px, 0) rotate(.2deg); }
+    70% { transform: translate3d(5px, -3px, 0) rotate(.35deg); }
+  }
   .pet-meter-shine { animation: pet-meter-shine 3.1s ease-in-out infinite; }
   .pet-neon-sign { animation: pet-neon-breathe 3.8s ease-in-out infinite; }
+  .pet-character-motion { animation: pet-idle-float 6.8s ease-in-out infinite; transform-origin: 50% 90%; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion { animation: none; }
   }
 `
+
+function formatCooldown(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `あと${minutes}分${String(seconds).padStart(2, '0')}秒`
+}
 
 function StatusBar({
   label,
@@ -87,6 +100,7 @@ function PetRoom({
   stats,
   isFull,
   message,
+  cooldownRemaining,
   onAction,
   onPet,
 }: {
@@ -95,10 +109,11 @@ function PetRoom({
   image: string
   roomWidth: string
   roomTheme: 'cat' | 'dog' | 'lion'
-  expression: 'default' | 'petted'
+  expression: PetExpression
   stats: PetStats
   isFull: boolean
   message: string
+  cooldownRemaining: Record<PetAction, number>
   onAction: (action: Exclude<PetAction, 'pet'>) => void
   onPet: () => void
 }) {
@@ -185,24 +200,29 @@ function PetRoom({
         data-pose="idle"
       >
         <div className="absolute bottom-1 left-1/2 h-7 w-[42%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md" data-pet-shadow />
-        <button
-          type="button"
-          onClick={onPet}
-          aria-label="なでる"
-          title="なでる"
-          className="absolute left-1/2 top-[3%] z-30 flex size-11 translate-x-[30%] items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25"
-          data-pet-interaction="pet"
-        >
-          <Hand className="size-6" />
-        </button>
-        <img
-          src={image}
-          alt={name}
-          className={cn('relative z-10 max-h-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
-          style={{ width: roomWidth }}
-          data-pet-character
-          data-expression={expression}
-        />
+        <div className="absolute left-1/2 top-[3%] z-30 flex translate-x-[30%] flex-col items-center gap-1">
+          <button
+            type="button"
+            onClick={onPet}
+            disabled={cooldownRemaining.pet > 0}
+            aria-label={cooldownRemaining.pet > 0 ? `なでる ${formatCooldown(cooldownRemaining.pet)}` : 'なでる'}
+            title="なでる"
+            className="flex size-11 items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25 disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none"
+            data-pet-interaction="pet"
+          >
+            <Hand className="size-6" />
+          </button>
+          {cooldownRemaining.pet > 0 && <span className="whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 font-mono text-[8px] text-fuchsia-100">{formatCooldown(cooldownRemaining.pet)}</span>}
+        </div>
+        <div className="pet-character-motion relative z-10 flex max-h-full items-end justify-center" style={{ width: roomWidth }}>
+          <img
+            src={image}
+            alt={name}
+            className={cn('max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform,opacity] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
+            data-pet-character
+            data-expression={expression}
+          />
+        </div>
       </div>
 
       <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-violet-300/25 bg-[#090611]/92 p-2.5 shadow-[0_-10px_30px_rgba(0,0,0,.38)] backdrop-blur-md sm:inset-x-4 sm:p-3">
@@ -217,10 +237,12 @@ function PetRoom({
         <div className="mt-1 grid grid-cols-3 gap-2">
           {ROOM_ACTIONS.map(action => {
             const Icon = action.icon
-            const disabled = action.id === 'feed' && isFull
+            const remaining = cooldownRemaining[action.id]
+            const disabled = (action.id === 'feed' && isFull) || remaining > 0
             return (
-              <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-11 gap-1.5 rounded-md bg-black/35 px-2 text-xs transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
-                <Icon className="size-4" /><span className="font-bold">{action.label}</span>
+              <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-14 flex-col gap-0.5 rounded-md bg-black/35 px-1 text-xs transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
+                <span className="flex items-center gap-1.5"><Icon className="size-4" /><span className="font-bold">{action.label}</span></span>
+                {remaining > 0 && <span className="font-mono text-[8px] leading-none opacity-80">{formatCooldown(remaining)}</span>}
               </Button>
             )
           })}
@@ -324,13 +346,33 @@ function CharacterRoster({ selectedPetId, petStats, onSelect, vertical = false }
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, selectedStats, petStats, selectPet, care, maxLevel } = usePetState()
+  const { selectedPetId, selectedStats, petStats, lastCareAt, expressionState, selectPet, care, setExpression, maxLevel } = usePetState()
   const [message, setMessage] = useState('')
-  const [expression, setExpression] = useState<'default' | 'petted'>('default')
+  const [now, setNow] = useState(Date.now)
+  const [isBlinking, setIsBlinking] = useState(false)
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
-  const pettingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const blinkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const blinkResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pet = PET_BY_ID[selectedPetId]
   const isFull = selectedStats.fullness >= 100
+  const cooldownRemaining: Record<PetAction, number> = {
+    feed: getPetCooldownRemaining('feed', lastCareAt, now),
+    play: getPetCooldownRemaining('play', lastCareAt, now),
+    sleep: getPetCooldownRemaining('sleep', lastCareAt, now),
+    pet: getPetCooldownRemaining('pet', lastCareAt, now),
+  }
+  const expression: PetExpression = expressionState.until > now && expressionState.kind !== 'default'
+    ? expressionState.kind
+    : selectedStats.fullness <= 30
+      ? 'hungry'
+      : selectedStats.sleepiness >= 80
+        ? 'sleepy'
+        : selectedStats.affection >= 80
+          ? 'affectionate'
+          : isBlinking
+            ? 'blink'
+            : 'default'
 
   useEffect(() => {
     fetch('/api/dashboard', { credentials: 'include' })
@@ -339,32 +381,61 @@ export function PetPage() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => () => {
-    if (pettingTimer.current) clearTimeout(pettingTimer.current)
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    if (reactionTimer.current) clearTimeout(reactionTimer.current)
+    const remaining = expressionState.until - Date.now()
+    if (expressionState.kind === 'default' || expressionState.until <= 0) return
+    if (remaining <= 0) {
+      setExpression('default')
+      return
+    }
+    reactionTimer.current = setTimeout(() => setExpression('default'), remaining)
+    return () => {
+      if (reactionTimer.current) clearTimeout(reactionTimer.current)
+    }
+  }, [expressionState.kind, expressionState.until, selectedPetId])
+
+  useEffect(() => {
+    function scheduleBlink() {
+      blinkTimer.current = setTimeout(() => {
+        setIsBlinking(true)
+        blinkResetTimer.current = setTimeout(() => {
+          setIsBlinking(false)
+          scheduleBlink()
+        }, 180)
+      }, 5000 + Math.round(Math.random() * 3500))
+    }
+    setIsBlinking(false)
+    scheduleBlink()
+    return () => {
+      if (blinkTimer.current) clearTimeout(blinkTimer.current)
+      if (blinkResetTimer.current) clearTimeout(blinkResetTimer.current)
+    }
+  }, [selectedPetId])
+
   function handleAction(action: PetAction) {
-    if (action === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return }
-    care(action)
+    if (action === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return false }
+    const actionNow = Date.now()
+    const remaining = getPetCooldownRemaining(action, lastCareAt, actionNow)
+    if (remaining > 0) { setMessage(formatCooldown(remaining)); return false }
+    if (!care(action, actionNow)) return false
+    setNow(actionNow)
+    setExpression({ feed: 'happy', play: 'happy', sleep: 'sleepy', pet: 'petted' }[action] as PetExpression, 2000, actionNow)
     setMessage({ feed: 'ご飯をあげました', play: '一緒に遊びました', sleep: 'ゆっくり休みました', pet: 'やさしくなでました' }[action])
+    return true
   }
 
   function handlePet() {
     handleAction('pet')
-    setExpression('petted')
-    if (pettingTimer.current) clearTimeout(pettingTimer.current)
-    pettingTimer.current = setTimeout(() => {
-      setExpression('default')
-      pettingTimer.current = null
-    }, 900)
   }
 
   function handleSelect(id: PetId) {
-    if (pettingTimer.current) {
-      clearTimeout(pettingTimer.current)
-      pettingTimer.current = null
-    }
-    setExpression('default')
+    setIsBlinking(false)
     selectPet(id)
     setMessage('')
   }
@@ -399,6 +470,7 @@ export function PetPage() {
               stats={selectedStats}
               isFull={isFull}
               message={message}
+              cooldownRemaining={cooldownRemaining}
               onAction={action => handleAction(action)}
               onPet={handlePet}
             />
