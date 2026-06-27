@@ -56,6 +56,16 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
   },
 }
 
+const CAPSULE_SOLID: Record<string,string> = {
+  pts100:'#bcc3cb',
+  pts300:'#ff4fa8',
+  pts500:'#a8db38',
+  pts1000:'#2468d8',
+  pts3000:'#e6382f',
+  pts5000:'#941bd4',
+  inmu10k:'#e3aa10',
+}
+
 const BALLS = [
   { id:'pts100',  label:'100pt',       rate:'55%',   color:'rgba(235,242,250,.9)' },
   { id:'pts300',  label:'300pt',       rate:'22%',   color:'rgba(255,156,216,.9)' },
@@ -460,14 +470,12 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
   const sep = open ? Math.max(7, size*.1) : 0
   const isJackpot = prizeId === 'inmu10k'
   const labelSize = Math.max(9, Math.min(28, size*.17))
-  const shellColor = ({
-    pts100:'#bcc3cb',pts300:'#ff4fa8',pts500:'#a8db38',pts1000:'#2468d8',
-    pts3000:'#e6382f',pts5000:'#941bd4',inmu10k:'#e3aa10',
-  } as Record<string,string>)[prizeId] ?? '#bcc3cb'
+  const shellColor = CAPSULE_SOLID[prizeId] ?? CAPSULE_SOLID.pts100
+  const capsuleWidth = size*1.16
   const svgSep = sep*100/size
   const centerBand = 'linear-gradient(90deg,#050505,#252014 46%,#080808)'
   return (
-    <div style={{position:'relative',width:size,height:size+sep*2,display:'flex',
+    <div style={{position:'relative',width:capsuleWidth,height:size+sep*2,display:'flex',
       flexDirection:'column',alignItems:'center',
       filter:`drop-shadow(0 0 ${Math.max(16,size*.22)}px ${c.glow})`}}>
       {!open&&(
@@ -475,7 +483,7 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
           background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
           opacity:isJackpot ? .42 : .22,pointerEvents:'none'}}/>
       )}
-      <svg width={size} height={size} viewBox="0 0 100 100"
+      <svg width={capsuleWidth} height={size} viewBox="0 0 100 100" preserveAspectRatio="none"
         style={{display:'block',overflow:'visible',flexShrink:0,
           filter:`drop-shadow(0 2px ${Math.max(8,size*.09)}px ${c.glow})`}}>
         {/* upper shell and curved stem */}
@@ -548,29 +556,21 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
 
 function RateOrb({ id }:{id:string}) {
   const c = CAPSULE[id] ?? CAPSULE.pts100
-  const isJackpot = id === 'inmu10k'
+  const shellColor = CAPSULE_SOLID[id] ?? CAPSULE_SOLID.pts100
   return (
-    <div style={{position:'relative',width:26,height:25,
-      borderRadius:'44% 56% 48% 52% / 52% 46% 54% 48%',flexShrink:0,
-      background:`${c.top}, ${c.bot}`,
-      border:'2px solid #050505',
-      boxShadow:`0 0 12px ${c.glow}, inset -4px -4px 9px rgba(0,0,0,.45), inset 3px 3px 6px rgba(255,255,255,.34)`,
-      overflow:'hidden'}}>
-      <div style={{position:'absolute',left:0,right:0,top:'47%',height:3,
-        background:isJackpot
-          ? 'linear-gradient(90deg,rgba(85,42,0,.8),rgba(255,232,130,.95),rgba(85,42,0,.8))'
-          : 'linear-gradient(90deg,rgba(5,8,16,.72),rgba(255,255,255,.46),rgba(5,8,16,.72))',
-        boxShadow:`0 0 7px ${c.glow}`}}/>
-      <div style={{position:'absolute',top:4,left:5,width:9,height:6,borderRadius:'50%',
-        background:'rgba(255,238,45,.9)',filter:'blur(.2px)',transform:'rotate(-24deg)'}}/>
-      <div style={{position:'absolute',top:12,left:4,width:4,height:3,borderRadius:'50%',
-        background:'rgba(255,255,255,.34)',transform:'rotate(-20deg)'}}/>
-      {isJackpot&&(
-        <div style={{position:'absolute',inset:5,borderRadius:'50%',
-          background:'radial-gradient(circle,rgba(255,246,160,.76) 0%,rgba(218,165,32,.28) 42%,transparent 70%)',
-          boxShadow:'0 0 10px rgba(255,215,0,.8)'}}/>
-      )}
-    </div>
+    <svg width="32" height="25" viewBox="0 0 100 100" preserveAspectRatio="none"
+      style={{flexShrink:0,overflow:'visible',filter:`drop-shadow(0 0 7px ${c.glow})`}}>
+      <path d="M58 18 C58 9 62 5 69 4" fill="none" stroke="#050505" strokeWidth="6" strokeLinecap="round"/>
+      <path d="M13 51 C10 42 11 30 17 21 C23 12 33 11 43 16 C49 19 54 19 60 15 C68 11 76 16 79 22 C86 20 91 28 92 37 C94 48 90 58 82 70 C79 80 69 87 57 88 C49 91 42 86 34 87 C23 85 17 77 16 68 C11 60 10 54 13 51 Z"
+        fill={shellColor} stroke="#050505" strokeWidth="7" strokeLinejoin="round" paintOrder="stroke"/>
+      <path d="M16 66 C28 59 36 64 42 70 C51 63 59 67 65 74 C73 68 79 66 83 61 C80 78 69 87 56 89 C46 88 42 84 34 87 C24 83 18 76 16 66 Z"
+        fill="#050505" opacity=".9"/>
+      <path d="M22 23 C31 17 41 20 44 30 C43 39 38 45 34 49 C26 47 20 39 19 31 Z" fill="#fff02e"/>
+      <path d="M28 24 C35 22 39 27 39 33 C37 40 34 44 31 46 C26 41 24 33 28 24 Z" fill="#fff"/>
+      <path d="M56 27 C64 20 74 24 77 33 C77 40 72 46 67 50 C59 47 54 40 53 33 Z" fill="#ffec32"/>
+      <path d="M62 28 C69 25 73 30 72 36 C70 42 67 46 64 47 C59 43 58 35 62 28 Z" fill="#fff"/>
+      <path d="M14 51 C34 49 66 53 88 50" fill="none" stroke="#050505" strokeWidth="7" strokeLinecap="round"/>
+    </svg>
   )
 }
 
@@ -1897,6 +1897,7 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
 
 
 
