@@ -107,16 +107,18 @@ const CSS=`
   @keyframes ga-drop     {0%{transform:translateY(-140px)rotate(0);opacity:0}65%{transform:translateY(6px)rotate(200deg);opacity:1}100%{transform:translateY(0)rotate(360deg);opacity:1}}
   @keyframes ga-popin    {0%{transform:scale(0)rotate(-18deg);opacity:0}65%{transform:scale(1.18)rotate(4deg);opacity:1}100%{transform:scale(1)rotate(0);opacity:1}}
   @keyframes ga-bounce   {0%,100%{transform:translateY(0)}42%{transform:translateY(-28px)scale(.96)}72%{transform:translateY(-11px)}}
-  @keyframes ga-mascotwalk{0%,100%{transform:translateX(0)}50%{transform:translateX(34px)}}
-  @keyframes ga-mascotbody{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  @keyframes ga-mascotwalk{0%{transform:translateX(0)scaleX(1)}44%{transform:translateX(34px)scaleX(1)}49%{transform:translateX(34px)scaleX(1)}51%{transform:translateX(34px)scaleX(-1)}94%{transform:translateX(0)scaleX(-1)}99%{transform:translateX(0)scaleX(-1)}100%{transform:translateX(0)scaleX(1)}}
+  @keyframes ga-mascotbody{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  @keyframes ga-mascotbody-walk{0%,100%{transform:translate(-2px,0)rotate(-1.5deg)}25%{transform:translate(1px,-4px)rotate(1deg)}50%{transform:translate(3px,0)rotate(1.8deg)}75%{transform:translate(0,-4px)rotate(-1deg)}}
   @keyframes ga-mascothead{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(5deg)}}
-  @keyframes ga-mascotarm-r{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(24deg)}}
-  @keyframes ga-mascotarm-l{0%,100%{transform:rotate(18deg)}50%{transform:rotate(-18deg)}}
+  @keyframes ga-mascothead-walk{0%,100%{transform:translateX(2px)rotate(3deg)}25%{transform:translateX(-1px)rotate(-2deg)}50%{transform:translateX(-2px)rotate(-3deg)}75%{transform:translateX(1px)rotate(2deg)}}
+  @keyframes ga-mascotarm-r{0%,100%{transform:translateY(1px)rotate(-16deg)}50%{transform:translateY(-2px)rotate(24deg)}}
+  @keyframes ga-mascotarm-l{0%,100%{transform:translateY(-2px)rotate(22deg)}50%{transform:translateY(2px)rotate(-20deg)}}
   @keyframes ga-mascotraise-r{0%{transform:rotate(38deg)}45%,100%{transform:rotate(-54deg)}}
   @keyframes ga-mascotraise-l{0%{transform:rotate(-38deg)}45%,100%{transform:rotate(54deg)}}
-  @keyframes ga-mascotleg-r{0%,100%{transform:rotate(16deg)}50%{transform:rotate(-22deg)}}
-  @keyframes ga-mascotleg-l{0%,100%{transform:rotate(-20deg)}50%{transform:rotate(18deg)}}
-  @keyframes ga-mascottail{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(20deg)}}
+  @keyframes ga-mascotleg-r{0%,100%{transform:translate(2px,-3px)rotate(-18deg)}25%{transform:translate(4px,1px)rotate(-4deg)}50%{transform:translate(-3px,3px)rotate(20deg)}75%{transform:translate(-4px,-2px)rotate(4deg)}}
+  @keyframes ga-mascotleg-l{0%,100%{transform:translate(-3px,3px)rotate(20deg)}25%{transform:translate(-4px,-2px)rotate(4deg)}50%{transform:translate(2px,-3px)rotate(-18deg)}75%{transform:translate(4px,1px)rotate(-4deg)}}
+  @keyframes ga-mascottail{0%,100%{transform:translateX(1px)rotate(-14deg)}50%{transform:translateX(-1px)rotate(18deg)}}
   @keyframes ga-mascotclap-r{0%,100%{transform:rotate(-32deg)}50%{transform:rotate(18deg)}}
   @keyframes ga-mascotclap-l{0%,100%{transform:rotate(32deg)}50%{transform:rotate(-18deg)}}
   @keyframes ga-mascotjumpbody{0%{transform:translateY(58px)scale(.74);opacity:0}46%{transform:translateY(-20px)scale(1.08);opacity:1}66%{transform:translateY(8px)scale(1.08,.86)}82%{transform:translateY(-4px)scale(.98,1.04)}100%{transform:translateY(0)scale(1);opacity:1}}
@@ -208,7 +210,9 @@ function SegmentedMascot({ size=100, motion='idle', style, delay=0 }: {
   const dur = motion === 'clap' ? .52 : motion === 'walk' ? .72 : 1.25
   const bodyAnim = motion === 'result'
     ? `ga-mascotjumpbody .86s cubic-bezier(.2,.8,.22,1) ${delay}s both`
-    : `ga-mascotbody ${dur}s ease-in-out ${delay}s infinite`
+    : motion === 'walk'
+      ? `ga-mascotbody-walk ${dur}s ease-in-out ${delay}s infinite`
+      : `ga-mascotbody ${dur}s ease-in-out ${delay}s infinite`
   const armR = motion === 'result' ? 'ga-mascotraise-r' : motion === 'clap' ? 'ga-mascotclap-r' : 'ga-mascotarm-r'
   const armL = motion === 'result' ? 'ga-mascotraise-l' : motion === 'clap' ? 'ga-mascotclap-l' : 'ga-mascotarm-l'
   const legR = motion === 'walk' ? 'ga-mascotleg-r' : 'ga-mascotbody'
@@ -217,7 +221,7 @@ function SegmentedMascot({ size=100, motion='idle', style, delay=0 }: {
     <img src={mascotImg} alt="" aria-hidden="true" style={{
       position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain',
       clipPath,transformOrigin:origin,animation,opacity,zIndex:z,
-      filter:'drop-shadow(0 4px 8px rgba(0,0,0,.32))',
+      filter:'none',
       willChange:'transform',
     }}/>
   )
@@ -228,13 +232,14 @@ function SegmentedMascot({ size=100, motion='idle', style, delay=0 }: {
         transform:'translateX(-50%)',
         animation:`ga-mascotshadow ${dur}s ease-in-out ${delay}s infinite`,zIndex:0}}/>
       <div style={{position:'absolute',inset:0,animation:bodyAnim,transformOrigin:'50% 78%',zIndex:1}}>
-        {part('polygon(2% 58%, 30% 55%, 33% 80%, 0 88%)','24% 72%',`ga-mascottail ${dur*1.18}s ease-in-out ${delay}s infinite`,1)}
-        {part('polygon(47% 70%, 68% 70%, 72% 99%, 45% 99%)','58% 76%',`${legR} ${dur}s ease-in-out ${delay}s infinite`,2)}
-        {part('polygon(28% 70%, 50% 70%, 53% 99%, 25% 99%)','40% 76%',`${legL} ${dur}s ease-in-out ${delay+.08}s infinite`,2)}
-        {part('polygon(23% 43%, 74% 43%, 79% 85%, 19% 85%)','50% 68%','none',3)}
-        {part('polygon(67% 43%, 100% 38%, 100% 72%, 68% 74%)','70% 50%',`${armR} ${dur}s ease-in-out ${delay}s infinite`,5)}
-        {part('polygon(0 39%, 32% 43%, 32% 75%, 0 72%)','30% 52%',`${armL} ${dur}s ease-in-out ${delay+.06}s infinite`,5)}
-        {part('polygon(12% 0, 88% 0, 84% 52%, 16% 53%)','50% 48%',`ga-mascothead ${dur*1.25}s ease-in-out ${delay}s infinite`,6)}
+        {part('polygon(14% 61%, 47% 58%, 49% 82%, 12% 84%)','43% 70%',`ga-mascottail ${dur*1.18}s ease-in-out ${delay}s infinite`,1)}
+        {part('polygon(47% 57%, 70% 57%, 70% 85%, 45% 85%)','57% 62%',`${legR} ${dur}s ease-in-out ${delay}s infinite`,2)}
+        {part('polygon(34% 57%, 54% 57%, 55% 85%, 32% 85%)','43% 62%',`${legL} ${dur}s ease-in-out ${delay+.08}s infinite`,2)}
+        {part('polygon(28% 37%, 72% 37%, 72% 79%, 26% 80%)','50% 68%','none',4)}
+        {part('polygon(54% 32%, 82% 31%, 82% 59%, 55% 61%)','59% 43%',`${armR} ${dur}s ease-in-out ${delay}s infinite`,5)}
+        {part('polygon(25% 38%, 46% 38%, 46% 67%, 24% 66%)','40% 45%',`${armL} ${dur}s ease-in-out ${delay+.06}s infinite`,5)}
+        {part('polygon(22% 13%, 79% 13%, 79% 51%, 21% 51%)','50% 45%',
+          `${motion==='walk'?'ga-mascothead-walk':'ga-mascothead'} ${dur*1.25}s ease-in-out ${delay}s infinite`,6)}
       </div>
     </div>
   )
