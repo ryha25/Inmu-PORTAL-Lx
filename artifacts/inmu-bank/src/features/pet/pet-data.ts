@@ -9,6 +9,10 @@ export type PetDefinition = {
   name: string
   rarity: number
   image: string
+  expressions: {
+    default: string
+    petted: string
+  }
   roomWidth: string
   roomTheme: 'cat' | 'dog' | 'lion'
   skill: {
@@ -27,6 +31,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     name: 'ニャルシアン',
     rarity: 3,
     image: nyarushianImage,
+    expressions: { default: nyarushianImage, petted: nyarushianImage },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'cat',
     skill: { name: '幸運の肉球', effect: 'ポイント2倍' },
@@ -41,6 +46,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     name: '拓也',
     rarity: 3,
     image: takuyaImage,
+    expressions: { default: takuyaImage, petted: takuyaImage },
     roomWidth: 'clamp(195px, 43%, 275px)',
     roomTheme: 'dog',
     skill: { name: '盛り上げ上手', effect: 'お世話EXPアップ' },
@@ -55,6 +61,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     name: 'レオン',
     rarity: 3,
     image: leonImage,
+    expressions: { default: leonImage, petted: leonImage },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'lion',
     skill: { name: '王者の導き', effect: '愛情度ボーナス' },

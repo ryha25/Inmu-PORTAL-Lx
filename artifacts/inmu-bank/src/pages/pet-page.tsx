@@ -1,5 +1,5 @@
 import type { ElementType, ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
@@ -8,14 +8,13 @@ import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetId } from '@/fe
 import { usePetState, type PetAction, type PetStats } from '@/features/pet/use-pet-state'
 import {
   BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
-  Gift, Glasses, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
+  Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
 } from 'lucide-react'
 
-const ACTIONS: Array<{ id: PetAction; label: string; icon: ElementType; tone: string }> = [
+const ROOM_ACTIONS: Array<{ id: Exclude<PetAction, 'pet'>; label: string; icon: ElementType; tone: string }> = [
   { id: 'feed', label: 'ご飯', icon: Utensils, tone: 'border-pink-400/50 text-pink-200 shadow-[0_0_18px_rgba(244,114,182,.12)]' },
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
   { id: 'sleep', label: '寝る', icon: Moon, tone: 'border-cyan-400/50 text-cyan-200 shadow-[0_0_18px_rgba(34,211,238,.12)]' },
-  { id: 'pet', label: 'なでる', icon: Heart, tone: 'border-fuchsia-400/50 text-fuchsia-200 shadow-[0_0_18px_rgba(232,121,249,.12)]' },
 ]
 
 const PET_ROOM_CSS = `
@@ -84,12 +83,24 @@ function PetRoom({
   image,
   roomWidth,
   roomTheme,
+  expression,
+  stats,
+  isFull,
+  message,
+  onAction,
+  onPet,
 }: {
   petId: PetId
   name: string
   image: string
   roomWidth: string
   roomTheme: 'cat' | 'dog' | 'lion'
+  expression: 'default' | 'petted'
+  stats: PetStats
+  isFull: boolean
+  message: string
+  onAction: (action: Exclude<PetAction, 'pet'>) => void
+  onPet: () => void
 }) {
   return (
     <section className="relative h-[570px] overflow-hidden rounded-lg border border-fuchsia-400/25 bg-[#080611] shadow-[0_0_46px_rgba(168,85,247,.16)] sm:h-[650px]">
@@ -168,20 +179,52 @@ function PetRoom({
       <div className="absolute bottom-12 right-[25%] size-4 rotate-12 rounded bg-cyan-300/15 ring-1 ring-cyan-200/20" />
 
       <div
-        className="absolute inset-x-0 bottom-12 z-10 flex h-[58%] items-end justify-center"
+        className="absolute inset-x-0 bottom-[148px] z-10 flex h-[50%] items-end justify-center"
         data-pet-stage
         data-pet-id={petId}
         data-pose="idle"
       >
         <div className="absolute bottom-1 left-1/2 h-7 w-[42%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md" data-pet-shadow />
+        <button
+          type="button"
+          onClick={onPet}
+          aria-label="なでる"
+          title="なでる"
+          className="absolute left-1/2 top-[3%] z-30 flex size-11 translate-x-[30%] items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25"
+          data-pet-interaction="pet"
+        >
+          <Hand className="size-6" />
+        </button>
         <img
           src={image}
           alt={name}
-          className="relative z-10 max-h-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)]"
+          className={cn('relative z-10 max-h-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
           style={{ width: roomWidth }}
           data-pet-character
-          data-expression="default"
+          data-expression={expression}
         />
+      </div>
+
+      <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-violet-300/25 bg-[#090611]/92 p-2.5 shadow-[0_-10px_30px_rgba(0,0,0,.38)] backdrop-blur-md sm:inset-x-4 sm:p-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <StatusBar label="満腹度" value={stats.fullness} display={`${stats.fullness}`} icon={<Utensils className="size-4 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
+          <StatusBar label="眠気" value={stats.sleepiness} display={`${stats.sleepiness}`} icon={<Moon className="size-4 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
+          <StatusBar label="愛情度" value={stats.affection} display={`${stats.affection}`} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
+        </div>
+        <div className="mt-2 flex min-h-4 items-center justify-end">
+          <p className="break-words text-right text-[9px] text-cyan-200" role="status">{isFull ? '満腹なのでご飯をあげられません' : message}</p>
+        </div>
+        <div className="mt-1 grid grid-cols-3 gap-2">
+          {ROOM_ACTIONS.map(action => {
+            const Icon = action.icon
+            const disabled = action.id === 'feed' && isFull
+            return (
+              <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-11 gap-1.5 rounded-md bg-black/35 px-2 text-xs transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
+                <Icon className="size-4" /><span className="font-bold">{action.label}</span>
+              </Button>
+            )
+          })}
+        </div>
       </div>
     </section>
   )
@@ -206,19 +249,6 @@ function CharacterInfo({ pet, stats, maxLevel }: { pet: PetDefinition; stats: Pe
         <div className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-cyan-400 to-fuchsia-400 shadow-[0_0_10px_rgba(217,70,239,.55)]" style={{ width: `${isMaxLevel ? 100 : Math.min(100, (stats.exp / requiredExp) * 100)}%` }}>
           <span className="pet-meter-shine absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
         </div>
-      </div>
-    </section>
-  )
-}
-
-function StatusPanel({ stats }: { stats: PetStats }) {
-  return (
-    <section className="rounded-lg border border-violet-300/20 bg-[#0d0916] p-4">
-      <h2 className="mb-4 text-sm font-bold text-fuchsia-200">ステータス</h2>
-      <div className="flex flex-col gap-4">
-        <StatusBar label="満腹度" value={stats.fullness} display={`${stats.fullness} / 100`} icon={<Utensils className="size-4 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
-        <StatusBar label="眠気" value={stats.sleepiness} display={`${stats.sleepiness} / 100`} icon={<Moon className="size-4 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
-        <StatusBar label="愛情度" value={stats.affection} display={`${stats.affection} / 100`} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
       </div>
     </section>
   )
@@ -261,28 +291,6 @@ function RewardsPanel({ pet, level }: { pet: PetDefinition; level: number }) {
   )
 }
 
-function CarePanel({ isFull, message, onAction }: { isFull: boolean; message: string; onAction: (action: PetAction) => void }) {
-  return (
-    <section className="rounded-lg border border-violet-300/15 bg-[#0d0916] p-3 sm:p-4">
-      <div className="mb-3 flex min-h-5 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-sm font-bold text-fuchsia-200">お世話</h2>
-        <p className="break-words text-[10px] text-cyan-200" role="status">{isFull ? '満腹なのでご飯をあげられません' : message}</p>
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {ACTIONS.map(action => {
-          const Icon = action.icon
-          const disabled = action.id === 'feed' && isFull
-          return (
-            <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-20 flex-col gap-2 rounded-lg bg-black/35 text-sm transition-all duration-100 hover:-translate-y-0.5 hover:bg-white/5 active:translate-y-0 active:scale-[.94] active:brightness-125', action.tone)}>
-              <Icon className="size-6" /><span className="font-bold">{action.label}</span>
-            </Button>
-          )
-        })}
-      </div>
-    </section>
-  )
-}
-
 function CharacterRoster({ selectedPetId, petStats, onSelect, vertical = false }: { selectedPetId: PetId; petStats: Record<PetId, PetStats>; onSelect: (id: PetId) => void; vertical?: boolean }) {
   return (
     <section className={vertical ? '' : 'border-t border-violet-300/15 pt-4'}>
@@ -318,7 +326,9 @@ export function PetPage() {
   const { profile, unread } = useAuth()
   const { selectedPetId, selectedStats, petStats, selectPet, care, maxLevel } = usePetState()
   const [message, setMessage] = useState('')
+  const [expression, setExpression] = useState<'default' | 'petted'>('default')
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
+  const pettingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pet = PET_BY_ID[selectedPetId]
   const isFull = selectedStats.fullness >= 100
 
@@ -329,13 +339,35 @@ export function PetPage() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => () => {
+    if (pettingTimer.current) clearTimeout(pettingTimer.current)
+  }, [])
+
   function handleAction(action: PetAction) {
     if (action === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return }
     care(action)
     setMessage({ feed: 'ご飯をあげました', play: '一緒に遊びました', sleep: 'ゆっくり休みました', pet: 'やさしくなでました' }[action])
   }
 
-  function handleSelect(id: PetId) { selectPet(id); setMessage('') }
+  function handlePet() {
+    handleAction('pet')
+    setExpression('petted')
+    if (pettingTimer.current) clearTimeout(pettingTimer.current)
+    pettingTimer.current = setTimeout(() => {
+      setExpression('default')
+      pettingTimer.current = null
+    }, 900)
+  }
+
+  function handleSelect(id: PetId) {
+    if (pettingTimer.current) {
+      clearTimeout(pettingTimer.current)
+      pettingTimer.current = null
+    }
+    setExpression('default')
+    selectPet(id)
+    setMessage('')
+  }
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
@@ -357,17 +389,26 @@ export function PetPage() {
 
           <main className="flex min-w-0 flex-col gap-3">
             <div className="lg:hidden"><CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} /></div>
-            <PetRoom petId={pet.id} name={pet.name} image={pet.image} roomWidth={pet.roomWidth} roomTheme={pet.roomTheme} />
-            <div className="lg:hidden"><StatusPanel stats={selectedStats} /></div>
+            <PetRoom
+              petId={pet.id}
+              name={pet.name}
+              image={pet.expressions[expression] ?? pet.expressions.default}
+              roomWidth={pet.roomWidth}
+              roomTheme={pet.roomTheme}
+              expression={expression}
+              stats={selectedStats}
+              isFull={isFull}
+              message={message}
+              onAction={action => handleAction(action)}
+              onPet={handlePet}
+            />
             <div className="lg:hidden"><SkillPanel pet={pet} /></div>
             <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} /></div>
-            <CarePanel isFull={isFull} message={message} onAction={handleAction} />
             <div className="lg:hidden"><CharacterRoster selectedPetId={selectedPetId} petStats={petStats} onSelect={handleSelect} /></div>
           </main>
 
           <aside className="hidden flex-col gap-3 lg:flex">
             <CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} />
-            <StatusPanel stats={selectedStats} />
             <SkillPanel pet={pet} />
             <RewardsPanel pet={pet} level={selectedStats.level} />
           </aside>
