@@ -838,9 +838,10 @@ export function GachaPage() {
             {/* Mascot bottom-left */}
             <div style={{position:'absolute',bottom:0,left:'2%',zIndex:8,pointerEvents:'none',
               animation:'ga-mascotwalk 5.2s ease-in-out infinite'}}>
-              <SegmentedMascot motion="walk" size={100}
-                style={{width:'min(100px,24vw)',height:'min(112px,27vw)',
-                  filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))'}}/>
+              <img src={mascotImg} alt="INMUくん" style={{
+                width:'min(100px,24vw)',height:'auto',objectFit:'contain',
+                filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))',
+                animation:'ga-mascotcelebrate 1.3s ease-in-out infinite'}}/>
             </div>
             {/* Rate panel */}
             <RatePanel />
@@ -1619,9 +1620,9 @@ export function GachaPage() {
                       <p style={{margin:'6px 0 10px',fontSize:12,color:'rgba(255,255,255,.5)'}}>
                         ポイントを即時付与しました
                       </p>
-                      <SegmentedMascot motion="result" size={58}
-                        style={{margin:'0 auto',
-                          filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))'}}/>
+                      <img src={mascotImg} alt="INMUくん" style={{width:58,height:'auto',objectFit:'contain',
+                        margin:'0 auto',filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',
+                        animation:'ga-mascotjumpin .72s ease-out both, ga-mascotcelebrate 1.15s ease-in-out .72s infinite'}}/>
                     </div>
                   </div>
                 )
@@ -1692,8 +1693,9 @@ export function GachaPage() {
                 </p>
               )}
               <div style={{display:'flex',justifyContent:'center'}}>
-                <SegmentedMascot motion="result" size={66}
-                  style={{filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))'}}/>
+                <img src={mascotImg} alt="INMUくん" style={{width:66,height:'auto',objectFit:'contain',
+                  filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))',
+                  animation:'ga-mascotjumpin .72s ease-out both, ga-mascotcelebrate 1.15s ease-in-out .72s infinite'}}/>
               </div>
             </div>
           )}
