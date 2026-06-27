@@ -473,7 +473,6 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
   const shellColor = CAPSULE_SOLID[prizeId] ?? CAPSULE_SOLID.pts100
   const capsuleWidth = size*1.16
   const svgSep = sep*100/size
-  const centerBand = 'linear-gradient(90deg,#050505,#252014 46%,#080808)'
   return (
     <div style={{position:'relative',width:capsuleWidth,height:size+sep*2,display:'flex',
       flexDirection:'column',alignItems:'center',
@@ -494,14 +493,14 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
             fill={shellColor} stroke="#050505" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke"/>
           <path d="M20 25 C27 18 35 18 43 22 C48 25 52 25 57 22 C64 18 71 20 75 26"
             fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="3" strokeLinecap="round"/>
-          <path d="M22 22 C31 16 41 20 44 29 C45 35 40 43 35 48 C27 47 21 41 18 34 Z"
-            fill="#fff02e" transform="rotate(-7 31 34)"/>
-          <path d="M27 23 C33 20 39 24 40 30 C40 35 36 41 32 45 C27 42 24 36 24 30 Z"
-            fill="rgba(255,255,255,.96)"/>
-          <path d="M57 26 C64 20 73 23 77 31 C78 37 73 45 67 49 C59 47 54 40 53 33 Z"
-            fill="#ffec32" transform="rotate(6 65 36)"/>
-          <path d="M62 27 C68 24 73 28 73 34 C72 40 68 44 64 46 C59 42 58 34 62 27 Z"
-            fill="rgba(255,255,255,.94)"/>
+          <path d="M18 23 L27 17 L38 18 L45 24 L43 31 L47 37 L43 43 L39 50 L29 48 L25 43 L18 39 L20 33 L16 29 Z"
+            fill="#fff200" transform="rotate(-5 31 34)"/>
+          <path d="M28 21 C34 18 39 22 41 28 L38 34 L40 39 L35 45 L31 47 L27 41 L28 35 L24 30 Z"
+            fill="#fff"/>
+          <path d="M52 29 L58 22 L68 20 L76 24 L78 30 L76 35 L81 39 L77 45 L70 52 L61 49 L58 44 L52 40 L55 34 Z"
+            fill="#ffed00" transform="rotate(5 66 36)"/>
+          <path d="M63 25 C68 23 73 27 74 32 L71 36 L72 41 L68 46 L64 48 L60 43 L61 37 L58 33 Z"
+            fill="#fff"/>
         </g>
         {/* lower shell with the heavy black shape from the reference */}
         <g transform={`translate(0 ${svgSep})`}>
@@ -514,19 +513,12 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
         </g>
       </svg>
       {!open&&(
-        <>
-          <div style={{position:'absolute',top:`calc(50% - ${Math.max(3,size*.028)}px)`,
-            left:size*.055,right:size*.055,height:Math.max(7,size*.065),borderRadius:'40% 55% 46% 52%',
-            background:centerBand,border:`${Math.max(1,size*.012)}px solid #000`,
-            boxShadow:`0 0 ${Math.max(10,size*.12)}px ${c.glow},inset 0 1px 0 rgba(255,255,255,.2)`,
-            zIndex:4}}/>
-          <div style={{position:'absolute',inset:0,borderRadius:'42% 48% 45% 52%',overflow:'hidden',zIndex:6,
-            pointerEvents:'none'}}>
-            <div style={{position:'absolute',top:'-12%',bottom:'-12%',left:'16%',width:'24%',
-              background:'linear-gradient(90deg,transparent,rgba(255,255,255,.68),transparent)',
-              animation:'ga-capglint 2.2s ease-in-out infinite'}}/>
-          </div>
-        </>
+        <div style={{position:'absolute',inset:0,borderRadius:'42% 48% 45% 52%',overflow:'hidden',zIndex:6,
+          pointerEvents:'none'}}>
+          <div style={{position:'absolute',top:'-12%',bottom:'-12%',left:'16%',width:'24%',
+            background:'linear-gradient(90deg,transparent,rgba(255,255,255,.68),transparent)',
+            animation:'ga-capglint 2.2s ease-in-out infinite'}}/>
+        </div>
       )}
       {showLabel&&(
         <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
@@ -565,11 +557,10 @@ function RateOrb({ id }:{id:string}) {
         fill={shellColor} stroke="#050505" strokeWidth="7" strokeLinejoin="round" paintOrder="stroke"/>
       <path d="M16 66 C28 59 36 64 42 70 C51 63 59 67 65 74 C73 68 79 66 83 61 C80 78 69 87 56 89 C46 88 42 84 34 87 C24 83 18 76 16 66 Z"
         fill="#050505" opacity=".9"/>
-      <path d="M22 23 C31 17 41 20 44 30 C43 39 38 45 34 49 C26 47 20 39 19 31 Z" fill="#fff02e"/>
-      <path d="M28 24 C35 22 39 27 39 33 C37 40 34 44 31 46 C26 41 24 33 28 24 Z" fill="#fff"/>
-      <path d="M56 27 C64 20 74 24 77 33 C77 40 72 46 67 50 C59 47 54 40 53 33 Z" fill="#ffec32"/>
-      <path d="M62 28 C69 25 73 30 72 36 C70 42 67 46 64 47 C59 43 58 35 62 28 Z" fill="#fff"/>
-      <path d="M14 51 C34 49 66 53 88 50" fill="none" stroke="#050505" strokeWidth="7" strokeLinecap="round"/>
+      <path d="M18 23 L27 17 L38 18 L45 24 L43 31 L47 37 L43 43 L39 50 L29 48 L25 43 L18 39 L20 33 L16 29 Z" fill="#fff200"/>
+      <path d="M28 21 C34 18 39 22 41 28 L38 34 L40 39 L35 45 L31 47 L27 41 L28 35 L24 30 Z" fill="#fff"/>
+      <path d="M52 29 L58 22 L68 20 L76 24 L78 30 L76 35 L81 39 L77 45 L70 52 L61 49 L58 44 L52 40 L55 34 Z" fill="#ffed00"/>
+      <path d="M63 25 C68 23 73 27 74 32 L71 36 L72 41 L68 46 L64 48 L60 43 L61 37 L58 33 Z" fill="#fff"/>
     </svg>
   )
 }
