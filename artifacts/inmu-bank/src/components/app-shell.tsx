@@ -6,7 +6,7 @@ import type { TranslationKey } from '@/lib/i18n/dict'
 import { cn } from '@/lib/utils'
 import {
   Bell, Coins, History, LayoutDashboard,
-  Lock, LogOut, Medal, Sparkles, Star, User as UserIcon,
+  Lock, LogOut, Medal, PawPrint, Sparkles, Star, User as UserIcon,
 } from 'lucide-react'
 import { Link, useLocation } from 'wouter'
 
@@ -17,6 +17,7 @@ const ALL_NAV: NavItem[] = [
   { href: '/history',       key: 'nav_history',       icon: History },
   { href: '/points',        key: 'nav_points',        icon: Star },
   { href: '/gacha',         key: 'nav_gacha',         icon: Sparkles },
+  { href: '/pet',           key: 'nav_pet',           icon: PawPrint },
   { href: '/achievements',  key: 'nav_achievements',  icon: Medal },
   { href: '/notifications', key: 'nav_notifications', icon: Bell },
   { href: '/profile',       key: 'nav_profile',       icon: UserIcon },

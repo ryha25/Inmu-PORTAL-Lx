@@ -11,6 +11,7 @@ import { NotificationsPage } from "@/pages/notifications-page";
 import { ProfilePage } from "@/pages/profile-page";
 import { PointsPage } from "@/pages/points-page";
 import { GachaPage } from "@/pages/gacha-page";
+import { PetPage } from "@/pages/pet-page";
 import { AdminPage } from "@/pages/admin-page";
 import { AdminLoginPage } from "@/pages/admin-login-page";
 import { AdminProfilePage } from "@/pages/admin-profile-page";
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/profile" component={ProfilePage} />
       <Route path="/points" component={PointsPage} />
       <Route path="/gacha" component={GachaPage} />
+      <Route path="/pet" component={PetPage} />
       <Route path="/inmu1919" component={AdminPage} />
       <Route path="/inmu1919/profile" component={AdminProfilePage} />
       <Route path="/inmu1919/ranking" component={AdminRankingPage} />
