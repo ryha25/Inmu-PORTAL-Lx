@@ -457,11 +457,14 @@ function ResultCapsuleReveal({ prizeId, size=210 }: {prizeId:string; size?:numbe
 /* ════ Prize Capsule: CSS-drawn colored capsule (image 5 reference) ════ */
 function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:string;size?:number;open?:boolean;showLabel?:boolean}) {
   const c = CAPSULE[prizeId] ?? CAPSULE.pts100
-  const r = size/2
   const sep = open ? Math.max(7, size*.1) : 0
   const isJackpot = prizeId === 'inmu10k'
   const labelSize = Math.max(9, Math.min(28, size*.17))
-  const outline = Math.max(3,size*.035)
+  const shellColor = ({
+    pts100:'#bcc3cb',pts300:'#ff4fa8',pts500:'#a8db38',pts1000:'#2468d8',
+    pts3000:'#e6382f',pts5000:'#941bd4',inmu10k:'#e3aa10',
+  } as Record<string,string>)[prizeId] ?? '#bcc3cb'
+  const svgSep = sep*100/size
   const centerBand = 'linear-gradient(90deg,#050505,#252014 46%,#080808)'
   return (
     <div style={{position:'relative',width:size,height:size+sep*2,display:'flex',
@@ -472,46 +475,36 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
           background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
           opacity:isJackpot ? .42 : .22,pointerEvents:'none'}}/>
       )}
-      {/* hand-drawn stem */}
-      <div style={{position:'absolute',zIndex:8,top:-size*.08,left:'57%',width:size*.08,height:size*.22,
-        borderLeft:`${Math.max(3,size*.03)}px solid #050505`,borderRadius:'58% 0 0 38%',
-        transform:`translateY(${-sep}px) rotate(17deg)`,transformOrigin:'bottom center'}}/>
-      {/* Top half: irregular black shell with colored inset */}
-      <div style={{width:size,height:r,background:'#050505',
-        clipPath:'polygon(5% 38%,9% 22%,18% 10%,31% 7%,40% 13%,50% 5%,60% 13%,72% 9%,86% 17%,94% 34%,95% 100%,5% 100%)',
-        filter:`drop-shadow(0 -4px 15px ${c.glow})`,
-        transform:`translateY(${-sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',inset:outline,background:c.top,
-          clipPath:'polygon(3% 34%,8% 18%,20% 7%,33% 5%,42% 12%,51% 3%,61% 12%,74% 7%,88% 17%,96% 36%,97% 100%,2% 100%)',
-          boxShadow:'inset 0 -12px 18px rgba(0,0,0,.38),inset 5px 4px 12px rgba(255,255,255,.22)'}}>
-          <div style={{position:'absolute',top:'15%',left:'16%',width:'34%',height:'60%',
-            background:'rgba(255,235,40,.9)',clipPath:'polygon(7% 8%,68% 0,100% 24%,82% 55%,100% 88%,42% 100%,10% 72%,0 36%)',
-            transform:'rotate(-8deg)'}}>
-            <div style={{position:'absolute',inset:'14% 22% 16% 18%',background:'rgba(255,255,255,.94)',
-              clipPath:'polygon(20% 0,80% 8%,100% 38%,74% 100%,18% 88%,0 42%)'}}/>
-          </div>
-          <div style={{position:'absolute',top:'20%',right:'13%',width:'31%',height:'55%',
-            background:'rgba(255,238,55,.82)',clipPath:'polygon(18% 0,86% 10%,100% 45%,72% 100%,12% 88%,0 38%)',
-            transform:'rotate(7deg)'}}>
-            <div style={{position:'absolute',inset:'16% 20% 18% 22%',background:'rgba(255,255,255,.9)',
-              clipPath:'polygon(12% 0,86% 12%,100% 50%,66% 100%,0 78%,8% 30%)'}}/>
-          </div>
-        </div>
-      </div>
-      {/* Bottom half */}
-      <div style={{width:size,height:r,background:'#050505',
-        clipPath:'polygon(5% 0,95% 0,94% 45%,87% 72%,72% 91%,53% 97%,34% 92%,17% 76%,7% 48%)',
-        filter:`drop-shadow(0 6px 17px ${c.glow})`,
-        transform:`translateY(${sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',inset:outline,background:c.bot,
-          clipPath:'polygon(2% 0,98% 0,97% 45%,89% 74%,72% 94%,52% 100%,31% 94%,13% 76%,3% 45%)',
-          boxShadow:'inset 0 12px 18px rgba(0,0,0,.22),inset -7px -10px 18px rgba(0,0,0,.48)'}}>
-          <div style={{position:'absolute',left:'4%',right:'4%',bottom:'0',height:'52%',
-            background:'rgba(0,0,0,.58)',clipPath:'polygon(0 42%,18% 17%,36% 36%,54% 20%,76% 42%,100% 8%,100% 100%,0 100%)'}}/>
-          <div style={{position:'absolute',right:'17%',top:'13%',width:'24%',height:'23%',
-            borderRadius:'50%',background:'rgba(255,255,255,.48)',transform:'rotate(-16deg)'}}/>
-        </div>
-      </div>
+      <svg width={size} height={size} viewBox="0 0 100 100"
+        style={{display:'block',overflow:'visible',flexShrink:0,
+          filter:`drop-shadow(0 2px ${Math.max(8,size*.09)}px ${c.glow})`}}>
+        {/* upper shell and curved stem */}
+        <g transform={`translate(0 ${-svgSep})`}>
+          <path d="M58 18 C58 9 62 5 69 4" fill="none" stroke="#050505" strokeWidth="4"
+            strokeLinecap="round"/>
+          <path d="M13 51 C10 42 11 30 17 21 C23 12 33 11 43 16 C49 19 54 19 60 15 C68 11 76 16 79 22 C86 20 91 28 92 37 C94 43 91 48 88 52 L13 52 Z"
+            fill={shellColor} stroke="#050505" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke"/>
+          <path d="M20 25 C27 18 35 18 43 22 C48 25 52 25 57 22 C64 18 71 20 75 26"
+            fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="3" strokeLinecap="round"/>
+          <path d="M22 22 C31 16 41 20 44 29 C45 35 40 43 35 48 C27 47 21 41 18 34 Z"
+            fill="#fff02e" transform="rotate(-7 31 34)"/>
+          <path d="M27 23 C33 20 39 24 40 30 C40 35 36 41 32 45 C27 42 24 36 24 30 Z"
+            fill="rgba(255,255,255,.96)"/>
+          <path d="M57 26 C64 20 73 23 77 31 C78 37 73 45 67 49 C59 47 54 40 53 33 Z"
+            fill="#ffec32" transform="rotate(6 65 36)"/>
+          <path d="M62 27 C68 24 73 28 73 34 C72 40 68 44 64 46 C59 42 58 34 62 27 Z"
+            fill="rgba(255,255,255,.94)"/>
+        </g>
+        {/* lower shell with the heavy black shape from the reference */}
+        <g transform={`translate(0 ${svgSep})`}>
+          <path d="M13 49 L88 49 C91 57 88 65 82 70 C79 80 69 87 57 88 C49 91 42 86 34 87 C23 85 17 77 16 68 C12 62 11 55 13 49 Z"
+            fill={shellColor} stroke="#050505" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke"/>
+          <path d="M15 67 C24 59 32 61 40 68 C48 62 55 65 62 72 C69 66 77 65 82 60 C81 75 70 85 57 87 C48 89 42 84 34 86 C24 83 18 76 15 67 Z"
+            fill="#050505" opacity=".92"/>
+          <path d="M66 55 C73 52 80 55 82 60 C79 64 74 66 68 65 C64 62 63 58 66 55 Z"
+            fill="rgba(255,255,255,.38)"/>
+        </g>
+      </svg>
       {!open&&(
         <>
           <div style={{position:'absolute',top:`calc(50% - ${Math.max(3,size*.028)}px)`,
@@ -1904,6 +1897,7 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
 
 
 
