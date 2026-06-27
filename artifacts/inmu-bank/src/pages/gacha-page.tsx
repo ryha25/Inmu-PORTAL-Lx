@@ -1739,9 +1739,6 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
         animation:'ga-goldflash .9s ease-out forwards'}}/>}
 
       <PageBg jackpot>
-        {(step===2||step===3||step===4||step===5)&&(
-          <GeneratedScene kind={step===2?'falling':'opening'} prizeId="inmu10k" guaranteed zIndex={2}/>
-        )}
         {/* Rising coins */}
         <div style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:4,overflow:'hidden'}}>
           {COIN_RISES.map((c,i)=>(
@@ -1776,23 +1773,6 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
           flexDirection:'column',alignItems:'center',
           padding:'14px 18px',gap:14,minHeight:'100dvh',overflowY:'auto'}}>
 
-          {/* Step 1: JACKPOT title */}
-          {step>=1&&(
-            <div className="ga-reveal" style={{textAlign:'center',marginTop:4}}>
-              <h1 style={{margin:0,fontSize:'min(10vw,36px)',fontWeight:900,
-                fontFamily:'Georgia,serif',letterSpacing:'0.12em',color:'#ffd700',
-                animation:'ga-jppulse 1.3s ease-in-out infinite, ga-jpzoom .52s ease-out forwards',opacity:0}}>
-                ◆ JACKPOT !! ◆
-              </h1>
-              <div style={{display:'flex',justifyContent:'center',gap:9,marginTop:5}}>
-                {['✦','★','✦','★','✦'].map((s,i)=>(
-                  <span key={i} style={{fontSize:20,color:'#ffd700',
-                    animation:`ga-sparkle ${.68+i*.17}s ease-in-out ${i*.13}s infinite`}}>{s}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Step 2: Gold capsule burst */}
           {step===2&&(
             <div className="ga-reveal" style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -1822,19 +1802,9 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
                     border:`1px solid rgba(218,165,32,${.55-i*.15})`,
                     animation:`ga-ring ${.48+i*.24}s ease-out ${.12+i*.14}s forwards`}}/>
                 ))}
-                <div style={{position:'absolute',width:155,height:78,
-                  borderRadius:'78px 78px 0 0',overflow:'hidden',
-                  top:14,transformOrigin:'bottom center',
-                  animation:'ga-split-t .6s ease-out .1s forwards',
-                  boxShadow:'0 -8px 32px rgba(218,165,32,.7)',zIndex:5}}>
-                  <PrizeCapsule prizeId="inmu10k" size={155}/>
-                </div>
-                <div style={{position:'absolute',width:155,height:78,
-                  borderRadius:'0 0 78px 78px',overflow:'hidden',
-                  top:110,transformOrigin:'top center',
-                  animation:'ga-split-b .6s ease-out .1s forwards',
-                  boxShadow:'0 8px 32px rgba(218,165,32,.58)',zIndex:5}}>
-                  <PrizeCapsule prizeId="inmu10k" size={155}/>
+                <div style={{position:'relative',zIndex:5,
+                  animation:'ga-premiumopen .72s ease-out .08s both'}}>
+                  <PrizeCapsule prizeId="inmu10k" size={155} open showLabel={false}/>
                 </div>
               </div>
             </div>
@@ -1917,6 +1887,7 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
 
 
 
