@@ -10,6 +10,15 @@ export type PetDefinition = {
   rarity: number
   image: string
   roomWidth: string
+  roomTheme: 'cat' | 'dog' | 'lion'
+  skill: {
+    name: string
+    effect: string
+  }
+  levelRewards: readonly {
+    level: 10 | 20 | 30
+    label: string
+  }[]
 }
 
 export const PET_DEFINITIONS: readonly PetDefinition[] = [
@@ -18,21 +27,42 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     name: 'ニャルシアン',
     rarity: 3,
     image: nyarushianImage,
-    roomWidth: 'clamp(275px, 68%, 420px)',
+    roomWidth: 'clamp(205px, 46%, 290px)',
+    roomTheme: 'cat',
+    skill: { name: '幸運の肉球', effect: 'ポイント2倍' },
+    levelRewards: [
+      { level: 10, label: '紫の毛糸' },
+      { level: 20, label: '特製クッション' },
+      { level: 30, label: 'ニャル王冠' },
+    ],
   },
   {
     id: 'takuya',
     name: '拓也',
     rarity: 3,
     image: takuyaImage,
-    roomWidth: 'clamp(265px, 64%, 390px)',
+    roomWidth: 'clamp(195px, 43%, 275px)',
+    roomTheme: 'dog',
+    skill: { name: '盛り上げ上手', effect: 'お世話EXPアップ' },
+    levelRewards: [
+      { level: 10, label: '金のダンベル' },
+      { level: 20, label: '特製サングラス' },
+      { level: 30, label: '拓也ソファ' },
+    ],
   },
   {
     id: 'leon',
     name: 'レオン',
     rarity: 3,
     image: leonImage,
-    roomWidth: 'clamp(275px, 68%, 420px)',
+    roomWidth: 'clamp(205px, 46%, 290px)',
+    roomTheme: 'lion',
+    skill: { name: '王者の導き', effect: '愛情度ボーナス' },
+    levelRewards: [
+      { level: 10, label: '王家の絨毯' },
+      { level: 20, label: '宝石の首飾り' },
+      { level: 30, label: '獅子王の玉座' },
+    ],
   },
 ]
 

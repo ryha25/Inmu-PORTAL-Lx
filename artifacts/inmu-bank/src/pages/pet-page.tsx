@@ -4,11 +4,11 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
-import { PET_BY_ID, PET_DEFINITIONS, type PetId } from '@/features/pet/pet-data'
-import { usePetState, type PetAction } from '@/features/pet/use-pet-state'
+import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetId } from '@/features/pet/pet-data'
+import { usePetState, type PetAction, type PetStats } from '@/features/pet/use-pet-state'
 import {
-  BookOpen, CircleDollarSign, Coins, Gamepad2, Gem,
-  Heart, Leaf, Moon, PawPrint, Sparkles, Utensils,
+  BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
+  Gift, Glasses, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
 } from 'lucide-react'
 
 const ACTIONS: Array<{ id: PetAction; label: string; icon: ElementType; tone: string }> = [
@@ -72,7 +72,7 @@ function BalanceChip({ icon, label, value }: { icon: ReactNode; label: string; v
       <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-fuchsia-400/15 text-fuchsia-200">{icon}</span>
       <div className="min-w-0">
         <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-        <p className="truncate font-mono text-xs font-bold text-white sm:text-sm">{value.toLocaleString()}</p>
+        <p className="break-all font-mono text-[11px] font-bold leading-tight text-white sm:text-sm">{value.toLocaleString()}</p>
       </div>
     </div>
   )
@@ -83,23 +83,14 @@ function PetRoom({
   name,
   image,
   roomWidth,
-  rarity,
-  level,
-  exp,
-  requiredExp,
-  isMaxLevel,
+  roomTheme,
 }: {
   petId: PetId
   name: string
   image: string
   roomWidth: string
-  rarity: number
-  level: number
-  exp: number
-  requiredExp: number
-  isMaxLevel: boolean
+  roomTheme: 'cat' | 'dog' | 'lion'
 }) {
-  const expPercent = isMaxLevel ? 100 : Math.min(100, (exp / requiredExp) * 100)
   return (
     <section className="relative h-[570px] overflow-hidden rounded-lg border border-fuchsia-400/25 bg-[#080611] shadow-[0_0_46px_rgba(168,85,247,.16)] sm:h-[650px]">
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#100b20_0%,#171026_55%,#0b0811_100%)]" />
@@ -148,34 +139,36 @@ function PetRoom({
       </div>
 
       <div className="absolute bottom-7 left-1/2 h-20 w-[72%] -translate-x-1/2 rounded-[50%] border border-fuchsia-400/15 bg-[radial-gradient(ellipse,rgba(126,34,206,.3),rgba(24,12,35,.78)_62%,transparent_70%)]" />
-      <div className="absolute bottom-16 left-1/2 h-20 w-[52%] -translate-x-1/2 rounded-[50%] border border-violet-300/15 bg-[#24172f] shadow-[inset_0_-12px_18px_rgba(0,0,0,.55),0_8px_30px_rgba(0,0,0,.55)]">
-        <span className="absolute bottom-4 right-[12%] rotate-[-12deg] text-sm font-black tracking-widest text-violet-200/10">INMU</span>
-      </div>
+      {roomTheme === 'cat' && (
+        <>
+          <div className="absolute bottom-16 left-1/2 h-20 w-[52%] -translate-x-1/2 rounded-[50%] border border-violet-300/15 bg-[#2c193b] shadow-[inset_0_-12px_18px_rgba(0,0,0,.55),0_8px_30px_rgba(0,0,0,.55)]" />
+          <div className="absolute bottom-16 right-[15%] size-7 rounded-full bg-fuchsia-500/35 shadow-[-18px_10px_0_rgba(99,102,241,.3)] before:absolute before:left-1/2 before:top-1/2 before:h-px before:w-10 before:-translate-y-1/2 before:rotate-[28deg] before:bg-fuchsia-200/30" />
+          <div className="absolute bottom-24 left-[15%] h-24 w-3 rounded bg-violet-900 shadow-[0_-36px_0_8px_rgba(88,28,135,.75),22px_-8px_0_-1px_rgba(88,28,135,.7)]" />
+        </>
+      )}
+      {roomTheme === 'dog' && (
+        <>
+          <div className="absolute bottom-20 left-1/2 h-20 w-[60%] -translate-x-1/2 rounded-t-3xl border border-amber-300/10 bg-[#29202b] shadow-[inset_0_-10px_18px_rgba(0,0,0,.5),0_9px_22px_rgba(0,0,0,.45)]" />
+          <Dumbbell className="absolute bottom-14 left-[13%] size-12 -rotate-12 text-amber-300/45 drop-shadow-[0_5px_5px_rgba(0,0,0,.55)]" />
+          <Glasses className="absolute right-[16%] top-[47%] size-10 rotate-6 text-amber-200/50" />
+        </>
+      )}
+      {roomTheme === 'lion' && (
+        <>
+          <div className="absolute bottom-0 left-1/2 h-[42%] w-[38%] -translate-x-1/2 bg-gradient-to-b from-red-800/35 to-red-950/10 [clip-path:polygon(35%_0,65%_0,100%_100%,0_100%)]" />
+          <div className="absolute bottom-16 left-1/2 h-36 w-[43%] -translate-x-1/2 rounded-t-[42%] border border-amber-300/20 bg-[#2b1933] shadow-[inset_0_0_24px_rgba(120,53,15,.2),0_8px_24px_rgba(0,0,0,.5)]" />
+          <div className="absolute bottom-24 right-[13%] h-20 w-10 border-x-4 border-b-4 border-amber-500/25">
+            <Crown className="absolute -left-3 -top-7 size-14 text-amber-300/55 drop-shadow-[0_0_8px_rgba(251,191,36,.3)]" />
+          </div>
+        </>
+      )}
       <div className="absolute bottom-9 right-5 z-10 h-7 w-16 rounded-[50%] border border-fuchsia-300/25 bg-[linear-gradient(180deg,#4b2858,#160d1d)] shadow-[inset_0_5px_8px_rgba(0,0,0,.6),0_7px_9px_rgba(0,0,0,.4)] sm:right-9">
         <div className="absolute inset-x-2 top-1 h-2 rounded-[50%] bg-amber-300/35" />
       </div>
       <div className="absolute bottom-12 right-[25%] size-4 rotate-12 rounded bg-cyan-300/15 ring-1 ring-cyan-200/20" />
 
-      <div className="absolute left-3 top-3 z-20 w-[168px] rounded-md border border-fuchsia-300/20 bg-black/60 p-3 backdrop-blur-md sm:left-5 sm:top-5 sm:w-[190px]">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white sm:text-base">{name}</p>
-            <p className="mt-0.5 text-xs tracking-wider text-amber-300">{'★'.repeat(rarity)}</p>
-          </div>
-          <span className="shrink-0 font-mono text-sm font-black text-cyan-300">Lv.{level}</span>
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[9px] text-muted-foreground">
-          <span>EXP</span><span className="font-mono">{isMaxLevel ? 'MAX' : `${exp} / ${requiredExp}`}</span>
-        </div>
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/10 shadow-[inset_0_1px_3px_rgba(0,0,0,.7)]">
-          <div className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-cyan-400 to-fuchsia-400 shadow-[0_0_10px_rgba(217,70,239,.55)]" style={{ width: `${expPercent}%` }}>
-            <span className="pet-meter-shine absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
-          </div>
-        </div>
-      </div>
-
       <div
-        className="absolute inset-x-0 bottom-10 z-10 flex h-[72%] items-end justify-center"
+        className="absolute inset-x-0 bottom-12 z-10 flex h-[58%] items-end justify-center"
         data-pet-stage
         data-pet-id={petId}
         data-pose="idle"
@@ -194,48 +187,163 @@ function PetRoom({
   )
 }
 
+function CharacterInfo({ pet, stats, maxLevel }: { pet: PetDefinition; stats: PetStats; maxLevel: number }) {
+  const requiredExp = stats.level * 20
+  const isMaxLevel = stats.level >= maxLevel
+  return (
+    <section className="rounded-lg border border-fuchsia-300/20 bg-[#0d0916] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="break-words text-lg font-black text-white">{pet.name}</h2>
+          <p className="mt-0.5 text-sm tracking-wider text-amber-300">{'★'.repeat(pet.rarity)}</p>
+        </div>
+        <span className="shrink-0 font-mono text-lg font-black text-cyan-300">Lv.{stats.level}</span>
+      </div>
+      <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>EXP</span><span className="font-mono">{isMaxLevel ? 'MAX' : `${stats.exp} / ${requiredExp}`}</span>
+      </div>
+      <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/10 shadow-[inset_0_1px_3px_rgba(0,0,0,.7)]">
+        <div className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-cyan-400 to-fuchsia-400 shadow-[0_0_10px_rgba(217,70,239,.55)]" style={{ width: `${isMaxLevel ? 100 : Math.min(100, (stats.exp / requiredExp) * 100)}%` }}>
+          <span className="pet-meter-shine absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function StatusPanel({ stats }: { stats: PetStats }) {
+  return (
+    <section className="rounded-lg border border-violet-300/20 bg-[#0d0916] p-4">
+      <h2 className="mb-4 text-sm font-bold text-fuchsia-200">ステータス</h2>
+      <div className="flex flex-col gap-4">
+        <StatusBar label="満腹度" value={stats.fullness} display={`${stats.fullness} / 100`} icon={<Utensils className="size-4 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
+        <StatusBar label="眠気" value={stats.sleepiness} display={`${stats.sleepiness} / 100`} icon={<Moon className="size-4 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
+        <StatusBar label="愛情度" value={stats.affection} display={`${stats.affection} / 100`} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
+      </div>
+    </section>
+  )
+}
+
+function SkillPanel({ pet }: { pet: PetDefinition }) {
+  return (
+    <section className="rounded-lg border border-cyan-300/20 bg-[linear-gradient(145deg,rgba(8,30,40,.7),rgba(13,9,22,.96))] p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">固有スキル</p>
+      <div className="mt-2 flex items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-cyan-300/25 bg-cyan-300/10">
+          <Sparkles className="size-5 text-cyan-200" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="break-words text-sm font-bold text-white">{pet.skill.name}</h3>
+          <p className="mt-0.5 break-words text-xs text-cyan-100/70">{pet.skill.effect}</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function RewardsPanel({ pet, level }: { pet: PetDefinition; level: number }) {
+  return (
+    <section className="rounded-lg border border-amber-300/15 bg-[#0d0916] p-4">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-100"><Gift className="size-4 text-amber-300" />Lv報酬</h2>
+      <div className="flex flex-col gap-2">
+        {pet.levelRewards.map(reward => {
+          const unlocked = level >= reward.level
+          return (
+            <div key={reward.level} className={cn('flex items-center gap-2 rounded-md border px-2.5 py-2', unlocked ? 'border-amber-300/30 bg-amber-300/10' : 'border-white/5 bg-black/20')}>
+              {unlocked ? <Gift className="size-4 shrink-0 text-amber-300" /> : <LockKeyhole className="size-4 shrink-0 text-muted-foreground" />}
+              <span className="shrink-0 font-mono text-xs font-bold text-amber-200">Lv.{reward.level}</span>
+              <span className="min-w-0 break-words text-xs text-foreground/80">{reward.label}</span>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function CarePanel({ isFull, message, onAction }: { isFull: boolean; message: string; onAction: (action: PetAction) => void }) {
+  return (
+    <section className="rounded-lg border border-violet-300/15 bg-[#0d0916] p-3 sm:p-4">
+      <div className="mb-3 flex min-h-5 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-sm font-bold text-fuchsia-200">お世話</h2>
+        <p className="break-words text-[10px] text-cyan-200" role="status">{isFull ? '満腹なのでご飯をあげられません' : message}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {ACTIONS.map(action => {
+          const Icon = action.icon
+          const disabled = action.id === 'feed' && isFull
+          return (
+            <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-20 flex-col gap-2 rounded-lg bg-black/35 text-sm transition-all duration-100 hover:-translate-y-0.5 hover:bg-white/5 active:translate-y-0 active:scale-[.94] active:brightness-125', action.tone)}>
+              <Icon className="size-6" /><span className="font-bold">{action.label}</span>
+            </Button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function CharacterRoster({ selectedPetId, petStats, onSelect, vertical = false }: { selectedPetId: PetId; petStats: Record<PetId, PetStats>; onSelect: (id: PetId) => void; vertical?: boolean }) {
+  return (
+    <section className={vertical ? '' : 'border-t border-violet-300/15 pt-4'}>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold text-fuchsia-200">所持キャラクター</h2>
+        <span className="font-mono text-[10px] text-muted-foreground">3 / 3</span>
+      </div>
+      <div className={cn(vertical ? 'flex flex-col gap-2' : 'flex snap-x snap-mandatory touch-pan-x gap-2 overflow-x-auto overscroll-x-contain pb-2 pr-4 scrollbar-none')}>
+        {PET_DEFINITIONS.map(candidate => {
+          const active = candidate.id === selectedPetId
+          const stats = petStats[candidate.id]
+          return (
+            <button key={candidate.id} type="button" aria-pressed={active} onClick={() => onSelect(candidate.id)} className={cn(vertical ? 'w-full' : 'w-24 shrink-0 snap-start sm:w-28', 'overflow-hidden rounded-lg border bg-[#0d0916] text-left transition-colors', active ? 'border-fuchsia-400 shadow-[0_0_18px_rgba(217,70,239,.24)]' : 'border-violet-300/15 hover:border-violet-300/35')}>
+              <div className={cn('flex items-end justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_65%,rgba(126,34,206,.2),transparent_67%)] px-2 pt-2', vertical ? 'h-24' : 'aspect-square')}>
+                <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain drop-shadow-[0_8px_10px_rgba(0,0,0,.45)]" />
+              </div>
+              <div className="border-t border-white/5 p-2">
+                <p className="break-words text-xs font-bold">{candidate.name}</p>
+                <div className="mt-1 flex items-center justify-between gap-1 text-[9px]">
+                  <span className="text-amber-300">★{candidate.rarity}</span>
+                  <span className="rounded bg-cyan-400/10 px-1 py-0.5 font-mono font-bold text-cyan-200">Lv.{stats.level}</span>
+                </div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 export function PetPage() {
   const { profile, unread } = useAuth()
   const { selectedPetId, selectedStats, petStats, selectPet, care, maxLevel } = usePetState()
   const [message, setMessage] = useState('')
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
   const pet = PET_BY_ID[selectedPetId]
-  const requiredExp = selectedStats.level * 20
-  const isMaxLevel = selectedStats.level >= maxLevel
   const isFull = selectedStats.fullness >= 100
 
   useEffect(() => {
     fetch('/api/dashboard', { credentials: 'include' })
       .then(response => response.ok ? response.json() : null)
-      .then(data => {
-        if (data) setBalances({ inmu: Number(data.balance) || 0, points: Number(data.monthlyPoints) || 0 })
-      })
+      .then(data => { if (data) setBalances({ inmu: Number(data.balance) || 0, points: Number(data.monthlyPoints) || 0 }) })
       .catch(() => {})
   }, [])
 
   function handleAction(action: PetAction) {
-    if (action === 'feed' && isFull) {
-      setMessage('満腹なのでご飯をあげられません')
-      return
-    }
+    if (action === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return }
     care(action)
     setMessage({ feed: 'ご飯をあげました', play: '一緒に遊びました', sleep: 'ゆっくり休みました', pet: 'やさしくなでました' }[action])
   }
 
-  function handleSelect(id: PetId) {
-    selectPet(id)
-    setMessage('')
-  }
+  function handleSelect(id: PetId) { selectPet(id); setMessage('') }
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
       <style>{PET_ROOM_CSS}</style>
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-6xl">
         <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300">
-              <PawPrint className="size-3.5" />Pet room
-            </p>
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300"><PawPrint className="size-3.5" />Pet room</p>
             <h1 className="text-2xl font-black text-white">INMU PET</h1>
           </div>
           <div className="grid w-full grid-cols-2 gap-3 rounded-lg border border-violet-300/15 bg-black/35 px-3 py-2 sm:w-auto sm:min-w-[230px]">
@@ -244,87 +352,26 @@ export function PetPage() {
           </div>
         </header>
 
-        <PetRoom
-          petId={pet.id}
-          name={pet.name}
-          image={pet.image}
-          roomWidth={pet.roomWidth}
-          rarity={pet.rarity}
-          level={selectedStats.level}
-          exp={selectedStats.exp}
-          requiredExp={requiredExp}
-          isMaxLevel={isMaxLevel}
-        />
+        <div className="grid gap-3 lg:grid-cols-[140px_minmax(360px,1fr)_260px] lg:items-start lg:gap-4">
+          <aside className="hidden lg:block"><CharacterRoster selectedPetId={selectedPetId} petStats={petStats} onSelect={handleSelect} vertical /></aside>
 
-        <section className="relative z-20 -mt-2 rounded-lg border border-violet-300/20 bg-[#0d0916]/95 p-4 shadow-[0_-10px_30px_rgba(0,0,0,.35)] backdrop-blur-md">
-          <div className="flex gap-3 sm:gap-5">
-            <StatusBar label="満腹度" value={selectedStats.fullness} icon={<Utensils className="size-4 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
-            <StatusBar label="眠気" value={selectedStats.sleepiness} icon={<Moon className="size-4 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
-            <StatusBar label="愛情度" value={selectedStats.affection} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
-          </div>
-        </section>
+          <main className="flex min-w-0 flex-col gap-3">
+            <div className="lg:hidden"><CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} /></div>
+            <PetRoom petId={pet.id} name={pet.name} image={pet.image} roomWidth={pet.roomWidth} roomTheme={pet.roomTheme} />
+            <div className="lg:hidden"><StatusPanel stats={selectedStats} /></div>
+            <div className="lg:hidden"><SkillPanel pet={pet} /></div>
+            <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} /></div>
+            <CarePanel isFull={isFull} message={message} onAction={handleAction} />
+            <div className="lg:hidden"><CharacterRoster selectedPetId={selectedPetId} petStats={petStats} onSelect={handleSelect} /></div>
+          </main>
 
-        <section className="mt-3 rounded-lg border border-violet-300/15 bg-[#0d0916] p-3 sm:p-4">
-          <div className="mb-3 flex min-h-5 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-sm font-bold text-fuchsia-200">お世話</h2>
-            <p className="text-right text-[10px] text-cyan-200" role="status">{isFull ? '満腹なのでご飯をあげられません' : message}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {ACTIONS.map(action => {
-              const Icon = action.icon
-              const disabled = action.id === 'feed' && isFull
-              return (
-                <Button
-                  key={action.id}
-                  type="button"
-                  variant="outline"
-                  disabled={disabled}
-                  onClick={() => handleAction(action.id)}
-                    className={cn('h-20 flex-col gap-2 rounded-lg bg-black/35 text-sm transition-all duration-100 hover:-translate-y-0.5 hover:bg-white/5 active:translate-y-0 active:scale-[.94] active:brightness-125', action.tone)}
-                >
-                  <Icon className="size-6" />
-                  <span className="font-bold">{action.label}</span>
-                </Button>
-              )
-            })}
-          </div>
-        </section>
-
-        <section className="mt-3 border-t border-violet-300/15 pt-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-fuchsia-200">所持キャラクター</h2>
-            <span className="font-mono text-[10px] text-muted-foreground">3 / 3</span>
-          </div>
-          <div className="flex snap-x snap-mandatory touch-pan-x gap-2 overflow-x-auto overscroll-x-contain pb-2 pr-4 scrollbar-none">
-            {PET_DEFINITIONS.map(candidate => {
-              const active = candidate.id === selectedPetId
-              const stats = petStats[candidate.id]
-              return (
-                <button
-                  key={candidate.id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => handleSelect(candidate.id)}
-                  className={cn(
-                    'w-24 shrink-0 snap-start overflow-hidden rounded-lg border bg-[#0d0916] text-left transition-colors sm:w-28',
-                    active ? 'border-fuchsia-400 shadow-[0_0_18px_rgba(217,70,239,.22)]' : 'border-violet-300/15 hover:border-violet-300/35',
-                  )}
-                >
-                  <div className="flex aspect-square items-end justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_65%,rgba(126,34,206,.2),transparent_67%)] px-2 pt-2">
-                    <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain drop-shadow-[0_8px_10px_rgba(0,0,0,.45)]" />
-                  </div>
-                  <div className="border-t border-white/5 p-2">
-                    <p className="truncate text-xs font-bold">{candidate.name}</p>
-                    <div className="mt-1 flex items-center justify-between text-[9px]">
-                      <span className="text-amber-300">★{candidate.rarity}</span>
-                      <span className="rounded bg-cyan-400/10 px-1 py-0.5 font-mono font-bold text-cyan-200">Lv.{stats.level}</span>
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </section>
+          <aside className="hidden flex-col gap-3 lg:flex">
+            <CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} />
+            <StatusPanel stats={selectedStats} />
+            <SkillPanel pet={pet} />
+            <RewardsPanel pet={pet} level={selectedStats.level} />
+          </aside>
+        </div>
       </div>
     </AppShell>
   )
