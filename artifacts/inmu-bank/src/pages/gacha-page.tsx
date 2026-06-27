@@ -461,10 +461,8 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
   const sep = open ? Math.max(7, size*.1) : 0
   const isJackpot = prizeId === 'inmu10k'
   const labelSize = Math.max(9, Math.min(28, size*.17))
-  const rimColor = isJackpot ? 'rgba(255,225,120,.92)' : c.border
-  const centerBand = isJackpot
-    ? 'linear-gradient(90deg,rgba(95,48,0,.72),rgba(255,229,115,.95),rgba(120,64,0,.76))'
-    : 'linear-gradient(90deg,rgba(5,8,16,.64),rgba(255,255,255,.32),rgba(5,8,16,.64))'
+  const outline = Math.max(3,size*.035)
+  const centerBand = 'linear-gradient(90deg,#050505,#252014 46%,#080808)'
   return (
     <div style={{position:'relative',width:size,height:size+sep*2,display:'flex',
       flexDirection:'column',alignItems:'center',
@@ -474,38 +472,54 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
           background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
           opacity:isJackpot ? .42 : .22,pointerEvents:'none'}}/>
       )}
-      {/* Top half */}
-      <div style={{width:size,height:r,
-        borderRadius:`${r}px ${r}px 0 0`,
-        background:`${c.top}, linear-gradient(135deg,rgba(255,255,255,.42),transparent 34%)`,
-        border:`1.8px solid ${rimColor}`,borderBottom:'none',
-        boxShadow:`0 -4px 24px ${c.glow},inset 0 3px 14px rgba(255,255,255,.58),inset 0 -9px 14px rgba(0,0,0,.42)`,
+      {/* hand-drawn stem */}
+      <div style={{position:'absolute',zIndex:8,top:-size*.08,left:'57%',width:size*.08,height:size*.22,
+        borderLeft:`${Math.max(3,size*.03)}px solid #050505`,borderRadius:'58% 0 0 38%',
+        transform:`translateY(${-sep}px) rotate(17deg)`,transformOrigin:'bottom center'}}/>
+      {/* Top half: irregular black shell with colored inset */}
+      <div style={{width:size,height:r,background:'#050505',
+        clipPath:'polygon(5% 38%,9% 22%,18% 10%,31% 7%,40% 13%,50% 5%,60% 13%,72% 9%,86% 17%,94% 34%,95% 100%,5% 100%)',
+        filter:`drop-shadow(0 -4px 15px ${c.glow})`,
         transform:`translateY(${-sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',top:size*.1,left:size*.16,width:size*.28,height:size*.12,
-          borderRadius:'50%',background:'rgba(255,255,255,.74)',filter:'blur(.2px)',
-          transform:'rotate(-22deg)'}}/>
-        <div style={{position:'absolute',top:size*.23,left:size*.11,width:size*.12,height:size*.055,
-          borderRadius:'50%',background:'rgba(255,255,255,.38)',transform:'rotate(-18deg)'}}/>
+        <div style={{position:'absolute',inset:outline,background:c.top,
+          clipPath:'polygon(3% 34%,8% 18%,20% 7%,33% 5%,42% 12%,51% 3%,61% 12%,74% 7%,88% 17%,96% 36%,97% 100%,2% 100%)',
+          boxShadow:'inset 0 -12px 18px rgba(0,0,0,.38),inset 5px 4px 12px rgba(255,255,255,.22)'}}>
+          <div style={{position:'absolute',top:'15%',left:'16%',width:'34%',height:'60%',
+            background:'rgba(255,235,40,.9)',clipPath:'polygon(7% 8%,68% 0,100% 24%,82% 55%,100% 88%,42% 100%,10% 72%,0 36%)',
+            transform:'rotate(-8deg)'}}>
+            <div style={{position:'absolute',inset:'14% 22% 16% 18%',background:'rgba(255,255,255,.94)',
+              clipPath:'polygon(20% 0,80% 8%,100% 38%,74% 100%,18% 88%,0 42%)'}}/>
+          </div>
+          <div style={{position:'absolute',top:'20%',right:'13%',width:'31%',height:'55%',
+            background:'rgba(255,238,55,.82)',clipPath:'polygon(18% 0,86% 10%,100% 45%,72% 100%,12% 88%,0 38%)',
+            transform:'rotate(7deg)'}}>
+            <div style={{position:'absolute',inset:'16% 20% 18% 22%',background:'rgba(255,255,255,.9)',
+              clipPath:'polygon(12% 0,86% 12%,100% 50%,66% 100%,0 78%,8% 30%)'}}/>
+          </div>
+        </div>
       </div>
       {/* Bottom half */}
-      <div style={{width:size,height:r,
-        borderRadius:`0 0 ${r}px ${r}px`,
-        background:c.bot,
-        border:`1.8px solid ${rimColor}`,borderTop:'none',
-        boxShadow:`0 6px 24px ${c.glow},inset 0 9px 14px rgba(0,0,0,.38),inset 0 -3px 9px rgba(255,255,255,.28)`,
+      <div style={{width:size,height:r,background:'#050505',
+        clipPath:'polygon(5% 0,95% 0,94% 45%,87% 72%,72% 91%,53% 97%,34% 92%,17% 76%,7% 48%)',
+        filter:`drop-shadow(0 6px 17px ${c.glow})`,
         transform:`translateY(${sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',bottom:size*.08,right:size*.13,width:size*.2,height:size*.08,
-          borderRadius:'50%',background:'rgba(255,255,255,.2)',filter:'blur(1px)',
-          transform:'rotate(-18deg)'}}/>
+        <div style={{position:'absolute',inset:outline,background:c.bot,
+          clipPath:'polygon(2% 0,98% 0,97% 45%,89% 74%,72% 94%,52% 100%,31% 94%,13% 76%,3% 45%)',
+          boxShadow:'inset 0 12px 18px rgba(0,0,0,.22),inset -7px -10px 18px rgba(0,0,0,.48)'}}>
+          <div style={{position:'absolute',left:'4%',right:'4%',bottom:'0',height:'52%',
+            background:'rgba(0,0,0,.58)',clipPath:'polygon(0 42%,18% 17%,36% 36%,54% 20%,76% 42%,100% 8%,100% 100%,0 100%)'}}/>
+          <div style={{position:'absolute',right:'17%',top:'13%',width:'24%',height:'23%',
+            borderRadius:'50%',background:'rgba(255,255,255,.48)',transform:'rotate(-16deg)'}}/>
+        </div>
       </div>
       {!open&&(
         <>
           <div style={{position:'absolute',top:`calc(50% - ${Math.max(3,size*.028)}px)`,
-            left:size*.035,right:size*.035,height:Math.max(6,size*.056),borderRadius:999,
-            background:centerBand,border:`1px solid ${rimColor}`,
-            boxShadow:`0 0 ${Math.max(10,size*.12)}px ${c.glow},inset 0 1px 0 rgba(255,255,255,.45)`,
+            left:size*.055,right:size*.055,height:Math.max(7,size*.065),borderRadius:'40% 55% 46% 52%',
+            background:centerBand,border:`${Math.max(1,size*.012)}px solid #000`,
+            boxShadow:`0 0 ${Math.max(10,size*.12)}px ${c.glow},inset 0 1px 0 rgba(255,255,255,.2)`,
             zIndex:4}}/>
-          <div style={{position:'absolute',inset:0,borderRadius:'50%',overflow:'hidden',zIndex:6,
+          <div style={{position:'absolute',inset:0,borderRadius:'42% 48% 45% 52%',overflow:'hidden',zIndex:6,
             pointerEvents:'none'}}>
             <div style={{position:'absolute',top:'-12%',bottom:'-12%',left:'16%',width:'24%',
               background:'linear-gradient(90deg,transparent,rgba(255,255,255,.68),transparent)',
@@ -543,9 +557,10 @@ function RateOrb({ id }:{id:string}) {
   const c = CAPSULE[id] ?? CAPSULE.pts100
   const isJackpot = id === 'inmu10k'
   return (
-    <div style={{position:'relative',width:26,height:26,borderRadius:'50%',flexShrink:0,
+    <div style={{position:'relative',width:26,height:25,
+      borderRadius:'44% 56% 48% 52% / 52% 46% 54% 48%',flexShrink:0,
       background:`${c.top}, ${c.bot}`,
-      border:`1px solid ${isJackpot?'rgba(255,224,120,.9)':c.border}`,
+      border:'2px solid #050505',
       boxShadow:`0 0 12px ${c.glow}, inset -4px -4px 9px rgba(0,0,0,.45), inset 3px 3px 6px rgba(255,255,255,.34)`,
       overflow:'hidden'}}>
       <div style={{position:'absolute',left:0,right:0,top:'47%',height:3,
@@ -554,7 +569,7 @@ function RateOrb({ id }:{id:string}) {
           : 'linear-gradient(90deg,rgba(5,8,16,.72),rgba(255,255,255,.46),rgba(5,8,16,.72))',
         boxShadow:`0 0 7px ${c.glow}`}}/>
       <div style={{position:'absolute',top:4,left:5,width:9,height:6,borderRadius:'50%',
-        background:'rgba(255,255,255,.82)',filter:'blur(.2px)',transform:'rotate(-24deg)'}}/>
+        background:'rgba(255,238,45,.9)',filter:'blur(.2px)',transform:'rotate(-24deg)'}}/>
       <div style={{position:'absolute',top:12,left:4,width:4,height:3,borderRadius:'50%',
         background:'rgba(255,255,255,.34)',transform:'rotate(-20deg)'}}/>
       {isJackpot&&(
@@ -1889,6 +1904,7 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
 
 
 
