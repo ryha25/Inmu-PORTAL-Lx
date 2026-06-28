@@ -2,19 +2,19 @@ import type { ElementType, ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
-import { getPetCooldownRemaining, usePetState, type PetAction, type PetStats } from '@/features/pet/use-pet-state'
+import { getCareCooldownRemaining, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats } from '@/features/pet/use-pet-state'
 import {
   BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
   Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
 } from 'lucide-react'
 
-const ROOM_ACTIONS: Array<{ id: Exclude<PetAction, 'pet'>; label: string; icon: ElementType; tone: string }> = [
+const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementType; tone: string }> = [
   { id: 'feed', label: 'ご飯', icon: Utensils, tone: 'border-pink-400/50 text-pink-200 shadow-[0_0_18px_rgba(244,114,182,.12)]' },
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
-  { id: 'sleep', label: '寝る', icon: Moon, tone: 'border-cyan-400/50 text-cyan-200 shadow-[0_0_18px_rgba(34,211,238,.12)]' },
 ]
 
 const PET_ROOM_CSS = `
@@ -32,11 +32,52 @@ const PET_ROOM_CSS = `
     35% { transform: translate3d(3px, -8px, 0) rotate(.2deg); }
     70% { transform: translate3d(5px, -3px, 0) rotate(.35deg); }
   }
+  @keyframes pet-react-feed {
+    0% { transform: translateY(0) scale(1); }
+    28% { transform: translateY(-18px) scale(1.04,.97); }
+    52% { transform: translateY(0) scale(.98,1.03); }
+    72% { transform: translateY(-7px) scale(1.02,.99); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  @keyframes pet-react-play {
+    0% { transform: translate3d(0,0,0) rotate(0); }
+    22% { transform: translate3d(-18px,-22px,0) rotate(-3deg); }
+    50% { transform: translate3d(18px,-8px,0) rotate(3deg); }
+    75% { transform: translate3d(-6px,-16px,0) rotate(-1deg); }
+    100% { transform: translate3d(0,0,0) rotate(0); }
+  }
+  @keyframes pet-react-pet {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    30% { transform: translateY(-8px) rotate(-1.5deg); }
+    65% { transform: translateY(-5px) rotate(1deg); }
+  }
+  @keyframes pet-react-angry {
+    0% { transform: translateX(0) rotate(0); }
+    20% { transform: translateX(-13px) rotate(-2deg); }
+    35% { transform: translateX(-5px) rotate(1deg); }
+    52% { transform: translateX(-16px) rotate(-1deg); }
+    100% { transform: translateX(-12px) rotate(0); }
+  }
+  @keyframes pet-sleep-breathe {
+    0%, 100% { transform: translateY(2px) scale(1,.98); }
+    50% { transform: translateY(0) scale(1.015,1); }
+  }
+  @keyframes pet-zzz {
+    0% { transform: translate3d(0,8px,0) scale(.8); opacity: 0; }
+    30% { opacity: 1; }
+    100% { transform: translate3d(12px,-25px,0) scale(1.15); opacity: 0; }
+  }
   .pet-meter-shine { animation: pet-meter-shine 3.1s ease-in-out infinite; }
   .pet-neon-sign { animation: pet-neon-breathe 3.8s ease-in-out infinite; }
   .pet-character-motion { animation: pet-idle-float 6.8s ease-in-out infinite; transform-origin: 50% 90%; }
+  .pet-react-feed { animation: pet-react-feed .75s ease-out both; }
+  .pet-react-play { animation: pet-react-play 1s ease-in-out both; }
+  .pet-react-pet { animation: pet-react-pet .8s ease-in-out both; }
+  .pet-react-angry { animation: pet-react-angry .9s ease-out both; }
+  .pet-sleeping-motion { animation: pet-sleep-breathe 3.4s ease-in-out infinite; transform-origin: 50% 90%; }
+  .pet-zzz { animation: pet-zzz 2.3s ease-out infinite; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign, .pet-character-motion { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz { animation: none; }
   }
 `
 
@@ -49,26 +90,29 @@ function formatCooldown(milliseconds: number) {
 
 type WalkMotion = {
   active: boolean
+  moving: boolean
   frame: 0 | 1
   offsetPercent: number
   facing: 1 | -1
   bob: number
 }
 
+type ReactionMotion = 'feed' | 'play' | 'pet' | 'angry' | null
+
 function getWalkMotion(tick: number, enabled: boolean): WalkMotion {
-  if (!enabled) return { active: false, frame: 0, offsetPercent: 0, facing: 1, bob: 0 }
-  const step = tick % 24
+  if (!enabled) return { active: false, moving: false, frame: 0, offsetPercent: 0, facing: 1, bob: 0 }
+  const step = tick % 30
   if (step <= 8) {
     const frame = step % 2 as 0 | 1
-    return { active: true, frame, offsetPercent: -18 + (36 * step) / 8, facing: -1, bob: frame ? -4 : 0 }
+    return { active: true, moving: true, frame, offsetPercent: -18 + (36 * step) / 8, facing: -1, bob: frame ? -4 : 0 }
   }
-  if (step <= 11) return { active: true, frame: 0, offsetPercent: 18, facing: -1, bob: 0 }
-  if (step <= 20) {
-    const walkingStep = step - 12
+  if (step <= 13) return { active: true, moving: false, frame: 0, offsetPercent: 18, facing: -1, bob: 0 }
+  if (step <= 22) {
+    const walkingStep = step - 14
     const frame = walkingStep % 2 as 0 | 1
-    return { active: true, frame, offsetPercent: 18 - (36 * walkingStep) / 8, facing: 1, bob: frame ? -4 : 0 }
+    return { active: true, moving: true, frame, offsetPercent: 18 - (36 * walkingStep) / 8, facing: 1, bob: frame ? -4 : 0 }
   }
-  return { active: true, frame: 0, offsetPercent: -18, facing: 1, bob: 0 }
+  return { active: true, moving: false, frame: 0, offsetPercent: -18, facing: 1, bob: 0 }
 }
 
 function StatusBar({
@@ -123,9 +167,12 @@ function PetRoom({
   expression,
   stats,
   isFull,
+  isSleeping,
   message,
   cooldownRemaining,
   walkMotion,
+  reactionMotion,
+  speechBubble,
   onAction,
   onPet,
 }: {
@@ -137,10 +184,13 @@ function PetRoom({
   expression: PetExpression
   stats: PetStats
   isFull: boolean
+  isSleeping: boolean
   message: string
-  cooldownRemaining: Record<PetAction, number>
+  cooldownRemaining: Record<PetCareCategory, number>
   walkMotion: WalkMotion
-  onAction: (action: Exclude<PetAction, 'pet'>) => void
+  reactionMotion: ReactionMotion
+  speechBubble: string
+  onAction: (action: PetCareCategory) => void
   onPet: () => void
 }) {
   return (
@@ -223,24 +273,37 @@ function PetRoom({
         className="absolute inset-x-0 bottom-[148px] z-10 flex h-[50%] items-end justify-center"
         data-pet-stage
         data-pet-id={petId}
-        data-pose="idle"
+        data-pose={isSleeping ? 'sleeping' : reactionMotion ?? (walkMotion.moving ? 'walking' : 'idle')}
       >
+        {speechBubble && (
+          <div className="absolute left-1/2 top-1 z-40 max-w-[72%] -translate-x-1/2 rounded-xl border border-fuchsia-300/35 bg-[#100817]/95 px-3 py-2 text-center text-xs font-bold text-fuchsia-50 shadow-[0_0_20px_rgba(232,121,249,.22)] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-[7px] after:border-transparent after:border-t-fuchsia-200/35">
+            {speechBubble}
+          </div>
+        )}
+        {isSleeping && !reactionMotion && (
+          <div className="absolute left-[64%] top-[22%] z-30 font-black text-cyan-200 drop-shadow-[0_0_8px_rgba(34,211,238,.7)]">
+            <span className="pet-zzz block text-lg">Z</span><span className="pet-zzz ml-4 block text-sm [animation-delay:.7s]">z</span>
+          </div>
+        )}
         <div className="absolute left-1/2 top-[3%] z-30 flex translate-x-[30%] flex-col items-center gap-1">
           <button
             type="button"
             onClick={onPet}
-            disabled={cooldownRemaining.pet > 0}
-            aria-label={cooldownRemaining.pet > 0 ? `なでる ${formatCooldown(cooldownRemaining.pet)}` : 'なでる'}
+            aria-label="なでる"
             title="なでる"
-            className="flex size-11 items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25 disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none"
+            className="flex size-11 items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25"
             data-pet-interaction="pet"
           >
             <Hand className="size-6" />
           </button>
-          {cooldownRemaining.pet > 0 && <span className="whitespace-nowrap rounded bg-black/70 px-1.5 py-0.5 font-mono text-[8px] text-fuchsia-100">{formatCooldown(cooldownRemaining.pet)}</span>}
         </div>
         <div
-          className={cn('relative z-10 flex max-h-full items-end justify-center', !walkMotion.active && 'pet-character-motion')}
+          className={cn(
+            'relative z-10 flex max-h-full items-end justify-center',
+            !walkMotion.active && !reactionMotion && !isSleeping && 'pet-character-motion',
+            reactionMotion && `pet-react-${reactionMotion}`,
+            isSleeping && !reactionMotion && 'pet-sleeping-motion',
+          )}
           style={{
             width: roomWidth,
             transform: walkMotion.active ? `translate3d(${walkMotion.offsetPercent}%, ${walkMotion.bob}px, 0) scaleX(${walkMotion.facing})` : undefined,
@@ -266,13 +329,13 @@ function PetRoom({
           <StatusBar label="愛情度" value={stats.affection} display={`${stats.affection}`} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
         </div>
         <div className="mt-2 flex min-h-4 items-center justify-end">
-          <p className="break-words text-right text-[9px] text-cyan-200" role="status">{isFull ? '満腹なのでご飯をあげられません' : message}</p>
+          <p className="break-words text-right text-[9px] text-cyan-200" role="status">{isSleeping ? 'すやすや眠っています' : isFull ? '満腹なのでご飯をあげられません' : message}</p>
         </div>
-        <div className="mt-1 grid grid-cols-3 gap-2">
+        <div className="mt-1 grid grid-cols-2 gap-2">
           {ROOM_ACTIONS.map(action => {
             const Icon = action.icon
             const remaining = cooldownRemaining[action.id]
-            const disabled = (action.id === 'feed' && isFull) || remaining > 0
+            const disabled = isSleeping || (action.id === 'feed' && isFull) || remaining > 0
             return (
               <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-14 flex-col gap-0.5 rounded-md bg-black/35 px-1 text-xs transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
                 <span className="flex items-center gap-1.5"><Icon className="size-4" /><span className="font-bold">{action.label}</span></span>
@@ -283,6 +346,40 @@ function PetRoom({
         </div>
       </div>
     </section>
+  )
+}
+
+const CARE_CHOICES: Record<PetCareCategory, Array<{ id: PetCareAction; label: string; detail: string }>> = {
+  feed: [
+    { id: 'feed-basic', label: '普通のご飯', detail: '満腹度 +20 / EXP +5 / 愛情度 +1 / CT 10分' },
+    { id: 'feed-premium', label: '高級ご飯', detail: '満腹度 +40 / EXP +15 / 愛情度 +3 / CT 30分' },
+  ],
+  play: [
+    { id: 'play-yarn', label: '毛糸', detail: 'EXP +5 / 愛情度 +3 / 眠気 +5 / CT 10分' },
+    { id: 'play-ball', label: 'ボール', detail: 'EXP +10 / 愛情度 +5 / 眠気 +10 / CT 20分' },
+    { id: 'play-toy', label: 'おもちゃ', detail: 'EXP +15 / 愛情度 +7 / 眠気 +15 / CT 30分' },
+  ],
+}
+
+function CareChoiceDialog({ kind, onClose, onChoose }: { kind: PetCareCategory | null; onClose: () => void; onChoose: (action: PetCareAction) => void }) {
+  if (!kind) return null
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="mx-4 max-w-sm border-violet-300/25 bg-[#0b0712]">
+        <DialogHeader><DialogTitle>{kind === 'feed' ? 'ご飯を選ぶ' : '遊びを選ぶ'}</DialogTitle></DialogHeader>
+        <div className="grid gap-2 pt-2">
+          {CARE_CHOICES[kind].map(choice => {
+            const Icon = kind === 'feed' ? Utensils : Gamepad2
+            return (
+              <button key={choice.id} type="button" onClick={() => onChoose(choice.id)} className="flex items-center gap-3 rounded-lg border border-violet-300/20 bg-violet-400/5 p-3 text-left transition hover:border-fuchsia-300/45 hover:bg-fuchsia-400/10 active:scale-[.98]">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fuchsia-400/10 text-fuchsia-200"><Icon className="size-5" /></span>
+                <span className="min-w-0"><span className="block font-bold text-white">{choice.label}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{choice.detail}</span></span>
+              </button>
+            )
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -380,26 +477,30 @@ function CharacterRoster({ selectedPetId, petStats, onSelect, vertical = false }
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, selectedStats, petStats, lastCareAt, expressionState, selectPet, care, setExpression, maxLevel } = usePetState()
+  const { selectedPetId, selectedStats, petStats, cooldownUntil, expressionState, isSleeping, selectPet, care, setExpression, maxLevel } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
   const [walkTick, setWalkTick] = useState(0)
+  const [careMenu, setCareMenu] = useState<PetCareCategory | null>(null)
+  const [reactionMotion, setReactionMotion] = useState<ReactionMotion>(null)
+  const [speechBubble, setSpeechBubble] = useState('')
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
   const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const motionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blinkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blinkResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pet = PET_BY_ID[selectedPetId]
   const isFull = selectedStats.fullness >= 100
-  const cooldownRemaining: Record<PetAction, number> = {
-    feed: getPetCooldownRemaining('feed', lastCareAt, now),
-    play: getPetCooldownRemaining('play', lastCareAt, now),
-    sleep: getPetCooldownRemaining('sleep', lastCareAt, now),
-    pet: getPetCooldownRemaining('pet', lastCareAt, now),
+  const cooldownRemaining: Record<PetCareCategory, number> = {
+    feed: getCareCooldownRemaining('feed', cooldownUntil, now),
+    play: getCareCooldownRemaining('play', cooldownUntil, now),
   }
   const expression: PetExpression = expressionState.until > now && expressionState.kind !== 'default'
     ? expressionState.kind
-    : selectedStats.fullness <= 30
+    : isSleeping
+      ? 'sleepy'
+      : selectedStats.fullness <= 30
       ? 'hungry'
       : selectedStats.sleepiness >= 80
         ? 'sleepy'
@@ -408,9 +509,9 @@ export function PetPage() {
           : isBlinking
             ? 'blink'
             : 'default'
-  const canShowWalk = pet.walk.enabled && expression === 'default'
+  const canShowWalk = pet.walk.enabled && !isSleeping && expression === 'default' && !reactionMotion
   const walkMotion = getWalkMotion(walkTick, canShowWalk)
-  const displayImage = canShowWalk ? pet.walk.frames[walkMotion.frame] : pet.expressions[expression]
+  const displayImage = canShowWalk && walkMotion.moving ? pet.walk.frames[walkMotion.frame] : pet.expressions[expression]
 
   useEffect(() => {
     fetch('/api/dashboard', { credentials: 'include' })
@@ -438,6 +539,10 @@ export function PetPage() {
     }
   }, [expressionState.kind, expressionState.until, selectedPetId])
 
+  useEffect(() => () => {
+    if (motionTimer.current) clearTimeout(motionTimer.current)
+  }, [])
+
   useEffect(() => {
     function scheduleBlink() {
       blinkTimer.current = setTimeout(() => {
@@ -459,28 +564,53 @@ export function PetPage() {
   useEffect(() => {
     setWalkTick(0)
     if (!pet.walk.enabled) return
-    const interval = setInterval(() => setWalkTick(current => (current + 1) % 24), 280)
+    const interval = setInterval(() => setWalkTick(current => (current + 1) % 30), 280)
     return () => clearInterval(interval)
   }, [selectedPetId, pet.walk.enabled])
 
-  function handleAction(action: PetAction) {
-    if (action === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return false }
+  function openCareMenu(category: PetCareCategory) {
+    if (isSleeping) { setMessage('眠っているので今はできません'); return }
+    if (category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return }
+    const remaining = getCareCooldownRemaining(category, cooldownUntil, Date.now())
+    if (remaining > 0) { setMessage(formatCooldown(remaining)); return }
+    setCareMenu(category)
+  }
+
+  function handleCare(action: PetCareAction) {
     const actionNow = Date.now()
-    const remaining = getPetCooldownRemaining(action, lastCareAt, actionNow)
-    if (remaining > 0) { setMessage(formatCooldown(remaining)); return false }
-    if (!care(action, actionNow)) return false
+    const config = PET_CARE_CONFIG[action]
+    if (config.category !== 'pet') {
+      if (isSleeping) { setMessage('眠っているので今はできません'); return false }
+      if (config.category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return false }
+      const remaining = getCareCooldownRemaining(config.category, cooldownUntil, actionNow)
+      if (remaining > 0) { setMessage(formatCooldown(remaining)); return false }
+    }
+    const result = care(action, actionNow)
+    if (!result) return false
     setNow(actionNow)
-    setExpression({ feed: 'happy', play: 'happy', sleep: 'sleepy', pet: 'petted' }[action] as PetExpression, 2000, actionNow)
-    setMessage({ feed: 'ご飯をあげました', play: '一緒に遊びました', sleep: 'ゆっくり休みました', pet: 'やさしくなでました' }[action])
+    const duration = result.motion === 'angry' ? 2800 : 2200
+    setExpression(result.expression, duration, actionNow)
+    setReactionMotion(result.motion)
+    setSpeechBubble(result.message === 'overpetted' ? pet.messages.overpetted : '')
+    setMessage({ fed: 'ご飯をあげました', played: '一緒に遊びました', petted: 'うれしそうにしています', annoyed: '少し嫌そうにしています', overpetted: pet.messages.overpetted }[result.message] ?? '')
+    setCareMenu(null)
+    if (motionTimer.current) clearTimeout(motionTimer.current)
+    motionTimer.current = setTimeout(() => {
+      setReactionMotion(null)
+      setSpeechBubble('')
+    }, duration)
     return true
   }
 
   function handlePet() {
-    handleAction('pet')
+    handleCare('pet')
   }
 
   function handleSelect(id: PetId) {
     setIsBlinking(false)
+    setReactionMotion(null)
+    setSpeechBubble('')
+    setCareMenu(null)
     selectPet(id)
     setMessage('')
   }
@@ -514,10 +644,13 @@ export function PetPage() {
               expression={expression}
               stats={selectedStats}
               isFull={isFull}
+              isSleeping={isSleeping}
               message={message}
               cooldownRemaining={cooldownRemaining}
               walkMotion={walkMotion}
-              onAction={action => handleAction(action)}
+              reactionMotion={reactionMotion}
+              speechBubble={speechBubble}
+              onAction={openCareMenu}
               onPet={handlePet}
             />
             <div className="lg:hidden"><SkillPanel pet={pet} /></div>
@@ -532,6 +665,7 @@ export function PetPage() {
           </aside>
         </div>
       </div>
+      <CareChoiceDialog kind={careMenu} onClose={() => setCareMenu(null)} onChoose={handleCare} />
     </AppShell>
   )
 }

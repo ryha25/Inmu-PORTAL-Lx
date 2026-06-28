@@ -1,4 +1,6 @@
 import nyarushianImage from '@assets/inmu-pet-nyarushian-v2.png'
+import nyarushianAngryImage from '@assets/inmu-pet-nyarushian-angry-v1.png'
+import nyarushianAnnoyedImage from '@assets/inmu-pet-nyarushian-annoyed-v1.png'
 import nyarushianBlinkImage from '@assets/inmu-pet-nyarushian-blink-v1.png'
 import nyarushianHappyImage from '@assets/inmu-pet-nyarushian-happy-v1.png'
 import nyarushianHungryImage from '@assets/inmu-pet-nyarushian-hungry-v1.png'
@@ -7,12 +9,16 @@ import nyarushianSleepyImage from '@assets/inmu-pet-nyarushian-sleepy-v1.png'
 import nyarushianWalk1Image from '@assets/inmu-pet-nyarushian-walk-1-v1.png'
 import nyarushianWalk2Image from '@assets/inmu-pet-nyarushian-walk-2-v1.png'
 import takuyaImage from '@assets/inmu-pet-takuya-v2.png'
+import takuyaAngryImage from '@assets/inmu-pet-takuya-angry-v1.png'
+import takuyaAnnoyedImage from '@assets/inmu-pet-takuya-annoyed-v1.png'
 import takuyaBlinkImage from '@assets/inmu-pet-takuya-blink-v1.png'
 import takuyaHappyImage from '@assets/inmu-pet-takuya-happy-v1.png'
 import takuyaHungryImage from '@assets/inmu-pet-takuya-hungry-v1.png'
 import takuyaPettedImage from '@assets/inmu-pet-takuya-petted-v1.png'
 import takuyaSleepyImage from '@assets/inmu-pet-takuya-sleepy-v1.png'
 import leonImage from '@assets/inmu-pet-leon-v2.png'
+import leonAngryImage from '@assets/inmu-pet-leon-angry-v1.png'
+import leonAnnoyedImage from '@assets/inmu-pet-leon-annoyed-v1.png'
 import leonBlinkImage from '@assets/inmu-pet-leon-blink-v1.png'
 import leonHappyImage from '@assets/inmu-pet-leon-happy-v1.png'
 import leonHungryImage from '@assets/inmu-pet-leon-hungry-v1.png'
@@ -20,7 +26,7 @@ import leonPettedImage from '@assets/inmu-pet-leon-petted-v1.png'
 import leonSleepyImage from '@assets/inmu-pet-leon-sleepy-v1.png'
 
 export type PetId = 'nyarushian' | 'takuya' | 'leon'
-export type PetExpression = 'default' | 'blink' | 'happy' | 'sleepy' | 'hungry' | 'petted' | 'affectionate'
+export type PetExpression = 'default' | 'blink' | 'happy' | 'sleepy' | 'hungry' | 'petted' | 'affectionate' | 'annoyed' | 'angry'
 
 export type PetDefinition = {
   id: PetId
@@ -31,6 +37,9 @@ export type PetDefinition = {
   walk: {
     enabled: boolean
     frames: readonly [string, string]
+  }
+  messages: {
+    overpetted: string
   }
   roomWidth: string
   roomTheme: 'cat' | 'dog' | 'lion'
@@ -58,8 +67,11 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       hungry: nyarushianHungryImage,
       petted: nyarushianPettedImage,
       affectionate: nyarushianHappyImage,
+      annoyed: nyarushianAnnoyedImage,
+      angry: nyarushianAngryImage,
     },
     walk: { enabled: true, frames: [nyarushianWalk1Image, nyarushianWalk2Image] },
+    messages: { overpetted: 'もう十分だよ…' },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'cat',
     skill: { name: '幸運の肉球', effect: 'ポイント2倍' },
@@ -82,8 +94,11 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       hungry: takuyaHungryImage,
       petted: takuyaPettedImage,
       affectionate: takuyaHappyImage,
+      annoyed: takuyaAnnoyedImage,
+      angry: takuyaAngryImage,
     },
     walk: { enabled: false, frames: [takuyaImage, takuyaImage] },
+    messages: { overpetted: 'おいおい、もう十分だぜ！' },
     roomWidth: 'clamp(195px, 43%, 275px)',
     roomTheme: 'dog',
     skill: { name: '盛り上げ上手', effect: 'お世話EXPアップ' },
@@ -106,8 +121,11 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       hungry: leonHungryImage,
       petted: leonPettedImage,
       affectionate: leonHappyImage,
+      annoyed: leonAnnoyedImage,
+      angry: leonAngryImage,
     },
     walk: { enabled: false, frames: [leonImage, leonImage] },
+    messages: { overpetted: '余はもう十分だ。' },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'lion',
     skill: { name: '王者の導き', effect: '愛情度ボーナス' },
