@@ -193,20 +193,17 @@ function FestivalCharacter({ image, expression, name, className }: { image: stri
   const angry = expression === 'angry'
   const affectionate = expression === 'petted' || expression === 'affectionate'
   return (
-    <div className={cn('relative', className)} data-festival-expression={expression}>
-      <img src={image} alt={name} className="relative z-10 h-full w-full object-contain" />
-      <div className="pointer-events-none absolute left-1/2 top-[19%] z-30 w-[63%] -translate-x-1/2 -rotate-2 rounded-[45%_45%_22%_22%] border-y-2 border-red-300/70 bg-[#f7eddd] py-1 text-center text-[10px] font-black leading-none text-red-700 shadow-[0_2px_5px_rgba(0,0,0,.55)]">810 <span className="text-black">祭り</span>
-        <span className="absolute -right-[13%] top-[45%] h-[72%] w-[24%] rotate-[24deg] bg-[#f7eddd] [clip-path:polygon(0_0,100%_8%,72%_100%,42%_72%,0_100%)]" />
-      </div>
+    <div className={cn('relative aspect-[.9] overflow-hidden', className)} data-festival-expression={expression}>
+      <img src={image} alt={name} className="relative z-10 h-auto w-full brightness-110 contrast-105 mix-blend-multiply" />
       {(sleepy || displeased || angry) && <div className="pointer-events-none absolute inset-0 z-40">
-        <span className={cn('absolute left-[29%] top-[36%] h-1 w-[15%] rounded-full bg-[#2a130d]', angry ? '-rotate-[18deg]' : displeased ? 'rotate-[6deg]' : 'rotate-0')} />
-        <span className={cn('absolute right-[29%] top-[36%] h-1 w-[15%] rounded-full bg-[#2a130d]', angry ? 'rotate-[18deg]' : displeased ? '-rotate-[6deg]' : 'rotate-0')} />
-        {(displeased || angry) && <span className="absolute left-1/2 top-[46%] h-3 w-7 -translate-x-1/2 rounded-t-full border-t-[3px] border-[#2a130d]" />}
+        <span className={cn('absolute left-[31%] top-[31%] h-1 w-[14%] rounded-full bg-[#2a130d]', angry ? '-rotate-[18deg]' : displeased ? 'rotate-[6deg]' : 'rotate-0')} />
+        <span className={cn('absolute right-[31%] top-[31%] h-1 w-[14%] rounded-full bg-[#2a130d]', angry ? 'rotate-[18deg]' : displeased ? '-rotate-[6deg]' : 'rotate-0')} />
+        {(displeased || angry) && <span className="absolute left-1/2 top-[40%] h-3 w-7 -translate-x-1/2 rounded-t-full border-t-[3px] border-[#2a130d]" />}
       </div>}
       {affectionate && <div className="pointer-events-none absolute inset-0 z-40">
-        <span className="absolute left-[20%] top-[42%] h-3 w-6 rounded-full bg-pink-400/45 blur-[2px]" />
-        <span className="absolute right-[20%] top-[42%] h-3 w-6 rounded-full bg-pink-400/45 blur-[2px]" />
-        <Heart className="absolute right-[13%] top-[24%] size-6 fill-pink-400 text-pink-300 drop-shadow-[0_0_7px_rgba(244,114,182,.8)]" />
+        <span className="absolute left-[23%] top-[37%] h-3 w-6 rounded-full bg-pink-400/45 blur-[2px]" />
+        <span className="absolute right-[23%] top-[37%] h-3 w-6 rounded-full bg-pink-400/45 blur-[2px]" />
+        <Heart className="absolute right-[13%] top-[16%] size-6 fill-pink-400 text-pink-300 drop-shadow-[0_0_7px_rgba(244,114,182,.8)]" />
       </div>}
     </div>
   )
@@ -513,6 +510,9 @@ function SkillPanel({ pet }: { pet: PetDefinition }) {
           <p className="mt-0.5 break-words text-xs text-cyan-100/70">{pet.skill.effect}</p>
         </div>
       </div>
+      <ul className="mt-3 space-y-1 border-t border-cyan-300/10 pt-3">
+        {pet.skill.notes.map(note => <li key={note} className="flex gap-2 text-[10px] leading-relaxed text-cyan-50/60"><span className="text-cyan-300">•</span><span>{note}</span></li>)}
+      </ul>
     </section>
   )
 }

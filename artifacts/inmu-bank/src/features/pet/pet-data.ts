@@ -24,7 +24,7 @@ import leonHappyImage from '@assets/inmu-pet-leon-happy-v1.png'
 import leonHungryImage from '@assets/inmu-pet-leon-hungry-v1.png'
 import leonPettedImage from '@assets/inmu-pet-leon-petted-v1.png'
 import leonSleepyImage from '@assets/inmu-pet-leon-sleepy-v1.png'
-import inmuFestivalImage from '@assets/generated_images/mascot-v2-nobg.png'
+import inmuFestivalImage from '@assets/inmu-pet-festival-810-v1.jpg'
 import nyarushianRoomImage from '@assets/inmu-pet-room-nyarushian-v1.jpg'
 import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
 import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
@@ -56,6 +56,7 @@ export type PetDefinition = {
   skill: {
     name: string
     effect: string
+    notes: readonly string[]
   }
   levelRewards: readonly {
     level: 10 | 20 | 30
@@ -85,7 +86,11 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'cat',
     roomImage: nyarushianRoomImage,
-    skill: { name: '幸運の肉球', effect: 'ポイント2倍' },
+    skill: {
+      name: '幸運の肉球',
+      effect: '毎日受け取れるポイント ×2',
+      notes: ['Lv.1から発動', 'デイリーポイント受取時に適用'],
+    },
     levelRewards: [
       { level: 10, label: '紫の毛糸' },
       { level: 20, label: '特製クッション' },
@@ -113,7 +118,11 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomWidth: 'clamp(195px, 43%, 275px)',
     roomTheme: 'dog',
     roomImage: takuyaRoomImage,
-    skill: { name: '盛り上げ上手', effect: 'お世話EXPアップ' },
+    skill: {
+      name: '卍解',
+      effect: 'ガチャ無料回数 +3回（毎日）',
+      notes: ['Lv.1から発動', '通常の無料ガチャとは別に毎日3回', '毎日0:00（JST）リセット'],
+    },
     levelRewards: [
       { level: 10, label: '金のダンベル' },
       { level: 20, label: '特製サングラス' },
@@ -141,7 +150,11 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'lion',
     roomImage: leonRoomImage,
-    skill: { name: '王者の導き', effect: '愛情度ボーナス' },
+    skill: {
+      name: '百獣の王',
+      effect: '購入申請上限 +100,000 INMU（1日）',
+      notes: ['Lv.1から発動', '1日の購入申請可能枚数を10万INMU拡張'],
+    },
     levelRewards: [
       { level: 10, label: '王家の絨毯' },
       { level: 20, label: '宝石の首飾り' },
@@ -170,7 +183,11 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomTheme: 'festival',
     roomImage: festivalRoomImage,
     costume: { id: 'festival-810', label: '810祭りVer.' },
-    skill: { name: '810祭り魂', effect: 'お世話時ポイントボーナス' },
+    skill: {
+      name: '810祭り‼️',
+      effect: '購入申請（イベント時）還元率 +5%',
+      notes: ['Lv.1から発動', 'イベント期間中のみ有効', 'イベント時の購入申請還元率に+5%加算'],
+    },
     levelRewards: [
       { level: 10, label: '810提灯' },
       { level: 20, label: '祭り太鼓' },
