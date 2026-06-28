@@ -188,18 +188,10 @@ function BalanceChip({ icon, label, value }: { icon: ReactNode; label: string; v
 }
 
 function FestivalCharacter({ image, expression, name, className }: { image: string; expression: PetExpression; name: string; className?: string }) {
-  const sleepy = expression === 'sleepy' || expression === 'blink'
-  const displeased = expression === 'annoyed' || expression === 'hungry'
-  const angry = expression === 'angry'
   const affectionate = expression === 'petted' || expression === 'affectionate'
   return (
     <div className={cn('relative', className)} data-festival-expression={expression}>
       <img src={image} alt={name} className="relative z-10 block max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)]" />
-      {(sleepy || displeased || angry) && <div className="pointer-events-none absolute inset-0 z-40">
-        <span className={cn('absolute left-[31%] top-[31%] h-1 w-[14%] rounded-full bg-[#2a130d]', angry ? '-rotate-[18deg]' : displeased ? 'rotate-[6deg]' : 'rotate-0')} />
-        <span className={cn('absolute right-[31%] top-[31%] h-1 w-[14%] rounded-full bg-[#2a130d]', angry ? 'rotate-[18deg]' : displeased ? '-rotate-[6deg]' : 'rotate-0')} />
-        {(displeased || angry) && <span className="absolute left-1/2 top-[40%] h-3 w-7 -translate-x-1/2 rounded-t-full border-t-[3px] border-[#2a130d]" />}
-      </div>}
       {affectionate && <div className="pointer-events-none absolute inset-0 z-40">
         <span className="absolute left-[23%] top-[37%] h-3 w-6 rounded-full bg-pink-400/45 blur-[2px]" />
         <span className="absolute right-[23%] top-[37%] h-3 w-6 rounded-full bg-pink-400/45 blur-[2px]" />
