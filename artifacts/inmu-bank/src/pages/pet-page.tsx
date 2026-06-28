@@ -187,6 +187,31 @@ function BalanceChip({ icon, label, value }: { icon: ReactNode; label: string; v
   )
 }
 
+function FestivalCharacter({ image, expression, name, className }: { image: string; expression: PetExpression; name: string; className?: string }) {
+  const sleepy = expression === 'sleepy' || expression === 'blink'
+  const displeased = expression === 'annoyed' || expression === 'hungry'
+  const angry = expression === 'angry'
+  const affectionate = expression === 'petted' || expression === 'affectionate'
+  return (
+    <div className={cn('relative', className)} data-festival-expression={expression}>
+      <img src={image} alt={name} className="relative z-10 h-full w-full object-contain" />
+      <div className="pointer-events-none absolute left-1/2 top-[19%] z-30 w-[63%] -translate-x-1/2 -rotate-2 rounded-[45%_45%_22%_22%] border-y-2 border-red-300/70 bg-[#f7eddd] py-1 text-center text-[10px] font-black leading-none text-red-700 shadow-[0_2px_5px_rgba(0,0,0,.55)]">810 <span className="text-black">祭り</span>
+        <span className="absolute -right-[13%] top-[45%] h-[72%] w-[24%] rotate-[24deg] bg-[#f7eddd] [clip-path:polygon(0_0,100%_8%,72%_100%,42%_72%,0_100%)]" />
+      </div>
+      {(sleepy || displeased || angry) && <div className="pointer-events-none absolute inset-0 z-40">
+        <span className={cn('absolute left-[29%] top-[36%] h-1 w-[15%] rounded-full bg-[#2a130d]', angry ? '-rotate-[18deg]' : displeased ? 'rotate-[6deg]' : 'rotate-0')} />
+        <span className={cn('absolute right-[29%] top-[36%] h-1 w-[15%] rounded-full bg-[#2a130d]', angry ? 'rotate-[18deg]' : displeased ? '-rotate-[6deg]' : 'rotate-0')} />
+        {(displeased || angry) && <span className="absolute left-1/2 top-[46%] h-3 w-7 -translate-x-1/2 rounded-t-full border-t-[3px] border-[#2a130d]" />}
+      </div>}
+      {affectionate && <div className="pointer-events-none absolute inset-0 z-40">
+        <span className="absolute left-[20%] top-[42%] h-3 w-6 rounded-full bg-pink-400/45 blur-[2px]" />
+        <span className="absolute right-[20%] top-[42%] h-3 w-6 rounded-full bg-pink-400/45 blur-[2px]" />
+        <Heart className="absolute right-[13%] top-[24%] size-6 fill-pink-400 text-pink-300 drop-shadow-[0_0_7px_rgba(244,114,182,.8)]" />
+      </div>}
+    </div>
+  )
+}
+
 function PetRoom({
   petId,
   name,
@@ -194,7 +219,6 @@ function PetRoom({
   roomWidth,
   roomTheme,
   roomImage,
-  costumeId,
   expression,
   stats,
   isFull,
@@ -213,7 +237,6 @@ function PetRoom({
   roomWidth: string
   roomTheme: 'cat' | 'dog' | 'lion' | 'festival'
   roomImage: string
-  costumeId?: 'festival-810'
   expression: PetExpression
   stats: PetStats
   isFull: boolean
@@ -378,23 +401,17 @@ function PetRoom({
             style={{ transform: `translateX(-50%) scaleX(${walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1})` }}
             data-pet-shadow
           />
-          {costumeId === 'festival-810' && (
-            <div className="pointer-events-none absolute inset-0 z-20" data-pet-costume="festival-810">
-              <div className="absolute left-1/2 top-[13%] z-30 w-[66%] -translate-x-1/2 -rotate-2 border-y border-red-300 bg-[#f7eddd] py-0.5 text-center text-[10px] font-black text-red-700 shadow-[0_2px_5px_rgba(0,0,0,.5)]">810 祭り</div>
-              <div className="absolute left-[14%] top-[44%] h-[34%] w-[37%] -rotate-3 border-l-2 border-t-2 border-red-950/80 bg-[repeating-conic-gradient(#b91c1c_0_25%,#f5ead8_0_50%)_0_0/12px_12px] shadow-[0_4px_8px_rgba(0,0,0,.35)] [clip-path:polygon(18%_0,100%_12%,82%_100%,0_88%)]" />
-              <div className="absolute right-[14%] top-[44%] h-[34%] w-[37%] rotate-3 border-r-2 border-t-2 border-red-950/80 bg-[repeating-conic-gradient(#b91c1c_0_25%,#f5ead8_0_50%)_0_0/12px_12px] shadow-[0_4px_8px_rgba(0,0,0,.35)] [clip-path:polygon(0_12%,82%_0,100%_88%,18%_100%)]" />
-              <div className="absolute left-1/2 top-[43%] z-30 h-[31%] w-[16%] -translate-x-1/2 bg-[linear-gradient(135deg,#ef4444,#991b1b)] shadow-[0_3px_7px_rgba(0,0,0,.45)] [clip-path:polygon(20%_0,80%_0,100%_78%,50%_100%,0_78%)]">
-                <span className="absolute left-1/2 top-[43%] -translate-x-1/2 -rotate-90 text-[7px] font-black tracking-wider text-amber-100">INMU</span>
-              </div>
-            </div>
+          {roomTheme === 'festival' ? (
+            <FestivalCharacter image={image} expression={expression} name={name} className="relative z-10 w-full drop-shadow-[0_14px_18px_rgba(0,0,0,.55)]" />
+          ) : (
+            <img
+              src={image}
+              alt={name}
+              className={cn('relative z-10 max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform,opacity] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
+              data-pet-character
+              data-expression={expression}
+            />
           )}
-          <img
-            src={image}
-            alt={name}
-            className={cn('relative z-10 max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform,opacity] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
-            data-pet-character
-            data-expression={expression}
-          />
         </div>
       </div>
 
@@ -535,7 +552,9 @@ function CharacterRoster({ candidates, selectedPetId, petStats, onSelect, vertic
             <button key={candidate.id} type="button" aria-pressed={active} onClick={() => onSelect(candidate.id)} className={cn(vertical ? 'w-full' : 'w-24 shrink-0 snap-start sm:w-28', 'overflow-hidden rounded-lg border bg-[#0d0916] text-left transition-colors', active ? 'border-fuchsia-400 shadow-[0_0_18px_rgba(217,70,239,.24)]' : 'border-violet-300/15 hover:border-violet-300/35')}>
               <div className={cn('relative flex items-end justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_65%,rgba(126,34,206,.2),transparent_67%)] px-2 pt-2', vertical ? 'h-24' : 'aspect-square')}>
                 <span className="absolute left-1.5 top-1.5 z-10 flex size-5 items-center justify-center rounded-full border border-amber-300/45 bg-black/70 font-mono text-[9px] font-black text-amber-200">{index + 1}</span>
-                <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain drop-shadow-[0_8px_10px_rgba(0,0,0,.45)]" />
+                {candidate.roomTheme === 'festival'
+                  ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
+                  : <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain drop-shadow-[0_8px_10px_rgba(0,0,0,.45)]" />}
               </div>
               <div className="border-t border-white/5 p-2">
                 <p className="break-words text-xs font-bold">{candidate.name}</p>
@@ -564,7 +583,9 @@ function OwnedCharacters({ activePetIds, onSet }: { activePetIds: readonly PetId
         {owned.map(candidate => (
           <div key={candidate.id} className="flex items-center gap-3 rounded-lg border border-violet-300/15 bg-[#0d0916] p-2.5">
             <div className="flex size-16 shrink-0 items-end justify-center overflow-hidden rounded-md bg-[radial-gradient(circle_at_50%_65%,rgba(126,34,206,.25),transparent_68%)]">
-              <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain" />
+              {candidate.roomTheme === 'festival'
+                ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
+                : <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain" />}
             </div>
             <div className="min-w-0 flex-1">
               <p className="break-words text-sm font-bold text-white">{candidate.name}</p>
@@ -573,15 +594,7 @@ function OwnedCharacters({ activePetIds, onSet }: { activePetIds: readonly PetId
             <Button type="button" size="sm" onClick={() => onSet(candidate.id)} className="shrink-0 border border-fuchsia-300/35 bg-fuchsia-500/15 text-[11px] text-fuchsia-100 hover:bg-fuchsia-500/25">育成にセット</Button>
           </div>
         ))}
-        <div className="flex items-center gap-3 rounded-lg border border-violet-300/10 bg-[#0a0710] p-2.5 opacity-75">
-          <div className="flex size-16 shrink-0 items-center justify-center rounded-md bg-violet-400/5"><PawPrint className="size-7 text-violet-300/35" /></div>
-          <div className="min-w-0 flex-1"><p className="text-sm font-bold text-white">レアル</p><p className="text-[10px] text-muted-foreground">キャラクター画像準備中</p></div>
-          <Button type="button" size="sm" disabled className="shrink-0 text-[11px]">育成にセット</Button>
-        </div>
-        <div className="flex items-center gap-3 rounded-lg border border-dashed border-violet-300/10 bg-black/20 p-2.5 opacity-60">
-          <div className="flex size-16 shrink-0 items-center justify-center rounded-md bg-white/[.02]"><LockKeyhole className="size-6 text-muted-foreground" /></div>
-          <div><p className="text-sm font-bold text-white">？？？</p><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Coming Soon</p></div>
-        </div>
+        {owned.length === 0 && <p className="rounded-lg border border-violet-300/10 bg-black/20 px-3 py-4 text-center text-xs text-muted-foreground">すべてのキャラクターを育成中です</p>}
       </div>
     </section>
   )
@@ -648,7 +661,7 @@ export function PetPage() {
       ...Object.values(candidate.expressions),
       ...candidate.walk.frames,
       candidate.roomImage,
-    ]))
+    ]).filter((url): url is string => Boolean(url)))
     preloadUrls.forEach(url => { const image = new Image(); image.src = url })
   }, [])
 
@@ -820,7 +833,6 @@ export function PetPage() {
               roomWidth={pet.roomWidth}
               roomTheme={pet.roomTheme}
               roomImage={pet.roomImage}
-              costumeId={pet.costume?.id}
               expression={expression}
               stats={selectedStats}
               isFull={isFull}

@@ -30,7 +30,7 @@ import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
 import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
 import festivalRoomImage from '@assets/inmu-pet-room-festival-v1.jpg'
 
-export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'inmu' | 'inmu-festival'
+export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'inmu-festival'
 export type PetExpression = 'default' | 'blink' | 'happy' | 'sleepy' | 'hungry' | 'petted' | 'affectionate' | 'annoyed' | 'angry'
 
 export type PetDefinition = {
@@ -146,34 +146,6 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       { level: 10, label: '王家の絨毯' },
       { level: 20, label: '宝石の首飾り' },
       { level: 30, label: '獅子王の玉座' },
-    ],
-  },
-  {
-    id: 'inmu',
-    name: 'INMUくん',
-    rarity: 3,
-    image: inmuFestivalImage,
-    expressions: {
-      default: inmuFestivalImage,
-      blink: inmuFestivalImage,
-      happy: inmuFestivalImage,
-      sleepy: inmuFestivalImage,
-      hungry: inmuFestivalImage,
-      petted: inmuFestivalImage,
-      affectionate: inmuFestivalImage,
-      annoyed: inmuFestivalImage,
-      angry: inmuFestivalImage,
-    },
-    walk: { enabled: true, frames: [inmuFestivalImage, inmuFestivalImage] },
-    messages: { overpetted: 'もう十分だよ！' },
-    roomWidth: 'clamp(185px, 41%, 255px)',
-    roomTheme: 'festival',
-    roomImage: festivalRoomImage,
-    skill: { name: 'INMUスマイル', effect: '愛情度ボーナス' },
-    levelRewards: [
-      { level: 10, label: 'INMUマグ' },
-      { level: 20, label: '金のコイン' },
-      { level: 30, label: 'INMUクッション' },
     ],
   },
   {
