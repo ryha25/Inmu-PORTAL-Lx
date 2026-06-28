@@ -17,6 +17,9 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
+const ACTIVE_PETS_STORAGE_KEY = 'inmu-portal:pet-active-slots:v1'
+const DEFAULT_ACTIVE_PETS: PetId[] = ['nyarushian', 'takuya', 'leon']
+
 const PET_ROOM_CSS = `
   @keyframes pet-meter-shine {
     0% { transform: translateX(-180%) skewX(-18deg); opacity: 0; }
@@ -191,6 +194,7 @@ function PetRoom({
   roomWidth,
   roomTheme,
   roomImage,
+  costumeId,
   expression,
   stats,
   isFull,
@@ -209,6 +213,7 @@ function PetRoom({
   roomWidth: string
   roomTheme: 'cat' | 'dog' | 'lion' | 'festival'
   roomImage: string
+  costumeId?: 'festival-810'
   expression: PetExpression
   stats: PetStats
   isFull: boolean
@@ -373,8 +378,15 @@ function PetRoom({
             style={{ transform: `translateX(-50%) scaleX(${walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1})` }}
             data-pet-shadow
           />
-          {roomTheme === 'festival' && (
-            <div className="absolute left-1/2 top-[14%] z-20 w-[64%] -translate-x-1/2 -rotate-2 border-y border-red-300 bg-[#f5ead8] py-0.5 text-center text-[10px] font-black text-red-700 shadow-[0_2px_5px_rgba(0,0,0,.45)]">810 祭り</div>
+          {costumeId === 'festival-810' && (
+            <div className="pointer-events-none absolute inset-0 z-20" data-pet-costume="festival-810">
+              <div className="absolute left-1/2 top-[13%] z-30 w-[66%] -translate-x-1/2 -rotate-2 border-y border-red-300 bg-[#f7eddd] py-0.5 text-center text-[10px] font-black text-red-700 shadow-[0_2px_5px_rgba(0,0,0,.5)]">810 祭り</div>
+              <div className="absolute left-[14%] top-[44%] h-[34%] w-[37%] -rotate-3 border-l-2 border-t-2 border-red-950/80 bg-[repeating-conic-gradient(#b91c1c_0_25%,#f5ead8_0_50%)_0_0/12px_12px] shadow-[0_4px_8px_rgba(0,0,0,.35)] [clip-path:polygon(18%_0,100%_12%,82%_100%,0_88%)]" />
+              <div className="absolute right-[14%] top-[44%] h-[34%] w-[37%] rotate-3 border-r-2 border-t-2 border-red-950/80 bg-[repeating-conic-gradient(#b91c1c_0_25%,#f5ead8_0_50%)_0_0/12px_12px] shadow-[0_4px_8px_rgba(0,0,0,.35)] [clip-path:polygon(0_12%,82%_0,100%_88%,18%_100%)]" />
+              <div className="absolute left-1/2 top-[43%] z-30 h-[31%] w-[16%] -translate-x-1/2 bg-[linear-gradient(135deg,#ef4444,#991b1b)] shadow-[0_3px_7px_rgba(0,0,0,.45)] [clip-path:polygon(20%_0,80%_0,100%_78%,50%_100%,0_78%)]">
+                <span className="absolute left-1/2 top-[43%] -translate-x-1/2 -rotate-90 text-[7px] font-black tracking-wider text-amber-100">INMU</span>
+              </div>
+            </div>
           )}
           <img
             src={image}
@@ -508,20 +520,21 @@ function RewardsPanel({ pet, level }: { pet: PetDefinition; level: number }) {
   )
 }
 
-function CharacterRoster({ selectedPetId, petStats, onSelect, vertical = false }: { selectedPetId: PetId; petStats: Record<PetId, PetStats>; onSelect: (id: PetId) => void; vertical?: boolean }) {
+function CharacterRoster({ candidates, selectedPetId, petStats, onSelect, vertical = false }: { candidates: readonly PetDefinition[]; selectedPetId: PetId; petStats: Record<PetId, PetStats>; onSelect: (id: PetId) => void; vertical?: boolean }) {
   return (
     <section className={vertical ? '' : 'border-t border-violet-300/15 pt-4'}>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold text-fuchsia-200">所持キャラクター</h2>
-        <span className="font-mono text-[10px] text-muted-foreground">3 / 3</span>
+        <h2 className="text-sm font-bold text-fuchsia-200">育成中</h2>
+        <span className="font-mono text-[10px] text-muted-foreground">{candidates.length} / 3</span>
       </div>
       <div className={cn(vertical ? 'flex flex-col gap-2' : 'flex snap-x snap-mandatory touch-pan-x gap-2 overflow-x-auto overscroll-x-contain pb-2 pr-4 scrollbar-none')}>
-        {PET_DEFINITIONS.map(candidate => {
+        {candidates.map((candidate, index) => {
           const active = candidate.id === selectedPetId
           const stats = petStats[candidate.id]
           return (
             <button key={candidate.id} type="button" aria-pressed={active} onClick={() => onSelect(candidate.id)} className={cn(vertical ? 'w-full' : 'w-24 shrink-0 snap-start sm:w-28', 'overflow-hidden rounded-lg border bg-[#0d0916] text-left transition-colors', active ? 'border-fuchsia-400 shadow-[0_0_18px_rgba(217,70,239,.24)]' : 'border-violet-300/15 hover:border-violet-300/35')}>
-              <div className={cn('flex items-end justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_65%,rgba(126,34,206,.2),transparent_67%)] px-2 pt-2', vertical ? 'h-24' : 'aspect-square')}>
+              <div className={cn('relative flex items-end justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_65%,rgba(126,34,206,.2),transparent_67%)] px-2 pt-2', vertical ? 'h-24' : 'aspect-square')}>
+                <span className="absolute left-1.5 top-1.5 z-10 flex size-5 items-center justify-center rounded-full border border-amber-300/45 bg-black/70 font-mono text-[9px] font-black text-amber-200">{index + 1}</span>
                 <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain drop-shadow-[0_8px_10px_rgba(0,0,0,.45)]" />
               </div>
               <div className="border-t border-white/5 p-2">
@@ -539,22 +552,71 @@ function CharacterRoster({ selectedPetId, petStats, onSelect, vertical = false }
   )
 }
 
+function OwnedCharacters({ activePetIds, onSet }: { activePetIds: readonly PetId[]; onSet: (id: PetId) => void }) {
+  const owned = PET_DEFINITIONS.filter(candidate => !activePetIds.includes(candidate.id))
+  return (
+    <section className="border-t border-violet-300/15 pt-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold text-fuchsia-200">所持キャラクター</h2>
+        <span className="text-[10px] text-muted-foreground">育成枠を選んで入れ替え</span>
+      </div>
+      <div className="space-y-2">
+        {owned.map(candidate => (
+          <div key={candidate.id} className="flex items-center gap-3 rounded-lg border border-violet-300/15 bg-[#0d0916] p-2.5">
+            <div className="flex size-16 shrink-0 items-end justify-center overflow-hidden rounded-md bg-[radial-gradient(circle_at_50%_65%,rgba(126,34,206,.25),transparent_68%)]">
+              <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="break-words text-sm font-bold text-white">{candidate.name}</p>
+              <p className="mt-0.5 text-[10px] text-amber-300">★{candidate.rarity}{candidate.costume ? ` ・ ${candidate.costume.label}` : ''}</p>
+            </div>
+            <Button type="button" size="sm" onClick={() => onSet(candidate.id)} className="shrink-0 border border-fuchsia-300/35 bg-fuchsia-500/15 text-[11px] text-fuchsia-100 hover:bg-fuchsia-500/25">育成にセット</Button>
+          </div>
+        ))}
+        <div className="flex items-center gap-3 rounded-lg border border-violet-300/10 bg-[#0a0710] p-2.5 opacity-75">
+          <div className="flex size-16 shrink-0 items-center justify-center rounded-md bg-violet-400/5"><PawPrint className="size-7 text-violet-300/35" /></div>
+          <div className="min-w-0 flex-1"><p className="text-sm font-bold text-white">レアル</p><p className="text-[10px] text-muted-foreground">キャラクター画像準備中</p></div>
+          <Button type="button" size="sm" disabled className="shrink-0 text-[11px]">育成にセット</Button>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-violet-300/10 bg-black/20 p-2.5 opacity-60">
+          <div className="flex size-16 shrink-0 items-center justify-center rounded-md bg-white/[.02]"><LockKeyhole className="size-6 text-muted-foreground" /></div>
+          <div><p className="text-sm font-bold text-white">？？？</p><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Coming Soon</p></div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function PetPage() {
   const { profile, unread } = useAuth()
   const { selectedPetId, selectedStats, petStats, cooldownUntil, expressionState, isSleeping, selectPet, care, setExpression, maxLevel } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
+  const [isYawning, setIsYawning] = useState(false)
   const [walkTick, setWalkTick] = useState(0)
   const [careMenu, setCareMenu] = useState<PetCareCategory | null>(null)
   const [reactionMotion, setReactionMotion] = useState<ReactionMotion>(null)
   const [speechBubble, setSpeechBubble] = useState('')
+  const [activePetIds, setActivePetIds] = useState<PetId[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_ACTIVE_PETS
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(ACTIVE_PETS_STORAGE_KEY) ?? '[]') as PetId[]
+      const valid = saved.filter((id, index) => PET_BY_ID[id] && saved.indexOf(id) === index).slice(0, 3)
+      return valid.length === 3 ? valid : DEFAULT_ACTIVE_PETS
+    } catch {
+      return DEFAULT_ACTIVE_PETS
+    }
+  })
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
   const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const motionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blinkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blinkResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const yawnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const yawnResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pet = PET_BY_ID[selectedPetId]
+  const activePets = activePetIds.map(id => PET_BY_ID[id]).filter(Boolean)
   const isFull = selectedStats.fullness >= 100
   const cooldownRemaining: Record<PetCareCategory, number> = {
     feed: getCareCooldownRemaining('feed', cooldownUntil, now),
@@ -568,14 +630,32 @@ export function PetPage() {
       ? 'hungry'
       : selectedStats.sleepiness >= 80
         ? 'sleepy'
-        : selectedStats.affection >= 80
+        : selectedStats.fullness >= 100
+          ? 'petted'
+          : selectedStats.affection >= 100
           ? 'affectionate'
+          : isYawning
+            ? 'sleepy'
           : isBlinking
             ? 'blink'
             : 'default'
   const canShowWalk = pet.walk.enabled && !isSleeping && expression === 'default' && !reactionMotion
   const walkMotion = getWalkMotion(walkTick, canShowWalk)
   const displayImage = canShowWalk && walkMotion.moving ? pet.walk.frames[walkMotion.frame] : pet.expressions[expression]
+
+  useEffect(() => {
+    const preloadUrls = new Set(PET_DEFINITIONS.flatMap(candidate => [
+      ...Object.values(candidate.expressions),
+      ...candidate.walk.frames,
+      candidate.roomImage,
+    ]))
+    preloadUrls.forEach(url => { const image = new Image(); image.src = url })
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(ACTIVE_PETS_STORAGE_KEY, JSON.stringify(activePetIds))
+    if (!activePetIds.includes(selectedPetId)) selectPet(activePetIds[0])
+  }, [activePetIds, selectedPetId])
 
   useEffect(() => {
     fetch('/api/dashboard', { credentials: 'include' })
@@ -624,6 +704,28 @@ export function PetPage() {
       if (blinkResetTimer.current) clearTimeout(blinkResetTimer.current)
     }
   }, [selectedPetId])
+
+  useEffect(() => {
+    function scheduleYawn() {
+      yawnTimer.current = setTimeout(() => {
+        if (!isSleeping && expressionState.kind === 'default' && !reactionMotion) {
+          setIsYawning(true)
+          yawnResetTimer.current = setTimeout(() => {
+            setIsYawning(false)
+            scheduleYawn()
+          }, 3000)
+          return
+        }
+        scheduleYawn()
+      }, 18000 + Math.round(Math.random() * 12000))
+    }
+    setIsYawning(false)
+    scheduleYawn()
+    return () => {
+      if (yawnTimer.current) clearTimeout(yawnTimer.current)
+      if (yawnResetTimer.current) clearTimeout(yawnResetTimer.current)
+    }
+  }, [selectedPetId, isSleeping, expressionState.kind, reactionMotion])
 
   useEffect(() => {
     setWalkTick(0)
@@ -679,6 +781,17 @@ export function PetPage() {
     setMessage('')
   }
 
+  function handleSetActive(id: PetId) {
+    if (activePetIds.includes(id)) { handleSelect(id); return }
+    setActivePetIds(current => {
+      const selectedSlot = current.indexOf(selectedPetId)
+      const replaceAt = selectedSlot >= 0 ? selectedSlot : current.length - 1
+      return current.map((petId, index) => index === replaceAt ? id : petId)
+    })
+    handleSelect(id)
+    setMessage(`${PET_BY_ID[id].name}を育成にセットしました`)
+  }
+
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
       <style>{PET_ROOM_CSS}</style>
@@ -695,10 +808,11 @@ export function PetPage() {
         </header>
 
         <div className="grid gap-3 lg:grid-cols-[140px_minmax(360px,1fr)_260px] lg:items-start lg:gap-4">
-          <aside className="hidden lg:block"><CharacterRoster selectedPetId={selectedPetId} petStats={petStats} onSelect={handleSelect} vertical /></aside>
+          <aside className="hidden lg:block"><CharacterRoster candidates={activePets} selectedPetId={selectedPetId} petStats={petStats} onSelect={handleSelect} vertical /></aside>
 
           <main className="flex min-w-0 flex-col gap-3">
             <div className="lg:hidden"><CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} /></div>
+            <div className="lg:hidden"><CharacterRoster candidates={activePets} selectedPetId={selectedPetId} petStats={petStats} onSelect={handleSelect} /></div>
             <PetRoom
               petId={pet.id}
               name={pet.name}
@@ -706,6 +820,7 @@ export function PetPage() {
               roomWidth={pet.roomWidth}
               roomTheme={pet.roomTheme}
               roomImage={pet.roomImage}
+              costumeId={pet.costume?.id}
               expression={expression}
               stats={selectedStats}
               isFull={isFull}
@@ -720,7 +835,7 @@ export function PetPage() {
             />
             <div className="lg:hidden"><SkillPanel pet={pet} /></div>
             <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} /></div>
-            <div className="lg:hidden"><CharacterRoster selectedPetId={selectedPetId} petStats={petStats} onSelect={handleSelect} /></div>
+            <OwnedCharacters activePetIds={activePetIds} onSet={handleSetActive} />
           </main>
 
           <aside className="hidden flex-col gap-3 lg:flex">

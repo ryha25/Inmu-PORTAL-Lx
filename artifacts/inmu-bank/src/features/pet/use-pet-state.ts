@@ -204,7 +204,7 @@ export function usePetState() {
         : action === 'pet'
           ? { expression: 'petted', motion: 'pet', message: 'petted' }
           : config.category === 'feed'
-            ? { expression: 'happy', motion: 'feed', message: 'fed' }
+            ? { expression: 'petted', motion: 'feed', message: 'fed' }
             : { expression: 'happy', motion: 'play', message: 'played' }
 
     setSave(current => {
