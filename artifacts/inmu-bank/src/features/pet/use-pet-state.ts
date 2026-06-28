@@ -16,6 +16,7 @@ export type PetCareAction = 'feed-basic' | 'feed-premium' | 'play-yarn' | 'play-
 export type PetCareCategory = 'feed' | 'play'
 export type PetExpressionState = { kind: PetExpression; until: number }
 export type PettingState = { count: number; lastAt: number }
+export type PremiumFoodState = { dailyRemaining: number; inventory: number; totalAvailable: number }
 export type PetCareResult = {
   expression: 'happy' | 'petted' | 'annoyed' | 'angry'
   motion: 'feed' | 'play' | 'pet' | 'angry'
@@ -23,7 +24,11 @@ export type PetCareResult = {
 }
 
 export const PET_PETTING_RESET_MS = 60 * 1000
+export const PET_PETTING_ANGER_COUNT = 6
 export const PET_SLEEP_RECOVERY_MS = 30 * 60 * 1000
+export const PET_FULLNESS_DECAY_MS = 12 * 60 * 1000
+export const PET_SLEEPINESS_GAIN_MS = 10 * 60 * 1000
+export const PET_PREMIUM_DAILY_FREE = 3
 
 export const PET_CARE_CONFIG: Record<PetCareAction, {
   category: PetCareCategory | 'pet'
@@ -33,8 +38,8 @@ export const PET_CARE_CONFIG: Record<PetCareAction, {
   affection: number
   sleepiness: number
 }> = {
-  'feed-basic': { category: 'feed', cooldownMs: 10 * 60 * 1000, fullness: 20, exp: 5, affection: 1, sleepiness: 0 },
-  'feed-premium': { category: 'feed', cooldownMs: 30 * 60 * 1000, fullness: 40, exp: 15, affection: 3, sleepiness: 0 },
+  'feed-basic': { category: 'feed', cooldownMs: 10 * 60 * 1000, fullness: 20, exp: 5, affection: 2, sleepiness: 0 },
+  'feed-premium': { category: 'feed', cooldownMs: 0, fullness: 40, exp: 15, affection: 10, sleepiness: 0 },
   'play-yarn': { category: 'play', cooldownMs: 10 * 60 * 1000, fullness: 0, exp: 5, affection: 3, sleepiness: 5 },
   'play-ball': { category: 'play', cooldownMs: 20 * 60 * 1000, fullness: 0, exp: 10, affection: 5, sleepiness: 10 },
   'play-toy': { category: 'play', cooldownMs: 30 * 60 * 1000, fullness: 0, exp: 15, affection: 7, sleepiness: 15 },
@@ -43,9 +48,11 @@ export const PET_CARE_CONFIG: Record<PetCareAction, {
 
 type PetActionTimes = Record<PetCareAction, number>
 type PetCooldownUntil = Record<PetCareCategory, number>
+type PetProgressState = { fullnessAt: number; sleepinessAt: number }
+type PremiumFoodSave = { dailyDate: string; dailyUsed: number; inventory: number }
 
 type PetSaveData = {
-  version: 3
+  version: 4
   selectedPetId: PetId
   pets: Record<PetId, PetStats>
   lastCareAt: Record<PetId, PetActionTimes>
@@ -53,6 +60,8 @@ type PetSaveData = {
   expressions: Record<PetId, PetExpressionState>
   petting: Record<PetId, PettingState>
   sleepStartedAt: Record<PetId, number>
+  progress: Record<PetId, PetProgressState>
+  premiumFood: PremiumFoodSave
 }
 
 type LegacySaveData = Partial<PetSaveData> & {
@@ -101,9 +110,29 @@ function sanitizeActionTimes(value: Record<string, number> | undefined): PetActi
   }
 }
 
-function createDefaultSave(): PetSaveData {
+function getJstDateKey(timestamp = Date.now()) {
+  return new Date(timestamp + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+function sanitizePremiumFood(value: Partial<PremiumFoodSave> | undefined, now = Date.now()): PremiumFoodSave {
+  const today = getJstDateKey(now)
   return {
-    version: 3,
+    dailyDate: today,
+    dailyUsed: value?.dailyDate === today ? clamp(readNumber(value.dailyUsed, 0), 0, PET_PREMIUM_DAILY_FREE) : 0,
+    inventory: Math.max(0, Math.floor(readNumber(value?.inventory, 0))),
+  }
+}
+
+function getPremiumFoodState(value: PremiumFoodSave, now = Date.now()): PremiumFoodState {
+  const normalized = sanitizePremiumFood(value, now)
+  const dailyRemaining = Math.max(0, PET_PREMIUM_DAILY_FREE - normalized.dailyUsed)
+  return { dailyRemaining, inventory: normalized.inventory, totalAvailable: dailyRemaining + normalized.inventory }
+}
+
+function createDefaultSave(): PetSaveData {
+  const now = Date.now()
+  return {
+    version: 4,
     selectedPetId: PET_DEFINITIONS[0].id,
     pets: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...DEFAULT_STATS }])) as Record<PetId, PetStats>,
     lastCareAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...EMPTY_ACTION_TIMES }])) as Record<PetId, PetActionTimes>,
@@ -111,6 +140,8 @@ function createDefaultSave(): PetSaveData {
     expressions: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { kind: 'default', until: 0 }])) as Record<PetId, PetExpressionState>,
     petting: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { count: 0, lastAt: 0 }])) as Record<PetId, PettingState>,
     sleepStartedAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, 0])) as Record<PetId, number>,
+    progress: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { fullnessAt: now, sleepinessAt: now }])) as Record<PetId, PetProgressState>,
+    premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
   }
 }
 
@@ -122,7 +153,7 @@ function loadSave(): PetSaveData {
     const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id])])) as Record<PetId, PetStats>
     const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(parsed.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
     return {
-      version: 3,
+      version: 4,
       selectedPetId: validSelection ? parsed.selectedPetId! : fallback.selectedPetId,
       pets,
       lastCareAt,
@@ -140,6 +171,11 @@ function loadSave(): PetSaveData {
         lastAt: Math.max(0, readNumber(parsed.petting?.[pet.id]?.lastAt, 0)),
       }])) as Record<PetId, PettingState>,
       sleepStartedAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, Math.max(0, readNumber(parsed.sleepStartedAt?.[pet.id], pets[pet.id].sleepiness >= 100 ? Date.now() : 0))])) as Record<PetId, number>,
+      progress: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, {
+        fullnessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.fullnessAt, Date.now())),
+        sleepinessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.sleepinessAt, Date.now())),
+      }])) as Record<PetId, PetProgressState>,
+      premiumFood: sanitizePremiumFood(parsed.premiumFood),
     }
   } catch {
     return fallback
@@ -157,26 +193,82 @@ function addExp(stats: PetStats, amount: number): PetStats {
   return { ...stats, level, exp: level >= MAX_LEVEL ? 0 : exp }
 }
 
-function getEffectiveStats(stats: PetStats, sleepStartedAt: number, now: number): PetStats {
-  if (sleepStartedAt <= 0) return stats
-  const recovery = Math.floor(((now - sleepStartedAt) / PET_SLEEP_RECOVERY_MS) * 100)
-  return { ...stats, sleepiness: clamp(100 - recovery) }
+function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
+  const pets = { ...save.pets }
+  const progress = { ...save.progress }
+  const sleepStartedAt = { ...save.sleepStartedAt }
+
+  PET_DEFINITIONS.forEach(pet => {
+    const id = pet.id
+    const stats = save.pets[id]
+    const currentProgress = save.progress[id]
+    const fullnessSteps = Math.max(0, Math.floor((now - currentProgress.fullnessAt) / PET_FULLNESS_DECAY_MS))
+    const nextProgress: PetProgressState = {
+      fullnessAt: currentProgress.fullnessAt + fullnessSteps * PET_FULLNESS_DECAY_MS,
+      sleepinessAt: currentProgress.sleepinessAt,
+    }
+    let nextStats = { ...stats, fullness: clamp(stats.fullness - fullnessSteps) }
+
+    if (save.sleepStartedAt[id] > 0) {
+      const recovery = Math.floor(((now - save.sleepStartedAt[id]) / PET_SLEEP_RECOVERY_MS) * 100)
+      if (recovery >= 100) {
+        const wokeAt = save.sleepStartedAt[id] + PET_SLEEP_RECOVERY_MS
+        const awakeSteps = Math.max(0, Math.floor((now - wokeAt) / PET_SLEEPINESS_GAIN_MS))
+        nextStats = { ...nextStats, sleepiness: clamp(awakeSteps) }
+        nextProgress.sleepinessAt = wokeAt + awakeSteps * PET_SLEEPINESS_GAIN_MS
+        sleepStartedAt[id] = nextStats.sleepiness >= 100 ? now : 0
+      } else {
+        nextStats = { ...nextStats, sleepiness: clamp(100 - recovery) }
+        nextProgress.sleepinessAt = now
+      }
+    } else {
+      const sleepinessSteps = Math.max(0, Math.floor((now - currentProgress.sleepinessAt) / PET_SLEEPINESS_GAIN_MS))
+      nextStats = { ...nextStats, sleepiness: clamp(stats.sleepiness + sleepinessSteps) }
+      nextProgress.sleepinessAt = currentProgress.sleepinessAt + sleepinessSteps * PET_SLEEPINESS_GAIN_MS
+      if (nextStats.sleepiness >= 100) sleepStartedAt[id] = now
+    }
+
+    pets[id] = nextStats
+    progress[id] = nextProgress
+  })
+
+  return {
+    ...save,
+    pets,
+    progress,
+    sleepStartedAt,
+    premiumFood: sanitizePremiumFood(save.premiumFood, now),
+  }
 }
 
 export function getCareCooldownRemaining(category: PetCareCategory, cooldownUntil: PetCooldownUntil, now = Date.now()) {
+  if (category === 'feed') return 0
   return Math.max(0, cooldownUntil[category] - now)
+}
+
+export function getActionCooldownRemaining(action: PetCareAction, lastCareAt: Partial<Record<PetCareAction, number>>, now = Date.now()) {
+  const config = PET_CARE_CONFIG[action]
+  return Math.max(0, (lastCareAt[action] ?? 0) + config.cooldownMs - now)
 }
 
 export function usePetState() {
   const [save, setSave] = useState<PetSaveData>(loadSave)
   const now = Date.now()
-  const effectivePets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, getEffectiveStats(save.pets[pet.id], save.sleepStartedAt[pet.id], now)])) as Record<PetId, PetStats>
-  const selectedStats = effectivePets[save.selectedPetId]
-  const isSleeping = save.sleepStartedAt[save.selectedPetId] > 0 && selectedStats.sleepiness > 0
+  const effectiveSave = materializeSaveAt(save, now)
+  const selectedStats = effectiveSave.pets[save.selectedPetId]
+  const isSleeping = effectiveSave.sleepStartedAt[save.selectedPetId] > 0
+  const premiumFood = getPremiumFoodState(effectiveSave.premiumFood, now)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(save))
   }, [save])
+
+  useEffect(() => {
+    const materialize = () => setSave(current => materializeSaveAt(current, Date.now()))
+    materialize()
+    const interval = window.setInterval(materialize, 60 * 1000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   function selectPet(selectedPetId: PetId) {
     setSave(current => ({ ...current, selectedPetId }))
@@ -185,40 +277,44 @@ export function usePetState() {
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
     const petId = save.selectedPetId
     const config = PET_CARE_CONFIG[action]
-    const stats = getEffectiveStats(save.pets[petId], save.sleepStartedAt[petId], actionNow)
-    const sleeping = save.sleepStartedAt[petId] > 0 && stats.sleepiness > 0
+    const currentEffective = materializeSaveAt(save, actionNow)
+    const stats = currentEffective.pets[petId]
+    const sleeping = currentEffective.sleepStartedAt[petId] > 0
     if (sleeping && action !== 'pet') return null
     if (config.category === 'feed' && stats.fullness >= 100) return null
+    if (config.category === 'feed' && getActionCooldownRemaining(action, currentEffective.lastCareAt[petId], actionNow) > 0) return null
     if (config.category !== 'pet' && getCareCooldownRemaining(config.category, save.cooldownUntil[petId], actionNow) > 0) return null
+    if (action === 'feed-premium' && getPremiumFoodState(currentEffective.premiumFood, actionNow).totalAvailable <= 0) return null
 
     const previousPetting = save.petting[petId]
     const petCount = action === 'pet'
       ? (actionNow - previousPetting.lastAt <= PET_PETTING_RESET_MS ? previousPetting.count + 1 : 1)
       : previousPetting.count
-    const angry = action === 'pet' && petCount > 10
-    const annoyed = action === 'pet' && petCount > 5
+    const angry = action === 'pet' && petCount >= PET_PETTING_ANGER_COUNT
     const result: PetCareResult = angry
       ? { expression: 'angry', motion: 'angry', message: 'overpetted' }
-      : annoyed
-        ? { expression: 'annoyed', motion: 'pet', message: 'annoyed' }
-        : action === 'pet'
+      : action === 'pet'
           ? { expression: 'petted', motion: 'pet', message: 'petted' }
           : config.category === 'feed'
-            ? { expression: 'petted', motion: 'feed', message: 'fed' }
+            ? { expression: 'happy', motion: 'feed', message: 'fed' }
             : { expression: 'happy', motion: 'play', message: 'played' }
 
     setSave(current => {
-      const currentPetId = current.selectedPetId
-      const currentStats = getEffectiveStats(current.pets[currentPetId], current.sleepStartedAt[currentPetId], actionNow)
+      const materialized = materializeSaveAt(current, actionNow)
+      const currentPetId = materialized.selectedPetId
+      const currentStats = materialized.pets[currentPetId]
       const currentConfig = PET_CARE_CONFIG[action]
-      const currentSleeping = current.sleepStartedAt[currentPetId] > 0 && currentStats.sleepiness > 0
+      const currentSleeping = materialized.sleepStartedAt[currentPetId] > 0
       if (currentSleeping && action !== 'pet') return current
       if (currentConfig.category === 'feed' && currentStats.fullness >= 100) return current
-      if (currentConfig.category !== 'pet' && getCareCooldownRemaining(currentConfig.category, current.cooldownUntil[currentPetId], actionNow) > 0) return current
+      if (currentConfig.category === 'feed' && getActionCooldownRemaining(action, materialized.lastCareAt[currentPetId], actionNow) > 0) return current
+      if (currentConfig.category !== 'pet' && getCareCooldownRemaining(currentConfig.category, materialized.cooldownUntil[currentPetId], actionNow) > 0) return current
+      const premiumState = getPremiumFoodState(materialized.premiumFood, actionNow)
+      if (action === 'feed-premium' && premiumState.totalAvailable <= 0) return current
 
-      const previous = current.petting[currentPetId]
+      const previous = materialized.petting[currentPetId]
       const count = action === 'pet' ? (actionNow - previous.lastAt <= PET_PETTING_RESET_MS ? previous.count + 1 : 1) : previous.count
-      const overpetted = action === 'pet' && count > 10
+      const overpetted = action === 'pet' && count >= PET_PETTING_ANGER_COUNT
       const nextStats = addExp({
         ...currentStats,
         fullness: clamp(currentStats.fullness + currentConfig.fullness),
@@ -226,17 +322,24 @@ export function usePetState() {
         affection: clamp(currentStats.affection + (overpetted ? -3 : currentConfig.affection)),
       }, overpetted ? 0 : currentConfig.exp)
       const startsSleeping = nextStats.sleepiness >= 100
+      let premiumFood = materialized.premiumFood
+      if (action === 'feed-premium') {
+        premiumFood = premiumState.dailyRemaining > 0
+          ? { ...premiumFood, dailyUsed: premiumFood.dailyUsed + 1 }
+          : { ...premiumFood, inventory: Math.max(0, premiumFood.inventory - 1) }
+      }
 
       return {
-        ...current,
-        pets: { ...current.pets, [currentPetId]: nextStats },
-        lastCareAt: { ...current.lastCareAt, [currentPetId]: { ...current.lastCareAt[currentPetId], [action]: actionNow } },
-        cooldownUntil: currentConfig.category === 'pet' ? current.cooldownUntil : {
-          ...current.cooldownUntil,
-          [currentPetId]: { ...current.cooldownUntil[currentPetId], [currentConfig.category]: actionNow + currentConfig.cooldownMs },
+        ...materialized,
+        pets: { ...materialized.pets, [currentPetId]: nextStats },
+        lastCareAt: { ...materialized.lastCareAt, [currentPetId]: { ...materialized.lastCareAt[currentPetId], [action]: actionNow } },
+        cooldownUntil: currentConfig.category === 'pet' || currentConfig.cooldownMs <= 0 ? materialized.cooldownUntil : {
+          ...materialized.cooldownUntil,
+          [currentPetId]: { ...materialized.cooldownUntil[currentPetId], [currentConfig.category]: actionNow + currentConfig.cooldownMs },
         },
-        petting: action === 'pet' ? { ...current.petting, [currentPetId]: { count, lastAt: actionNow } } : current.petting,
-        sleepStartedAt: { ...current.sleepStartedAt, [currentPetId]: startsSleeping ? (current.sleepStartedAt[currentPetId] || actionNow) : 0 },
+        petting: action === 'pet' ? { ...materialized.petting, [currentPetId]: { count: overpetted ? 0 : count, lastAt: actionNow } } : materialized.petting,
+        sleepStartedAt: { ...materialized.sleepStartedAt, [currentPetId]: startsSleeping ? (materialized.sleepStartedAt[currentPetId] || actionNow) : 0 },
+        premiumFood,
       }
     })
     return result
@@ -249,17 +352,29 @@ export function usePetState() {
     }))
   }
 
+  function grantPremiumFood(amount: number) {
+    const grant = Math.max(0, Math.floor(amount))
+    if (grant <= 0) return
+    setSave(current => ({
+      ...current,
+      premiumFood: { ...sanitizePremiumFood(current.premiumFood), inventory: current.premiumFood.inventory + grant },
+    }))
+  }
+
   return {
     selectedPetId: save.selectedPetId,
     selectedStats,
-    petStats: effectivePets,
-    cooldownUntil: save.cooldownUntil[save.selectedPetId],
-    expressionState: save.expressions[save.selectedPetId],
-    pettingState: save.petting[save.selectedPetId],
+    petStats: effectiveSave.pets,
+    cooldownUntil: effectiveSave.cooldownUntil[save.selectedPetId],
+    lastCareAt: effectiveSave.lastCareAt[save.selectedPetId],
+    expressionState: effectiveSave.expressions[save.selectedPetId],
+    pettingState: effectiveSave.petting[save.selectedPetId],
+    premiumFood,
     isSleeping,
     selectPet,
     care,
     setExpression,
+    grantPremiumFood,
     maxLevel: MAX_LEVEL,
   }
 }

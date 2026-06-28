@@ -47,9 +47,22 @@ export type PetDefinition = {
   walk: {
     enabled: boolean
     frames: readonly [string, string]
+    distancePercent: number
+    tickMs: number
   }
   messages: {
     overpetted: string
+  }
+  dialogues: {
+    idle: readonly string[]
+    walking: readonly string[]
+    care: readonly string[]
+  }
+  reactionDurations: {
+    feed: number
+    play: number
+    pet: number
+    angry: number
   }
   roomWidth: string
   roomTheme: 'cat' | 'dog' | 'lion' | 'festival'
@@ -86,8 +99,14 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       annoyed: nyarushianAnnoyedImage,
       angry: nyarushianAngryImage,
     },
-    walk: { enabled: true, frames: [nyarushianWalk1Image, nyarushianWalk2Image] },
+    walk: { enabled: true, frames: [nyarushianWalk1Image, nyarushianWalk2Image], distancePercent: 17, tickMs: 310 },
     messages: { overpetted: 'もう十分だよ…' },
+    dialogues: {
+      idle: ['別に…', '暇なんだけど。', '眠い…', 'ふーん。', '今日は気分いいかも。'],
+      walking: ['暇なんだけど。', 'ふーん。', 'ご飯まだ？'],
+      care: ['なでてもいいけど…', 'ご飯まだ？', '今日は気分いいかも。'],
+    },
+    reactionDurations: { feed: 4200, play: 4400, pet: 3800, angry: 4600 },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'cat',
     roomImage: nyarushianRoomImage,
@@ -118,8 +137,14 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       annoyed: takuyaAnnoyedImage,
       angry: takuyaAngryImage,
     },
-    walk: { enabled: true, frames: [takuyaImage, takuyaImage] },
+    walk: { enabled: true, frames: [takuyaImage, takuyaImage], distancePercent: 19, tickMs: 260 },
     messages: { overpetted: 'おいおい、もう十分だぜ！' },
+    dialogues: {
+      idle: ['やりますねぇ！', '最高だぜぇ！', '今日も元気！', '腹減った！'],
+      walking: ['いいよ、来いよ！', '遊ぼうぜ！', '今日も元気！'],
+      care: ['やりますねぇ！', '最高だぜぇ！', 'イキスギィ！'],
+    },
+    reactionDurations: { feed: 4000, play: 4300, pet: 3600, angry: 4500 },
     roomWidth: 'clamp(195px, 43%, 275px)',
     roomTheme: 'dog',
     roomImage: takuyaRoomImage,
@@ -150,8 +175,14 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       annoyed: leonAnnoyedImage,
       angry: leonAngryImage,
     },
-    walk: { enabled: true, frames: [leonImage, leonImage] },
+    walk: { enabled: true, frames: [leonImage, leonImage], distancePercent: 15, tickMs: 330 },
     messages: { overpetted: '余はもう十分だ。' },
+    dialogues: {
+      idle: ['仲間は大切だ。', '焦る必要はない。', '平和が一番だ。'],
+      walking: ['共に進もう。', '今日も鍛錬だ。', '強くなろう。'],
+      care: ['ありがとう。', '仲間は大切だ。', '共に進もう。'],
+    },
+    reactionDurations: { feed: 4100, play: 4200, pet: 3900, angry: 4700 },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'lion',
     roomImage: leonRoomImage,
@@ -182,8 +213,14 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       annoyed: inmuFestivalAnnoyedImage,
       angry: inmuFestivalAngryImage,
     },
-    walk: { enabled: true, frames: [inmuFestivalImage, inmuFestivalImage] },
+    walk: { enabled: true, frames: [inmuFestivalImage, inmuFestivalImage], distancePercent: 18, tickMs: 280 },
     messages: { overpetted: '祭りは楽しいけど、なでるのはもう十分！' },
+    dialogues: {
+      idle: ['810祭り開催中！', '今日も盛り上がろう！', 'INMU最高！'],
+      walking: ['祭りだー！！', 'わっしょい！', '遊ぼう！'],
+      care: ['ありがとう！', '今日も盛り上がろう！', 'わっしょい！'],
+    },
+    reactionDurations: { feed: 4000, play: 4400, pet: 3700, angry: 4600 },
     roomWidth: 'clamp(185px, 41%, 255px)',
     roomTheme: 'festival',
     roomImage: festivalRoomImage,

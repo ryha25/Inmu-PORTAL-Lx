@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
-import { getCareCooldownRemaining, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats } from '@/features/pet/use-pet-state'
+import { getActionCooldownRemaining, getCareCooldownRemaining, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState } from '@/features/pet/use-pet-state'
 import {
   BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
   Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
@@ -90,6 +90,11 @@ const PET_ROOM_CSS = `
     30% { opacity: 1; }
     100% { transform: translate3d(12px,-25px,0) scale(1.15); opacity: 0; }
   }
+  @keyframes pet-speech-pop {
+    0% { opacity: 0; transform: translate(-50%, 7px) scale(.94); }
+    12%, 82% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -4px) scale(.98); }
+  }
   .pet-meter-shine { animation: pet-meter-shine 3.1s ease-in-out infinite; }
   .pet-neon-sign { animation: pet-neon-breathe 3.8s ease-in-out infinite; }
   .pet-room-enter { animation: pet-room-enter .7s ease-out both; }
@@ -104,8 +109,9 @@ const PET_ROOM_CSS = `
   .pet-react-angry { animation: pet-react-angry 1.55s ease-out both; }
   .pet-sleeping-motion { animation: pet-sleep-breathe 3.4s ease-in-out infinite; transform-origin: 50% 90%; }
   .pet-zzz { animation: pet-zzz 2.3s ease-out infinite; }
+  .pet-speech-bubble { animation: pet-speech-pop 4.2s ease-in-out both; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-speaker { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-speaker { animation: none; }
   }
 `
 
@@ -128,20 +134,24 @@ type WalkMotion = {
 
 type ReactionMotion = 'feed' | 'play' | 'pet' | 'angry' | null
 
-function getWalkMotion(tick: number, enabled: boolean): WalkMotion {
+function getWalkMotion(tick: number, enabled: boolean, distancePercent = 18): WalkMotion {
   if (!enabled) return { active: false, moving: false, frame: 0, offsetPercent: 0, facing: 1, bob: 0, stride: 0 }
   const step = tick % 30
   if (step <= 8) {
     const frame = step % 2 as 0 | 1
-    return { active: true, moving: true, frame, offsetPercent: -18 + (36 * step) / 8, facing: -1, bob: frame ? -5 : 1, stride: frame ? 1 : -1 }
+    return { active: true, moving: true, frame, offsetPercent: -distancePercent + (distancePercent * 2 * step) / 8, facing: -1, bob: frame ? -5 : 1, stride: frame ? 1 : -1 }
   }
-  if (step <= 13) return { active: true, moving: false, frame: 0, offsetPercent: 18, facing: -1, bob: 0, stride: 0 }
+  if (step <= 13) return { active: true, moving: false, frame: 0, offsetPercent: distancePercent, facing: -1, bob: 0, stride: 0 }
   if (step <= 22) {
     const walkingStep = step - 14
     const frame = walkingStep % 2 as 0 | 1
-    return { active: true, moving: true, frame, offsetPercent: 18 - (36 * walkingStep) / 8, facing: 1, bob: frame ? -5 : 1, stride: frame ? 1 : -1 }
+    return { active: true, moving: true, frame, offsetPercent: distancePercent - (distancePercent * 2 * walkingStep) / 8, facing: 1, bob: frame ? -5 : 1, stride: frame ? 1 : -1 }
   }
-  return { active: true, moving: false, frame: 0, offsetPercent: -18, facing: 1, bob: 0, stride: 0 }
+  return { active: true, moving: false, frame: 0, offsetPercent: -distancePercent, facing: 1, bob: 0, stride: 0 }
+}
+
+function pickRandom<T>(items: readonly T[]): T | undefined {
+  return items.length > 0 ? items[Math.floor(Math.random() * items.length)] : undefined
 }
 
 function StatusBar({
@@ -348,7 +358,7 @@ function PetRoom({
         data-pose={isSleeping ? 'sleeping' : reactionMotion ?? (walkMotion.moving ? 'walking' : 'idle')}
       >
         {speechBubble && (
-          <div className="absolute left-1/2 top-1 z-40 max-w-[72%] -translate-x-1/2 rounded-xl border border-fuchsia-300/35 bg-[#100817]/95 px-3 py-2 text-center text-xs font-bold text-fuchsia-50 shadow-[0_0_20px_rgba(232,121,249,.22)] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-[7px] after:border-transparent after:border-t-fuchsia-200/35">
+          <div key={speechBubble} className="pet-speech-bubble absolute left-1/2 top-1 z-40 max-w-[72%] -translate-x-1/2 rounded-xl border border-fuchsia-300/35 bg-[#100817]/95 px-3 py-2 text-center text-xs font-bold text-fuchsia-50 shadow-[0_0_20px_rgba(232,121,249,.22)] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-[7px] after:border-transparent after:border-t-fuchsia-200/35">
             {speechBubble}
           </div>
         )}
@@ -433,8 +443,8 @@ function PetRoom({
 
 const CARE_CHOICES: Record<PetCareCategory, Array<{ id: PetCareAction; label: string; detail: string }>> = {
   feed: [
-    { id: 'feed-basic', label: '普通のご飯', detail: '満腹度 +20 / EXP +5 / 愛情度 +1 / CT 10分' },
-    { id: 'feed-premium', label: '高級ご飯', detail: '満腹度 +40 / EXP +15 / 愛情度 +3 / CT 30分' },
+    { id: 'feed-basic', label: '🍖 普通ごはん', detail: '満腹度 +20 / 愛情度 +2 / EXP +5 / 個数制限なし / CT 10分' },
+    { id: 'feed-premium', label: '🍱 高級ごはん', detail: '満腹度 +40 / 愛情度 +10 / EXP +15' },
   ],
   play: [
     { id: 'play-yarn', label: '毛糸', detail: 'EXP +5 / 愛情度 +3 / 眠気 +5 / CT 10分' },
@@ -443,19 +453,27 @@ const CARE_CHOICES: Record<PetCareCategory, Array<{ id: PetCareAction; label: st
   ],
 }
 
-function CareChoiceDialog({ kind, onClose, onChoose }: { kind: PetCareCategory | null; onClose: () => void; onChoose: (action: PetCareAction) => void }) {
+function CareChoiceDialog({ kind, premiumFood, actionCooldowns, onClose, onChoose }: { kind: PetCareCategory | null; premiumFood: PremiumFoodState; actionCooldowns: Partial<Record<PetCareAction, number>>; onClose: () => void; onChoose: (action: PetCareAction) => void }) {
   if (!kind) return null
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
       <DialogContent className="mx-4 max-w-sm border-violet-300/25 bg-[#0b0712]">
         <DialogHeader><DialogTitle>{kind === 'feed' ? 'ご飯を選ぶ' : '遊びを選ぶ'}</DialogTitle></DialogHeader>
+        {kind === 'feed' && (
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-[10px] text-amber-100/80">
+            <span>本日の無料分 <strong className="ml-1 text-amber-200">{premiumFood.dailyRemaining} / 3</strong></span>
+            <span>所持分 <strong className="ml-1 text-amber-200">{premiumFood.inventory}個</strong></span>
+          </div>
+        )}
         <div className="grid gap-2 pt-2">
           {CARE_CHOICES[kind].map(choice => {
             const Icon = kind === 'feed' ? Utensils : Gamepad2
+            const cooldown = actionCooldowns[choice.id] ?? 0
+            const unavailable = cooldown > 0 || (choice.id === 'feed-premium' && premiumFood.totalAvailable <= 0)
             return (
-              <button key={choice.id} type="button" onClick={() => onChoose(choice.id)} className="flex items-center gap-3 rounded-lg border border-violet-300/20 bg-violet-400/5 p-3 text-left transition hover:border-fuchsia-300/45 hover:bg-fuchsia-400/10 active:scale-[.98]">
+              <button key={choice.id} type="button" disabled={unavailable} onClick={() => onChoose(choice.id)} className="flex items-center gap-3 rounded-lg border border-violet-300/20 bg-violet-400/5 p-3 text-left transition hover:border-fuchsia-300/45 hover:bg-fuchsia-400/10 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-40">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fuchsia-400/10 text-fuchsia-200"><Icon className="size-5" /></span>
-                <span className="min-w-0"><span className="block font-bold text-white">{choice.label}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{choice.detail}</span></span>
+                <span className="min-w-0"><span className="block font-bold text-white">{choice.label}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{choice.detail}</span>{cooldown > 0 && <span className="mt-1 block font-mono text-[9px] text-cyan-200">{formatCooldown(cooldown)}</span>}{choice.id === 'feed-premium' && <span className="mt-1 block text-[9px] text-amber-200/75">無料分を先に消費し、その後に所持分を使用</span>}</span>
               </button>
             )
           })}
@@ -594,7 +612,7 @@ function OwnedCharacters({ activePetIds, onSet }: { activePetIds: readonly PetId
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, selectedStats, petStats, cooldownUntil, expressionState, isSleeping, selectPet, care, setExpression, maxLevel } = usePetState()
+  const { selectedPetId, selectedStats, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, isSleeping, selectPet, care, setExpression, maxLevel } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
@@ -620,6 +638,11 @@ export function PetPage() {
   const blinkResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const yawnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const yawnResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const speechResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const walkingRef = useRef(false)
+  const interactionRef = useRef(false)
+  const sleepingRef = useRef(false)
   const pet = PET_BY_ID[selectedPetId]
   const activePets = activePetIds.map(id => PET_BY_ID[id]).filter(Boolean)
   const isFull = selectedStats.fullness >= 100
@@ -627,17 +650,19 @@ export function PetPage() {
     feed: getCareCooldownRemaining('feed', cooldownUntil, now),
     play: getCareCooldownRemaining('play', cooldownUntil, now),
   }
+  const actionCooldowns = Object.fromEntries(
+    (Object.keys(PET_CARE_CONFIG) as PetCareAction[]).map(action => [action, getActionCooldownRemaining(action, lastCareAt, now)]),
+  ) as Record<PetCareAction, number>
+  const statusExpressionWindow = Math.floor(now / 4000) % 5 === 0
   const expression: PetExpression = expressionState.until > now && expressionState.kind !== 'default'
     ? expressionState.kind
     : isSleeping
       ? 'sleepy'
-      : selectedStats.fullness <= 30
+      : selectedStats.fullness <= 30 && statusExpressionWindow
       ? 'hungry'
-      : selectedStats.sleepiness >= 80
+      : selectedStats.sleepiness >= 80 && statusExpressionWindow
         ? 'sleepy'
-        : selectedStats.fullness >= 100
-          ? 'petted'
-          : selectedStats.affection >= 100
+        : selectedStats.affection >= 100 && statusExpressionWindow
           ? 'affectionate'
           : isYawning
             ? 'sleepy'
@@ -645,7 +670,10 @@ export function PetPage() {
             ? 'blink'
             : 'default'
   const canShowWalk = pet.walk.enabled && !isSleeping && expression === 'default' && !reactionMotion
-  const walkMotion = getWalkMotion(walkTick, canShowWalk)
+  const walkMotion = getWalkMotion(walkTick, canShowWalk, pet.walk.distancePercent)
+  walkingRef.current = walkMotion.moving
+  interactionRef.current = Boolean(reactionMotion)
+  sleepingRef.current = isSleeping
   const displayImage = canShowWalk && walkMotion.moving ? pet.walk.frames[walkMotion.frame] : pet.expressions[expression]
 
   useEffect(() => {
@@ -733,11 +761,33 @@ export function PetPage() {
   }, [selectedPetId, isSleeping, expressionState.kind, reactionMotion])
 
   useEffect(() => {
+    function scheduleSpeech() {
+      speechTimer.current = setTimeout(() => {
+        if (!interactionRef.current && !sleepingRef.current) {
+          const lines = walkingRef.current ? pet.dialogues.walking : pet.dialogues.idle
+          const line = pickRandom(lines)
+          if (line) {
+            setSpeechBubble(line)
+            if (speechResetTimer.current) clearTimeout(speechResetTimer.current)
+            speechResetTimer.current = setTimeout(() => setSpeechBubble(''), 4200)
+          }
+        }
+        scheduleSpeech()
+      }, 11000 + Math.round(Math.random() * 10000))
+    }
+    scheduleSpeech()
+    return () => {
+      if (speechTimer.current) clearTimeout(speechTimer.current)
+      if (speechResetTimer.current) clearTimeout(speechResetTimer.current)
+    }
+  }, [selectedPetId, pet.dialogues])
+
+  useEffect(() => {
     setWalkTick(0)
     if (!pet.walk.enabled) return
-    const interval = setInterval(() => setWalkTick(current => (current + 1) % 30), 280)
+    const interval = setInterval(() => setWalkTick(current => (current + 1) % 30), pet.walk.tickMs)
     return () => clearInterval(interval)
-  }, [selectedPetId, pet.walk.enabled])
+  }, [selectedPetId, pet.walk.enabled, pet.walk.tickMs])
 
   function openCareMenu(category: PetCareCategory) {
     if (isSleeping) { setMessage('眠っているので今はできません'); return }
@@ -753,17 +803,22 @@ export function PetPage() {
     if (config.category !== 'pet') {
       if (isSleeping) { setMessage('眠っているので今はできません'); return false }
       if (config.category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return false }
+      const actionRemaining = getActionCooldownRemaining(action, lastCareAt, actionNow)
+      if (config.category === 'feed' && actionRemaining > 0) { setMessage(formatCooldown(actionRemaining)); return false }
+      if (action === 'feed-premium' && premiumFood.totalAvailable <= 0) { setMessage('高級ごはんの無料分・所持分がありません'); return false }
       const remaining = getCareCooldownRemaining(config.category, cooldownUntil, actionNow)
       if (remaining > 0) { setMessage(formatCooldown(remaining)); return false }
     }
     const result = care(action, actionNow)
     if (!result) return false
     setNow(actionNow)
-    const duration = result.motion === 'angry' ? 4500 : 3500
+    const duration = pet.reactionDurations[result.motion]
     setExpression(result.expression, duration, actionNow)
     setReactionMotion(result.motion)
-    setSpeechBubble(result.message === 'overpetted' ? pet.messages.overpetted : '')
-    setMessage({ fed: 'ご飯をあげました', played: '一緒に遊びました', petted: 'うれしそうにしています', annoyed: '少し嫌そうにしています', overpetted: pet.messages.overpetted }[result.message] ?? '')
+    const careSpeech = result.message === 'overpetted' ? pet.messages.overpetted : pickRandom(pet.dialogues.care) ?? ''
+    if (speechResetTimer.current) clearTimeout(speechResetTimer.current)
+    setSpeechBubble(careSpeech)
+    setMessage({ fed: 'ご飯をあげました', played: '一緒に遊びました', petted: 'うれしそうにしています', overpetted: pet.messages.overpetted }[result.message] ?? '')
     setCareMenu(null)
     if (motionTimer.current) clearTimeout(motionTimer.current)
     motionTimer.current = setTimeout(() => {
@@ -849,7 +904,7 @@ export function PetPage() {
           </aside>
         </div>
       </div>
-      <CareChoiceDialog kind={careMenu} onClose={() => setCareMenu(null)} onChoose={handleCare} />
+      <CareChoiceDialog kind={careMenu} premiumFood={premiumFood} actionCooldowns={actionCooldowns} onClose={() => setCareMenu(null)} onChoose={handleCare} />
     </AppShell>
   )
 }
