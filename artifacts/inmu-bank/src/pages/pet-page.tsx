@@ -27,6 +27,26 @@ const PET_ROOM_CSS = `
     0%, 100% { filter: brightness(.9); opacity: .72; }
     50% { filter: brightness(1.2); opacity: 1; }
   }
+  @keyframes pet-room-enter {
+    0% { opacity: 0; transform: scale(1.025); filter: blur(5px); }
+    100% { opacity: 1; transform: scale(1); filter: blur(0); }
+  }
+  @keyframes pet-room-drift {
+    0%, 100% { transform: translate3d(-2%, 2%, 0); opacity: .22; }
+    50% { transform: translate3d(3%, -4%, 0); opacity: .5; }
+  }
+  @keyframes pet-room-sway {
+    0%, 100% { transform: rotate(-2deg); }
+    50% { transform: rotate(2deg); }
+  }
+  @keyframes pet-room-fire {
+    0%, 100% { transform: scale(.92, 1.05); opacity: .55; }
+    45% { transform: translateY(-3px) scale(1.08, .9); opacity: .9; }
+  }
+  @keyframes pet-room-speaker {
+    0% { transform: scale(.65); opacity: .65; }
+    100% { transform: scale(1.65); opacity: 0; }
+  }
   @keyframes pet-idle-float {
     0%, 100% { transform: translate3d(-4px, 0, 0) rotate(-.35deg); }
     35% { transform: translate3d(3px, -8px, 0) rotate(.2deg); }
@@ -69,15 +89,20 @@ const PET_ROOM_CSS = `
   }
   .pet-meter-shine { animation: pet-meter-shine 3.1s ease-in-out infinite; }
   .pet-neon-sign { animation: pet-neon-breathe 3.8s ease-in-out infinite; }
+  .pet-room-enter { animation: pet-room-enter .7s ease-out both; }
+  .pet-room-drift { animation: pet-room-drift 7s ease-in-out infinite; }
+  .pet-room-sway { animation: pet-room-sway 3.6s ease-in-out infinite; transform-origin: 50% 0; }
+  .pet-room-fire { animation: pet-room-fire 1.25s ease-in-out infinite; transform-origin: 50% 100%; }
+  .pet-room-speaker { animation: pet-room-speaker 1.8s ease-out infinite; }
   .pet-character-motion { animation: pet-idle-float 6.8s ease-in-out infinite; transform-origin: 50% 90%; }
-  .pet-react-feed { animation: pet-react-feed .75s ease-out both; }
-  .pet-react-play { animation: pet-react-play 1s ease-in-out both; }
-  .pet-react-pet { animation: pet-react-pet .8s ease-in-out both; }
-  .pet-react-angry { animation: pet-react-angry .9s ease-out both; }
+  .pet-react-feed { animation: pet-react-feed 1.35s ease-out both; }
+  .pet-react-play { animation: pet-react-play 1.55s ease-in-out both; }
+  .pet-react-pet { animation: pet-react-pet 1.35s ease-in-out both; }
+  .pet-react-angry { animation: pet-react-angry 1.55s ease-out both; }
   .pet-sleeping-motion { animation: pet-sleep-breathe 3.4s ease-in-out infinite; transform-origin: 50% 90%; }
   .pet-zzz { animation: pet-zzz 2.3s ease-out infinite; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-speaker { animation: none; }
   }
 `
 
@@ -95,24 +120,25 @@ type WalkMotion = {
   offsetPercent: number
   facing: 1 | -1
   bob: number
+  stride: number
 }
 
 type ReactionMotion = 'feed' | 'play' | 'pet' | 'angry' | null
 
 function getWalkMotion(tick: number, enabled: boolean): WalkMotion {
-  if (!enabled) return { active: false, moving: false, frame: 0, offsetPercent: 0, facing: 1, bob: 0 }
+  if (!enabled) return { active: false, moving: false, frame: 0, offsetPercent: 0, facing: 1, bob: 0, stride: 0 }
   const step = tick % 30
   if (step <= 8) {
     const frame = step % 2 as 0 | 1
-    return { active: true, moving: true, frame, offsetPercent: -18 + (36 * step) / 8, facing: -1, bob: frame ? -4 : 0 }
+    return { active: true, moving: true, frame, offsetPercent: -18 + (36 * step) / 8, facing: -1, bob: frame ? -5 : 1, stride: frame ? 1 : -1 }
   }
-  if (step <= 13) return { active: true, moving: false, frame: 0, offsetPercent: 18, facing: -1, bob: 0 }
+  if (step <= 13) return { active: true, moving: false, frame: 0, offsetPercent: 18, facing: -1, bob: 0, stride: 0 }
   if (step <= 22) {
     const walkingStep = step - 14
     const frame = walkingStep % 2 as 0 | 1
-    return { active: true, moving: true, frame, offsetPercent: 18 - (36 * walkingStep) / 8, facing: 1, bob: frame ? -4 : 0 }
+    return { active: true, moving: true, frame, offsetPercent: 18 - (36 * walkingStep) / 8, facing: 1, bob: frame ? -5 : 1, stride: frame ? 1 : -1 }
   }
-  return { active: true, moving: false, frame: 0, offsetPercent: -18, facing: 1, bob: 0 }
+  return { active: true, moving: false, frame: 0, offsetPercent: -18, facing: 1, bob: 0, stride: 0 }
 }
 
 function StatusBar({
@@ -164,6 +190,7 @@ function PetRoom({
   image,
   roomWidth,
   roomTheme,
+  roomImage,
   expression,
   stats,
   isFull,
@@ -180,7 +207,8 @@ function PetRoom({
   name: string
   image: string
   roomWidth: string
-  roomTheme: 'cat' | 'dog' | 'lion'
+  roomTheme: 'cat' | 'dog' | 'lion' | 'festival'
+  roomImage: string
   expression: PetExpression
   stats: PetStats
   isFull: boolean
@@ -270,6 +298,33 @@ function PetRoom({
       <div className="absolute bottom-12 right-[25%] size-4 rotate-12 rounded bg-cyan-300/15 ring-1 ring-cyan-200/20" />
 
       <div
+        key={petId}
+        className="pet-room-enter absolute inset-0 z-[1] bg-cover bg-center"
+        style={{ backgroundImage: `url(${roomImage})` }}
+        data-pet-room={roomTheme}
+      />
+      <div className="absolute inset-0 z-[2] bg-[linear-gradient(180deg,rgba(2,1,8,.08),rgba(3,2,10,.18)_55%,rgba(2,1,7,.68))]" />
+      <div className="pet-room-drift pointer-events-none absolute inset-0 z-[3] opacity-30 [background-image:radial-gradient(circle_at_15%_28%,rgba(255,255,255,.9)_0_1px,transparent_2px),radial-gradient(circle_at_76%_22%,rgba(250,204,21,.8)_0_1px,transparent_2px),radial-gradient(circle_at_68%_62%,rgba(232,121,249,.7)_0_1.5px,transparent_2.5px),radial-gradient(circle_at_28%_72%,rgba(255,255,255,.65)_0_1px,transparent_2px)] [background-size:120px_140px,170px_190px,210px_180px,155px_175px]" />
+      {roomTheme === 'cat' && (
+        <div className="pet-neon-sign absolute right-[13%] top-[17%] z-[4] text-fuchsia-300/70 drop-shadow-[0_0_12px_rgba(232,121,249,.9)]"><PawPrint className="size-10" /></div>
+      )}
+      {roomTheme === 'dog' && (
+        <div className="absolute bottom-[27%] right-[15%] z-[4] size-16 rounded-full border border-amber-300/25">
+          <div className="pet-room-speaker absolute inset-0 rounded-full border border-amber-300/35" />
+          <div className="pet-room-speaker absolute inset-0 rounded-full border border-orange-300/25 [animation-delay:.9s]" />
+        </div>
+      )}
+      {roomTheme === 'lion' && (
+        <div className="pet-room-fire absolute left-[45%] top-[46%] z-[4] h-12 w-8 rounded-[50%_50%_45%_45%] bg-[radial-gradient(circle_at_50%_70%,#fff7ae,#f59e0b_45%,rgba(220,38,38,.35)_72%,transparent_73%)] blur-[1px]" />
+      )}
+      {roomTheme === 'festival' && (
+        <>
+          <div className="pet-room-sway absolute left-[12%] top-[12%] z-[4] h-20 w-10 rounded-[45%] border border-amber-200/50 bg-red-700/80 text-center text-[9px] font-black leading-[5rem] text-amber-100 shadow-[0_0_18px_rgba(251,146,60,.5)]">810</div>
+          <div className="pet-room-sway absolute right-[12%] top-[14%] z-[4] h-20 w-10 rounded-[45%] border border-amber-200/50 bg-red-700/80 text-center text-[9px] font-black leading-[5rem] text-amber-100 shadow-[0_0_18px_rgba(251,146,60,.5)] [animation-delay:-1.8s]">祭</div>
+        </>
+      )}
+
+      <div
         className="absolute inset-x-0 bottom-[148px] z-10 flex h-[50%] items-end justify-center"
         data-pet-stage
         data-pet-id={petId}
@@ -306,12 +361,21 @@ function PetRoom({
           )}
           style={{
             width: roomWidth,
-            transform: walkMotion.active ? `translate3d(${walkMotion.offsetPercent}%, ${walkMotion.bob}px, 0) scaleX(${walkMotion.facing})` : undefined,
+            transform: walkMotion.active
+              ? `translate3d(${walkMotion.offsetPercent}%, ${walkMotion.bob}px, 0) scaleX(${walkMotion.facing}) rotate(${walkMotion.stride * 1.4}deg) scaleY(${walkMotion.moving ? (walkMotion.frame ? .985 : 1.012) : 1})`
+              : undefined,
             transition: walkMotion.active ? 'transform 280ms linear' : undefined,
           }}
           data-walking={walkMotion.active || undefined}
         >
-          <div className="absolute bottom-1 left-1/2 h-7 w-[72%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md" data-pet-shadow />
+          <div
+            className="absolute bottom-1 left-1/2 h-7 w-[72%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md transition-transform duration-200"
+            style={{ transform: `translateX(-50%) scaleX(${walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1})` }}
+            data-pet-shadow
+          />
+          {roomTheme === 'festival' && (
+            <div className="absolute left-1/2 top-[14%] z-20 w-[64%] -translate-x-1/2 -rotate-2 border-y border-red-300 bg-[#f5ead8] py-0.5 text-center text-[10px] font-black text-red-700 shadow-[0_2px_5px_rgba(0,0,0,.45)]">810 祭り</div>
+          )}
           <img
             src={image}
             alt={name}
@@ -588,7 +652,7 @@ export function PetPage() {
     const result = care(action, actionNow)
     if (!result) return false
     setNow(actionNow)
-    const duration = result.motion === 'angry' ? 2800 : 2200
+    const duration = result.motion === 'angry' ? 4500 : 3500
     setExpression(result.expression, duration, actionNow)
     setReactionMotion(result.motion)
     setSpeechBubble(result.message === 'overpetted' ? pet.messages.overpetted : '')
@@ -641,6 +705,7 @@ export function PetPage() {
               image={displayImage}
               roomWidth={pet.roomWidth}
               roomTheme={pet.roomTheme}
+              roomImage={pet.roomImage}
               expression={expression}
               stats={selectedStats}
               isFull={isFull}

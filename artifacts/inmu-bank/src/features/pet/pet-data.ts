@@ -24,8 +24,13 @@ import leonHappyImage from '@assets/inmu-pet-leon-happy-v1.png'
 import leonHungryImage from '@assets/inmu-pet-leon-hungry-v1.png'
 import leonPettedImage from '@assets/inmu-pet-leon-petted-v1.png'
 import leonSleepyImage from '@assets/inmu-pet-leon-sleepy-v1.png'
+import inmuFestivalImage from '@assets/generated_images/mascot-v2-nobg.png'
+import nyarushianRoomImage from '@assets/inmu-pet-room-nyarushian-v1.jpg'
+import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
+import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
+import festivalRoomImage from '@assets/inmu-pet-room-festival-v1.jpg'
 
-export type PetId = 'nyarushian' | 'takuya' | 'leon'
+export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'inmu-festival'
 export type PetExpression = 'default' | 'blink' | 'happy' | 'sleepy' | 'hungry' | 'petted' | 'affectionate' | 'annoyed' | 'angry'
 
 export type PetDefinition = {
@@ -42,7 +47,8 @@ export type PetDefinition = {
     overpetted: string
   }
   roomWidth: string
-  roomTheme: 'cat' | 'dog' | 'lion'
+  roomTheme: 'cat' | 'dog' | 'lion' | 'festival'
+  roomImage: string
   skill: {
     name: string
     effect: string
@@ -74,6 +80,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     messages: { overpetted: 'もう十分だよ…' },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'cat',
+    roomImage: nyarushianRoomImage,
     skill: { name: '幸運の肉球', effect: 'ポイント2倍' },
     levelRewards: [
       { level: 10, label: '紫の毛糸' },
@@ -97,10 +104,11 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       annoyed: takuyaAnnoyedImage,
       angry: takuyaAngryImage,
     },
-    walk: { enabled: false, frames: [takuyaImage, takuyaImage] },
+    walk: { enabled: true, frames: [takuyaImage, takuyaImage] },
     messages: { overpetted: 'おいおい、もう十分だぜ！' },
     roomWidth: 'clamp(195px, 43%, 275px)',
     roomTheme: 'dog',
+    roomImage: takuyaRoomImage,
     skill: { name: '盛り上げ上手', effect: 'お世話EXPアップ' },
     levelRewards: [
       { level: 10, label: '金のダンベル' },
@@ -124,15 +132,44 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       annoyed: leonAnnoyedImage,
       angry: leonAngryImage,
     },
-    walk: { enabled: false, frames: [leonImage, leonImage] },
+    walk: { enabled: true, frames: [leonImage, leonImage] },
     messages: { overpetted: '余はもう十分だ。' },
     roomWidth: 'clamp(205px, 46%, 290px)',
     roomTheme: 'lion',
+    roomImage: leonRoomImage,
     skill: { name: '王者の導き', effect: '愛情度ボーナス' },
     levelRewards: [
       { level: 10, label: '王家の絨毯' },
       { level: 20, label: '宝石の首飾り' },
       { level: 30, label: '獅子王の玉座' },
+    ],
+  },
+  {
+    id: 'inmu-festival',
+    name: 'INMUくん 810祭り',
+    rarity: 3,
+    image: inmuFestivalImage,
+    expressions: {
+      default: inmuFestivalImage,
+      blink: inmuFestivalImage,
+      happy: inmuFestivalImage,
+      sleepy: inmuFestivalImage,
+      hungry: inmuFestivalImage,
+      petted: inmuFestivalImage,
+      affectionate: inmuFestivalImage,
+      annoyed: inmuFestivalImage,
+      angry: inmuFestivalImage,
+    },
+    walk: { enabled: true, frames: [inmuFestivalImage, inmuFestivalImage] },
+    messages: { overpetted: '祭りは楽しいけど、なでるのはもう十分！' },
+    roomWidth: 'clamp(185px, 41%, 255px)',
+    roomTheme: 'festival',
+    roomImage: festivalRoomImage,
+    skill: { name: '810祭り魂', effect: 'お世話時ポイントボーナス' },
+    levelRewards: [
+      { level: 10, label: '810提灯' },
+      { level: 20, label: '祭り太鼓' },
+      { level: 30, label: '金のINMU神輿' },
     ],
   },
 ]
