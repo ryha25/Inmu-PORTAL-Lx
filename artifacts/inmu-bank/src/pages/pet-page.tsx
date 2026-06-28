@@ -193,8 +193,8 @@ function FestivalCharacter({ image, expression, name, className }: { image: stri
   const angry = expression === 'angry'
   const affectionate = expression === 'petted' || expression === 'affectionate'
   return (
-    <div className={cn('relative aspect-[.9] overflow-hidden', className)} data-festival-expression={expression}>
-      <img src={image} alt={name} className="relative z-10 h-auto w-full brightness-110 contrast-105 mix-blend-multiply" />
+    <div className={cn('relative', className)} data-festival-expression={expression}>
+      <img src={image} alt={name} className="relative z-10 block max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)]" />
       {(sleepy || displeased || angry) && <div className="pointer-events-none absolute inset-0 z-40">
         <span className={cn('absolute left-[31%] top-[31%] h-1 w-[14%] rounded-full bg-[#2a130d]', angry ? '-rotate-[18deg]' : displeased ? 'rotate-[6deg]' : 'rotate-0')} />
         <span className={cn('absolute right-[31%] top-[31%] h-1 w-[14%] rounded-full bg-[#2a130d]', angry ? 'rotate-[18deg]' : displeased ? '-rotate-[6deg]' : 'rotate-0')} />
