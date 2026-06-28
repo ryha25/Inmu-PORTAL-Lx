@@ -25,6 +25,14 @@ import leonHungryImage from '@assets/inmu-pet-leon-hungry-v1.png'
 import leonPettedImage from '@assets/inmu-pet-leon-petted-v1.png'
 import leonSleepyImage from '@assets/inmu-pet-leon-sleepy-v1.png'
 import inmuFestivalImage from '@assets/inmu-pet-festival-810-v2.png'
+import inmuFestivalDefaultImage from '@assets/inmu-pet-festival-default-v1.png'
+import inmuFestivalHappyImage from '@assets/inmu-pet-festival-happy-v1.png'
+import inmuFestivalSleepyImage from '@assets/inmu-pet-festival-sleepy-v1.png'
+import inmuFestivalHungryImage from '@assets/inmu-pet-festival-hungry-v1.png'
+import inmuFestivalPettedImage from '@assets/inmu-pet-festival-petted-v1.png'
+import inmuFestivalAngryImage from '@assets/inmu-pet-festival-angry-v1.png'
+import inmuFestivalWalk1Image from '@assets/inmu-pet-festival-walk-1-v1.png'
+import inmuFestivalWalk2Image from '@assets/inmu-pet-festival-walk-2-v1.png'
 import nyarushianRoomImage from '@assets/inmu-pet-room-nyarushian-v1.jpg'
 import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
 import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
@@ -167,17 +175,17 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     rarity: 3,
     image: inmuFestivalImage,
     expressions: {
-      default: inmuFestivalImage,
-      blink: inmuFestivalImage,
-      happy: inmuFestivalImage,
-      sleepy: inmuFestivalImage,
-      hungry: inmuFestivalImage,
-      petted: inmuFestivalImage,
-      affectionate: inmuFestivalImage,
-      annoyed: inmuFestivalImage,
-      angry: inmuFestivalImage,
+      default:      inmuFestivalDefaultImage,
+      blink:        inmuFestivalHappyImage,
+      happy:        inmuFestivalHappyImage,
+      sleepy:       inmuFestivalSleepyImage,
+      hungry:       inmuFestivalHungryImage,
+      petted:       inmuFestivalPettedImage,
+      affectionate: inmuFestivalPettedImage,
+      annoyed:      inmuFestivalAngryImage,
+      angry:        inmuFestivalAngryImage,
     },
-    walk: { enabled: true, frames: [inmuFestivalImage, inmuFestivalImage] },
+    walk: { enabled: true, frames: [inmuFestivalWalk1Image, inmuFestivalWalk2Image] },
     messages: { overpetted: '祭りは楽しいけど、なでるのはもう十分！' },
     roomWidth: 'clamp(185px, 41%, 255px)',
     roomTheme: 'festival',
