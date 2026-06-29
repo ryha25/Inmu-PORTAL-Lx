@@ -32,18 +32,17 @@ type Mission = {
   conditionCurrent: number | null
   locked: boolean
   prerequisiteMissionTitle: string | null
-  rewardInmu: number
   rewardCharacterId: string | null
   rewardCharacterName: string | null
 }
 
 const POINT_TYPE_LABEL: Record<string, string> = {
-  mission:     '?????',
-  daily_login: '????????',
-  dex_vote:    'DEX??',
-  admin_grant: '?????',
-  admin_deduct:'?????',
-  streak:      '?????',
+  mission:     'ミッション',
+  daily_login: 'ログインボーナス',
+  dex_vote:    'DEX投票',
+  admin_grant: '管理者付与',
+  admin_deduct:'管理者減算',
+  streak:      'ストリーク',
 }
 
 export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: () => void }) {
@@ -81,12 +80,12 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       const res = await fetch(`/api/missions/${mission.id}/join`, { method: 'POST', credentials: 'include' })
       if (!res.ok) {
         const d = await res.json()
-        toast.error(d.message ?? d.error ?? '??????????')
+        toast.error(d.message ?? d.error ?? 'エラーが発生しました')
       } else {
-        toast.success('????????????!')
+        toast.success('ミッションに参加しました！')
         loadMissions()
       }
-    } catch { toast.error('????????????') }
+    } catch { toast.error('通信エラーが発生しました') }
     finally { setBusy(null) }
   }
 
@@ -97,18 +96,18 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       const joinRes = await fetch(`/api/missions/${mission.id}/join`, { method: 'POST', credentials: 'include' })
       if (!joinRes.ok) {
         const d = await joinRes.json()
-        toast.error(d.message ?? d.error ?? '??????????')
+        toast.error(d.message ?? d.error ?? 'エラーが発生しました')
         return
       }
       const achRes = await fetch(`/api/missions/${mission.id}/achieve`, { method: 'POST', credentials: 'include' })
       if (!achRes.ok) {
         const d = await achRes.json()
-        toast.error(d.error ?? '??????????')
+        toast.error(d.error ?? 'エラーが発生しました')
       } else {
-        toast.success('??????!????????????')
+        toast.success('達成しました！報酬を受け取ってください')
       }
       loadMissions()
-    } catch { toast.error('????????????') }
+    } catch { toast.error('通信エラーが発生しました') }
     finally { setBusy(null) }
   }
 
@@ -127,14 +126,14 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       const res = await fetch(`/api/missions/${mission.id}/achieve`, { method: 'POST', credentials: 'include' })
       if (!res.ok) {
         const d = await res.json()
-        toast.error(d.error ?? '??????????')
+        toast.error(d.error ?? 'エラーが発生しました')
         updateMissionStatus(mission.id, 'joined')
       } else {
-        toast.success('??????!????????????')
+        toast.success('達成しました！報酬を受け取ってください')
         loadMissions()
       }
     } catch {
-      toast.error('????????????')
+      toast.error('通信エラーが発生しました')
       updateMissionStatus(mission.id, 'joined')
     }
     finally { setBusy(null) }
@@ -153,7 +152,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         const joinRes = await fetch(`/api/missions/${mission.id}/join`, { method: 'POST', credentials: 'include' })
         if (!joinRes.ok) {
           const d = await joinRes.json()
-          toast.error(d.error ?? '??????????')
+          toast.error(d.error ?? 'エラーが発生しました')
           updateMissionStatus(mission.id, null)
           return
         }
@@ -161,14 +160,14 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       const res = await fetch(`/api/missions/${mission.id}/achieve`, { method: 'POST', credentials: 'include' })
       if (!res.ok) {
         const d = await res.json()
-        toast.error(d.error ?? '??????????')
+        toast.error(d.error ?? 'エラーが発生しました')
         updateMissionStatus(mission.id, 'joined')
       } else {
-        toast.success('??????!????????????')
+        toast.success('達成しました！報酬を受け取ってください')
         loadMissions()
       }
     } catch {
-      toast.error('????????????')
+      toast.error('通信エラーが発生しました')
       updateMissionStatus(mission.id, null)
     }
     finally { setBusy(null) }
@@ -181,23 +180,22 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       const res = await fetch(`/api/missions/${mission.id}/claim`, { method: 'POST', credentials: 'include' })
       const d = await res.json()
       if (!res.ok) {
-        if (d.error === 'already_completed') toast.info('????????????????')
-        else if (d.error === 'character_already_owned') toast.info('??????????????????')
-        else toast.error(d.message ?? d.error ?? '??????????')
+        if (d.error === 'already_completed') toast.info('このミッションは既に達成済みです')
+        else if (d.error === 'character_already_owned') toast.info('このキャラクターは既に所持しています')
+        else toast.error(d.message ?? d.error ?? 'エラーが発生しました')
         updateMissionStatus(mission.id, 'achieved')
       } else {
         const rewards = [
-          d.points > 0 ? `${Number(d.points).toLocaleString()}????` : null,
-          d.inmu > 0 ? `${Number(d.inmu).toLocaleString()} INMU` : null,
+          d.points > 0 ? `${Number(d.points).toLocaleString()}ポイント` : null,
           d.characterName || null,
         ].filter(Boolean)
-        toast.success(`${rewards.join(' + ')}???????!`)
+        toast.success(`${rewards.join(' + ')}を獲得しました！`)
         if (d.characterId) window.dispatchEvent(new CustomEvent('inmu-pet-ownership-changed'))
         loadMissions()
         onRefresh()
       }
     } catch {
-      toast.error('????????????')
+      toast.error('通信エラーが発生しました')
       updateMissionStatus(mission.id, 'achieved')
     }
     finally { setBusy(null) }
@@ -223,18 +221,17 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {m.points > 0 && <span className="rounded bg-yellow-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-300">{m.points.toLocaleString()} pt</span>}
-              {m.rewardInmu > 0 && <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">{m.rewardInmu.toLocaleString()} INMU</span>}
               {m.rewardCharacterName && <span className="rounded bg-fuchsia-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-300">{m.rewardCharacterName}</span>}
             </div>
             {m.conditionType && m.conditionType !== 'none' && m.conditionCurrent !== null && m.conditionValue && (
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                ??: {Number(m.conditionCurrent).toLocaleString()} / {Number(m.conditionValue).toLocaleString()}
-                {m.conditionMet && <span className="text-green-500 ml-1">?</span>}
+                進捗: {Number(m.conditionCurrent).toLocaleString()} / {Number(m.conditionValue).toLocaleString()}
+                {m.conditionMet && <span className="text-green-500 ml-1">✓</span>}
               </p>
             )}
             {m.endAt && (
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                ??: {new Date(m.endAt).toLocaleDateString('ja-JP')}
+                期限: {new Date(m.endAt).toLocaleDateString('ja-JP')}
               </p>
             )}
           </div>
@@ -243,37 +240,37 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
               <div className="flex items-center gap-1 rounded-full bg-chart-5/15 px-2 py-1">
                 <CheckCircle2 className="size-3 text-chart-5" />
                 <span className="text-[10px] font-medium text-chart-5">
-                  {isAchievement ? '????' : '????'}
+                  {isAchievement ? '達成済み' : '受取済み'}
                 </span>
               </div>
             ) : status === 'achieved' ? (
               <Button size="sm" className="h-7 px-2 text-xs bg-chart-5 hover:bg-chart-5/90"
                 disabled={isBusy} onClick={() => claimMission(m)}>
-                {isBusy ? '???.' : '???????'}
+                {isBusy ? '処理中…' : '報酬を受け取る'}
               </Button>
             ) : status === 'joined' ? (
               m.linkUrl ? (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1"
                   disabled={isBusy} onClick={() => openLinkAndAchieve(m)}>
-                  {isBusy ? '???.' : <><ExternalLink className="size-3" />??????</>}
+                  {isBusy ? '処理中…' : <><ExternalLink className="size-3" />リンクを開く</>}
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                   disabled={isBusy || (m.conditionType && m.conditionType !== 'none' && m.conditionType !== 'link_visit' ? !m.conditionMet : false)}
                   onClick={() => achieveMission(m)}>
-                  {isBusy ? '???.' : '????'}
+                  {isBusy ? '処理中…' : '達成する'}
                 </Button>
               )
             ) : m.conditionType === 'link_visit' ? (
               <Button size="sm" variant="secondary" className="h-7 px-2 text-xs"
                 disabled={isBusy} onClick={() => joinAndOpenLinkMission(m)}>
-                {isBusy ? '???.' : '????'}
+                {isBusy ? '処理中…' : '参加する'}
               </Button>
             ) : (
               <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
                 disabled={isBusy || (m.conditionType && m.conditionType !== 'none' ? !m.conditionMet : false)}
                 onClick={() => achieveMissionDirect(m)}>
-                {isBusy ? '???.' : '????'}
+                {isBusy ? '処理中…' : '達成する'}
               </Button>
             )}
           </div>
@@ -288,12 +285,12 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
   return (
     <div className="flex flex-col gap-4">
 
-      {/* ?? ???? ?? */}
+      {/* ── 上部統計 ── */}
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-orange-400/30 bg-orange-400/10 p-3 flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
             <Flame className="size-3.5 text-orange-400" />
-            <p className="text-xs font-semibold text-orange-400">??????</p>
+            <p className="text-xs font-semibold text-orange-400">デイリー達成</p>
           </div>
           <p className="font-mono text-xl font-bold">
             {dailyDone}
@@ -303,7 +300,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         <div className="rounded-xl border border-blue-400/30 bg-blue-400/10 p-3 flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
             <Target className="size-3.5 text-blue-400" />
-            <p className="text-xs font-semibold text-blue-400">????????</p>
+            <p className="text-xs font-semibold text-blue-400">ウィークリー達成</p>
           </div>
           <p className="font-mono text-xl font-bold">
             {weeklyDone}
@@ -312,14 +309,14 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         </div>
       </div>
 
-      {/* ?? ????????? ?? */}
+      {/* ── デイリーミッション ── */}
       <Card className="border-border bg-card overflow-hidden">
         <button type="button"
           className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
           onClick={() => setDailyOpen(o => !o)}>
           <div className="flex items-center gap-2">
             <Flame className="size-3.5 text-orange-400" />
-            <h2 className="text-sm font-semibold">?????????</h2>
+            <h2 className="text-sm font-semibold">デイリーミッション</h2>
             {dailyMissions.length > 0 && (
               <span className="text-[10px] text-muted-foreground">
                 ({dailyDone}/{dailyMissions.length})
@@ -330,19 +327,19 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         </button>
         {dailyOpen && (
           dailyMissions.length === 0
-            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">?????????????</p>
+            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">現在ミッションはありません</p>
             : <ul className="divide-y divide-border">{dailyMissions.map(m => <MissionItem key={m.id} m={m} />)}</ul>
         )}
       </Card>
 
-      {/* ?? ??????????? ?? */}
+      {/* ── ウィークリーミッション ── */}
       <Card className="border-border bg-card overflow-hidden">
         <button type="button"
           className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
           onClick={() => setWeeklyOpen(o => !o)}>
           <div className="flex items-center gap-2">
             <Star className="size-3.5 text-blue-400" />
-            <h2 className="text-sm font-semibold">???????????</h2>
+            <h2 className="text-sm font-semibold">ウィークリーミッション</h2>
             {weeklyMissions.length > 0 && (
               <span className="text-[10px] text-muted-foreground">
                 ({weeklyDone}/{weeklyMissions.length})
@@ -353,19 +350,19 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         </button>
         {weeklyOpen && (
           weeklyMissions.length === 0
-            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">?????????????</p>
+            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">現在ミッションはありません</p>
             : <ul className="divide-y divide-border">{weeklyMissions.map(m => <MissionItem key={m.id} m={m} />)}</ul>
         )}
       </Card>
 
-      {/* ?? ??????? ?? */}
+      {/* ── アチーブメント ── */}
       <Card className="border-border bg-card overflow-hidden">
         <button type="button"
           className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
           onClick={() => setAchievementOpen(o => !o)}>
           <div className="flex items-center gap-2">
             <Award className="size-3.5 text-chart-5" />
-            <h2 className="text-sm font-semibold">???????</h2>
+            <h2 className="text-sm font-semibold">アチーブメント</h2>
             {achievementMissions.length > 0 && (
               <span className="text-[10px] text-muted-foreground">
                 ({achievementMissions.filter(m => m.participationStatus === 'rewarded').length}/{achievementMissions.length})
@@ -376,12 +373,12 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         </button>
         {achievementOpen && (
           achievementMissions.length === 0
-            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">???????????????</p>
+            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">現在アチーブメントはありません</p>
             : <ul className="divide-y divide-border">{achievementMissions.map(m => <MissionItem key={m.id} m={m} isAchievement />)}</ul>
         )}
       </Card>
 
-      {/* ?? ????????? ?? */}
+      {/* ── イベントミッション ── */}
       {eventMissions.length > 0 && (
         <Card className="border border-primary/40 bg-primary/5 overflow-hidden">
           <button type="button"
@@ -389,7 +386,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             onClick={() => setEventOpen(o => !o)}>
             <div className="flex items-center gap-2">
               <Zap className="size-3.5 text-primary" />
-              <h2 className="text-sm font-semibold text-primary">?????????</h2>
+              <h2 className="text-sm font-semibold text-primary">イベントミッション</h2>
               <span className="text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">LIMITED</span>
             </div>
             {eventOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
@@ -400,23 +397,23 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         </Card>
       )}
 
-      {/* ?? ?????? ?? */}
+      {/* ── ポイント履歴 ── */}
       <Card className="border-border bg-card overflow-hidden">
         <button type="button"
           className="flex w-full items-center justify-between px-4 py-3 border-b border-border hover:bg-secondary/20 transition-colors"
           onClick={() => setHistoryOpen(o => !o)}>
           <div className="flex items-center gap-2">
             <History className="size-3.5 text-muted-foreground" />
-            <h2 className="text-sm font-semibold">??????</h2>
+            <h2 className="text-sm font-semibold">ポイント履歴</h2>
             {data.totalPoints > 0 && (
-              <span className="font-mono text-xs text-chart-5">{data.totalPoints.toLocaleString()} pt ??</span>
+              <span className="font-mono text-xs text-chart-5">{data.totalPoints.toLocaleString()} pt 累計</span>
             )}
           </div>
           {historyOpen ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
         </button>
         {historyOpen && (
           data.history.length === 0
-            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">????????????</p>
+            ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">ポイント履歴がありません</p>
             : (
               <ul className="divide-y divide-border">
                 {data.history.map(h => {
