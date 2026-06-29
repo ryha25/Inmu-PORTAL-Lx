@@ -109,6 +109,18 @@ type Mission = {
   rewardCharacterName: string | null
 }
 
+const CHARACTER_REWARD_NAMES: Record<string, string> = {
+  nyarushian: 'ニャルシアン',
+  takuya: '拓也',
+  leon: 'レオン',
+  'inmu-festival': 'INMUくん（810祭りVer.）',
+}
+
+function getCharacterRewardName(mission: Mission) {
+  if (!mission.rewardCharacterId) return null
+  return CHARACTER_REWARD_NAMES[mission.rewardCharacterId] ?? mission.rewardCharacterName ?? mission.rewardCharacterId
+}
+
 const POINT_TYPE_LABEL: Record<string, string> = {
   mission:     'ミッション',
   daily_login: 'ログインボーナス',
@@ -296,7 +308,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {m.points > 0 && <span className="rounded bg-yellow-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-300">{m.points.toLocaleString()} pt</span>}
-              {m.rewardCharacterName && <span className="rounded bg-fuchsia-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-300">{m.rewardCharacterName}</span>}
+              {getCharacterRewardName(m) && <span className="rounded bg-fuchsia-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-300">{getCharacterRewardName(m)}</span>}
             </div>
             {m.conditionType && m.conditionType !== 'none' && m.conditionCurrent !== null && m.conditionValue && (
               <p className="text-[10px] text-muted-foreground mt-0.5">
