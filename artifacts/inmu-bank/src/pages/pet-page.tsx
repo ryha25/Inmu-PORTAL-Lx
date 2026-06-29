@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
 import { getActionCooldownRemaining, getCareCooldownRemaining, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState } from '@/features/pet/use-pet-state'
 import {
@@ -527,18 +528,71 @@ function SkillPanel({ pet }: { pet: PetDefinition }) {
   )
 }
 
-function RewardsPanel({ pet, level }: { pet: PetDefinition; level: number }) {
+type PetRewardRequest = {
+  id: number
+  sourceKey: string
+  status: 'pending' | 'approved' | 'rejected' | 'paid'
+  txHash: string | null
+}
+
+const PET_REWARD_STATUS_LABEL: Record<PetRewardRequest['status'], string> = {
+  pending: '申請中',
+  approved: '承認済み（送金待ち）',
+  rejected: '却下',
+  paid: '送金済み',
+}
+
+function RewardsPanel({
+  pet,
+  level,
+  requests,
+  requestBusy,
+  onRequest,
+}: {
+  pet: PetDefinition
+  level: number
+  requests: readonly PetRewardRequest[]
+  requestBusy: string | null
+  onRequest: (pet: PetDefinition, level: number) => void
+}) {
   return (
     <section className="rounded-lg border border-amber-300/15 bg-[#0d0916] p-4">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-100"><Gift className="size-4 text-amber-300" />Lv報酬</h2>
       <div className="flex flex-col gap-2">
         {pet.levelRewards.map(reward => {
           const unlocked = level >= reward.level
+          const sourceKey = `pet:${pet.id}:level:${reward.level}`
+          const request = requests.find(candidate => candidate.sourceKey === sourceKey)
           return (
             <div key={reward.level} className={cn('flex items-center gap-2 rounded-md border px-2.5 py-2', unlocked ? 'border-amber-300/30 bg-amber-300/10' : 'border-white/5 bg-black/20')}>
               {unlocked ? <Gift className="size-4 shrink-0 text-amber-300" /> : <LockKeyhole className="size-4 shrink-0 text-muted-foreground" />}
               <span className="shrink-0 font-mono text-xs font-bold text-amber-200">Lv.{reward.level}</span>
-              <span className="min-w-0 break-words text-xs text-foreground/80">{reward.label}</span>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-xs font-bold text-foreground/90">{reward.label}</p>
+                {reward.detail && <p className="mt-0.5 break-words text-[10px] leading-relaxed text-amber-200/75">{reward.detail}</p>}
+                {reward.delivery && <p className="mt-1 inline-flex rounded border border-cyan-300/20 bg-cyan-300/10 px-1.5 py-0.5 text-[9px] font-semibold text-cyan-200">{reward.delivery}</p>}
+                {reward.inmuAmount && unlocked && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={Boolean(request) || requestBusy === sourceKey}
+                    onClick={() => onRequest(pet, reward.level)}
+                    className={cn(
+                      'mt-2 min-h-9 w-full text-[10px] font-bold',
+                      request?.status === 'paid'
+                        ? 'bg-emerald-600/20 text-emerald-200'
+                        : 'border border-fuchsia-300/35 bg-fuchsia-500/20 text-fuchsia-100 hover:bg-fuchsia-500/30',
+                    )}
+                  >
+                    {requestBusy === sourceKey
+                      ? '申請しています…'
+                      : request
+                        ? PET_REWARD_STATUS_LABEL[request.status]
+                        : 'INMU報酬を申請する'}
+                  </Button>
+                )}
+                {request?.txHash && <p className="mt-1 break-all text-[8px] text-muted-foreground">Tx: {request.txHash}</p>}
+              </div>
             </div>
           )
         })}
@@ -648,6 +702,9 @@ export function PetPage() {
   const [speechBubble, setSpeechBubble] = useState('')
   const [ownedPetIds, setOwnedPetIds] = useState<PetId[] | null>(null)
   const [ownershipError, setOwnershipError] = useState(false)
+  const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
+  const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
+  const levelRewardSyncRef = useRef(new Set<string>())
   const [activePetIds, setActivePetIds] = useState<PetId[]>(() => {
     if (typeof window === 'undefined') return []
     try {
@@ -658,6 +715,63 @@ export function PetPage() {
     }
   })
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
+
+  const loadRewardRequests = async () => {
+    try {
+      const response = await fetch('/api/pet/reward-requests', { credentials: 'include' })
+      if (!response.ok) return
+      const data = await response.json() as PetRewardRequest[]
+      setRewardRequests(Array.isArray(data) ? data : [])
+    } catch {
+      // The room remains usable if request history cannot be loaded.
+    }
+  }
+
+  const requestLevelReward = async (targetPet: PetDefinition, reachedLevel: number) => {
+    const sourceKey = `pet:${targetPet.id}:level:${reachedLevel}`
+    setRewardRequestBusy(sourceKey)
+    try {
+      const response = await fetch('/api/pet/reward-requests', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: targetPet.id, reachedLevel }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error ?? '報酬申請に失敗しました')
+      toast.success('INMU報酬を申請しました。運営の承認をお待ちください。')
+      await loadRewardRequests()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '報酬申請に失敗しました')
+    } finally {
+      setRewardRequestBusy(null)
+    }
+  }
+
+  useEffect(() => { void loadRewardRequests() }, [])
+
+  useEffect(() => {
+    if (selectedPetId !== 'inmu-festival' || selectedStats.level < 10 || !ownedPetIds?.includes(selectedPetId)) return
+    const key = `${selectedPetId}:10`
+    if (levelRewardSyncRef.current.has(key)) return
+    levelRewardSyncRef.current.add(key)
+    void fetch('/api/pet/level-rewards/claim', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId: selectedPetId, currentLevel: selectedStats.level }),
+    }).then(async response => {
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error ?? 'ポイント報酬の受取に失敗しました')
+      if (!data.alreadyClaimed) {
+        toast.success('Lv.10報酬として100,000ポイントを受け取りました！')
+        setBalances(current => ({ ...current, points: current.points + 100_000 }))
+      }
+    }).catch(error => {
+      levelRewardSyncRef.current.delete(key)
+      toast.error(error instanceof Error ? error.message : 'ポイント報酬の受取に失敗しました')
+    })
+  }, [ownedPetIds, selectedPetId, selectedStats.level])
   const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const motionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blinkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -968,7 +1082,7 @@ export function PetPage() {
                 onPet={handlePet}
               />
               <div className="lg:hidden"><SkillPanel pet={pet} /></div>
-              <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} /></div>
+              <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} /></div>
               <TrainingSlots activePet={pet} />
               <OwnedCharacters ownedPetIds={ownedPetIds} activePetIds={activePetIds} onSet={handleSetActive} />
             </main>
@@ -976,7 +1090,7 @@ export function PetPage() {
             <aside className="hidden flex-col gap-3 lg:flex">
               <CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} />
               <SkillPanel pet={pet} />
-              <RewardsPanel pet={pet} level={selectedStats.level} />
+              <RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} />
             </aside>
           </div>
         )}
