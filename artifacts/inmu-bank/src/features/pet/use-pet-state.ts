@@ -335,11 +335,16 @@ export function usePetState() {
     setSave(current => ({ ...current, selectedPetId }))
   }
 
-  function setActivePetIds(activePetIds: PetId[]) {
-    setSave(current => ({
-      ...current,
-      activePetIds: activePetIds.filter((id, index, list) => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3),
-    }))
+  function setActivePetIds(nextActivePetIds: PetId[] | ((current: PetId[]) => PetId[])) {
+    setSave(current => {
+      const activePetIds = typeof nextActivePetIds === 'function'
+        ? nextActivePetIds(current.activePetIds)
+        : nextActivePetIds
+      return {
+        ...current,
+        activePetIds: activePetIds.filter((id, index, list) => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3),
+      }
+    })
   }
 
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {

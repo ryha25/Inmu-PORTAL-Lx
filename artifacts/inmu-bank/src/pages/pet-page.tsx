@@ -745,8 +745,14 @@ export function PetPage() {
   const interactionRef = useRef(false)
   const sleepingRef = useRef(false)
   const displayedPetId = activePetIds.includes(selectedPetId) ? selectedPetId : (activePetIds[0] ?? 'inmu-festival')
-  const pet = PET_BY_ID[displayedPetId]
-  const selectedStats = petStats[displayedPetId]
+  const pet = PET_BY_ID[displayedPetId] ?? PET_BY_ID['inmu-festival']
+  const selectedStats = petStats[displayedPetId] ?? petStats['inmu-festival'] ?? {
+    level: 1,
+    exp: 0,
+    fullness: 50,
+    sleepiness: 20,
+    affection: 10,
+  }
   const activePets = activePetIds.map(id => PET_BY_ID[id]).filter(Boolean)
   const hasOwnedPet = (ownedPetIds?.length ?? 0) > 0
 
