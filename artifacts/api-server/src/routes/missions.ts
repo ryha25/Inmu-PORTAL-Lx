@@ -50,6 +50,7 @@ async function fetchInmuBalance(wallet: string): Promise<number> {
 }
 
 import { requireAuth, requireAdmin } from "../middlewares/session";
+import { initializePetCharacterState } from "../services/pet-state-store";
 
 const router = Router();
 
@@ -811,6 +812,9 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
          ON CONFLICT ("userId", "characterId") DO NOTHING`,
         [userId, extraReward.characterId, missionId],
       );
+      await initializePetCharacterState(userId, extraReward.characterId).catch(error => {
+        console.error("[Missions] initialize awarded PET state", error);
+      });
     }
 
     const rewardParts: string[] = [];

@@ -18,7 +18,6 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
-const ACTIVE_PETS_STORAGE_KEY = 'inmu-portal:pet-active-slots:v1'
 const USER_VISIBLE_PET_IDS = new Set<PetId>(['inmu-festival'])
 
 const PET_ROOM_CSS = `
@@ -345,13 +344,6 @@ function PetRoom({
       {roomTheme === 'lion' && (
         <div className="pet-room-fire absolute left-[45%] top-[46%] z-[4] h-12 w-8 rounded-[50%_50%_45%_45%] bg-[radial-gradient(circle_at_50%_70%,#fff7ae,#f59e0b_45%,rgba(220,38,38,.35)_72%,transparent_73%)] blur-[1px]" />
       )}
-      {roomTheme === 'festival' && (
-        <>
-          <div className="pet-room-sway absolute left-[12%] top-[12%] z-[4] h-20 w-10 rounded-[45%] border border-amber-200/50 bg-red-700/80 text-center text-[9px] font-black leading-[5rem] text-amber-100 shadow-[0_0_18px_rgba(251,146,60,.5)]">810</div>
-          <div className="pet-room-sway absolute right-[12%] top-[14%] z-[4] h-20 w-10 rounded-[45%] border border-amber-200/50 bg-red-700/80 text-center text-[9px] font-black leading-[5rem] text-amber-100 shadow-[0_0_18px_rgba(251,146,60,.5)] [animation-delay:-1.8s]">祭</div>
-        </>
-      )}
-
       <div
         className="absolute inset-x-0 bottom-[148px] z-10 flex h-[50%] items-end justify-center"
         data-pet-stage
@@ -691,7 +683,7 @@ function TrainingSlots({ activePet }: { activePet: PetDefinition | null }) {
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, isSleeping, selectPet, care, setExpression, maxLevel } = usePetState()
+  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, isSleeping, selectPet, setActivePetIds, care, setExpression, maxLevel, isHydrated, syncError } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
@@ -705,15 +697,6 @@ export function PetPage() {
   const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
   const levelRewardSyncRef = useRef(new Set<string>())
-  const [activePetIds, setActivePetIds] = useState<PetId[]>(() => {
-    if (typeof window === 'undefined') return []
-    try {
-      const saved = JSON.parse(window.localStorage.getItem(ACTIVE_PETS_STORAGE_KEY) ?? '[]') as PetId[]
-      return saved.filter((id, index) => PET_BY_ID[id] && USER_VISIBLE_PET_IDS.has(id) && saved.indexOf(id) === index).slice(0, 1)
-    } catch {
-      return []
-    }
-  })
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
 
   const loadRewardRequests = async () => {
@@ -768,7 +751,7 @@ export function PetPage() {
   const hasOwnedPet = (ownedPetIds?.length ?? 0) > 0
 
   useEffect(() => {
-    if (displayedPetId !== 'inmu-festival' || selectedStats.level < 10 || !ownedPetIds?.includes(displayedPetId)) return
+    if (!isHydrated || displayedPetId !== 'inmu-festival' || selectedStats.level < 10 || !ownedPetIds?.includes(displayedPetId)) return
     const key = `${displayedPetId}:10`
     if (levelRewardSyncRef.current.has(key)) return
     levelRewardSyncRef.current.add(key)
@@ -788,7 +771,7 @@ export function PetPage() {
       levelRewardSyncRef.current.delete(key)
       toast.error(error instanceof Error ? error.message : 'ポイント報酬の受取に失敗しました')
     })
-  }, [displayedPetId, ownedPetIds, selectedStats.level])
+  }, [displayedPetId, isHydrated, ownedPetIds, selectedStats.level])
 
   const isFull = selectedStats.fullness >= 100
   const cooldownRemaining: Record<PetCareCategory, number> = {
@@ -831,7 +814,6 @@ export function PetPage() {
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem(ACTIVE_PETS_STORAGE_KEY, JSON.stringify(activePetIds))
     if (activePetIds.length > 0 && !activePetIds.includes(selectedPetId)) selectPet(activePetIds[0])
   }, [activePetIds, selectedPetId])
 
@@ -1042,6 +1024,9 @@ export function PetPage() {
             <BalanceChip icon={<CircleDollarSign className="size-3.5" />} label="POINT" value={balances.points} />
           </div>
         </header>
+
+        {!isHydrated && <p className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100">育成データを同期しています…</p>}
+        {syncError && <p className="rounded-md border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs text-rose-100">{syncError}。一時データを表示しています。</p>}
 
         {ownedPetIds === null ? (
           <div className="flex min-h-64 items-center justify-center rounded-lg border border-violet-300/15 bg-black/25 text-sm text-muted-foreground">所持キャラクターを読み込んでいます…</div>

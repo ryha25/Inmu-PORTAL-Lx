@@ -2,9 +2,9 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Award, Flame, ChevronDown, ChevronUp, ExternalLink,
-  CheckCircle2, Star, Zap, History, Target,
+  CheckCircle2, Star, Zap, History, Target, X,
 } from 'lucide-react'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { PET_BY_ID, type PetId } from '@/features/pet/pet-data'
 import { initializeAwardedPetAtLevelOne } from '@/features/pet/use-pet-state'
@@ -14,20 +14,31 @@ type CharacterRevealData = { characterId: string; characterName: string; points:
 function CharacterRewardReveal({ reward, onClose }: { reward: CharacterRevealData; onClose: () => void }) {
   const [phase, setPhase] = useState(0)
   const pet = PET_BY_ID[reward.characterId as PetId]
+  const characterName = pet?.name ?? getCanonicalCharacterName(reward.characterId, reward.characterName)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     const timers = [
       window.setTimeout(() => setPhase(1), 850),
       window.setTimeout(() => setPhase(2), 1120),
       window.setTimeout(() => setPhase(3), 2600),
     ]
-    return () => timers.forEach(window.clearTimeout)
+    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onCloseRef.current() }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      timers.forEach(window.clearTimeout)
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = previousOverflow
+    }
   }, [])
 
   if (!pet) return null
 
   return (
-    <div className="fixed inset-0 z-[10000] overflow-hidden bg-[#020106] text-white" role="dialog" aria-modal="true" aria-label={`${reward.characterName}獲得演出`}>
+    <div className="fixed inset-0 z-[10000] overflow-y-auto bg-[#020106] text-white" role="dialog" aria-modal="true" aria-label={`${characterName}獲得演出`}>
       <style>{`
         @keyframes mission-reveal-stars { from { transform: translateY(18px); opacity:.25 } to { transform:translateY(-42px); opacity:1 } }
         @keyframes mission-reveal-pulse { 0%,100% { transform:scale(.94); opacity:.62 } 50% { transform:scale(1.1); opacity:1 } }
@@ -46,6 +57,9 @@ function CharacterRewardReveal({ reward, onClose }: { reward: CharacterRevealDat
           }} />
         ))}
       </div>
+      <button type="button" onClick={onClose} aria-label="演出を閉じる" className="fixed right-4 top-4 z-50 flex size-11 items-center justify-center rounded-full border border-white/30 bg-black/60 text-white backdrop-blur hover:bg-white/15 active:scale-95">
+        <X className="size-5" />
+      </button>
 
       {phase >= 1 && <div className="pointer-events-none absolute inset-0 z-30 bg-[radial-gradient(circle_at_50%_44%,white_0%,#fff7b2_15%,rgba(250,204,21,.75)_34%,transparent_68%)]" style={{ animation: 'mission-reveal-flash 1.15s ease-out both' }} />}
 
@@ -63,13 +77,14 @@ function CharacterRewardReveal({ reward, onClose }: { reward: CharacterRevealDat
             <div className="absolute inset-x-[-3px] top-1/2 z-10 h-3 -translate-y-1/2 rounded-full border border-yellow-100 bg-gradient-to-b from-yellow-100 via-amber-400 to-amber-800 shadow-[0_0_12px_rgba(255,237,130,.95)]" />
           </div>
 
-          {phase >= 2 && <img src={pet.image} alt={reward.characterName} className="absolute z-20 max-h-[330px] w-[74%] object-contain drop-shadow-[0_0_35px_rgba(250,204,21,.8)] drop-shadow-[0_18px_20px_rgba(0,0,0,.8)]" style={{ animation: 'mission-character-pop 1.05s cubic-bezier(.16,.85,.24,1) both' }} />}
+          {phase >= 2 && <img src={pet.image} alt={characterName} className="absolute z-20 max-h-[330px] w-[74%] object-contain drop-shadow-[0_0_35px_rgba(250,204,21,.8)] drop-shadow-[0_18px_20px_rgba(0,0,0,.8)]" style={{ animation: 'mission-character-pop 1.05s cubic-bezier(.16,.85,.24,1) both' }} />}
         </div>
 
         {phase >= 3 && (
           <div className="z-40 w-full max-w-sm text-center" style={{ animation: 'mission-title-in .55s ease-out both' }}>
             <p className="text-xs font-bold tracking-[0.2em] text-fuchsia-200">NEW CHARACTER</p>
-            <h2 className="mt-2 text-2xl font-black text-white drop-shadow-[0_0_16px_rgba(217,70,239,.8)]">{reward.characterName}</h2>
+            <h2 className="mt-2 text-2xl font-black text-white drop-shadow-[0_0_16px_rgba(217,70,239,.8)]">{characterName}</h2>
+            <p className="mt-1 text-sm font-semibold text-fuchsia-100">{characterName}を獲得しました！</p>
             <p className="mt-1 text-sm font-bold text-amber-300">★{pet.rarity} ・ Lv.1</p>
             {reward.points > 0 && <p className="mt-2 text-xs text-cyan-100">同時獲得：{reward.points.toLocaleString()}ポイント</p>}
             <Button type="button" onClick={onClose} className="mt-5 min-h-12 w-full border border-amber-200/50 bg-gradient-to-b from-yellow-300 to-amber-600 font-black text-black shadow-[0_0_28px_rgba(250,204,21,.42)] hover:from-yellow-200 hover:to-amber-500">仲間に迎える</Button>
@@ -116,9 +131,13 @@ const CHARACTER_REWARD_NAMES: Record<string, string> = {
   'inmu-festival': 'INMUくん（810祭りVer.）',
 }
 
+function getCanonicalCharacterName(characterId: string, fallback?: string | null) {
+  return CHARACTER_REWARD_NAMES[characterId] ?? fallback ?? characterId
+}
+
 function getCharacterRewardName(mission: Mission) {
   if (!mission.rewardCharacterId) return null
-  return CHARACTER_REWARD_NAMES[mission.rewardCharacterId] ?? mission.rewardCharacterName ?? mission.rewardCharacterId
+  return getCanonicalCharacterName(mission.rewardCharacterId, mission.rewardCharacterName)
 }
 
 const POINT_TYPE_LABEL: Record<string, string> = {
@@ -273,7 +292,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
       } else {
         if (d.characterId) {
           initializeAwardedPetAtLevelOne(d.characterId)
-          setCharacterReveal({ characterId: d.characterId, characterName: d.characterName || '新しいキャラクター', points: Number(d.points ?? 0) })
+          setCharacterReveal({ characterId: d.characterId, characterName: getCanonicalCharacterName(d.characterId, d.characterName), points: Number(d.points ?? 0) })
           window.dispatchEvent(new CustomEvent('inmu-pet-ownership-changed'))
         } else {
           toast.success(`${Number(d.points ?? 0).toLocaleString()}ポイントを獲得しました！`)
@@ -371,7 +390,12 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
 
   return (
     <div className="flex flex-col gap-4">
-      {characterReveal && <CharacterRewardReveal reward={characterReveal} onClose={() => setCharacterReveal(null)} />}
+      {characterReveal && <CharacterRewardReveal reward={characterReveal} onClose={() => {
+        setCharacterReveal(null)
+        loadMissions()
+        onRefresh()
+        window.dispatchEvent(new CustomEvent('inmu-pet-ownership-changed'))
+      }} />}
 
       {/* ── 上部統計 ── */}
       <div className="grid grid-cols-2 gap-3">

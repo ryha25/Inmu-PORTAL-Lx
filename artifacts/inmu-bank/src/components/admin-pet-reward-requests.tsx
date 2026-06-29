@@ -48,6 +48,7 @@ export function AdminPetRewardRequests() {
   const [txHashes, setTxHashes] = useState<Record<number, string>>({})
   const [notes, setNotes] = useState<Record<number, string>>({})
   const [bulkTxHash, setBulkTxHash] = useState('')
+  const [loadError, setLoadError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -57,8 +58,12 @@ export function AdminPetRewardRequests() {
       setTxHashes(Object.fromEntries((data ?? []).map(row => [row.id, row.txHash ?? ''])))
       setNotes(Object.fromEntries((data ?? []).map(row => [row.id, row.adminNote ?? ''])))
       setSelected(new Set())
+      setLoadError('')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '報酬申請の取得に失敗しました')
+      const message = error instanceof Error ? error.message : '報酬申請の取得に失敗しました'
+      console.error('[AdminPetRewardRequests] load failed', error)
+      setLoadError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -132,6 +137,8 @@ export function AdminPetRewardRequests() {
           </button>
         ))}
       </div>
+
+      {loadError && <p className="rounded-md border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{loadError}。管理セッションとAPI接続を確認して、再度「更新」を押してください。</p>}
 
       {selected.size > 0 && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">

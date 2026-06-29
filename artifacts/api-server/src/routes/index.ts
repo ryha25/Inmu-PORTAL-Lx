@@ -24,6 +24,7 @@ import searchUsersRouter from "./search-users";
 import gameInviteRouter from "./game-invite";
 import gachaRouter from "./gacha";
 import rewardRequestsRouter from "./reward-requests";
+import petStateRouter from "./pet-state";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(searchUsersRouter);
 router.use(gameInviteRouter);
 router.use(gachaRouter);
 router.use(rewardRequestsRouter);
+router.use(petStateRouter);
 
 export default router;

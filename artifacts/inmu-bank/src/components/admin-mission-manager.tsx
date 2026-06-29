@@ -48,7 +48,7 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'join_discord',             label: 'Discordに参加する' },
   { value: 'inmu_balance',             label: '累計INMU保有枚数' },
   { value: 'login_streak',             label: '連続ログイン日数' },
-  { value: 'login_total',              label: '累計ログイン日数' },
+  { value: 'login_total',              label: '通算ログイン' },
   { value: 'buy_daily',                label: 'デイリー購入枚数' },
   { value: 'buy_weekly',               label: 'ウィークリー購入枚数' },
   { value: 'buy_total',                label: '累計購入枚数' },
@@ -679,10 +679,10 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
           <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} className={`${SELECT_CLS} flex-1`}>
             {TYPE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
-          <Input type="number" placeholder="ポイント" value={form.points} onChange={e => setForm(p => ({ ...p, points: e.target.value }))} className="min-h-10 w-28" />
+          <Input type="number" placeholder="ポイント報酬" aria-label="ポイント報酬" value={form.points} onChange={e => setForm(p => ({ ...p, points: e.target.value }))} className="min-h-10 w-28" />
         </div>
         <div className="flex flex-col gap-1">
-          <Label className="text-xs text-muted-foreground">報酬キャラクター</Label>
+          <Label className="text-xs text-muted-foreground">キャラクター報酬（報酬キャラクター）</Label>
           <select value={form.rewardCharacterId} onChange={e => setForm(p => ({ ...p, rewardCharacterId: e.target.value }))} className={SELECT_CLS}>
             <option value="">なし</option>
             {PET_REWARD_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}

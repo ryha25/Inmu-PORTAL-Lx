@@ -3,6 +3,7 @@ import { db, pool } from "@workspace/db";
 import { notificationsTable, pointsTable, profileTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireAdmin, requireAuth } from "../middlewares/session";
+import { ensurePetStateTable } from "../services/pet-state-store";
 
 const router = Router();
 
@@ -40,7 +41,35 @@ function ensureRewardRequestTable() {
         UNIQUE ("userId", "rewardType", "sourceKey")
       )
     `);
-    await pool.query(`ALTER TABLE "inmuRewardRequests" ADD COLUMN IF NOT EXISTS "displayName" TEXT`);
+    const requestColumns = [
+      `ADD COLUMN IF NOT EXISTS "displayName" TEXT`,
+      `ADD COLUMN IF NOT EXISTS "rewardType" TEXT`,
+      `ADD COLUMN IF NOT EXISTS "sourceKey" TEXT`,
+      `ADD COLUMN IF NOT EXISTS "characterId" TEXT`,
+      `ADD COLUMN IF NOT EXISTS "characterName" TEXT`,
+      `ADD COLUMN IF NOT EXISTS "reachedLevel" INTEGER`,
+      `ADD COLUMN IF NOT EXISTS "inmuAmount" NUMERIC(24, 6) DEFAULT 0`,
+      `ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'`,
+      `ADD COLUMN IF NOT EXISTS "adminNote" TEXT`,
+      `ADD COLUMN IF NOT EXISTS "txHash" TEXT`,
+      `ADD COLUMN IF NOT EXISTS "reviewedByAdminId" TEXT`,
+      `ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ DEFAULT NOW()`,
+      `ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMPTZ`,
+      `ADD COLUMN IF NOT EXISTS "paidAt" TIMESTAMPTZ`,
+    ];
+    for (const definition of requestColumns) {
+      await pool.query(`ALTER TABLE "inmuRewardRequests" ${definition}`);
+    }
+    await pool.query(`UPDATE "inmuRewardRequests" SET status = 'pending' WHERE status IS NULL OR status NOT IN ('pending', 'approved', 'rejected', 'paid')`);
+    await pool.query(`
+      DELETE FROM "inmuRewardRequests" newer
+      USING "inmuRewardRequests" older
+      WHERE newer.id > older.id
+        AND newer."userId" = older."userId"
+        AND newer."rewardType" = older."rewardType"
+        AND newer."sourceKey" = older."sourceKey"
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "inmu_reward_request_source_unique" ON "inmuRewardRequests" ("userId", "rewardType", "sourceKey")`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "petLevelRewardClaims" (
         id              SERIAL PRIMARY KEY,
@@ -72,13 +101,19 @@ function ensureRewardRequestTable() {
 
 router.post("/pet/level-rewards/claim", requireAuth, async (req, res): Promise<void> => {
   const characterId = typeof req.body?.characterId === "string" ? req.body.characterId : "";
-  const currentLevel = Number(req.body?.currentLevel);
-  if (characterId !== "inmu-festival" || currentLevel < 10) {
+  if (characterId !== "inmu-festival") {
     res.status(400).json({ error: "受け取れるレベル報酬がありません" });
     return;
   }
   try {
     await ensureRewardRequestTable();
+    await ensurePetStateTable();
+    const petState = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]);
+    const currentLevel = Number(petState.rows[0]?.state?.pets?.[characterId]?.level ?? 0);
+    if (currentLevel < 10) {
+      res.status(400).json({ error: "Lv.10到達後に受け取れます" });
+      return;
+    }
     const owned = await pool.query(
       `SELECT 1 FROM "userPetCharacters" WHERE "userId" = $1 AND "characterId" = $2 LIMIT 1`,
       [req.userId!, characterId],
@@ -120,6 +155,13 @@ router.post("/pet/level-rewards/claim", requireAuth, async (req, res): Promise<v
 router.get("/pet/reward-requests", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensureRewardRequestTable();
+    await ensurePetStateTable();
+    const petState = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]);
+    const storedLevel = Number(petState.rows[0]?.state?.pets?.[characterId]?.level ?? 0);
+    if (storedLevel < reward.level) {
+      res.status(400).json({ error: `Lv.${reward.level}到達後に申請できます` });
+      return;
+    }
     const { rows } = await pool.query(`
       SELECT id, "rewardType", "sourceKey", "characterId", "characterName",
              "reachedLevel", "inmuAmount", status, "adminNote", "txHash",
@@ -181,9 +223,10 @@ router.get("/admin/pet-reward-requests", requireAdmin, async (_req, res): Promis
   try {
     await ensureRewardRequestTable();
     const { rows } = await pool.query(`
-      SELECT r.*, COALESCE(r."displayName", p."displayName", r."userId") AS "displayName", p."solWallet"
+      SELECT r.*, COALESCE(NULLIF(r."displayName", ''), p."displayName", u.name, r."userId") AS "displayName", p."solWallet"
       FROM "inmuRewardRequests" r
       LEFT JOIN profile p ON p."userId" = r."userId"
+      LEFT JOIN "user" u ON u.id = r."userId"
       ORDER BY
         CASE r.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 WHEN 'rejected' THEN 2 ELSE 3 END,
         r."createdAt" DESC

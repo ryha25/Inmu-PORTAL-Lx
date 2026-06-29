@@ -206,7 +206,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
   },
   {
     id: 'inmu-festival',
-    name: 'INMUくん 810祭り',
+    name: 'INMUくん（810祭りVer.）',
     rarity: 3,
     maxLevel: 15,
     image: inmuFestivalImage,
@@ -235,7 +235,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     costume: { id: 'festival-810', label: '810祭りVer.' },
     skill: {
       name: '810祭り‼️',
-      effect: 'イベント時の購入申請還元率 +5%',
+      effect: '購入申請（イベント時）還元率 +5%',
       notes: ['Lv.1から発動', 'イベント期間中のみ有効'],
     },
     levelRewards: [

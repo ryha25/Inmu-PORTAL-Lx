@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PET_BY_ID, PET_DEFINITIONS, type PetExpression, type PetId } from './pet-data'
 
 const STORAGE_KEY = 'inmu-portal:pet-state:v1'
@@ -51,8 +51,9 @@ type PetProgressState = { fullnessAt: number; sleepinessAt: number }
 type PremiumFoodSave = { dailyDate: string; dailyUsed: number; inventory: number }
 
 type PetSaveData = {
-  version: 4
+  version: 5
   selectedPetId: PetId
+  activePetIds: PetId[]
   pets: Record<PetId, PetStats>
   lastCareAt: Record<PetId, PetActionTimes>
   cooldownUntil: Record<PetId, PetCooldownUntil>
@@ -61,6 +62,7 @@ type PetSaveData = {
   sleepStartedAt: Record<PetId, number>
   progress: Record<PetId, PetProgressState>
   premiumFood: PremiumFoodSave
+  skillState: Record<PetId, boolean>
 }
 
 type LegacySaveData = Partial<PetSaveData> & {
@@ -132,8 +134,9 @@ function getPremiumFoodState(value: PremiumFoodSave, now = Date.now()): PremiumF
 function createDefaultSave(): PetSaveData {
   const now = Date.now()
   return {
-    version: 4,
+    version: 5,
     selectedPetId: PET_DEFINITIONS[0].id,
+    activePetIds: [],
     pets: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...DEFAULT_STATS }])) as Record<PetId, PetStats>,
     lastCareAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...EMPTY_ACTION_TIMES }])) as Record<PetId, PetActionTimes>,
     cooldownUntil: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...EMPTY_COOLDOWNS }])) as Record<PetId, PetCooldownUntil>,
@@ -142,19 +145,26 @@ function createDefaultSave(): PetSaveData {
     sleepStartedAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, 0])) as Record<PetId, number>,
     progress: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { fullnessAt: now, sleepinessAt: now }])) as Record<PetId, PetProgressState>,
     premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
+    skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, true])) as Record<PetId, boolean>,
   }
 }
 
-function loadSave(): PetSaveData {
+function loadSave(source?: unknown): PetSaveData {
   const fallback = createDefaultSave()
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '') as LegacySaveData
+    const parsed = (source && typeof source === 'object'
+      ? source
+      : JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '')) as LegacySaveData
     const validSelection = PET_DEFINITIONS.some(pet => pet.id === parsed.selectedPetId)
+    const activePetIds = Array.isArray(parsed.activePetIds)
+      ? parsed.activePetIds.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id as PetId]) && list.indexOf(id) === index).slice(0, 3)
+      : []
     const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
     const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(parsed.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
     return {
-      version: 4,
+      version: 5,
       selectedPetId: validSelection ? parsed.selectedPetId! : fallback.selectedPetId,
+      activePetIds,
       pets,
       lastCareAt,
       cooldownUntil: Object.fromEntries(PET_DEFINITIONS.map(pet => {
@@ -176,6 +186,7 @@ function loadSave(): PetSaveData {
         sleepinessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.sleepinessAt, Date.now())),
       }])) as Record<PetId, PetProgressState>,
       premiumFood: sanitizePremiumFood(parsed.premiumFood),
+      skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, parsed.skillState?.[pet.id] !== false])) as Record<PetId, boolean>,
     }
   } catch {
     return fallback
@@ -253,6 +264,9 @@ export function getActionCooldownRemaining(action: PetCareAction, lastCareAt: Pa
 
 export function usePetState() {
   const [save, setSave] = useState<PetSaveData>(loadSave)
+  const [isHydrated, setIsHydrated] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const initialLocalSave = useRef(save)
   const now = Date.now()
   const effectiveSave = materializeSaveAt(save, now)
   const selectedStats = effectiveSave.pets[save.selectedPetId]
@@ -260,8 +274,55 @@ export function usePetState() {
   const premiumFood = getPremiumFoodState(effectiveSave.premiumFood, now)
 
   useEffect(() => {
+    let cancelled = false
+    async function hydrateFromDatabase() {
+      try {
+        const response = await fetch('/api/pet/state', { credentials: 'include' })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error ?? 'INMU PETデータの取得に失敗しました')
+        if (cancelled) return
+        if (data.hasState && data.state) {
+          setSave(loadSave(data.state))
+        } else {
+          const migrateResponse = await fetch('/api/pet/state', {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: initialLocalSave.current, clientUpdatedAt: Date.now() }),
+          })
+          if (!migrateResponse.ok) {
+            const migrateData = await migrateResponse.json().catch(() => ({}))
+            throw new Error(migrateData.error ?? 'INMU PETデータの初期保存に失敗しました')
+          }
+        }
+        setSyncError(null)
+      } catch (error) {
+        if (!cancelled) setSyncError(error instanceof Error ? error.message : 'INMU PETデータの同期に失敗しました')
+      } finally {
+        if (!cancelled) setIsHydrated(true)
+      }
+    }
+    void hydrateFromDatabase()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(save))
-  }, [save])
+    if (!isHydrated) return
+    void fetch('/api/pet/state', {
+      method: 'PUT',
+      credentials: 'include',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: save, clientUpdatedAt: Date.now() }),
+    }).then(async response => {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error ?? 'INMU PETデータの保存に失敗しました')
+      }
+      setSyncError(null)
+    }).catch(error => setSyncError(error instanceof Error ? error.message : 'INMU PETデータの保存に失敗しました'))
+  }, [isHydrated, save])
 
   useEffect(() => {
     const materialize = () => setSave(current => materializeSaveAt(current, Date.now()))
@@ -272,6 +333,13 @@ export function usePetState() {
 
   function selectPet(selectedPetId: PetId) {
     setSave(current => ({ ...current, selectedPetId }))
+  }
+
+  function setActivePetIds(activePetIds: PetId[]) {
+    setSave(current => ({
+      ...current,
+      activePetIds: activePetIds.filter((id, index, list) => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3),
+    }))
   }
 
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
@@ -363,6 +431,7 @@ export function usePetState() {
 
   return {
     selectedPetId: save.selectedPetId,
+    activePetIds: effectiveSave.activePetIds,
     selectedStats,
     petStats: effectiveSave.pets,
     cooldownUntil: effectiveSave.cooldownUntil[save.selectedPetId],
@@ -372,10 +441,14 @@ export function usePetState() {
     premiumFood,
     isSleeping,
     selectPet,
+    setActivePetIds,
     care,
     setExpression,
     grantPremiumFood,
     maxLevel: PET_BY_ID[save.selectedPetId].maxLevel,
+    isHydrated,
+    syncError,
+    skillState: effectiveSave.skillState,
   }
 }
 
