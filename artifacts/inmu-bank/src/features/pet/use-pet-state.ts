@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { PET_DEFINITIONS, type PetExpression, type PetId } from './pet-data'
+import { PET_BY_ID, PET_DEFINITIONS, type PetExpression, type PetId } from './pet-data'
 
 const STORAGE_KEY = 'inmu-portal:pet-state:v1'
-const MAX_LEVEL = 30
 
 export type PetStats = {
   level: number
@@ -82,11 +81,12 @@ function readNumber(value: unknown, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-function sanitizeStats(value: Partial<PetStats> | undefined): PetStats {
-  const level = clamp(readNumber(value?.level, DEFAULT_STATS.level), 1, MAX_LEVEL)
+function sanitizeStats(value: Partial<PetStats> | undefined, petId: PetId): PetStats {
+  const maxLevel = PET_BY_ID[petId].maxLevel
+  const level = clamp(readNumber(value?.level, DEFAULT_STATS.level), 1, maxLevel)
   return {
     level,
-    exp: level >= MAX_LEVEL ? 0 : clamp(readNumber(value?.exp, DEFAULT_STATS.exp), 0, level * 20 - 1),
+    exp: level >= maxLevel ? 0 : clamp(readNumber(value?.exp, DEFAULT_STATS.exp), 0, level * 20 - 1),
     fullness: clamp(readNumber(value?.fullness, DEFAULT_STATS.fullness)),
     sleepiness: clamp(readNumber(value?.sleepiness, DEFAULT_STATS.sleepiness)),
     affection: clamp(readNumber(value?.affection, DEFAULT_STATS.affection)),
@@ -150,7 +150,7 @@ function loadSave(): PetSaveData {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '') as LegacySaveData
     const validSelection = PET_DEFINITIONS.some(pet => pet.id === parsed.selectedPetId)
-    const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id])])) as Record<PetId, PetStats>
+    const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
     const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(parsed.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
     return {
       version: 4,
@@ -182,15 +182,15 @@ function loadSave(): PetSaveData {
   }
 }
 
-function addExp(stats: PetStats, amount: number): PetStats {
-  if (stats.level >= MAX_LEVEL) return { ...stats, level: MAX_LEVEL, exp: 0 }
+function addExp(stats: PetStats, amount: number, maxLevel: number): PetStats {
+  if (stats.level >= maxLevel) return { ...stats, level: maxLevel, exp: 0 }
   let level = stats.level
   let exp = stats.exp + amount
-  while (level < MAX_LEVEL && exp >= level * 20) {
+  while (level < maxLevel && exp >= level * 20) {
     exp -= level * 20
     level += 1
   }
-  return { ...stats, level, exp: level >= MAX_LEVEL ? 0 : exp }
+  return { ...stats, level, exp: level >= maxLevel ? 0 : exp }
 }
 
 function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
@@ -320,7 +320,7 @@ export function usePetState() {
         fullness: clamp(currentStats.fullness + currentConfig.fullness),
         sleepiness: clamp(currentStats.sleepiness + currentConfig.sleepiness),
         affection: clamp(currentStats.affection + (overpetted ? -3 : currentConfig.affection)),
-      }, overpetted ? 0 : currentConfig.exp)
+      }, overpetted ? 0 : currentConfig.exp, PET_BY_ID[currentPetId].maxLevel)
       const startsSleeping = nextStats.sleepiness >= 100
       let premiumFood = materialized.premiumFood
       if (action === 'feed-premium') {
@@ -375,6 +375,30 @@ export function usePetState() {
     care,
     setExpression,
     grantPremiumFood,
-    maxLevel: MAX_LEVEL,
+    maxLevel: PET_BY_ID[save.selectedPetId].maxLevel,
+  }
+}
+
+export function initializeAwardedPetAtLevelOne(petId: string) {
+  if (!(petId in PET_BY_ID)) return
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<PetSaveData>
+    const fallback = createDefaultSave()
+    const current = parsed.version ? { ...fallback, ...parsed } as PetSaveData : fallback
+    const id = petId as PetId
+    const now = Date.now()
+    const next: PetSaveData = {
+      ...current,
+      pets: { ...current.pets, [id]: { ...DEFAULT_STATS } },
+      lastCareAt: { ...current.lastCareAt, [id]: { ...EMPTY_ACTION_TIMES } },
+      cooldownUntil: { ...current.cooldownUntil, [id]: { ...EMPTY_COOLDOWNS } },
+      expressions: { ...current.expressions, [id]: { kind: 'default', until: 0 } },
+      petting: { ...current.petting, [id]: { count: 0, lastAt: 0 } },
+      sleepStartedAt: { ...current.sleepStartedAt, [id]: 0 },
+      progress: { ...current.progress, [id]: { fullnessAt: now, sleepinessAt: now } },
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  } catch {
+    // A broken local save should not prevent receiving the character.
   }
 }
