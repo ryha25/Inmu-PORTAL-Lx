@@ -42,6 +42,7 @@ export type PetDefinition = {
   id: PetId
   name: string
   rarity: number
+  maxLevel: number
   image: string
   expressions: Record<PetExpression, string>
   walk: {
@@ -77,8 +78,11 @@ export type PetDefinition = {
     notes: readonly string[]
   }
   levelRewards: readonly {
-    level: 10 | 20 | 30
+    level: number
     label: string
+    detail?: string
+    delivery?: string
+    inmuAmount?: number
   }[]
 }
 
@@ -87,6 +91,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     id: 'nyarushian',
     name: 'ニャルシアン',
     rarity: 3,
+    maxLevel: 30,
     image: nyarushianImage,
     expressions: {
       default: nyarushianImage,
@@ -125,6 +130,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     id: 'takuya',
     name: '拓也',
     rarity: 3,
+    maxLevel: 30,
     image: takuyaImage,
     expressions: {
       default: takuyaImage,
@@ -163,6 +169,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     id: 'leon',
     name: 'レオン',
     rarity: 3,
+    maxLevel: 30,
     image: leonImage,
     expressions: {
       default: leonImage,
@@ -201,6 +208,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     id: 'inmu-festival',
     name: 'INMUくん 810祭り',
     rarity: 3,
+    maxLevel: 15,
     image: inmuFestivalImage,
     expressions: {
       default: inmuFestivalImage,
@@ -227,13 +235,12 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     costume: { id: 'festival-810', label: '810祭りVer.' },
     skill: {
       name: '810祭り‼️',
-      effect: '購入申請（イベント時）還元率 +5%',
-      notes: ['Lv.1から発動', 'イベント期間中のみ有効', 'イベント時の購入申請還元率に+5%加算'],
+      effect: 'イベント時の購入申請還元率 +5%',
+      notes: ['Lv.1から発動', 'イベント期間中のみ有効'],
     },
     levelRewards: [
-      { level: 10, label: '810提灯' },
-      { level: 20, label: '祭り太鼓' },
-      { level: 30, label: '金のINMU神輿' },
+      { level: 10, label: '100,000ポイント', detail: '達成と同時に即時付与', delivery: '即時付与' },
+      { level: 15, label: '30,000 INMU', detail: '購入申請還元率 +5%（全対象）', delivery: '申請式（承認後送金）', inmuAmount: 30_000 },
     ],
   },
 ]
