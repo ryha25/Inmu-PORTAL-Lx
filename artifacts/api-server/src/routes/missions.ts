@@ -123,9 +123,24 @@ async function ensureTesterPetMission() {
   if (testerMissionPromise) return testerMissionPromise;
   testerMissionPromise = (async () => {
     await ensureRewardTables();
-    let mission = await db.select().from(missionsTable)
-      .where(eq(missionsTable.title, TESTER_PET_MISSION_TITLE))
-      .then(rows => rows[0]);
+    const existingMissions = await db.select().from(missionsTable);
+    let mission = existingMissions.find(row => row.title === TESTER_PET_MISSION_TITLE)
+      ?? existingMissions.find(row =>
+        row.type === "event"
+        && row.conditionType === "login_total"
+        && Number(row.conditionValue) === 7
+        && /\?{2,}/.test(row.title)
+      );
+
+    if (mission && mission.title !== TESTER_PET_MISSION_TITLE) {
+      [mission] = await db.update(missionsTable)
+        .set({
+          title: TESTER_PET_MISSION_TITLE,
+          description: "通算ログイン日数7日達成で限定キャラクターを獲得できます。",
+        })
+        .where(eq(missionsTable.id, mission.id))
+        .returning();
+    }
 
     if (!mission) {
       [mission] = await db.insert(missionsTable).values({
@@ -158,8 +173,23 @@ async function ensureTesterPetMission() {
 function withExtraReward<T extends { id: number }>(mission: T, rewards: Map<number, MissionExtraReward>) {
   const reward = rewards.get(mission.id);
   const rewardCharacterId = reward?.characterId ?? null;
+  const rawMission = mission as T & { title?: string; description?: string | null; type?: string };
+  const fallbackTypeNames: Record<string, string> = {
+    daily: "デイリー",
+    weekly: "ウィークリー",
+    achievement: "アチーブメント",
+    event: "イベント",
+  };
+  const title = rawMission.title && !/\?{3,}/.test(rawMission.title)
+    ? rawMission.title
+    : `${fallbackTypeNames[rawMission.type ?? ""] ?? ""}ミッション #${mission.id}`;
+  const description = rawMission.description && /\?{3,}/.test(rawMission.description)
+    ? null
+    : rawMission.description;
   return {
     ...mission,
+    title,
+    description,
     rewardCharacterId,
     rewardCharacterName: rewardCharacterId ? (PET_CHARACTER_NAMES[rewardCharacterId] ?? rewardCharacterId) : null,
   };
