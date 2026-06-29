@@ -6,6 +6,79 @@ import {
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
+import { PET_BY_ID, type PetId } from '@/features/pet/pet-data'
+import { initializeAwardedPetAtLevelOne } from '@/features/pet/use-pet-state'
+
+type CharacterRevealData = { characterId: string; characterName: string; points: number }
+
+function CharacterRewardReveal({ reward, onClose }: { reward: CharacterRevealData; onClose: () => void }) {
+  const [phase, setPhase] = useState(0)
+  const pet = PET_BY_ID[reward.characterId as PetId]
+
+  useEffect(() => {
+    const timers = [
+      window.setTimeout(() => setPhase(1), 850),
+      window.setTimeout(() => setPhase(2), 1120),
+      window.setTimeout(() => setPhase(3), 2600),
+    ]
+    return () => timers.forEach(window.clearTimeout)
+  }, [])
+
+  if (!pet) return null
+
+  return (
+    <div className="fixed inset-0 z-[10000] overflow-hidden bg-[#020106] text-white" role="dialog" aria-modal="true" aria-label={`${reward.characterName}獲得演出`}>
+      <style>{`
+        @keyframes mission-reveal-stars { from { transform: translateY(18px); opacity:.25 } to { transform:translateY(-42px); opacity:1 } }
+        @keyframes mission-reveal-pulse { 0%,100% { transform:scale(.94); opacity:.62 } 50% { transform:scale(1.1); opacity:1 } }
+        @keyframes mission-reveal-flash { 0% { opacity:0 } 22% { opacity:1 } 100% { opacity:0 } }
+        @keyframes mission-capsule-top { to { transform:translate3d(-12px,-115px,0) rotate(-14deg); opacity:.3 } }
+        @keyframes mission-capsule-bottom { to { transform:translate3d(12px,115px,0) rotate(11deg); opacity:.3 } }
+        @keyframes mission-character-pop { 0% { opacity:0; transform:translateY(78px) scale(.38); filter:brightness(3) blur(8px) } 62% { opacity:1; transform:translateY(-8px) scale(1.08); filter:brightness(1.35) blur(0) } 100% { opacity:1; transform:translateY(0) scale(1); filter:brightness(1) blur(0) } }
+        @keyframes mission-title-in { from { opacity:0; transform:translateY(18px) } to { opacity:1; transform:translateY(0) } }
+      `}</style>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_44%,rgba(250,204,21,.34),transparent_22%),radial-gradient(circle_at_50%_60%,rgba(126,34,206,.3),transparent_48%),linear-gradient(180deg,#020106,#080313_62%,#020106)]" />
+      <div className="absolute inset-0 opacity-60">
+        {Array.from({ length: 28 }, (_, index) => (
+          <span key={index} className="absolute rounded-full bg-amber-200 shadow-[0_0_10px_rgba(250,204,21,.9)]" style={{
+            left: `${(index * 37) % 97}%`, top: `${(index * 53) % 92}%`, width: 2 + index % 4, height: 2 + index % 4,
+            animation: `mission-reveal-stars ${2.1 + (index % 5) * .33}s ease-in-out ${(index % 7) * .12}s infinite alternate`,
+          }} />
+        ))}
+      </div>
+
+      {phase >= 1 && <div className="pointer-events-none absolute inset-0 z-30 bg-[radial-gradient(circle_at_50%_44%,white_0%,#fff7b2_15%,rgba(250,204,21,.75)_34%,transparent_68%)]" style={{ animation: 'mission-reveal-flash 1.15s ease-out both' }} />}
+
+      <div className="relative z-20 flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8">
+        <p className="mb-7 font-serif text-sm font-black tracking-[0.28em] text-amber-200 drop-shadow-[0_0_12px_rgba(250,204,21,.8)]">CHARACTER REWARD</p>
+        <div className="relative flex h-[390px] w-full max-w-sm items-center justify-center">
+          <div className="absolute size-72 rounded-full border border-amber-200/35 shadow-[0_0_80px_rgba(250,204,21,.25)]" style={{ animation: 'mission-reveal-pulse 1.5s ease-in-out infinite' }} />
+          {[0, 1, 2].map(index => <div key={index} className="absolute rounded-full border border-amber-300/30" style={{ width: 190 + index * 70, height: 70 + index * 26, transform: `rotate(${index * 22 - 18}deg)` }} />)}
+
+          <div className="absolute size-48">
+            <div className="absolute inset-x-0 top-0 h-24 rounded-t-full border-2 border-amber-100/80 bg-[radial-gradient(circle_at_30%_18%,#fffbd1_0%,#ffe169_8%,#e9a817_32%,#8a4300_74%,#2b1000_100%)] shadow-[inset_-18px_-12px_25px_rgba(45,17,0,.55),inset_12px_8px_20px_rgba(255,255,220,.7),0_0_45px_rgba(250,204,21,.75)]" style={phase >= 1 ? { animation: 'mission-capsule-top .75s cubic-bezier(.2,.8,.2,1) forwards' } : undefined}>
+              <span className="absolute left-[19%] top-[14%] h-9 w-5 -rotate-45 rounded-full bg-white/75 blur-[1px]" />
+            </div>
+            <div className="absolute inset-x-0 bottom-0 h-24 rounded-b-full border-2 border-amber-100/75 bg-[radial-gradient(circle_at_34%_4%,#ffd960_0%,#d89309_34%,#6d3100_74%,#230c00_100%)] shadow-[inset_-16px_12px_24px_rgba(35,12,0,.65),inset_10px_-5px_18px_rgba(255,222,104,.42),0_0_45px_rgba(250,204,21,.7)]" style={phase >= 1 ? { animation: 'mission-capsule-bottom .75s cubic-bezier(.2,.8,.2,1) forwards' } : undefined} />
+            <div className="absolute inset-x-[-3px] top-1/2 z-10 h-3 -translate-y-1/2 rounded-full border border-yellow-100 bg-gradient-to-b from-yellow-100 via-amber-400 to-amber-800 shadow-[0_0_12px_rgba(255,237,130,.95)]" />
+          </div>
+
+          {phase >= 2 && <img src={pet.image} alt={reward.characterName} className="absolute z-20 max-h-[330px] w-[74%] object-contain drop-shadow-[0_0_35px_rgba(250,204,21,.8)] drop-shadow-[0_18px_20px_rgba(0,0,0,.8)]" style={{ animation: 'mission-character-pop 1.05s cubic-bezier(.16,.85,.24,1) both' }} />}
+        </div>
+
+        {phase >= 3 && (
+          <div className="z-40 w-full max-w-sm text-center" style={{ animation: 'mission-title-in .55s ease-out both' }}>
+            <p className="text-xs font-bold tracking-[0.2em] text-fuchsia-200">NEW CHARACTER</p>
+            <h2 className="mt-2 text-2xl font-black text-white drop-shadow-[0_0_16px_rgba(217,70,239,.8)]">{reward.characterName}</h2>
+            <p className="mt-1 text-sm font-bold text-amber-300">★{pet.rarity} ・ Lv.1</p>
+            {reward.points > 0 && <p className="mt-2 text-xs text-cyan-100">同時獲得：{reward.points.toLocaleString()}ポイント</p>}
+            <Button type="button" onClick={onClose} className="mt-5 min-h-12 w-full border border-amber-200/50 bg-gradient-to-b from-yellow-300 to-amber-600 font-black text-black shadow-[0_0_28px_rgba(250,204,21,.42)] hover:from-yellow-200 hover:to-amber-500">仲間に迎える</Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 type PointsData = {
   totalPoints: number
@@ -57,6 +130,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
   const [achievementMissions, setAchievementMissions]  = useState<Mission[]>([])
   const [eventMissions,       setEventMissions]        = useState<Mission[]>([])
   const [busy, setBusy] = useState<number | null>(null)
+  const [characterReveal, setCharacterReveal] = useState<CharacterRevealData | null>(null)
 
   const loadMissions = useCallback(() => {
     fetch('/api/missions', { credentials: 'include' })
@@ -185,12 +259,13 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         else toast.error(d.message ?? d.error ?? 'エラーが発生しました')
         updateMissionStatus(mission.id, 'achieved')
       } else {
-        const rewards = [
-          d.points > 0 ? `${Number(d.points).toLocaleString()}ポイント` : null,
-          d.characterName || null,
-        ].filter(Boolean)
-        toast.success(`${rewards.join(' + ')}を獲得しました！`)
-        if (d.characterId) window.dispatchEvent(new CustomEvent('inmu-pet-ownership-changed'))
+        if (d.characterId) {
+          initializeAwardedPetAtLevelOne(d.characterId)
+          setCharacterReveal({ characterId: d.characterId, characterName: d.characterName || '新しいキャラクター', points: Number(d.points ?? 0) })
+          window.dispatchEvent(new CustomEvent('inmu-pet-ownership-changed'))
+        } else {
+          toast.success(`${Number(d.points ?? 0).toLocaleString()}ポイントを獲得しました！`)
+        }
         loadMissions()
         onRefresh()
       }
@@ -284,6 +359,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
 
   return (
     <div className="flex flex-col gap-4">
+      {characterReveal && <CharacterRewardReveal reward={characterReveal} onClose={() => setCharacterReveal(null)} />}
 
       {/* ── 上部統計 ── */}
       <div className="grid grid-cols-2 gap-3">
