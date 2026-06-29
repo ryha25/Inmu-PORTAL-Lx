@@ -1,4 +1,5 @@
 import { AdminMissionManager } from '@/components/admin-mission-manager'
+import { AdminPetRewardRequests } from '@/components/admin-pet-reward-requests'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1268,6 +1269,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           <TabsTrigger value="purchase" className="text-xs py-1.5" onClick={loadPurchaseRequests}>
             <ShoppingCart className="size-3 mr-1" />申請
           </TabsTrigger>
+          <TabsTrigger value="pet-rewards" className="text-xs py-1.5">
+            <Coins className="size-3 mr-1" />PET報酬
+          </TabsTrigger>
           <TabsTrigger value="settings" className="text-xs py-1.5" onClick={loadSystemSettings}>
             <Settings className="size-3 mr-1" />設定
           </TabsTrigger>
@@ -1583,6 +1587,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         {/* ── Missions tab ── */}
         <TabsContent value="missions" className="flex flex-col gap-4 mt-3">
           <AdminMissionManager api={api} />
+        </TabsContent>
+
+        <TabsContent value="pet-rewards" className="flex flex-col gap-4 mt-3">
+          <AdminPetRewardRequests />
         </TabsContent>
 
 
