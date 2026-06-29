@@ -750,28 +750,6 @@ export function PetPage() {
 
   useEffect(() => { void loadRewardRequests() }, [])
 
-  useEffect(() => {
-    if (selectedPetId !== 'inmu-festival' || selectedStats.level < 10 || !ownedPetIds?.includes(selectedPetId)) return
-    const key = `${selectedPetId}:10`
-    if (levelRewardSyncRef.current.has(key)) return
-    levelRewardSyncRef.current.add(key)
-    void fetch('/api/pet/level-rewards/claim', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: selectedPetId, currentLevel: selectedStats.level }),
-    }).then(async response => {
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error ?? 'ポイント報酬の受取に失敗しました')
-      if (!data.alreadyClaimed) {
-        toast.success('Lv.10報酬として100,000ポイントを受け取りました！')
-        setBalances(current => ({ ...current, points: current.points + 100_000 }))
-      }
-    }).catch(error => {
-      levelRewardSyncRef.current.delete(key)
-      toast.error(error instanceof Error ? error.message : 'ポイント報酬の受取に失敗しました')
-    })
-  }, [ownedPetIds, selectedPetId, selectedStats.level])
   const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const motionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blinkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -788,6 +766,30 @@ export function PetPage() {
   const selectedStats = petStats[displayedPetId]
   const activePets = activePetIds.map(id => PET_BY_ID[id]).filter(Boolean)
   const hasOwnedPet = (ownedPetIds?.length ?? 0) > 0
+
+  useEffect(() => {
+    if (displayedPetId !== 'inmu-festival' || selectedStats.level < 10 || !ownedPetIds?.includes(displayedPetId)) return
+    const key = `${displayedPetId}:10`
+    if (levelRewardSyncRef.current.has(key)) return
+    levelRewardSyncRef.current.add(key)
+    void fetch('/api/pet/level-rewards/claim', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId: displayedPetId, currentLevel: selectedStats.level }),
+    }).then(async response => {
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error ?? 'ポイント報酬の受取に失敗しました')
+      if (!data.alreadyClaimed) {
+        toast.success('Lv.10報酬として100,000ポイントを受け取りました！')
+        setBalances(current => ({ ...current, points: current.points + 100_000 }))
+      }
+    }).catch(error => {
+      levelRewardSyncRef.current.delete(key)
+      toast.error(error instanceof Error ? error.message : 'ポイント報酬の受取に失敗しました')
+    })
+  }, [displayedPetId, ownedPetIds, selectedStats.level])
+
   const isFull = selectedStats.fullness >= 100
   const cooldownRemaining: Record<PetCareCategory, number> = {
     feed: getCareCooldownRemaining('feed', cooldownUntil, now),
