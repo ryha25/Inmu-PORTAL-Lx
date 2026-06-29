@@ -15,7 +15,7 @@ import { eq, and, sql, gte } from "drizzle-orm";
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
 
-// ?? ????????????(2026-05-01??????)??
+// ── 購入履歴の有効期間開始日（2026-05-01以降のみ対象）──
 const HISTORY_CUTOFF = new Date("2026-05-01T00:00:00.000Z");
 const RPC_ENDPOINTS = [
   "https://api.mainnet-beta.solana.com",
@@ -53,18 +53,17 @@ import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
-const TESTER_PET_MISSION_TITLE = "????????7???";
+const TESTER_PET_MISSION_TITLE = "ログイン日数通算7日達成";
 const TESTER_PET_CHARACTER_ID = "inmu-festival";
 const PET_CHARACTER_NAMES: Record<string, string> = {
-  nyarushian: "??????",
-  takuya: "??",
-  leon: "???",
-  "inmu-festival": "INMU??(810??Ver.)",
+  nyarushian: "ニャルシアン",
+  takuya: "拓也",
+  leon: "レオン",
+  "inmu-festival": "INMUくん（810祭りVer.）",
 };
 
 type MissionExtraReward = {
   missionId: number;
-  inmuAmount: number;
   characterId: string | null;
 };
 
@@ -77,7 +76,6 @@ function ensureRewardTables(): Promise<void> {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "missionExtraRewards" (
         "missionId"    INTEGER PRIMARY KEY,
-        "inmuAmount"   NUMERIC(24, 6) NOT NULL DEFAULT 0,
         "characterId"  TEXT
       )
     `);
@@ -91,19 +89,6 @@ function ensureRewardTables(): Promise<void> {
         UNIQUE ("userId", "characterId")
       )
     `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS "missionInmuRewards" (
-        id               SERIAL PRIMARY KEY,
-        "userId"         TEXT NOT NULL,
-        "missionId"      INTEGER NOT NULL,
-        "inmuAmount"     NUMERIC(24, 6) NOT NULL,
-        "sentStatus"     TEXT NOT NULL DEFAULT 'pending',
-        "createdAt"      TIMESTAMP NOT NULL DEFAULT NOW(),
-        "sentAt"         TIMESTAMP,
-        "txHash"         TEXT,
-        UNIQUE ("userId", "missionId")
-      )
-    `);
   })().catch(error => {
     rewardTablesPromise = null;
     throw error;
@@ -114,25 +99,23 @@ function ensureRewardTables(): Promise<void> {
 async function loadMissionExtraRewards(): Promise<Map<number, MissionExtraReward>> {
   await ensureRewardTables();
   const { rows } = await pool.query(
-    `SELECT "missionId", "inmuAmount", "characterId" FROM "missionExtraRewards"`,
+    `SELECT "missionId", "characterId" FROM "missionExtraRewards"`,
   );
   return new Map(rows.map(row => [Number(row.missionId), {
     missionId: Number(row.missionId),
-    inmuAmount: Math.max(0, Number(row.inmuAmount) || 0),
     characterId: typeof row.characterId === "string" && row.characterId ? row.characterId : null,
   }]));
 }
 
-async function saveMissionExtraReward(missionId: number, inmuAmount: number, characterId: string | null) {
+async function saveMissionExtraReward(missionId: number, characterId: string | null) {
   await ensureRewardTables();
-  const safeInmu = Math.max(0, Number(inmuAmount) || 0);
   const safeCharacter = characterId?.trim() || null;
   await pool.query(
-    `INSERT INTO "missionExtraRewards" ("missionId", "inmuAmount", "characterId")
-     VALUES ($1, $2, $3)
+    `INSERT INTO "missionExtraRewards" ("missionId", "characterId")
+     VALUES ($1, $2)
      ON CONFLICT ("missionId") DO UPDATE
-       SET "inmuAmount" = EXCLUDED."inmuAmount", "characterId" = EXCLUDED."characterId"`,
-    [missionId, safeInmu, safeCharacter],
+       SET "characterId" = EXCLUDED."characterId"`,
+    [missionId, safeCharacter],
   );
 }
 
@@ -147,7 +130,7 @@ async function ensureTesterPetMission() {
     if (!mission) {
       [mission] = await db.insert(missionsTable).values({
         title: TESTER_PET_MISSION_TITLE,
-        description: "????????7???????????????",
+        description: "通算ログイン日数7日達成で限定キャラクターを獲得",
         type: "event",
         points: 0,
         isActive: true,
@@ -160,8 +143,8 @@ async function ensureTesterPetMission() {
     if (!mission) throw new Error("Failed to create tester PET mission");
 
     await pool.query(
-      `INSERT INTO "missionExtraRewards" ("missionId", "inmuAmount", "characterId")
-       VALUES ($1, 0, $2)
+      `INSERT INTO "missionExtraRewards" ("missionId", "characterId")
+       VALUES ($1, $2)
        ON CONFLICT ("missionId") DO NOTHING`,
       [mission.id, TESTER_PET_CHARACTER_ID],
     );
@@ -177,13 +160,12 @@ function withExtraReward<T extends { id: number }>(mission: T, rewards: Map<numb
   const rewardCharacterId = reward?.characterId ?? null;
   return {
     ...mission,
-    rewardInmu: reward?.inmuAmount ?? 0,
     rewardCharacterId,
     rewardCharacterName: rewardCharacterId ? (PET_CHARACTER_NAMES[rewardCharacterId] ?? rewardCharacterId) : null,
   };
 }
 
-// JST 4:00 = UTC 19:00 prev day ? shift +5h so JST4:00 becomes UTC midnight
+// JST 4:00 = UTC 19:00 prev day → shift +5h so JST4:00 becomes UTC midnight
 function getAdjustedNow(): Date {
   return new Date(Date.now() + 5 * 3600 * 1000);
 }
@@ -301,7 +283,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
         .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, weekStart)))
         .then(r => r[0]),
-      // 2026-05-01????????(buy_total???)
+      // 2026-05-01以降の総購入枚数（buy_total条件用）
       db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
         .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, HISTORY_CUTOFF)))
         .then(r => r[0]),
@@ -487,10 +469,10 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
   if (isNaN(missionId)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     const mission = await db.select().from(missionsTable).where(eq(missionsTable.id, missionId)).then(r => r[0]);
-    if (!mission || !mission.isActive) { res.status(404).json({ error: "?????????????" }); return; }
+    if (!mission || !mission.isActive) { res.status(404).json({ error: "ミッションが見つかりません" }); return; }
 
     const now = new Date();
-    if (mission.endAt && mission.endAt < now) { res.status(400).json({ error: "???????????????" }); return; }
+    if (mission.endAt && mission.endAt < now) { res.status(400).json({ error: "このミッションは終了しています" }); return; }
 
     // Check mission-chain prerequisite (staged unlock)
     if (mission.prerequisiteMissionId) {
@@ -500,7 +482,7 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
         .then(r => r[0]);
       if (!prereq) {
         const prereqMission = await db.select({ title: missionsTable.title }).from(missionsTable).where(eq(missionsTable.id, mission.prerequisiteMissionId)).then(r => r[0]);
-        res.status(400).json({ error: `?${prereqMission?.title ?? "??????"}????????????` });
+        res.status(400).json({ error: `「${prereqMission?.title ?? "前のステージ"}」を先に達成してください` });
         return;
       }
     }
@@ -512,7 +494,7 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
 
     if (existing) {
       if ((mission.type === "achievement" || mission.type === "event") && existing.status === "rewarded") {
-        res.status(409).json({ error: "already_completed", message: "????????????????" });
+        res.status(409).json({ error: "already_completed", message: "このミッションは既に達成済みです" });
         return;
       }
       res.json({ ok: true, status: existing.status });
@@ -521,7 +503,7 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
 
     await db.insert(missionParticipationsTable).values({ userId, missionId, period, status: "joined" });
 
-    // ????????? participationCount ????????
+    // イベント参加時のみ participationCount をインクリメント
     if (mission.type === "event") {
       await db
         .update(profileTable)
@@ -556,11 +538,11 @@ async function checkCondition(
 
   // Binary (social) conditions
   if (condType === "follow_x") {
-    if (!profile?.xId) return { met: false, errorMsg: "X??????INMU Bank?????????(??????????)" };
+    if (!profile?.xId) return { met: false, errorMsg: "XアカウントをINMU Bankに連携してください（プロフィール設定から）" };
     return { met: true };
   }
   if (condType === "join_discord") {
-    if (!profile?.discordId) return { met: false, errorMsg: "Discord?INMU Bank?????????(??????????)" };
+    if (!profile?.discordId) return { met: false, errorMsg: "DiscordをINMU Bankに連携してください（プロフィール設定から）" };
     return { met: true };
   }
 
@@ -570,50 +552,50 @@ async function checkCondition(
   const weekStart  = getWeekStart();
 
   if (condType === "inmu_balance") {
-    if (!profile?.solWallet) return { met: false, errorMsg: "???????????????????" };
+    if (!profile?.solWallet) return { met: false, errorMsg: "ウォレットアドレスが設定されていません" };
     try {
       const balance = await fetchInmuBalance(profile.solWallet);
-      if (balance < condVal) return { met: false, errorMsg: `INMU????????????(??: ${condVal.toLocaleString()} INMU???: ${balance.toLocaleString()} INMU)` };
+      if (balance < condVal) return { met: false, errorMsg: `INMU保有枚数が不足しています（必要: ${condVal.toLocaleString()} INMU、現在: ${balance.toLocaleString()} INMU）` };
     } catch {
-      return { met: false, errorMsg: "INMU???????????????????????????????" };
+      return { met: false, errorMsg: "INMU残高の取得に失敗しました。しばらくしてから再試行してください。" };
     }
   } else if (condType === "login_streak") {
     const streak = await db.select().from(loginStreaksTable).where(eq(loginStreaksTable.userId, userId)).then(r => r[0]);
     const cur = streak?.streak ?? 0;
-    if (cur < condVal) return { met: false, errorMsg: `????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `連続ログイン日数が不足しています（必要: ${condVal}日、現在: ${cur}日）` };
   } else if (condType === "login_total") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
       .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "daily_login")));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `累計ログイン日数が不足しています（必要: ${condVal}日、現在: ${cur}日）` };
   } else if (condType === "buy_daily") {
     const [row] = await db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
       .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, todayStart)));
     const cur = Number(row?.total ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `???????????????(??: ${condVal.toLocaleString()} INMU)` };
+    if (cur < condVal) return { met: false, errorMsg: `本日の購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU）` };
   } else if (condType === "buy_weekly") {
     const [row] = await db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
       .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, weekStart)));
     const cur = Number(row?.total ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `???????????????(??: ${condVal.toLocaleString()} INMU)` };
+    if (cur < condVal) return { met: false, errorMsg: `今週の購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU）` };
   } else if (condType === "buy_total") {
     const [row] = await db.select({ total: sql<string>`coalesce(sum("tokenAmount"), '0')` }).from(tradeHistoryTable)
       .where(and(eq(tradeHistoryTable.userId, userId), eq(tradeHistoryTable.type, "buy"), gte(tradeHistoryTable.tradedAt, HISTORY_CUTOFF)));
     const cur = Number(row?.total ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `????????????(??: ${condVal.toLocaleString()} INMU???: ${cur.toLocaleString()} INMU)` };
+    if (cur < condVal) return { met: false, errorMsg: `購入枚数が不足しています（必要: ${condVal.toLocaleString()} INMU、現在: ${cur.toLocaleString()} INMU）` };
   } else if (condType === "daily_weekly_count") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
       .from(missionParticipationsTable)
       .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "daily"), gte(missionParticipationsTable.rewardedAt, weekStart)));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `????????????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `今週のデイリーミッションクリア数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "total_clears") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
       .from(missionParticipationsTable)
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded")));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `????????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `累計ミッションクリア回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "daily_clears_today") {
     const todayPeriod = getPeriod("daily");
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
@@ -621,43 +603,43 @@ async function checkCondition(
       .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "daily"), eq(missionParticipationsTable.period, todayPeriod)));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `???????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `本日のデイリークリア数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "daily_clears_total") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
       .from(missionParticipationsTable)
       .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "daily")));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `??????????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `デイリーミッションクリア累計が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "weekly_clears_total") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
       .from(missionParticipationsTable)
       .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "weekly")));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `????????????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `ウィークリーミッションクリア回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "achievement_clears_total") {
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
       .from(missionParticipationsTable)
       .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "achievement")));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `??????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `アチーブメント達成数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "monthly_points") {
     const cur = Number(profile?.monthlyPoints ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `?????????????????(??: ${condVal.toLocaleString()}pt???: ${cur.toLocaleString()}pt)` };
+    if (cur < condVal) return { met: false, errorMsg: `累計ポイント保有数が不足しています（必要: ${condVal.toLocaleString()}pt、現在: ${cur.toLocaleString()}pt）` };
   } else if (condType === "login_weekly") {
     const ws = getWeekStart();
     const [row] = await db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
       .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "daily_login"), gte(pointsTable.createdAt, ws)));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `?????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `今週のログイン日数が不足しています（必要: ${condVal}日、現在: ${cur}日）` };
   } else if (condType === "dex_vote_weekly") {
     const ws = getWeekStart();
     const [row] = await db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
       .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "dex_vote"), gte(pointsTable.createdAt, ws)));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `???dexScanner???????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `今週のdexScanner投票数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "weekly_clears_weekly") {
     const wp = getPeriod("weekly");
     const [row] = await db.select({ cnt: sql<number>`count(*)` })
@@ -665,7 +647,7 @@ async function checkCondition(
       .innerJoin(missionsTable, eq(missionParticipationsTable.missionId, missionsTable.id))
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "weekly"), eq(missionParticipationsTable.period, wp)));
     const cur = Number(row?.cnt ?? 0);
-    if (cur < condVal) return { met: false, errorMsg: `?????????????????????????(??: ${condVal}????: ${cur}?)` };
+    if (cur < condVal) return { met: false, errorMsg: `今週のウィークリーミッション達成数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   }
 
   return { met: true };
@@ -677,14 +659,14 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
   if (isNaN(missionId)) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     const mission = await db.select().from(missionsTable).where(eq(missionsTable.id, missionId)).then(r => r[0]);
-    if (!mission || !mission.isActive) { res.status(404).json({ error: "?????????????" }); return; }
+    if (!mission || !mission.isActive) { res.status(404).json({ error: "ミッションが見つかりません" }); return; }
 
     const period = getPeriod(mission.type);
     const existing = await db.select().from(missionParticipationsTable)
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.missionId, missionId), eq(missionParticipationsTable.period, period)))
       .then(r => r[0]);
 
-    if (!existing) { res.status(400).json({ error: "????????????????" }); return; }
+    if (!existing) { res.status(400).json({ error: "先に「参加する」を押してください" }); return; }
     if (existing.status === "rewarded") { res.status(409).json({ error: "already_completed" }); return; }
     if (existing.status === "achieved") { res.json({ ok: true, status: "achieved" }); return; }
 
@@ -695,7 +677,7 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
         .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.missionId, mission.prerequisiteMissionId), eq(missionParticipationsTable.status, "rewarded")))
         .then(r => r[0]);
       if (!prereq) {
-        res.status(400).json({ error: "????????????" });
+        res.status(400).json({ error: "前のステージが未達成です" });
         return;
       }
     }
@@ -703,7 +685,7 @@ router.post("/missions/:id/achieve", requireAuth, async (req, res): Promise<void
     const profile = await db.select().from(profileTable).where(eq(profileTable.userId, userId)).then(r => r[0]);
     const result = await checkCondition(userId, mission, profile ?? null);
     if (!result.met) {
-      res.status(400).json({ error: result.errorMsg ?? "???????????" });
+      res.status(400).json({ error: result.errorMsg ?? "条件を満たしていません" });
       return;
     }
 
@@ -724,7 +706,7 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
   try {
     await ensureRewardTables();
     const mission = await db.select().from(missionsTable).where(eq(missionsTable.id, missionId)).then(r => r[0]);
-    if (!mission || !mission.isActive) { res.status(404).json({ error: "?????????????" }); return; }
+    if (!mission || !mission.isActive) { res.status(404).json({ error: "ミッションが見つかりません" }); return; }
     const extraReward = (await loadMissionExtraRewards()).get(missionId);
 
     const now = new Date();
@@ -733,15 +715,15 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.missionId, missionId), eq(missionParticipationsTable.period, period)))
       .then(r => r[0]);
 
-    if (!existing) { res.status(400).json({ error: "????????????????" }); return; }
-    if (existing.status === "rewarded") { res.status(409).json({ error: "already_completed", message: "????????????????" }); return; }
-    if (existing.status === "joined") { res.status(400).json({ error: "???????????????" }); return; }
+    if (!existing) { res.status(400).json({ error: "先に「参加する」を押してください" }); return; }
+    if (existing.status === "rewarded") { res.status(409).json({ error: "already_completed", message: "このミッションは既に達成済みです" }); return; }
+    if (existing.status === "joined") { res.status(400).json({ error: "先に達成条件を満たしてください" }); return; }
 
     // Double-check condition server-side before rewarding
     const profile = await db.select().from(profileTable).where(eq(profileTable.userId, userId)).then(r => r[0]);
     const result = await checkCondition(userId, mission, profile ?? null);
     if (!result.met) {
-      res.status(400).json({ error: result.errorMsg ?? "???????????" });
+      res.status(400).json({ error: result.errorMsg ?? "条件を満たしていません" });
       return;
     }
 
@@ -753,7 +735,7 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       if (owned.rows.length > 0) {
         res.status(409).json({
           error: "character_already_owned",
-          message: "??????????????????",
+          message: "このキャラクターは既に所持しています",
         });
         return;
       }
@@ -769,16 +751,16 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       ))
       .returning({ missionId: missionParticipationsTable.missionId });
     if (rewardedRows.length === 0) {
-      res.status(409).json({ error: "already_completed", message: "????????????????" });
+      res.status(409).json({ error: "already_completed", message: "このミッションは既に達成済みです" });
       return;
     }
 
     await db.insert(missionCompletionsTable).values({ userId, missionId, period }).catch(() => {});
 
-    // dexScanner????????????????????
+    // dexScanner投票ミッションなら週間投票カウントを記録
     if (mission.type === "daily") {
       const haystack = `${mission.title ?? ""} ${mission.description ?? ""}`.toLowerCase();
-      if (haystack.includes("dex") || haystack.includes("??")) {
+      if (haystack.includes("dex") || haystack.includes("投票")) {
         const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
         await db.insert(pointsTable).values({ userId, amount: "0", type: "dex_vote", source: mission.title, month });
       }
@@ -801,29 +783,18 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       );
     }
 
-    if ((extraReward?.inmuAmount ?? 0) > 0) {
-      await pool.query(
-        `INSERT INTO "missionInmuRewards" ("userId", "missionId", "inmuAmount")
-         VALUES ($1, $2, $3)
-         ON CONFLICT ("userId", "missionId") DO NOTHING`,
-        [userId, missionId, extraReward!.inmuAmount],
-      );
-    }
-
     const rewardParts: string[] = [];
-    if (mission.points > 0) rewardParts.push(`${mission.points.toLocaleString()}????`);
-    if ((extraReward?.inmuAmount ?? 0) > 0) rewardParts.push(`${extraReward!.inmuAmount.toLocaleString()} INMU(????)`);
+    if (mission.points > 0) rewardParts.push(`${mission.points.toLocaleString()}ポイント`);
     if (extraReward?.characterId) rewardParts.push(PET_CHARACTER_NAMES[extraReward.characterId] ?? extraReward.characterId);
 
     await db.insert(notificationsTable).values({
-      userId, type: "mission", title: "???????!",
-      message: `?${mission.title}??????${rewardParts.length > 0 ? ` ${rewardParts.join(" + ")}???????` : "??????????"}`,
+      userId, type: "mission", title: "ミッション達成！",
+      message: `「${mission.title}」を達成して${rewardParts.length > 0 ? ` ${rewardParts.join(" + ")}を獲得しました` : "報酬を受け取りました"}`,
     });
 
     res.json({
       ok: true,
       points: mission.points,
-      inmu: extraReward?.inmuAmount ?? 0,
       characterId: extraReward?.characterId ?? null,
       characterName: extraReward?.characterId ? (PET_CHARACTER_NAMES[extraReward.characterId] ?? extraReward.characterId) : null,
     });
@@ -882,8 +853,8 @@ router.put("/admin/missions/reorder", requireAdmin, async (req, res): Promise<vo
 });
 
 router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => {
-  const { title, description, type, points, rewardInmu, rewardCharacterId, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
-    req.body as { title?: string; description?: string; type?: string; points?: number; rewardInmu?: number; rewardCharacterId?: string | null; startAt?: string; endAt?: string; linkUrl?: string; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
+  const { title, description, type, points, rewardCharacterId, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
+    req.body as { title?: string; description?: string; type?: string; points?: number; rewardCharacterId?: string | null; startAt?: string; endAt?: string; linkUrl?: string; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
   if (!title?.trim() || !type) { res.status(400).json({ error: "title and type required" }); return; }
   const validType = VALID_MISSION_TYPES.has(type) ? type : "daily";
   const VALID_STATUSES = new Set(["active", "inactive", "draft"]);
@@ -911,7 +882,7 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
       prerequisiteMissionId: prerequisiteMissionId ?? null,
       displayOrder: autoOrder,
     }).returning();
-    await saveMissionExtraReward(mission.id, rewardInmu ?? 0, rewardCharacterId ?? null);
+    await saveMissionExtraReward(mission.id, rewardCharacterId ?? null);
     const extraRewards = await loadMissionExtraRewards();
     res.status(201).json(withExtraReward(mission, extraRewards));
   } catch {
@@ -998,12 +969,12 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
       endAt?: string | null;
       status?: string;
       stages?: Array<{
-        id?: number;              // 0 or missing = ??????
+        id?: number;              // 0 or missing = 新規ステージ
         title?: string;
         description?: string;
         points?: number;
         conditionValue?: number | null;
-        stageStatus?: string;     // ???????????(???? status ???)
+        stageStatus?: string;     // ステージ個別ステータス（省略時は status を適用）
       }>;
     };
   if (!Array.isArray(stages) || stages.length === 0) {
@@ -1018,7 +989,7 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
   const condTypeVal = conditionType === "none" ? null : conditionType;
 
   try {
-    // ????????????? prerequisiteMissionId ?????
+    // ステージを順番通りに処理し prerequisiteMissionId を再リンク
     const processedIds: number[] = [];
 
     for (let i = 0; i < stages.length; i++) {
@@ -1027,7 +998,7 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
       const stageStatus  = s.stageStatus && VALID_S.has(s.stageStatus) ? s.stageStatus : chainStatus;
 
       if (s.id && s.id > 0) {
-        // ?????????
+        // 既存ステージを更新
         await db.update(missionsTable).set({
           ...(s.title       !== undefined && { title:          s.title!.trim() }),
           ...(s.description !== undefined && { description:    s.description?.trim() || null }),
@@ -1044,7 +1015,7 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
         }).where(eq(missionsTable.id, s.id));
         processedIds.push(s.id);
       } else {
-        // ?????????(??????????)
+        // 新規ステージを作成（後から追加された段階）
         const [newM] = await db.insert(missionsTable).values({
           title:         s.title!.trim(),
           description:   s.description?.trim() || null,
@@ -1074,8 +1045,8 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
 router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { title, description, type, points, rewardInmu, rewardCharacterId, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
-    req.body as { title?: string; description?: string; type?: string; points?: number; rewardInmu?: number; rewardCharacterId?: string | null; startAt?: string | null; endAt?: string | null; linkUrl?: string | null; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
+  const { title, description, type, points, rewardCharacterId, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
+    req.body as { title?: string; description?: string; type?: string; points?: number; rewardCharacterId?: string | null; startAt?: string | null; endAt?: string | null; linkUrl?: string | null; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
   const VALID_STATUSES_P = new Set(["active", "inactive", "draft"]);
   const missionStatus = status && VALID_STATUSES_P.has(status) ? status : undefined;
   try {
@@ -1095,13 +1066,8 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
       ...(prerequisiteMissionId !== undefined && { prerequisiteMissionId: prerequisiteMissionId ?? null }),
       ...(displayOrder !== undefined && { displayOrder }),
     }).where(eq(missionsTable.id, id));
-    if (rewardInmu !== undefined || rewardCharacterId !== undefined) {
-      const current = (await loadMissionExtraRewards()).get(id);
-      await saveMissionExtraReward(
-        id,
-        rewardInmu !== undefined ? rewardInmu : (current?.inmuAmount ?? 0),
-        rewardCharacterId !== undefined ? rewardCharacterId : (current?.characterId ?? null),
-      );
+    if (rewardCharacterId !== undefined) {
+      await saveMissionExtraReward(id, rewardCharacterId);
     }
     res.json({ ok: true });
   } catch {
