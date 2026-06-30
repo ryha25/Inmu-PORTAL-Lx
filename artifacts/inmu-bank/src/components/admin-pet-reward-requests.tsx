@@ -247,7 +247,7 @@ export function AdminPetRewardRequests() {
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-1.5">
                       <Button size="sm" disabled={saving || row.status !== 'pending'} onClick={() => void rejectOne(row)} variant="destructive" className="h-9 gap-1 text-[10px]"><XCircle className="size-3" />却下</Button>
-                      <Button size="sm" disabled={saving || row.status !== 'pending' || !row.solWallet} onClick={() => void sendReward(row)} className="h-9 gap-1 bg-emerald-600 text-[10px] hover:bg-emerald-500"><Send className="size-3" />Phantomで送金</Button>
+                      <Button size="sm" disabled={saving || row.status !== 'pending' || !row.solWallet} onClick={() => void sendReward(row)} className="h-9 gap-1 bg-emerald-600 text-[10px] hover:bg-emerald-500"><Send className="size-3" />送金済み</Button>
                     </div>
                     {row.status === 'pending' && <p className="mt-2 flex items-center gap-1 text-[9px] text-amber-200/70"><Clock3 className="size-3" />運営確認待ち</p>}
                   </div>
