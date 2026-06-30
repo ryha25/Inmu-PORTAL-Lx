@@ -26,6 +26,9 @@ export type PetCareResult = {
 export const PET_PETTING_RESET_MS = 60 * 1000
 export const PET_PETTING_ANGER_COUNT = 6
 export const PET_ANGER_HOLD_MS = 30 * 1000
+export const PET_SLEEP_THRESHOLD = 99
+export const PET_SLEEP_PETTING_ANGER_CHANCE = 0.25
+export const PET_SLEEP_PETTING_ANGER_COUNT = 3
 export const PET_SLEEP_RECOVERY_MS = 30 * 60 * 1000
 export const PET_FULLNESS_DECAY_MS = 12 * 60 * 1000
 export const PET_SLEEPINESS_GAIN_MS = 10 * 60 * 1000
@@ -191,7 +194,7 @@ function loadSave(source?: unknown): PetSaveData {
         count: Math.max(0, readNumber(parsed.petting?.[pet.id]?.count, 0)),
         lastAt: Math.max(0, readNumber(parsed.petting?.[pet.id]?.lastAt, 0)),
       }])) as Record<PetId, PettingState>,
-      sleepStartedAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, Math.max(0, readNumber(parsed.sleepStartedAt?.[pet.id], pets[pet.id].sleepiness >= 100 ? Date.now() : 0))])) as Record<PetId, number>,
+      sleepStartedAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, Math.max(0, readNumber(parsed.sleepStartedAt?.[pet.id], pets[pet.id].sleepiness >= PET_SLEEP_THRESHOLD ? Date.now() : 0))])) as Record<PetId, number>,
       progress: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, {
         fullnessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.fullnessAt, Date.now())),
         sleepinessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.sleepinessAt, Date.now())),
@@ -239,7 +242,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
         const awakeSteps = Math.max(0, Math.floor((now - wokeAt) / PET_SLEEPINESS_GAIN_MS))
         nextStats = { ...nextStats, sleepiness: clamp(awakeSteps) }
         nextProgress.sleepinessAt = wokeAt + awakeSteps * PET_SLEEPINESS_GAIN_MS
-        sleepStartedAt[id] = nextStats.sleepiness >= 100 ? now : 0
+        sleepStartedAt[id] = nextStats.sleepiness >= PET_SLEEP_THRESHOLD ? now : 0
       } else {
         nextStats = { ...nextStats, sleepiness: clamp(100 - recovery) }
         nextProgress.sleepinessAt = now
@@ -248,7 +251,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
       const sleepinessSteps = Math.max(0, Math.floor((now - currentProgress.sleepinessAt) / PET_SLEEPINESS_GAIN_MS))
       nextStats = { ...nextStats, sleepiness: clamp(stats.sleepiness + sleepinessSteps) }
       nextProgress.sleepinessAt = currentProgress.sleepinessAt + sleepinessSteps * PET_SLEEPINESS_GAIN_MS
-      if (nextStats.sleepiness >= 100) sleepStartedAt[id] = now
+      if (nextStats.sleepiness >= PET_SLEEP_THRESHOLD) sleepStartedAt[id] = now
     }
 
     pets[id] = nextStats
@@ -377,7 +380,10 @@ export function usePetState() {
     const petCount = action === 'pet'
       ? (actionNow - previousPetting.lastAt <= PET_PETTING_RESET_MS ? previousPetting.count + 1 : 1)
       : previousPetting.count
-    const angry = angryActive || (action === 'pet' && petCount >= PET_PETTING_ANGER_COUNT)
+    const sleepPettingAnger = action === 'pet' && sleeping && (
+      petCount >= PET_SLEEP_PETTING_ANGER_COUNT || Math.random() < PET_SLEEP_PETTING_ANGER_CHANCE
+    )
+    const angry = angryActive || sleepPettingAnger || (action === 'pet' && petCount >= PET_PETTING_ANGER_COUNT)
     const result: PetCareResult = angry
       ? {
           expression: 'angry',
@@ -408,16 +414,16 @@ export function usePetState() {
       const savedExpression = materialized.expressions[currentPetId]
       const stillAngry = action === 'pet' && savedExpression.kind === 'angry' && savedExpression.until > actionNow
       const count = action === 'pet' ? (actionNow - previous.lastAt <= PET_PETTING_RESET_MS ? previous.count + 1 : 1) : previous.count
-      const triggeredAnger = action === 'pet' && !stillAngry && count >= PET_PETTING_ANGER_COUNT
+      const triggeredAnger = action === 'pet' && !stillAngry && (sleepPettingAnger || count >= PET_PETTING_ANGER_COUNT)
       const overpetted = stillAngry || triggeredAnger
-      const affectionDelta = stillAngry ? 0 : triggeredAnger ? -3 : currentConfig.affection
+      const affectionDelta = overpetted ? -3 : currentConfig.affection
       const nextStats = addExp({
         ...currentStats,
         fullness: clamp(currentStats.fullness + currentConfig.fullness),
         sleepiness: clamp(currentStats.sleepiness + currentConfig.sleepiness),
         affection: clamp(currentStats.affection + affectionDelta),
       }, action === 'pet' ? 0 : currentConfig.exp, currentPetId)
-      const startsSleeping = nextStats.sleepiness >= 100
+      const startsSleeping = nextStats.sleepiness >= PET_SLEEP_THRESHOLD
       let premiumFood = materialized.premiumFood
       if (action === 'feed-premium') {
         premiumFood = premiumState.dailyRemaining > 0
