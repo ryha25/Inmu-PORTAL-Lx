@@ -3,7 +3,9 @@ import type { CSSProperties } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, LockKeyhole, WalletCards } from 'lucide-react'
+import { getPhantomProvider, isMobileBrowser, openInPhantomBrowser, sendInmuWithPhantom } from '@/lib/admin-inmu-transfer'
+import { PET_BY_ID, type PetId } from '@/features/pet/pet-data'
 
 import machineImg  from '@assets/generated_images/gacha-machine-v2.png'
 import mascotImg   from '@assets/generated_images/mascot-v2-nobg.png'
@@ -13,8 +15,11 @@ import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
 
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
-type Prize = { prizeId:string; label:string; type:'points'|'inmu'; amount:number }
-type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; newPoints:number }
+type Prize = {
+  prizeId:string; label:string; type:'points'|'inmu'|'premium_food'|'character'; amount:number
+  characterId?:PetId; isNewCharacter?:boolean; isDuplicate?:boolean; convertedPoints?:number
+}
+type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; costInmu?:number; newPoints:number; txId?:string; paidPity?:number|null }
 type HistRow = { id:number; pullType:string; isFree:boolean; results:Prize[]; totalPoints:number; hasInmu:boolean; inmuSentStatus:string; txHash:string|null; wasGuaranteed:boolean; costPoints:number; createdAt:string }
 
 /* ─── capsule color configs (image 5 reference) ─── */
@@ -25,14 +30,14 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     glow:'rgba(210,220,235,.62)', border:'rgba(235,242,250,.78)', label:'100pt',
   },
   pts300: {
-    top:'radial-gradient(ellipse at 33% 28%, rgba(255,205,236,.98) 0%, rgba(255,95,183,.92) 42%, rgba(182,20,122,.70) 74%)',
-    bot:'radial-gradient(ellipse at 67% 72%, rgba(255,170,220,.94) 0%, rgba(235,64,164,.88) 42%, rgba(146,12,96,.66) 74%)',
-    glow:'rgba(255,92,186,.66)', border:'rgba(255,156,216,.72)', label:'300pt',
+    top:'radial-gradient(ellipse at 33% 28%, rgba(255,205,240,.98) 0%, rgba(240,72,178,.92) 42%, rgba(142,16,104,.72) 74%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(255,152,222,.94) 0%, rgba(214,40,154,.88) 42%, rgba(106,10,84,.66) 74%)',
+    glow:'rgba(255,88,196,.64)', border:'rgba(255,150,224,.58)', label:'300pt',
   },
   pts500: {
-    top:'radial-gradient(ellipse at 33% 28%, rgba(235,255,150,.98) 0%, rgba(164,225,45,.92) 42%, rgba(86,150,10,.72) 74%)',
-    bot:'radial-gradient(ellipse at 67% 72%, rgba(210,250,95,.94) 0%, rgba(124,198,25,.88) 42%, rgba(58,118,7,.66) 74%)',
-    glow:'rgba(180,255,70,.64)', border:'rgba(214,255,118,.72)', label:'500pt',
+    top:'radial-gradient(ellipse at 33% 28%, rgba(238,255,166,.98) 0%, rgba(143,224,32,.92) 42%, rgba(62,132,14,.72) 74%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(210,255,108,.94) 0%, rgba(116,196,24,.88) 42%, rgba(43,108,10,.66) 74%)',
+    glow:'rgba(166,255,58,.64)', border:'rgba(210,255,112,.58)', label:'500pt',
   },
   pts1000: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(135,192,255,.98) 0%, rgba(25,85,218,.93) 42%, rgba(6,35,165,.68) 72%)',
@@ -40,9 +45,9 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     glow:'rgba(45,118,255,.65)', border:'rgba(75,145,255,.55)', label:'1,000pt',
   },
   pts3000: {
-    top:'radial-gradient(ellipse at 33% 28%, rgba(255,162,140,.98) 0%, rgba(232,48,32,.93) 42%, rgba(150,8,8,.70) 74%)',
-    bot:'radial-gradient(ellipse at 67% 72%, rgba(255,112,92,.94) 0%, rgba(205,30,24,.88) 42%, rgba(112,5,7,.66) 74%)',
-    glow:'rgba(255,70,50,.66)', border:'rgba(255,116,96,.72)', label:'3,000pt',
+    top:'radial-gradient(ellipse at 33% 28%, rgba(255,183,132,.98) 0%, rgba(231,78,38,.9) 42%, rgba(125,18,24,.70) 74%)',
+    bot:'radial-gradient(ellipse at 67% 72%, rgba(255,132,92,.93) 0%, rgba(196,44,36,.86) 42%, rgba(96,8,22,.64) 74%)',
+    glow:'rgba(255,92,58,.64)', border:'rgba(255,146,92,.57)', label:'3,000pt',
   },
   pts5000: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(212,85,255,.98) 0%, rgba(145,18,228,.9) 42%, rgba(86,2,188,.67) 72%)',
@@ -54,27 +59,45 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     bot:'radial-gradient(ellipse at 67% 72%, rgba(248,215,78,.95) 0%, rgba(218,155,8,.9) 38%, rgba(165,105,0,.67) 70%)',
     glow:'rgba(255,215,0,.85)', border:'rgba(255,215,0,.65)', label:'10,000\nINMU',
   },
-}
-
-const CAPSULE_SOLID: Record<string,string> = {
-  pts100:'#bcc3cb',
-  pts300:'#ff4fa8',
-  pts500:'#a8db38',
-  pts1000:'#2468d8',
-  pts3000:'#e6382f',
-  pts5000:'#941bd4',
-  inmu10k:'#e3aa10',
+  'premium-food': {
+    top:'radial-gradient(ellipse at 33% 28%,rgba(255,248,194,.99),rgba(231,161,42,.94) 42%,rgba(112,52,8,.82) 78%)',
+    bot:'radial-gradient(ellipse at 67% 72%,rgba(255,222,112,.96),rgba(198,112,18,.9) 44%,rgba(83,31,4,.8) 78%)',
+    glow:'rgba(255,184,54,.78)', border:'rgba(255,222,132,.75)', label:'高級ごはん',
+  },
+  'character-nyarushian': {
+    top:'radial-gradient(ellipse at 33% 28%,#fffbd0,#ffd31a 42%,#9b5700 78%)',
+    bot:'radial-gradient(ellipse at 67% 72%,#fff28a,#e8a400 44%,#784000 78%)',
+    glow:'rgba(255,215,0,.95)', border:'rgba(255,242,138,.9)', label:'ニャルシアン',
+  },
+  'character-takuya': {
+    top:'radial-gradient(ellipse at 33% 28%,#fffbd0,#ffd31a 42%,#9b5700 78%)',
+    bot:'radial-gradient(ellipse at 67% 72%,#fff28a,#e8a400 44%,#784000 78%)',
+    glow:'rgba(255,215,0,.95)', border:'rgba(255,242,138,.9)', label:'拓也',
+  },
+  'character-leon': {
+    top:'radial-gradient(ellipse at 33% 28%,#fffbd0,#ffd31a 42%,#9b5700 78%)',
+    bot:'radial-gradient(ellipse at 67% 72%,#fff28a,#e8a400 44%,#784000 78%)',
+    glow:'rgba(255,215,0,.95)', border:'rgba(255,242,138,.9)', label:'レオン',
+  },
 }
 
 const BALLS = [
-  { id:'pts100',  label:'100pt',       rate:'55%',   color:'rgba(235,242,250,.9)' },
-  { id:'pts300',  label:'300pt',       rate:'22%',   color:'rgba(255,156,216,.9)' },
-  { id:'pts500',  label:'500pt',       rate:'12%',   color:'rgba(214,255,118,.9)' },
+  { id:'pts100',  label:'100pt',       rate:'55%',   color:'rgba(210,220,235,.9)' },
+  { id:'pts300',  label:'300pt',       rate:'22%',   color:'rgba(255,88,196,.9)'  },
+  { id:'pts500',  label:'500pt',       rate:'12%',   color:'rgba(166,255,58,.9)'  },
   { id:'pts1000', label:'1,000pt',     rate:'6%',    color:'rgba(70,140,255,.9)'  },
-  { id:'pts3000', label:'3,000pt',     rate:'3%',    color:'rgba(255,116,96,.9)'  },
+  { id:'pts3000', label:'3,000pt',     rate:'3%',    color:'rgba(255,92,58,.9)'   },
   { id:'pts5000', label:'5,000pt',     rate:'1.5%',  color:'rgba(180,60,255,.9)'  },
   { id:'inmu10k', label:'10,000 INMU', rate:'0.5%',  color:'rgba(255,215,0,.9)'   },
 ]
+const ORBIT_POSITIONS = [
+  { left:'13%', top:'69%' },
+  { left:'76%', top:'34%' },
+  { left:'82%', top:'69%' },
+  { left:'18%', top:'34%' },
+  { left:'62%', top:'20%' },
+  { left:'48%', top:'76%' },
+] as const
 const PHASE_MS: Partial<Record<Phase,number>> = {
   guaranteed:2600, inserting:1600, lever:1800, space:2300, falling:2200, opening:1800,
 }
@@ -117,25 +140,6 @@ const CSS=`
   @keyframes ga-drop     {0%{transform:translateY(-140px)rotate(0);opacity:0}65%{transform:translateY(6px)rotate(200deg);opacity:1}100%{transform:translateY(0)rotate(360deg);opacity:1}}
   @keyframes ga-popin    {0%{transform:scale(0)rotate(-18deg);opacity:0}65%{transform:scale(1.18)rotate(4deg);opacity:1}100%{transform:scale(1)rotate(0);opacity:1}}
   @keyframes ga-bounce   {0%,100%{transform:translateY(0)}42%{transform:translateY(-28px)scale(.96)}72%{transform:translateY(-11px)}}
-  @keyframes ga-mascotwalk{0%{transform:translateX(0)scaleX(1)}44%{transform:translateX(34px)scaleX(1)}49%{transform:translateX(34px)scaleX(1)}51%{transform:translateX(34px)scaleX(-1)}94%{transform:translateX(0)scaleX(-1)}99%{transform:translateX(0)scaleX(-1)}100%{transform:translateX(0)scaleX(1)}}
-  @keyframes ga-mascotbody{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-  @keyframes ga-mascotbody-walk{0%,100%{transform:translate(-2px,0)rotate(-1.5deg)}25%{transform:translate(1px,-4px)rotate(1deg)}50%{transform:translate(3px,0)rotate(1.8deg)}75%{transform:translate(0,-4px)rotate(-1deg)}}
-  @keyframes ga-mascothead{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(5deg)}}
-  @keyframes ga-mascothead-walk{0%,100%{transform:translateX(2px)rotate(3deg)}25%{transform:translateX(-1px)rotate(-2deg)}50%{transform:translateX(-2px)rotate(-3deg)}75%{transform:translateX(1px)rotate(2deg)}}
-  @keyframes ga-mascotarm-r{0%,100%{transform:translateY(1px)rotate(-16deg)}50%{transform:translateY(-2px)rotate(24deg)}}
-  @keyframes ga-mascotarm-l{0%,100%{transform:translateY(-2px)rotate(22deg)}50%{transform:translateY(2px)rotate(-20deg)}}
-  @keyframes ga-mascotraise-r{0%{transform:rotate(38deg)}45%,100%{transform:rotate(-54deg)}}
-  @keyframes ga-mascotraise-l{0%{transform:rotate(-38deg)}45%,100%{transform:rotate(54deg)}}
-  @keyframes ga-mascotleg-r{0%,100%{transform:translate(2px,-3px)rotate(-18deg)}25%{transform:translate(4px,1px)rotate(-4deg)}50%{transform:translate(-3px,3px)rotate(20deg)}75%{transform:translate(-4px,-2px)rotate(4deg)}}
-  @keyframes ga-mascotleg-l{0%,100%{transform:translate(-3px,3px)rotate(20deg)}25%{transform:translate(-4px,-2px)rotate(4deg)}50%{transform:translate(2px,-3px)rotate(-18deg)}75%{transform:translate(4px,1px)rotate(-4deg)}}
-  @keyframes ga-mascottail{0%,100%{transform:translateX(1px)rotate(-14deg)}50%{transform:translateX(-1px)rotate(18deg)}}
-  @keyframes ga-mascotclap-r{0%,100%{transform:rotate(-32deg)}50%{transform:rotate(18deg)}}
-  @keyframes ga-mascotclap-l{0%,100%{transform:rotate(32deg)}50%{transform:rotate(-18deg)}}
-  @keyframes ga-mascotjumpbody{0%{transform:translateY(58px)scale(.74);opacity:0}46%{transform:translateY(-20px)scale(1.08);opacity:1}66%{transform:translateY(8px)scale(1.08,.86)}82%{transform:translateY(-4px)scale(.98,1.04)}100%{transform:translateY(0)scale(1);opacity:1}}
-  @keyframes ga-mascotshadow{0%,100%{transform:translateX(-50%)scaleX(1);opacity:.48}25%,75%{transform:translateX(-50%)scaleX(.72);opacity:.25}50%{transform:translateX(-50%)scaleX(1.06);opacity:.42}}
-  @keyframes ga-mascotjumpin{0%{transform:translateY(68px)scale(.62)rotate(-10deg);opacity:0}48%{transform:translateY(-22px)scale(1.13)rotate(5deg);opacity:1}70%{transform:translateY(5px)scale(.96)rotate(-3deg)}100%{transform:translateY(0)scale(1)rotate(0);opacity:1}}
-  @keyframes ga-mascotcelebrate{0%,100%{transform:translateY(0)rotate(-4deg)}35%{transform:translateY(-10px)rotate(6deg)}70%{transform:translateY(-3px)rotate(-6deg)}}
-  @keyframes ga-mascotside{0%{transform:translateX(var(--ga-from,0))translateY(18px)rotate(var(--ga-rot,0deg));opacity:0}34%{opacity:1}62%{transform:translateX(0)translateY(-8px)rotate(calc(var(--ga-rot,0deg) * -1))}100%{transform:translateX(0)translateY(0)rotate(var(--ga-rot,0deg));opacity:1}}
   @keyframes ga-shimmer  {0%{transform:translateX(-100%)skewX(-22deg)}100%{transform:translateX(280%)skewX(-22deg)}}
   @keyframes ga-particle {0%,100%{opacity:0;transform:translateY(0)scale(.7)}42%,58%{opacity:1}50%{transform:translateY(-15px)scale(1.3)}}
   @keyframes ga-coinrise {0%{transform:translateY(80px)rotate(0);opacity:1}80%{opacity:.85}100%{transform:translateY(-180px)rotate(520deg);opacity:0}}
@@ -207,49 +211,6 @@ function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:b
         animation:'ga-spotlight 5.5s ease-in-out 2.7s infinite'}}/>
       <div style={{position:'relative',zIndex:5,display:'flex',flexDirection:'column',flex:1}}>
         {children}
-      </div>
-    </div>
-  )
-}
-
-type MascotMotion = 'idle'|'walk'|'result'|'clap'
-
-function SegmentedMascot({ size=100, motion='idle', style, delay=0 }: {
-  size?:number; motion?:MascotMotion; style?:CSSProperties; delay?:number
-}) {
-  const dur = motion === 'clap' ? .52 : motion === 'walk' ? .72 : 1.25
-  const bodyAnim = motion === 'result'
-    ? `ga-mascotjumpbody .86s cubic-bezier(.2,.8,.22,1) ${delay}s both`
-    : motion === 'walk'
-      ? `ga-mascotbody-walk ${dur}s ease-in-out ${delay}s infinite`
-      : `ga-mascotbody ${dur}s ease-in-out ${delay}s infinite`
-  const armR = motion === 'result' ? 'ga-mascotraise-r' : motion === 'clap' ? 'ga-mascotclap-r' : 'ga-mascotarm-r'
-  const armL = motion === 'result' ? 'ga-mascotraise-l' : motion === 'clap' ? 'ga-mascotclap-l' : 'ga-mascotarm-l'
-  const legR = motion === 'walk' ? 'ga-mascotleg-r' : 'ga-mascotbody'
-  const legL = motion === 'walk' ? 'ga-mascotleg-l' : 'ga-mascotbody'
-  const part = (clipPath:string, origin:string, animation:string, z=2, opacity=1) => (
-    <img src={mascotImg} alt="" aria-hidden="true" style={{
-      position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain',
-      clipPath,transformOrigin:origin,animation,opacity,zIndex:z,
-      filter:'none',
-      willChange:'transform',
-    }}/>
-  )
-  return (
-    <div style={{position:'relative',width:size,height:size*1.12,...style}}>
-      <div style={{position:'absolute',left:'50%',bottom:size*.03,width:size*.68,height:size*.1,
-        borderRadius:'50%',background:'rgba(0,0,0,.52)',filter:'blur(4px)',
-        transform:'translateX(-50%)',
-        animation:`ga-mascotshadow ${dur}s ease-in-out ${delay}s infinite`,zIndex:0}}/>
-      <div style={{position:'absolute',inset:0,animation:bodyAnim,transformOrigin:'50% 78%',zIndex:1}}>
-        {part('polygon(14% 61%, 47% 58%, 49% 82%, 12% 84%)','43% 70%',`ga-mascottail ${dur*1.18}s ease-in-out ${delay}s infinite`,1)}
-        {part('polygon(47% 57%, 70% 57%, 70% 85%, 45% 85%)','57% 62%',`${legR} ${dur}s ease-in-out ${delay}s infinite`,2)}
-        {part('polygon(34% 57%, 54% 57%, 55% 85%, 32% 85%)','43% 62%',`${legL} ${dur}s ease-in-out ${delay+.08}s infinite`,2)}
-        {part('polygon(28% 37%, 72% 37%, 72% 79%, 26% 80%)','50% 68%','none',4)}
-        {part('polygon(54% 32%, 82% 31%, 82% 59%, 55% 61%)','59% 43%',`${armR} ${dur}s ease-in-out ${delay}s infinite`,5)}
-        {part('polygon(25% 38%, 46% 38%, 46% 67%, 24% 66%)','40% 45%',`${armL} ${dur}s ease-in-out ${delay+.06}s infinite`,5)}
-        {part('polygon(22% 13%, 79% 13%, 79% 51%, 21% 51%)','50% 45%',
-          `${motion==='walk'?'ga-mascothead-walk':'ga-mascothead'} ${dur*1.25}s ease-in-out ${delay}s infinite`,6)}
       </div>
     </div>
   )
@@ -385,14 +346,15 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
         </>
       )}
 
-      {kind==='space'&&BALLS.filter(b=>b.id!=='pts100').map((b,i)=>(
+      {kind==='space'&&BALLS.filter(b=>b.id!=='pts100').map((b,i)=>{
+        const pos = ORBIT_POSITIONS[i % ORBIT_POSITIONS.length]
+        return (
         <div key={b.id} style={{position:'absolute',
-          left:['13%','76%','82%','23%','67%','88%'][i] ?? '50%',
-          top:['69%','34%','69%','32%','54%','48%'][i] ?? '58%',
+          left:pos.left,top:pos.top,
           animation:`ga-rayfall ${1.55+i*.18}s ease-in-out ${i*.12}s infinite`}}>
           <PrizeCapsule prizeId={b.id} size={76} showLabel={false}/>
         </div>
-      ))}
+      )})}
 
       {kind==='space'&&(
         <div style={{position:'absolute',left:'50%',top:'58%',transform:'translate(-50%,-50%)',
@@ -417,6 +379,9 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
               background:'radial-gradient(circle,rgba(255,235,150,.78),rgba(218,165,32,.32) 42%,transparent 70%)',
               filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
             <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
+            <img src={mascotImg} style={{position:'absolute',width:88,height:'auto',bottom:82,
+              filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
+              animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
           </div>
         </div>
       )}
@@ -424,14 +389,11 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
       {(kind==='falling'||kind==='opening')&&guaranteed&&(
         <>
           {[8,82,13,86,5,91].map((left,i)=>(
-            <div key={i} style={{position:'absolute',
-              left:`${left}%`,bottom:`${i%3*9+2}%`,
+            <img key={i} src={mascotImg} style={{position:'absolute',
+              left:`${left}%`,bottom:`${i%3*9+2}%`,width:70+(i%2)*16,
               transform:`translateX(-50%) rotate(${i%2?-8:8}deg)`,
               filter:'drop-shadow(0 0 18px rgba(218,165,32,.64))',
-              animation:`ga-mascotside .78s ease-out ${i*.08}s both`,
-              '--ga-from':left<50?'-76px':'76px','--ga-rot':`${i%2?-8:8}deg`} as CSSProperties}>
-              <SegmentedMascot motion="clap" size={70+(i%2)*16} delay={i*.04}/>
-            </div>
+              animation:`ga-bounce ${1.2+i*.08}s ease-in-out ${i*.12}s infinite`}}/>
           ))}
         </>
       )}
@@ -467,14 +429,16 @@ function ResultCapsuleReveal({ prizeId, size=210 }: {prizeId:string; size?:numbe
 /* ════ Prize Capsule: CSS-drawn colored capsule (image 5 reference) ════ */
 function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:string;size?:number;open?:boolean;showLabel?:boolean}) {
   const c = CAPSULE[prizeId] ?? CAPSULE.pts100
+  const r = size/2
   const sep = open ? Math.max(7, size*.1) : 0
   const isJackpot = prizeId === 'inmu10k'
   const labelSize = Math.max(9, Math.min(28, size*.17))
-  const shellColor = CAPSULE_SOLID[prizeId] ?? CAPSULE_SOLID.pts100
-  const capsuleWidth = size*1.16
-  const svgSep = sep*100/size
+  const rimColor = isJackpot ? 'rgba(255,225,120,.92)' : c.border
+  const centerBand = isJackpot
+    ? 'linear-gradient(90deg,rgba(95,48,0,.72),rgba(255,229,115,.95),rgba(120,64,0,.76))'
+    : 'linear-gradient(90deg,rgba(5,8,16,.64),rgba(255,255,255,.32),rgba(5,8,16,.64))'
   return (
-    <div style={{position:'relative',width:capsuleWidth,height:size+sep*2,display:'flex',
+    <div style={{position:'relative',width:size,height:size+sep*2,display:'flex',
       flexDirection:'column',alignItems:'center',
       filter:`drop-shadow(0 0 ${Math.max(16,size*.22)}px ${c.glow})`}}>
       {!open&&(
@@ -482,43 +446,44 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
           background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
           opacity:isJackpot ? .42 : .22,pointerEvents:'none'}}/>
       )}
-      <svg width={capsuleWidth} height={size} viewBox="0 0 100 100" preserveAspectRatio="none"
-        style={{display:'block',overflow:'visible',flexShrink:0,
-          filter:`drop-shadow(0 2px ${Math.max(8,size*.09)}px ${c.glow})`}}>
-        {/* upper shell and curved stem */}
-        <g transform={`translate(0 ${-svgSep})`}>
-          <path d="M58 18 C58 9 62 5 69 4" fill="none" stroke="#050505" strokeWidth="4"
-            strokeLinecap="round"/>
-          <path d="M13 51 C10 42 11 30 17 21 C23 12 33 11 43 16 C49 19 54 19 60 15 C68 11 76 16 79 22 C86 20 91 28 92 37 C94 43 91 48 88 52 L13 52 Z"
-            fill={shellColor} stroke="#050505" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke"/>
-          <path d="M20 25 C27 18 35 18 43 22 C48 25 52 25 57 22 C64 18 71 20 75 26"
-            fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="3" strokeLinecap="round"/>
-          <path d="M18 23 L27 17 L38 18 L45 24 L43 31 L47 37 L43 43 L39 50 L29 48 L25 43 L18 39 L20 33 L16 29 Z"
-            fill="#fff200" transform="rotate(-5 31 34)"/>
-          <path d="M28 21 C34 18 39 22 41 28 L38 34 L40 39 L35 45 L31 47 L27 41 L28 35 L24 30 Z"
-            fill="#fff"/>
-          <path d="M52 29 L58 22 L68 20 L76 24 L78 30 L76 35 L81 39 L77 45 L70 52 L61 49 L58 44 L52 40 L55 34 Z"
-            fill="#ffed00" transform="rotate(5 66 36)"/>
-          <path d="M63 25 C68 23 73 27 74 32 L71 36 L72 41 L68 46 L64 48 L60 43 L61 37 L58 33 Z"
-            fill="#fff"/>
-        </g>
-        {/* lower shell with the heavy black shape from the reference */}
-        <g transform={`translate(0 ${svgSep})`}>
-          <path d="M13 49 L88 49 C91 57 88 65 82 70 C79 80 69 87 57 88 C49 91 42 86 34 87 C23 85 17 77 16 68 C12 62 11 55 13 49 Z"
-            fill={shellColor} stroke="#050505" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke"/>
-          <path d="M15 67 C24 59 32 61 40 68 C48 62 55 65 62 72 C69 66 77 65 82 60 C81 75 70 85 57 87 C48 89 42 84 34 86 C24 83 18 76 15 67 Z"
-            fill="#050505" opacity=".92"/>
-          <path d="M66 55 C73 52 80 55 82 60 C79 64 74 66 68 65 C64 62 63 58 66 55 Z"
-            fill="rgba(255,255,255,.38)"/>
-        </g>
-      </svg>
+      {/* Top half */}
+      <div style={{width:size,height:r,
+        borderRadius:`${r}px ${r}px 0 0`,
+        background:`${c.top}, linear-gradient(135deg,rgba(255,255,255,.42),transparent 34%)`,
+        border:`1.8px solid ${rimColor}`,borderBottom:'none',
+        boxShadow:`0 -4px 24px ${c.glow},inset 0 3px 14px rgba(255,255,255,.58),inset 0 -9px 14px rgba(0,0,0,.42)`,
+        transform:`translateY(${-sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',top:size*.1,left:size*.16,width:size*.28,height:size*.12,
+          borderRadius:'50%',background:'rgba(255,255,255,.74)',filter:'blur(.2px)',
+          transform:'rotate(-22deg)'}}/>
+        <div style={{position:'absolute',top:size*.23,left:size*.11,width:size*.12,height:size*.055,
+          borderRadius:'50%',background:'rgba(255,255,255,.38)',transform:'rotate(-18deg)'}}/>
+      </div>
+      {/* Bottom half */}
+      <div style={{width:size,height:r,
+        borderRadius:`0 0 ${r}px ${r}px`,
+        background:c.bot,
+        border:`1.8px solid ${rimColor}`,borderTop:'none',
+        boxShadow:`0 6px 24px ${c.glow},inset 0 9px 14px rgba(0,0,0,.38),inset 0 -3px 9px rgba(255,255,255,.28)`,
+        transform:`translateY(${sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',bottom:size*.08,right:size*.13,width:size*.2,height:size*.08,
+          borderRadius:'50%',background:'rgba(255,255,255,.2)',filter:'blur(1px)',
+          transform:'rotate(-18deg)'}}/>
+      </div>
       {!open&&(
-        <div style={{position:'absolute',inset:0,borderRadius:'42% 48% 45% 52%',overflow:'hidden',zIndex:6,
-          pointerEvents:'none'}}>
-          <div style={{position:'absolute',top:'-12%',bottom:'-12%',left:'16%',width:'24%',
-            background:'linear-gradient(90deg,transparent,rgba(255,255,255,.68),transparent)',
-            animation:'ga-capglint 2.2s ease-in-out infinite'}}/>
-        </div>
+        <>
+          <div style={{position:'absolute',top:`calc(50% - ${Math.max(3,size*.028)}px)`,
+            left:size*.035,right:size*.035,height:Math.max(6,size*.056),borderRadius:999,
+            background:centerBand,border:`1px solid ${rimColor}`,
+            boxShadow:`0 0 ${Math.max(10,size*.12)}px ${c.glow},inset 0 1px 0 rgba(255,255,255,.45)`,
+            zIndex:4}}/>
+          <div style={{position:'absolute',inset:0,borderRadius:'50%',overflow:'hidden',zIndex:6,
+            pointerEvents:'none'}}>
+            <div style={{position:'absolute',top:'-12%',bottom:'-12%',left:'16%',width:'24%',
+              background:'linear-gradient(90deg,transparent,rgba(255,255,255,.68),transparent)',
+              animation:'ga-capglint 2.2s ease-in-out infinite'}}/>
+          </div>
+        </>
       )}
       {showLabel&&(
         <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
@@ -531,11 +496,10 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
           {c.label}
         </div>
       )}
-      {isJackpot&&open&&size>=120&&(
-        <SegmentedMascot motion="idle" size={size*.34}
-          style={{position:'absolute',left:'50%',top:'55%',
-            transform:'translate(-50%,-50%)',
-            opacity:.28,filter:'drop-shadow(0 2px 8px rgba(95,48,0,.8))',zIndex:5}}/>
+      {isJackpot&&size>=120&&(
+        <img src={mascotImg} style={{position:'absolute',left:'50%',top:'55%',
+          width:size*.34,height:'auto',objectFit:'contain',transform:'translate(-50%,-50%)',
+          opacity:open ? .28 : .48,filter:'drop-shadow(0 2px 8px rgba(95,48,0,.8))',zIndex:5}}/>
       )}
       {isJackpot&&open&&(
         <div style={{position:'absolute',inset:-12,borderRadius:'50%',
@@ -548,20 +512,28 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
 
 function RateOrb({ id }:{id:string}) {
   const c = CAPSULE[id] ?? CAPSULE.pts100
-  const shellColor = CAPSULE_SOLID[id] ?? CAPSULE_SOLID.pts100
+  const isJackpot = id === 'inmu10k'
   return (
-    <svg width="32" height="25" viewBox="0 0 100 100" preserveAspectRatio="none"
-      style={{flexShrink:0,overflow:'visible',filter:`drop-shadow(0 0 7px ${c.glow})`}}>
-      <path d="M58 18 C58 9 62 5 69 4" fill="none" stroke="#050505" strokeWidth="6" strokeLinecap="round"/>
-      <path d="M13 51 C10 42 11 30 17 21 C23 12 33 11 43 16 C49 19 54 19 60 15 C68 11 76 16 79 22 C86 20 91 28 92 37 C94 48 90 58 82 70 C79 80 69 87 57 88 C49 91 42 86 34 87 C23 85 17 77 16 68 C11 60 10 54 13 51 Z"
-        fill={shellColor} stroke="#050505" strokeWidth="7" strokeLinejoin="round" paintOrder="stroke"/>
-      <path d="M16 66 C28 59 36 64 42 70 C51 63 59 67 65 74 C73 68 79 66 83 61 C80 78 69 87 56 89 C46 88 42 84 34 87 C24 83 18 76 16 66 Z"
-        fill="#050505" opacity=".9"/>
-      <path d="M18 23 L27 17 L38 18 L45 24 L43 31 L47 37 L43 43 L39 50 L29 48 L25 43 L18 39 L20 33 L16 29 Z" fill="#fff200"/>
-      <path d="M28 21 C34 18 39 22 41 28 L38 34 L40 39 L35 45 L31 47 L27 41 L28 35 L24 30 Z" fill="#fff"/>
-      <path d="M52 29 L58 22 L68 20 L76 24 L78 30 L76 35 L81 39 L77 45 L70 52 L61 49 L58 44 L52 40 L55 34 Z" fill="#ffed00"/>
-      <path d="M63 25 C68 23 73 27 74 32 L71 36 L72 41 L68 46 L64 48 L60 43 L61 37 L58 33 Z" fill="#fff"/>
-    </svg>
+    <div style={{position:'relative',width:26,height:26,borderRadius:'50%',flexShrink:0,
+      background:`${c.top}, ${c.bot}`,
+      border:`1px solid ${isJackpot?'rgba(255,224,120,.9)':c.border}`,
+      boxShadow:`0 0 12px ${c.glow}, inset -4px -4px 9px rgba(0,0,0,.45), inset 3px 3px 6px rgba(255,255,255,.34)`,
+      overflow:'hidden'}}>
+      <div style={{position:'absolute',left:0,right:0,top:'47%',height:3,
+        background:isJackpot
+          ? 'linear-gradient(90deg,rgba(85,42,0,.8),rgba(255,232,130,.95),rgba(85,42,0,.8))'
+          : 'linear-gradient(90deg,rgba(5,8,16,.72),rgba(255,255,255,.46),rgba(5,8,16,.72))',
+        boxShadow:`0 0 7px ${c.glow}`}}/>
+      <div style={{position:'absolute',top:4,left:5,width:9,height:6,borderRadius:'50%',
+        background:'rgba(255,255,255,.82)',filter:'blur(.2px)',transform:'rotate(-24deg)'}}/>
+      <div style={{position:'absolute',top:12,left:4,width:4,height:3,borderRadius:'50%',
+        background:'rgba(255,255,255,.34)',transform:'rotate(-20deg)'}}/>
+      {isJackpot&&(
+        <div style={{position:'absolute',inset:5,borderRadius:'50%',
+          background:'radial-gradient(circle,rgba(255,246,160,.76) 0%,rgba(218,165,32,.28) 42%,transparent 70%)',
+          boxShadow:'0 0 10px rgba(255,215,0,.8)'}}/>
+      )}
+    </div>
   )
 }
 
@@ -586,7 +558,7 @@ function RatePanel() {
       ))}
       <p style={{margin:'0 0 12px',fontSize:16,color:'#e8c65a',
         textAlign:'center',letterSpacing:'0.1em',fontWeight:900,
-        textShadow:'0 0 12px rgba(218,165,32,.58)'}}>排出率</p>
+        textShadow:'0 0 12px rgba(218,165,32,.58)'}}>&#25490;&#20986;&#29575;</p>
       {BALLS.map(b=>(
         <div key={b.id} style={{display:'flex',alignItems:'center',gap:8,marginBottom:11}}>
           <RateOrb id={b.id}/>
@@ -702,6 +674,39 @@ function PointsPanel({ pts, loading }:{pts:number;loading:boolean}) {
 }
 
 /* ════ Main GachaPage ════ */
+function GachaModeTabs({ mode, onChange, disabled=false }: { mode:'points'|'paid'; onChange:(mode:'points'|'paid')=>void; disabled?:boolean }) {
+  return (
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,padding:4,margin:'6px auto 2px',width:'min(360px,92%)',border:'1px solid rgba(218,165,32,.35)',borderRadius:8,background:'rgba(3,2,10,.78)'}}>
+      {(['points','paid'] as const).map(value => (
+        <button key={value} type="button" disabled={disabled} onClick={()=>onChange(value)} style={{height:38,border:0,borderRadius:6,fontWeight:800,fontSize:12,cursor:disabled?'not-allowed':'pointer',color:mode===value?'#160c00':'rgba(255,255,255,.55)',background:mode===value?'linear-gradient(135deg,#ffe277,#d59a00)':'transparent',boxShadow:mode===value?'0 0 18px rgba(255,190,30,.36)':'none'}}>
+          {value==='points'?'通常ガチャ':'有償ガチャ'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function NewPetCharacterScreen({ prize, profile, unread, onClose }:{ prize:Prize; profile:any; unread:number; onClose:()=>void }) {
+  const pet = prize.characterId ? PET_BY_ID[prize.characterId] : null
+  return (
+    <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
+      <style>{CSS}</style>
+      <PageBg>
+        <div style={{minHeight:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'28px 20px',textAlign:'center'}}>
+          <p style={{color:'#ffe87d',fontFamily:'Georgia,serif',fontWeight:900,letterSpacing:'.2em',fontSize:13}}>NEW CHARACTER</p>
+          <div style={{position:'relative',width:'min(310px,78vw)',height:'min(410px,48vh)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <div style={{position:'absolute',inset:'10%',borderRadius:'50%',background:'radial-gradient(circle,rgba(255,215,0,.75),rgba(130,38,255,.25) 48%,transparent 72%)',filter:'blur(12px)',animation:'ga-stageflash 1.6s ease-in-out infinite'}}/>
+            {pet&&<img src={pet.image} alt={pet.name} style={{position:'relative',zIndex:2,maxWidth:'100%',maxHeight:'100%',objectFit:'contain',filter:'drop-shadow(0 0 32px rgba(255,215,0,.72))',animation:'ga-jpzoom .8s ease-out both'}}/>}
+          </div>
+          <p style={{margin:0,color:'#fff',fontSize:28,fontWeight:900}}>{pet?.name??prize.label}</p>
+          <p style={{margin:'5px 0 20px',color:'#ffd700',fontWeight:800}}>★3 ・ Lv.1</p>
+          <button type="button" onClick={onClose} style={{width:'min(320px,90%)',height:52,borderRadius:8,border:'1px solid #ffe47b',background:'linear-gradient(135deg,#ffe47b,#c78a00)',fontWeight:900,color:'#160b00',boxShadow:'0 0 24px rgba(255,190,20,.4)'}}>OK</button>
+        </div>
+      </PageBg>
+    </AppShell>
+  )
+}
+
 export function GachaPage() {
   const { profile, unread } = useAuth()
   const [pts,setPts]             = useState(0)
@@ -715,6 +720,10 @@ export function GachaPage() {
   const [freeUsed,setFreeUsed]   = useState(true)
   const [freeNextReset,setFreeNextReset] = useState<string|null>(null)
   const [freeLoading,setFreeLoading] = useState(false)
+  const [gachaMode,setGachaMode] = useState<'points'|'paid'>('points')
+  const [paidBusy,setPaidBusy] = useState(false)
+  const [paidPity,setPaidPity] = useState(0)
+  const [paidStatus,setPaidStatus] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
 
   const loadPts = useCallback(async()=>{
@@ -740,6 +749,14 @@ export function GachaPage() {
     }catch{/**/}
   },[])
   useEffect(()=>{loadFreeStatus()},[loadFreeStatus])
+
+  const loadCommerceStatus = useCallback(async()=>{
+    try{
+      const response=await fetch('/api/pet-commerce/status',{credentials:'include'})
+      if(response.ok){const data=await response.json() as {paidPity?:number};setPaidPity(Number(data.paidPity??0))}
+    }catch{/**/}
+  },[])
+  useEffect(()=>{loadCommerceStatus()},[loadCommerceStatus])
 
   const clr=()=>{if(timer.current)clearTimeout(timer.current)}
   const after=(ms:number,next:Phase)=>{clr();timer.current=setTimeout(()=>setPhase(next),ms)}
@@ -770,13 +787,14 @@ export function GachaPage() {
     const cost=type==='multi'?10000:1000
     if(pts<cost){toast.error(`ポイント不足 (必要: ${cost.toLocaleString()}pt)`);return}
     try{
-      const res=await fetch('/api/gacha/spin',{
+      const res=await fetch('/api/pet-gacha/points',{
         method:'POST',credentials:'include',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({type})
+        body:JSON.stringify({pullType:type})
       })
       if(!res.ok){const e=await res.json().catch(()=>({})) as {error?:string};throw new Error(e.error??'エラー')}
-      const r=await res.json() as Result
+      const data=await res.json() as Result
+      const r:Result={...data,hasInmu:Boolean(data.hasInmu),wasGuaranteed:Boolean(data.wasGuaranteed)}
       setResult(r);setRevIdx(0);setPts(r.newPoints)
       setPhase(r.wasGuaranteed?'guaranteed':'inserting')
     }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
@@ -799,8 +817,65 @@ export function GachaPage() {
     finally{setFreeLoading(false)}
   }
 
-  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);loadPts();loadHist();loadFreeStatus()}
+  async function completePaidGacha(txId:string,pullType:'single'|'eleven'){
+    const response=await fetch('/api/pet-gacha/paid',{
+      method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({txId,pullType}),
+    })
+    const data=await response.json().catch(()=>({})) as Result&{error?:string}
+    if(!response.ok)throw new Error(data.error??'有償ガチャの確定に失敗しました')
+    localStorage.removeItem('inmu-pet-paid-gacha-pending')
+    const hasCharacter=data.results.some(prize=>prize.type==='character')
+    setResult({...data,hasInmu:false,wasGuaranteed:hasCharacter,costPoints:0})
+    setPts(data.newPoints)
+    setPaidPity(Number(data.paidPity??0))
+    setRevIdx(0)
+    setPhase(hasCharacter?'guaranteed':'inserting')
+  }
+
+  async function spinPaid(pullType:'single'|'eleven'){
+    if(phase!=='idle'||paidBusy)return
+    const amount=pullType==='eleven'?100000:10000
+    if(!getPhantomProvider()){
+      if(isMobileBrowser()){
+        localStorage.setItem('inmu-pet-paid-gacha-intent',pullType)
+        toast.info('Phantomアプリで開きます…')
+        window.setTimeout(openInPhantomBrowser,400)
+      }else toast.error('Phantomウォレットをインストールしてください')
+      return
+    }
+    setPaidBusy(true)
+    try{
+      const txId=await sendInmuWithPhantom('Hatp1W4QCzr7GAVbnQqKTVW2BmX7sRaf7jeHJMvETeU4',amount,setPaidStatus)
+      localStorage.setItem('inmu-pet-paid-gacha-pending',JSON.stringify({txId,pullType}))
+      setPaidStatus('送金を確認しています…')
+      await completePaidGacha(txId,pullType)
+    }catch(error){toast.error(error instanceof Error?error.message:'有償ガチャに失敗しました')}
+    finally{setPaidBusy(false);setPaidStatus('')}
+  }
+
+  useEffect(()=>{
+    if(!getPhantomProvider()||paidBusy)return
+    const intent=localStorage.getItem('inmu-pet-paid-gacha-intent') as 'single'|'eleven'|null
+    if(intent){localStorage.removeItem('inmu-pet-paid-gacha-intent');setGachaMode('paid')}
+    const pendingRaw=localStorage.getItem('inmu-pet-paid-gacha-pending')
+    if(!pendingRaw)return
+    try{
+      const pending=JSON.parse(pendingRaw) as {txId:string;pullType:'single'|'eleven'}
+      setPaidBusy(true)
+      void completePaidGacha(pending.txId,pending.pullType)
+        .catch(error=>toast.error(error instanceof Error?error.message:'送金済みガチャの復旧に失敗しました'))
+        .finally(()=>setPaidBusy(false))
+    }catch{localStorage.removeItem('inmu-pet-paid-gacha-pending')}
+  },[])
+
+  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);loadPts();loadHist();loadFreeStatus();loadCommerceStatus()}
   const isMulti=(result?.results.length??0)>1
+
+  const newCharacter=result?.results.find(prize=>prize.type==='character'&&prize.isNewCharacter)
+  if(phase==='done'&&newCharacter){
+    return <NewPetCharacterScreen prize={newCharacter} profile={profile} unread={unread} onClose={reset}/>
+  }
 
   /* ════ JACKPOT SCREEN ════ */
   if(phase==='done'&&result?.hasInmu){
@@ -808,12 +883,42 @@ export function GachaPage() {
   }
 
   /* ════ IDLE SCREEN ════ */
+  if(phase==='idle'&&gachaMode==='paid')return(
+    <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
+      <style>{CSS}</style>
+      <PageBg>
+        <div style={{display:'flex',flexDirection:'column',minHeight:'100%',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}}>
+          <GachaModeTabs mode={gachaMode} onChange={setGachaMode} disabled={paidBusy}/>
+          <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'18px 18px 8px',textAlign:'center'}}>
+            <WalletCards style={{width:42,height:42,color:'#ffd65a',filter:'drop-shadow(0 0 14px rgba(255,200,40,.65))'}}/>
+            <h1 style={{margin:'10px 0 4px',fontFamily:'Georgia,serif',fontSize:25,color:'#f4c84b',letterSpacing:'.12em'}}>INMU PET PREMIUM</h1>
+            <p style={{margin:0,color:'rgba(255,255,255,.62)',fontSize:11}}>ニャルシアン・拓也・レオン 各1.2%</p>
+            <div style={{marginTop:18,width:'min(430px,100%)',padding:16,borderRadius:8,border:'1px solid rgba(218,165,32,.48)',background:'rgba(8,4,14,.82)',boxShadow:'0 14px 45px rgba(0,0,0,.42)'}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#f3d97c'}}><span>50連キャラ確定まで</span><strong>{50-paidPity}回</strong></div>
+              <div style={{height:6,marginTop:8,borderRadius:99,background:'rgba(255,255,255,.08)',overflow:'hidden'}}><div style={{height:'100%',width:`${paidPity/50*100}%`,background:'linear-gradient(90deg,#a855f7,#ffd700)',boxShadow:'0 0 12px #d8a900'}}/></div>
+              <p style={{fontSize:10,color:'rgba(255,255,255,.45)',margin:'9px 0 0'}}>50回以内に対象キャラを獲得するとカウントはリセットされます</p>
+            </div>
+          </div>
+          <div style={{padding:'10px 14px'}}>
+            {paidStatus&&<p style={{textAlign:'center',fontSize:11,color:'#8ee7ff',margin:'0 0 8px'}}>{paidStatus}</p>}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+              <OrnateButton gold enabled={!paidBusy} onClick={()=>spinPaid('single')} label={paidBusy?'処理中…':'1連ガチャ'} price="10,000 INMU"/>
+              <OrnateButton gold={false} enabled={!paidBusy} onClick={()=>spinPaid('eleven')} label={paidBusy?'処理中…':'11連ガチャ'} price="100,000 INMU"/>
+            </div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,marginTop:12,color:'rgba(255,255,255,.38)',fontSize:9}}><LockKeyhole style={{width:12}}/>送金成功をサーバーで確認後に抽選します</div>
+          </div>
+        </div>
+      </PageBg>
+    </AppShell>
+  )
+
   if(phase==='idle') return (
     <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
       <style>{CSS}</style>
       <PageBg>
         {/* ── Fixed non-scrolling layout matching reference screen 3 ── */}
         <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden'}}>
+          <GachaModeTabs mode={gachaMode} onChange={setGachaMode}/>
 
           {/* Title (compact) */}
           <div style={{textAlign:'center',padding:'4px 16px 0',flexShrink:0}}>
@@ -835,12 +940,10 @@ export function GachaPage() {
                 display:'block',objectFit:'contain',
                 filter:'drop-shadow(0 22px 66px rgba(0,0,0,.98)) drop-shadow(0 0 30px rgba(184,134,11,.3))'}}/>
             {/* Mascot bottom-left */}
-            <div style={{position:'absolute',bottom:0,left:'2%',zIndex:8,pointerEvents:'none',
-              animation:'ga-mascotwalk 5.2s ease-in-out infinite'}}>
+            <div className="ga-floatslow" style={{position:'absolute',bottom:0,left:'2%',zIndex:8}}>
               <img src={mascotImg} alt="INMUくん" style={{
                 width:'min(100px,24vw)',height:'auto',objectFit:'contain',
-                filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))',
-                animation:'ga-mascotcelebrate 1.3s ease-in-out infinite'}}/>
+                filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))'}}/>
             </div>
             {/* Rate panel */}
             <RatePanel />
@@ -1000,8 +1103,7 @@ export function GachaPage() {
                     boxShadow:`0 0 ${i===0?44:24}px rgba(218,165,32,${i===0?.95:.7})`,
                     transform:i===0?'translate(-50%,-50%)':'translate(-50%,-50%)',
                     animation:`ga-popin .42s ease-out ${m.d} both, ga-bounce .72s ease-in-out ${500+parseInt(m.d)}ms infinite`}}>
-                    <SegmentedMascot motion="clap" size={m.s}
-                      style={{background:'rgba(4,2,14,.4)'}} delay={i*.04}/>
+                    <img src={mascotImg} style={{width:'100%',height:'100%',objectFit:'contain',background:'rgba(4,2,14,.4)'}}/>
                   </div>
                 ))}
               </div>
@@ -1385,8 +1487,8 @@ export function GachaPage() {
                       background:'rgba(255,180,0,.48)',filter:'blur(5px)'}}/>
                     {/* Mascot */}
                     <div style={{position:'absolute',inset:9,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <SegmentedMascot motion="idle" size={68}
-                        style={{opacity:.82,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
+                      <img src={mascotImg} style={{width:68,height:'auto',objectFit:'contain',
+                        opacity:.82,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
                     </div>
                   </div>
                 </div>
@@ -1476,8 +1578,8 @@ export function GachaPage() {
                       background:'rgba(255,180,0,.5)',filter:'blur(5px)'}}/>
                     {/* Mascot inside */}
                     <div style={{position:'absolute',inset:11,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <SegmentedMascot motion="idle" size={80}
-                        style={{opacity:.84,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
+                      <img src={mascotImg} style={{width:80,height:'auto',objectFit:'contain',
+                        opacity:.84,filter:'drop-shadow(0 2px 8px rgba(80,40,0,.8))'}}/>
                     </div>
                   </div>
                   {/* Star-burst impact rays radiating from base of orb */}
@@ -1619,9 +1721,9 @@ export function GachaPage() {
                       <p style={{margin:'6px 0 10px',fontSize:12,color:'rgba(255,255,255,.5)'}}>
                         ポイントを即時付与しました
                       </p>
-                      <img src={mascotImg} alt="INMUくん" style={{width:58,height:'auto',objectFit:'contain',
-                        margin:'0 auto',filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',
-                        animation:'ga-mascotjumpin .72s ease-out both, ga-mascotcelebrate 1.15s ease-in-out .72s infinite'}}/>
+                      <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
+                        filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',
+                        animation:'ga-bounce 1.1s ease-in-out infinite'}}/>
                     </div>
                   </div>
                 )
@@ -1692,9 +1794,9 @@ export function GachaPage() {
                 </p>
               )}
               <div style={{display:'flex',justifyContent:'center'}}>
-                <img src={mascotImg} alt="INMUくん" style={{width:66,height:'auto',objectFit:'contain',
+                <img src={mascotImg} style={{width:60,height:'auto',objectFit:'contain',
                   filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))',
-                  animation:'ga-mascotjumpin .72s ease-out both, ga-mascotcelebrate 1.15s ease-in-out .72s infinite'}}/>
+                  animation:'ga-bounce 1s ease-in-out infinite'}}/>
               </div>
             </div>
           )}
@@ -1740,6 +1842,9 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
         animation:'ga-goldflash .9s ease-out forwards'}}/>}
 
       <PageBg jackpot>
+        {(step===2||step===3||step===4||step===5)&&(
+          <GeneratedScene kind={step===2?'falling':'opening'} prizeId="inmu10k" guaranteed zIndex={2}/>
+        )}
         {/* Rising coins */}
         <div style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:4,overflow:'hidden'}}>
           {COIN_RISES.map((c,i)=>(
@@ -1774,6 +1879,23 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
           flexDirection:'column',alignItems:'center',
           padding:'14px 18px',gap:14,minHeight:'100dvh',overflowY:'auto'}}>
 
+          {/* Step 1: JACKPOT title */}
+          {step>=1&&(
+            <div className="ga-reveal" style={{textAlign:'center',marginTop:4}}>
+              <h1 style={{margin:0,fontSize:'min(10vw,36px)',fontWeight:900,
+                fontFamily:'Georgia,serif',letterSpacing:'0.12em',color:'#ffd700',
+                animation:'ga-jppulse 1.3s ease-in-out infinite, ga-jpzoom .52s ease-out forwards',opacity:0}}>
+                ◆ JACKPOT !! ◆
+              </h1>
+              <div style={{display:'flex',justifyContent:'center',gap:9,marginTop:5}}>
+                {['✦','★','✦','★','✦'].map((s,i)=>(
+                  <span key={i} style={{fontSize:20,color:'#ffd700',
+                    animation:`ga-sparkle ${.68+i*.17}s ease-in-out ${i*.13}s infinite`}}>{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Step 2: Gold capsule burst */}
           {step===2&&(
             <div className="ga-reveal" style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -1803,9 +1925,19 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
                     border:`1px solid rgba(218,165,32,${.55-i*.15})`,
                     animation:`ga-ring ${.48+i*.24}s ease-out ${.12+i*.14}s forwards`}}/>
                 ))}
-                <div style={{position:'relative',zIndex:5,
-                  animation:'ga-premiumopen .72s ease-out .08s both'}}>
-                  <PrizeCapsule prizeId="inmu10k" size={155} open showLabel={false}/>
+                <div style={{position:'absolute',width:155,height:78,
+                  borderRadius:'78px 78px 0 0',overflow:'hidden',
+                  top:14,transformOrigin:'bottom center',
+                  animation:'ga-split-t .6s ease-out .1s forwards',
+                  boxShadow:'0 -8px 32px rgba(218,165,32,.7)',zIndex:5}}>
+                  <PrizeCapsule prizeId="inmu10k" size={155}/>
+                </div>
+                <div style={{position:'absolute',width:155,height:78,
+                  borderRadius:'0 0 78px 78px',overflow:'hidden',
+                  top:110,transformOrigin:'top center',
+                  animation:'ga-split-b .6s ease-out .1s forwards',
+                  boxShadow:'0 8px 32px rgba(218,165,32,.58)',zIndex:5}}>
+                  <PrizeCapsule prizeId="inmu10k" size={155}/>
                 </div>
               </div>
             </div>
@@ -1815,8 +1947,10 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
           {step===4&&(
             <div className="ga-reveal" style={{display:'flex',flexDirection:'column',
               alignItems:'center',gap:6}}>
-              <SegmentedMascot motion="result" size={116}
-                style={{filter:'drop-shadow(0 0 32px rgba(218,165,32,.88)) drop-shadow(-2px 8px 18px rgba(0,0,0,.8))'}}/>
+              <img src={mascotImg} style={{
+                width:110,height:'auto',objectFit:'contain',
+                filter:'drop-shadow(0 0 32px rgba(218,165,32,.88)) drop-shadow(-2px 8px 18px rgba(0,0,0,.8))',
+                animation:'ga-popin .42s ease-out both'}}/>
             </div>
           )}
 
@@ -1824,9 +1958,10 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
           {step>=5&&(
             <div style={{display:'flex',gap:12,alignItems:'flex-end',justifyContent:'center'}}>
               {[{s:82,d:'0s'},{s:108,d:'.24s'},{s:82,d:'.48s'}].map((m,i)=>(
-                <SegmentedMascot key={i} motion="clap" size={m.s}
-                  style={{filter:'drop-shadow(-2px 8px 18px rgba(0,0,0,.8)) drop-shadow(0 0 16px rgba(218,165,32,.55))'}}
-                  delay={parseFloat(m.d) || 0}/>
+                <img key={i} src={mascotImg} style={{
+                  width:m.s,height:'auto',objectFit:'contain',
+                  filter:'drop-shadow(-2px 8px 18px rgba(0,0,0,.8)) drop-shadow(0 0 16px rgba(218,165,32,.55))',
+                  animation:`ga-bounce .82s ease-in-out ${m.d} infinite`}}/>
               ))}
             </div>
           )}
@@ -1888,11 +2023,3 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
-
-
-
-
-
-
-
-

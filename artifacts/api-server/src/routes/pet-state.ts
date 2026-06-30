@@ -2,12 +2,14 @@ import { Router } from "express";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
 import { ensurePetStateTable, PET_CHARACTER_NAMES } from "../services/pet-state-store";
+import { ensurePetCommerceTables } from "./pet-commerce";
 
 const router = Router();
 
 router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensurePetStateTable();
+    await ensurePetCommerceTables();
     const [stateResult, ownershipResult, claimsResult] = await Promise.all([
       pool.query(`SELECT state, "updatedAt" FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]),
       pool.query(`SELECT "characterId" FROM "userPetCharacters" WHERE "userId" = $1 ORDER BY "acquiredAt" ASC`, [req.userId!]),
@@ -41,6 +43,10 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
   }
   try {
     await ensurePetStateTable();
+    await ensurePetCommerceTables();
+    const slotResult = await pool.query(`SELECT COUNT(*)::int AS count FROM "petSlotUnlocks" WHERE "userId"=$1`, [req.userId!]);
+    const maxSlots = Math.min(3, 1 + Number(slotResult.rows[0]?.count ?? 0));
+    if (Array.isArray(state.activePetIds)) state.activePetIds = state.activePetIds.slice(0, maxSlots);
     await pool.query(`
       INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt")
       VALUES ($1, $2::jsonb, $3)

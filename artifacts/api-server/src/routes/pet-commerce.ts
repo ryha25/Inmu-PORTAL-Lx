@@ -1,0 +1,378 @@
+import { Router } from "express";
+import { pool } from "@workspace/db";
+import { requireAuth } from "../middlewares/session";
+
+const router = Router();
+
+const MANAGEMENT_WALLET = "Hatp1W4QCzr7GAVbnQqKTVW2BmX7sRaf7jeHJMvETeU4";
+const INMU_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
+const INMU_DECIMALS = 6;
+const DUPLICATE_CHARACTER_POINTS = 100_000;
+
+const CHARACTERS = [
+  { id: "nyarushian", name: "ニャルシアン" },
+  { id: "takuya", name: "拓也" },
+  { id: "leon", name: "レオン" },
+] as const;
+
+type PullType = "single" | "multi" | "eleven";
+type GachaMode = "points" | "paid";
+type PetGachaPrize = {
+  prizeId: string;
+  label: string;
+  type: "points" | "inmu" | "premium_food" | "character";
+  amount: number;
+  characterId?: string;
+  isNewCharacter?: boolean;
+  isDuplicate?: boolean;
+  convertedPoints?: number;
+};
+
+const PAID_PRIZES = [
+  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 6_000 },
+  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 2_200 },
+  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 800 },
+  { id: "pts10000", label: "10,000ポイント", type: "points" as const, amount: 10_000, weight: 240 },
+  { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 400 },
+  ...CHARACTERS.map(character => ({
+    id: `character-${character.id}`,
+    label: character.name,
+    type: "character" as const,
+    amount: 1,
+    characterId: character.id,
+    weight: 120,
+  })),
+];
+
+const POINT_PRIZES = [
+  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 5_110 },
+  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 2_200 },
+  { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 1_200 },
+  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 600 },
+  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 300 },
+  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 150 },
+  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 50 },
+  { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 300 },
+  ...CHARACTERS.map(character => ({
+    id: `character-${character.id}`,
+    label: character.name,
+    type: "character" as const,
+    amount: 1,
+    characterId: character.id,
+    weight: 30,
+  })),
+];
+
+let tablePromise: Promise<void> | null = null;
+export function ensurePetCommerceTables() {
+  if (tablePromise) return tablePromise;
+  tablePromise = Promise.all([
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS "petGachaState" (
+        "userId" TEXT PRIMARY KEY,
+        "paidPity" INTEGER NOT NULL DEFAULT 0,
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS "petGachaHistory" (
+        id SERIAL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "gachaType" TEXT NOT NULL,
+        "pullType" TEXT NOT NULL,
+        "costPoints" INTEGER NOT NULL DEFAULT 0,
+        "costInmu" BIGINT NOT NULL DEFAULT 0,
+        "txId" TEXT UNIQUE,
+        "payerWallet" TEXT,
+        results JSONB NOT NULL DEFAULT '[]'::jsonb,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS "petSlotUnlocks" (
+        id SERIAL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "slotNumber" INTEGER NOT NULL,
+        "paidInmu" BIGINT NOT NULL,
+        "txId" TEXT NOT NULL UNIQUE,
+        "payerWallet" TEXT,
+        "unlockedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("userId", "slotNumber")
+      )
+    `),
+  ]).then(() => undefined).catch(error => {
+    tablePromise = null;
+    throw error;
+  });
+  return tablePromise;
+}
+
+function weightedRoll(table: typeof PAID_PRIZES | typeof POINT_PRIZES) {
+  const total = table.reduce((sum, prize) => sum + prize.weight, 0);
+  let cursor = Math.floor(Math.random() * total);
+  for (const prize of table) {
+    if (cursor < prize.weight) return prize;
+    cursor -= prize.weight;
+  }
+  return table[0];
+}
+
+function randomCharacter() {
+  return CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+}
+
+async function verifyInmuPayment(signature: string, expectedAmount: number) {
+  if (!/^[1-9A-HJ-NP-Za-km-z]{64,100}$/.test(signature)) throw new Error("TXIDの形式が正しくありません");
+  const rpcUrl = process.env.SOLANA_RPC;
+  if (!rpcUrl) throw new Error("SOLANA_RPCが設定されていません");
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "getTransaction",
+      params: [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }],
+    }),
+  });
+  const rpc = await response.json() as any;
+  const transaction = rpc?.result;
+  if (!response.ok || rpc?.error || !transaction || transaction.meta?.err) throw new Error("送金成功を確認できませんでした");
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!transaction.blockTime || Math.abs(nowSeconds - Number(transaction.blockTime)) > 60 * 60) {
+    throw new Error("この送金は有効期限を過ぎています");
+  }
+
+  const sumForOwner = (balances: any[]) => (balances ?? [])
+    .filter(balance => balance?.mint === INMU_MINT && balance?.owner === MANAGEMENT_WALLET)
+    .reduce((sum, balance) => sum + BigInt(balance?.uiTokenAmount?.amount ?? "0"), 0n);
+  const before = sumForOwner(transaction.meta?.preTokenBalances);
+  const after = sumForOwner(transaction.meta?.postTokenBalances);
+  const expectedRaw = BigInt(Math.round(expectedAmount * 10 ** INMU_DECIMALS));
+  if (after - before !== expectedRaw) throw new Error(`送金額が一致しません（必要: ${expectedAmount.toLocaleString()} INMU）`);
+
+  const accountKeys = transaction.transaction?.message?.accountKeys ?? [];
+  const payer = accountKeys.find((key: any) => key?.signer)?.pubkey ?? accountKeys[0]?.pubkey ?? null;
+  return { payerWallet: payer ? String(payer) : null };
+}
+
+async function addPremiumFood(client: any, userId: string, amount: number) {
+  const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
+  const now = Date.now();
+  const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+  const premiumFood = state.premiumFood && typeof state.premiumFood === "object"
+    ? state.premiumFood
+    : { dailyDate: "", dailyUsed: 0, inventory: 0 };
+  state.premiumFood = { ...premiumFood, inventory: Math.max(0, Number(premiumFood.inventory ?? 0)) + amount };
+  await client.query(`
+    INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
+    ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()
+  `, [userId, JSON.stringify(state), now]);
+}
+
+async function initializeCharacterAtLevelOne(client: any, userId: string, characterId: string) {
+  const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
+  const now = Date.now();
+  const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+  state.pets = { ...(state.pets ?? {}), [characterId]: { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 10 } };
+  state.lastCareAt = { ...(state.lastCareAt ?? {}), [characterId]: { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "play-ball": 0, "play-toy": 0, pet: 0 } };
+  state.cooldownUntil = { ...(state.cooldownUntil ?? {}), [characterId]: { feed: 0, play: 0 } };
+  state.expressions = { ...(state.expressions ?? {}), [characterId]: { kind: "default", until: 0 } };
+  state.petting = { ...(state.petting ?? {}), [characterId]: { count: 0, lastAt: 0 } };
+  state.sleepStartedAt = { ...(state.sleepStartedAt ?? {}), [characterId]: 0 };
+  state.progress = { ...(state.progress ?? {}), [characterId]: { fullnessAt: now, sleepinessAt: now } };
+  await client.query(`
+    INSERT INTO "userPetStates" ("userId",state,"clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
+    ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()
+  `, [userId, JSON.stringify(state), now]);
+}
+
+async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
+  const results: PetGachaPrize[] = [];
+  let totalPoints = 0;
+  let premiumFood = 0;
+  let inmuCount = 0;
+  for (const raw of rawPrizes) {
+    if (raw.type === "character") {
+      const inserted = await client.query(`
+        INSERT INTO "userPetCharacters" ("userId","characterId") VALUES ($1,$2)
+        ON CONFLICT ("userId","characterId") DO NOTHING RETURNING id
+      `, [userId, raw.characterId]);
+      const isNew = inserted.rowCount === 1;
+      if (isNew) await initializeCharacterAtLevelOne(client, userId, raw.characterId);
+      if (!isNew) totalPoints += DUPLICATE_CHARACTER_POINTS;
+      results.push({
+        prizeId: raw.id,
+        label: isNew ? raw.label : `${raw.label}は既に所持しています。100,000ポイントに変換されました。`,
+        type: "character",
+        amount: 1,
+        characterId: raw.characterId,
+        isNewCharacter: isNew,
+        isDuplicate: !isNew,
+        convertedPoints: isNew ? 0 : DUPLICATE_CHARACTER_POINTS,
+      });
+    } else if (raw.type === "premium_food") {
+      premiumFood += raw.amount;
+      results.push({ prizeId: raw.id, label: raw.label, type: "premium_food", amount: raw.amount });
+    } else if (raw.type === "inmu") {
+      inmuCount += 1;
+      results.push({ prizeId: raw.id, label: raw.label, type: "inmu", amount: raw.amount });
+    } else {
+      totalPoints += raw.amount;
+      results.push({ prizeId: raw.id, label: raw.label, type: "points", amount: raw.amount });
+    }
+  }
+  if (premiumFood > 0) await addPremiumFood(client, userId, premiumFood);
+  if (totalPoints > 0) {
+    const month = new Date().toISOString().slice(0, 7);
+    await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [totalPoints, userId]);
+    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_reward','INMU PETガチャ報酬',$3)`, [userId, totalPoints, month]);
+  }
+  return { results, totalPoints, premiumFood, inmuCount, hasInmu: inmuCount > 0 };
+}
+
+async function getCurrentPoints(client: any, userId: string) {
+  const result = await client.query(`SELECT "monthlyPoints" FROM profile WHERE "userId"=$1`, [userId]);
+  return Number(result.rows[0]?.monthlyPoints ?? 0);
+}
+
+router.get("/pet-commerce/status", requireAuth, async (req, res): Promise<void> => {
+  try {
+    await ensurePetCommerceTables();
+    const [state, slots, history] = await Promise.all([
+      pool.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1`, [req.userId!]),
+      pool.query(`SELECT "slotNumber","paidInmu","txId","unlockedAt" FROM "petSlotUnlocks" WHERE "userId"=$1 ORDER BY "slotNumber"`, [req.userId!]),
+      pool.query(`SELECT id,"gachaType","pullType","costPoints","costInmu","txId",results,"createdAt" FROM "petGachaHistory" WHERE "userId"=$1 ORDER BY "createdAt" DESC LIMIT 30`, [req.userId!]),
+    ]);
+    res.json({ paidPity: Number(state.rows[0]?.paidPity ?? 0), unlockedSlots: 1 + slots.rows.length, slotUnlocks: slots.rows, history: history.rows });
+  } catch (error) {
+    console.error("[PetCommerce] status", error);
+    res.status(500).json({ error: "PETガチャ情報の取得に失敗しました" });
+  }
+});
+
+router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> => {
+  const pullType: PullType = req.body?.pullType === "multi" ? "multi" : "single";
+  const count = pullType === "multi" ? 10 : 1;
+  const costPoints = pullType === "multi" ? 10_000 : 1_000;
+  const client = await pool.connect();
+  try {
+    await ensurePetCommerceTables();
+    await client.query("BEGIN");
+    const currentPoints = await getCurrentPoints(client, req.userId!);
+    if (currentPoints < costPoints) throw new Error("ポイントが不足しています");
+    await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"-$1,"updatedAt"=NOW() WHERE "userId"=$2`, [costPoints, req.userId!]);
+    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PET通常ガチャ', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
+    const rolled = Array.from({ length: count }, () => weightedRoll(POINT_PRIZES));
+    const applied = await applyPrizes(client, req.userId!, rolled);
+    const history = await client.query(`
+      INSERT INTO "petGachaHistory" ("userId","gachaType","pullType","costPoints",results)
+      VALUES ($1,'points',$2,$3,$4::jsonb) RETURNING id,"createdAt"
+    `, [req.userId!, pullType, costPoints, JSON.stringify(applied.results)]);
+    if (applied.inmuCount > 0) {
+      const legacySpin = await client.query(`
+        INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
+        VALUES ($1,$2,$3::jsonb,$4,true,$5,'pending',false,$6,false) RETURNING id
+      `, [req.userId!, pullType, JSON.stringify(applied.results), applied.totalPoints, applied.inmuCount, costPoints]);
+      for (let index = 0; index < applied.inmuCount; index += 1) {
+        await client.query(`INSERT INTO "gachaInmuWins" ("spinId","userId","pullType","inmuAmount","inmuSentStatus") VALUES ($1,$2,$3,10000,'pending')`, [legacySpin.rows[0].id, req.userId!, pullType]);
+      }
+    }
+    const newPoints = await getCurrentPoints(client, req.userId!);
+    await client.query("COMMIT");
+    res.json({ ...applied, costPoints, costInmu: 0, newPoints, historyId: history.rows[0].id, paidPity: null, wasGuaranteed: applied.results.some(prize => prize.type === "character") });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[PetCommerce] points gacha", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "ガチャに失敗しました" });
+  } finally {
+    client.release();
+  }
+});
+
+router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
+  const pullType: PullType = req.body?.pullType === "eleven" ? "eleven" : "single";
+  const count = pullType === "eleven" ? 11 : 1;
+  const costInmu = pullType === "eleven" ? 100_000 : 10_000;
+  const txId = String(req.body?.txId ?? "").trim();
+  const client = await pool.connect();
+  try {
+    await ensurePetCommerceTables();
+    const existing = await pool.query(`SELECT "userId",results,"costInmu" FROM "petGachaHistory" WHERE "txId"=$1`, [txId]);
+    if (existing.rowCount) {
+      if (existing.rows[0].userId !== req.userId) throw new Error("このTXIDは既に使用されています");
+      const currentPoints = await getCurrentPoints(client, req.userId!);
+      const state = await pool.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1`, [req.userId!]);
+      const recoveredResults = Array.isArray(existing.rows[0].results) ? existing.rows[0].results : [];
+      const totalPoints = recoveredResults.reduce((sum: number, prize: any) => sum + (prize.type === "points" ? Number(prize.amount ?? 0) : Number(prize.convertedPoints ?? 0)), 0);
+      res.json({ results: recoveredResults, totalPoints, premiumFood: recoveredResults.filter((prize: any) => prize.type === "premium_food").length, hasInmu: false, costPoints: 0, costInmu: Number(existing.rows[0].costInmu), txId, newPoints: currentPoints, paidPity: Number(state.rows[0]?.paidPity ?? 0), recovered: true });
+      return;
+    }
+    const payment = await verifyInmuPayment(txId, costInmu);
+    await client.query("BEGIN");
+    const duplicateTx = await client.query(`SELECT id FROM "petGachaHistory" WHERE "txId"=$1`, [txId]);
+    if (duplicateTx.rowCount) throw new Error("このTXIDは既に使用されています");
+    const state = await client.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1 FOR UPDATE`, [req.userId!]);
+    let pity = Number(state.rows[0]?.paidPity ?? 0);
+    const rolled: any[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const prize = pity >= 49
+        ? (() => { const character = randomCharacter(); return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id }; })()
+        : weightedRoll(PAID_PRIZES);
+      rolled.push(prize);
+      pity = prize.type === "character" ? 0 : pity + 1;
+    }
+    const applied = await applyPrizes(client, req.userId!, rolled);
+    await client.query(`
+      INSERT INTO "petGachaState" ("userId","paidPity") VALUES ($1,$2)
+      ON CONFLICT ("userId") DO UPDATE SET "paidPity"=EXCLUDED."paidPity","updatedAt"=NOW()
+    `, [req.userId!, pity]);
+    const history = await client.query(`
+      INSERT INTO "petGachaHistory" ("userId","gachaType","pullType","costInmu","txId","payerWallet",results)
+      VALUES ($1,'paid',$2,$3,$4,$5,$6::jsonb) RETURNING id,"createdAt"
+    `, [req.userId!, pullType, costInmu, txId, payment.payerWallet, JSON.stringify(applied.results)]);
+    const newPoints = await getCurrentPoints(client, req.userId!);
+    await client.query("COMMIT");
+    res.json({ ...applied, costPoints: 0, costInmu, txId, newPoints, paidPity: pity, historyId: history.rows[0].id });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[PetCommerce] paid gacha", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "有償ガチャに失敗しました" });
+  } finally {
+    client.release();
+  }
+});
+
+router.post("/pet-slots/unlock", requireAuth, async (req, res): Promise<void> => {
+  const txId = String(req.body?.txId ?? "").trim();
+  const client = await pool.connect();
+  try {
+    await ensurePetCommerceTables();
+    const existing = await pool.query(`SELECT "userId","slotNumber","paidInmu","unlockedAt" FROM "petSlotUnlocks" WHERE "txId"=$1`, [txId]);
+    if (existing.rowCount) {
+      if (existing.rows[0].userId !== req.userId) throw new Error("このTXIDは既に使用されています");
+      res.json({ ok: true, unlockedSlots: Number(existing.rows[0].slotNumber), slotNumber: Number(existing.rows[0].slotNumber), paidInmu: Number(existing.rows[0].paidInmu), txId, unlockedAt: existing.rows[0].unlockedAt, recovered: true });
+      return;
+    }
+    const current = await pool.query(`SELECT COUNT(*)::int AS count FROM "petSlotUnlocks" WHERE "userId"=$1`, [req.userId!]);
+    const slotNumber = Number(current.rows[0]?.count ?? 0) + 2;
+    if (slotNumber > 3) throw new Error("育成枠はすでに最大です");
+    const paidInmu = slotNumber === 2 ? 1_000_000 : 2_000_000;
+    const payment = await verifyInmuPayment(txId, paidInmu);
+    await client.query("BEGIN");
+    const inserted = await client.query(`
+      INSERT INTO "petSlotUnlocks" ("userId","slotNumber","paidInmu","txId","payerWallet")
+      VALUES ($1,$2,$3,$4,$5) RETURNING "slotNumber","unlockedAt"
+    `, [req.userId!, slotNumber, paidInmu, txId, payment.payerWallet]);
+    await client.query("COMMIT");
+    res.json({ ok: true, unlockedSlots: slotNumber, slotNumber, paidInmu, txId, unlockedAt: inserted.rows[0].unlockedAt });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[PetCommerce] unlock slot", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "育成枠の解放に失敗しました" });
+  } finally {
+    client.release();
+  }
+});
+
+export default router;

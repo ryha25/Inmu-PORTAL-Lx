@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
+import { getPhantomProvider, isMobileBrowser, openInPhantomBrowser, sendInmuWithPhantom } from '@/lib/admin-inmu-transfer'
 import { toast } from 'sonner'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
 import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState } from '@/features/pet/use-pet-state'
@@ -18,7 +19,7 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
-const USER_VISIBLE_PET_IDS = new Set<PetId>(['inmu-festival'])
+const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'inmu-festival'])
 
 const PET_ROOM_CSS = `
   @keyframes pet-meter-shine {
@@ -680,6 +681,45 @@ function TrainingSlots({ activePet }: { activePet: PetDefinition | null }) {
   )
 }
 
+function SlotUnlockPanel({ unlockedSlots, busy, onUnlock }: { unlockedSlots: number; busy: boolean; onUnlock: () => void }) {
+  if (unlockedSlots >= 3) return <p className="rounded-lg border border-emerald-300/25 bg-emerald-300/5 px-3 py-2 text-center text-xs text-emerald-200">育成枠は3枠すべて解放済みです</p>
+  const price = unlockedSlots === 1 ? 1_000_000 : 2_000_000
+  return (
+    <div className="rounded-lg border border-amber-300/25 bg-amber-300/5 p-3 text-center">
+      <p className="text-xs font-bold text-amber-100">Slot {unlockedSlots + 1} を解放</p>
+      <p className="mt-1 text-lg font-black text-amber-300">{price.toLocaleString()} INMU</p>
+      <Button type="button" disabled={busy} onClick={onUnlock} className="mt-2 w-full border border-amber-200/40 bg-amber-300/15 text-amber-100 hover:bg-amber-300/25 disabled:opacity-40">
+        <LockKeyhole className="size-4" />{busy ? '送金確認中…' : 'Phantomで解放'}
+      </Button>
+      <p className="mt-2 text-[9px] text-muted-foreground">送金成功をサーバーで確認後に解放します</p>
+    </div>
+  )
+}
+
+function TrainingSlotsV2({ activePets, unlockedSlots }: { activePets: PetDefinition[]; unlockedSlots: number }) {
+  return (
+    <section className="border-t border-violet-300/15 pt-4">
+      <h2 className="mb-3 text-sm font-bold text-fuchsia-200">育成枠</h2>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {[1, 2, 3].map(slotNumber => {
+          const locked = slotNumber > unlockedSlots
+          const activePet = activePets[slotNumber - 1]
+          const price = slotNumber === 2 ? 1_000_000 : slotNumber === 3 ? 2_000_000 : 0
+          return (
+            <div key={slotNumber} className={cn('flex min-h-16 items-center gap-2 rounded-lg border px-3 py-2', locked ? 'border-white/10 bg-black/30 text-muted-foreground' : 'border-fuchsia-400/35 bg-fuchsia-400/10 text-fuchsia-100')}>
+              {locked ? <LockKeyhole className="size-4 shrink-0" /> : <PawPrint className="size-4 shrink-0 text-fuchsia-300" />}
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em]">Slot {slotNumber}</p>
+                <p className="break-words text-xs font-bold">{locked ? `${price.toLocaleString()} INMUで解放` : activePet?.name ?? '未設定'}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 export function PetPage() {
   const { profile, unread } = useAuth()
   const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, isSleeping, selectPet, setActivePetIds, care, setExpression, maxLevel, isHydrated, syncError } = usePetState()
@@ -693,6 +733,8 @@ export function PetPage() {
   const [speechBubble, setSpeechBubble] = useState('')
   const [ownedPetIds, setOwnedPetIds] = useState<PetId[] | null>(null)
   const [ownershipError, setOwnershipError] = useState(false)
+  const [unlockedSlots, setUnlockedSlots] = useState(1)
+  const [slotBusy, setSlotBusy] = useState(false)
   const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
   const levelRewardSyncRef = useRef(new Set<string>())
@@ -731,6 +773,19 @@ export function PetPage() {
   }
 
   useEffect(() => { void loadRewardRequests() }, [])
+
+  const loadSlotStatus = async () => {
+    try {
+      const response = await fetch('/api/pet-commerce/status', { credentials: 'include' })
+      if (!response.ok) return
+      const data = await response.json() as { unlockedSlots?: number }
+      setUnlockedSlots(Math.min(3, Math.max(1, Number(data.unlockedSlots ?? 1))))
+    } catch {
+      // Keep the first slot available if status cannot be loaded.
+    }
+  }
+
+  useEffect(() => { void loadSlotStatus() }, [])
 
   const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const motionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -836,8 +891,8 @@ export function PetPage() {
         setOwnedPetIds(owned)
         setOwnershipError(false)
         setActivePetIds(current => {
-          const activeOwned = current.filter(id => owned.includes(id)).slice(0, 1)
-          return activeOwned.length > 0 ? activeOwned : owned.slice(0, 1)
+          const activeOwned = current.filter(id => owned.includes(id)).slice(0, unlockedSlots)
+          return activeOwned.length > 0 ? activeOwned : owned.slice(0, unlockedSlots)
         })
         if (owned.length > 0 && !owned.includes(selectedPetId)) selectPet(owned[0])
       } catch {
@@ -854,7 +909,7 @@ export function PetPage() {
       cancelled = true
       window.removeEventListener('inmu-pet-ownership-changed', loadOwnership)
     }
-  }, [])
+  }, [unlockedSlots])
 
   useEffect(() => {
     fetch('/api/dashboard', { credentials: 'include' })
@@ -1012,10 +1067,66 @@ export function PetPage() {
   function handleSetActive(id: PetId) {
     if (activePetIds.includes(id)) { handleSelect(id); return }
     if (!ownedPetIds?.includes(id)) return
-    setActivePetIds([id])
+    setActivePetIds(current => current.length < unlockedSlots ? [...current, id] : [...current.slice(1), id])
     handleSelect(id)
     setMessage(`${PET_BY_ID[id].name}を育成にセットしました`)
   }
+
+  async function unlockNextSlot() {
+    if (slotBusy || unlockedSlots >= 3) return
+    const price = unlockedSlots === 1 ? 1_000_000 : 2_000_000
+    if (!getPhantomProvider()) {
+      if (isMobileBrowser()) {
+        localStorage.setItem('inmu-pet-slot-unlock-intent', String(unlockedSlots + 1))
+        toast.info('Phantomアプリで開きます…')
+        window.setTimeout(openInPhantomBrowser, 400)
+      } else toast.error('Phantomウォレットをインストールしてください')
+      return
+    }
+    setSlotBusy(true)
+    try {
+      const txId = await sendInmuWithPhantom('Hatp1W4QCzr7GAVbnQqKTVW2BmX7sRaf7jeHJMvETeU4', price, progress => setMessage(progress))
+      localStorage.setItem('inmu-pet-slot-unlock-pending', JSON.stringify({ txId, slotNumber: unlockedSlots + 1 }))
+      const response = await fetch('/api/pet-slots/unlock', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ txId }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error ?? '育成枠の解放に失敗しました')
+      localStorage.removeItem('inmu-pet-slot-unlock-pending')
+      setUnlockedSlots(Number(data.unlockedSlots))
+      toast.success(`育成枠${data.slotNumber}を解放しました`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '育成枠の解放に失敗しました')
+    } finally {
+      setSlotBusy(false)
+      setMessage('')
+    }
+  }
+
+  useEffect(() => {
+    if (!getPhantomProvider()) return
+    if (localStorage.getItem('inmu-pet-slot-unlock-intent')) {
+      localStorage.removeItem('inmu-pet-slot-unlock-intent')
+      toast.info('育成枠の解放ボタンを押して送金を続けてください')
+    }
+    const pendingRaw = localStorage.getItem('inmu-pet-slot-unlock-pending')
+    if (!pendingRaw || slotBusy) return
+    try {
+      const pending = JSON.parse(pendingRaw) as { txId: string }
+      setSlotBusy(true)
+      void fetch('/api/pet-slots/unlock', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ txId: pending.txId }),
+      }).then(async response => {
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error ?? '育成枠の復旧に失敗しました')
+        localStorage.removeItem('inmu-pet-slot-unlock-pending')
+        setUnlockedSlots(Number(data.unlockedSlots))
+        toast.success(`育成枠${data.slotNumber}を解放しました`)
+      }).catch(error => toast.error(error instanceof Error ? error.message : '育成枠の復旧に失敗しました')).finally(() => setSlotBusy(false))
+    } catch {
+      localStorage.removeItem('inmu-pet-slot-unlock-pending')
+    }
+  }, [])
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
@@ -1047,7 +1158,8 @@ export function PetPage() {
               </p>
               {ownershipError && <p className="mt-3 text-xs text-rose-300">所持情報を取得できませんでした。画面を再読み込みしてください。</p>}
             </section>
-            <TrainingSlots activePet={null} />
+            <TrainingSlotsV2 activePets={[]} unlockedSlots={unlockedSlots} />
+            <SlotUnlockPanel unlockedSlots={unlockedSlots} busy={slotBusy} onUnlock={unlockNextSlot} />
           </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-[140px_minmax(360px,1fr)_260px] lg:items-start lg:gap-4">
@@ -1077,7 +1189,8 @@ export function PetPage() {
               />
               <div className="lg:hidden"><SkillPanel pet={pet} /></div>
               <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} /></div>
-              <TrainingSlots activePet={pet} />
+              <TrainingSlotsV2 activePets={activePets} unlockedSlots={unlockedSlots} />
+              <SlotUnlockPanel unlockedSlots={unlockedSlots} busy={slotBusy} onUnlock={unlockNextSlot} />
               <OwnedCharacters ownedPetIds={ownedPetIds} activePetIds={activePetIds} onSet={handleSetActive} />
             </main>
 
