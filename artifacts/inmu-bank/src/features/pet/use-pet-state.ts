@@ -56,7 +56,7 @@ export const PET_CARE_CONFIG: Record<PetCareAction, {
   'play-yarn': { category: 'play', cooldownMs: 10 * 60 * 1000, fullness: 0, exp: 5, affection: 3, sleepiness: 5 },
   'play-ball': { category: 'play', cooldownMs: 20 * 60 * 1000, fullness: 0, exp: 10, affection: 5, sleepiness: 10 },
   'play-toy': { category: 'play', cooldownMs: 30 * 60 * 1000, fullness: 0, exp: 15, affection: 7, sleepiness: 15 },
-  pet: { category: 'pet', cooldownMs: 0, fullness: 0, exp: 0, affection: 1, sleepiness: 0 },
+  pet: { category: 'pet', cooldownMs: 0, fullness: 0, exp: 1, affection: 1, sleepiness: 0 },
 }
 
 type PetActionTimes = Record<PetCareAction, number>
@@ -422,7 +422,7 @@ export function usePetState() {
         fullness: clamp(currentStats.fullness + currentConfig.fullness),
         sleepiness: clamp(currentStats.sleepiness + currentConfig.sleepiness),
         affection: clamp(currentStats.affection + affectionDelta),
-      }, action === 'pet' ? 0 : currentConfig.exp, currentPetId)
+      }, overpetted ? 0 : currentConfig.exp, currentPetId)
       const startsSleeping = nextStats.sleepiness >= PET_SLEEP_THRESHOLD
       let premiumFood = materialized.premiumFood
       if (action === 'feed-premium') {
