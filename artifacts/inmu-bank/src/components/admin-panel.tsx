@@ -190,6 +190,9 @@ type PurchaseRequestAdminRow = {
   rebateRate: string | null
   adminNote: string | null
   rebateTxSignature: string | null
+  petRebateBonusRate: number
+  petRebateBonuses: Array<{ source: 'level_reward' | 'skill'; label: string; rate: number; eventOnly: boolean }>
+  isEventPurchase: boolean
   reviewedAt: string | null
   createdAt: string
 }
@@ -1838,9 +1841,23 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                             {s.label}
                           </span>
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          {pr.displayName ?? pr.userId.slice(0, 12)}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span>{pr.displayName ?? pr.userId.slice(0, 12)}</span>
+                          {pr.petRebateBonusRate > 0 && (
+                            <span className="rounded border border-fuchsia-300/30 bg-fuchsia-300/10 px-1.5 py-0.5 font-black text-fuchsia-200">
+                              +{pr.petRebateBonusRate}%
+                            </span>
+                          )}
+                        </div>
+                        {pr.petRebateBonuses?.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {pr.petRebateBonuses.map(bonus => (
+                              <span key={`${bonus.source}-${bonus.label}`} className="rounded bg-secondary px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                                {bonus.label} +{bonus.rate}%{bonus.eventOnly ? '（イベント）' : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {pr.comment && <span className="text-xs text-muted-foreground">"{pr.comment}"</span>}
                         {pr.txHash && (
                           <a href={`https://solscan.io/tx/${pr.txHash}`} target="_blank" rel="noopener noreferrer"

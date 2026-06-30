@@ -1,0 +1,76 @@
+import { Connection, PublicKey, Transaction } from '@solana/web3.js'
+import {
+  createAssociatedTokenAccountIdempotentInstruction,
+  createTransferInstruction,
+  getAssociatedTokenAddress,
+  TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token'
+
+type PhantomProvider = {
+  isPhantom: boolean
+  connect(): Promise<{ publicKey: { toString(): string } }>
+  signTransaction(transaction: Transaction): Promise<Transaction>
+}
+
+const INMU_MINT = new PublicKey('4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump')
+const INMU_DECIMALS = 6
+
+export function getPhantomProvider(): PhantomProvider | null {
+  const browser = window as Window & {
+    phantom?: { solana?: PhantomProvider }
+    solana?: PhantomProvider
+  }
+  if (browser.phantom?.solana?.isPhantom) return browser.phantom.solana
+  if (browser.solana?.isPhantom) return browser.solana
+  return null
+}
+
+export function isMobileBrowser() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+}
+
+export function openInPhantomBrowser() {
+  const url = encodeURIComponent(window.location.href)
+  const ref = encodeURIComponent(window.location.origin)
+  const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
+  if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    window.location.href = phantomUrl
+    return
+  }
+  window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+}
+
+export async function sendInmuWithPhantom(
+  wallet: string,
+  amount: number,
+  onProgress?: (message: string) => void,
+) {
+  const phantom = getPhantomProvider()
+  if (!phantom) throw new Error('Phantomウォレットが見つかりません')
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error('送金枚数が不正です')
+
+  onProgress?.('Phantomに接続しています…')
+  const response = await phantom.connect()
+  const from = new PublicKey(response.publicKey.toString())
+  const to = new PublicKey(wallet)
+  const connection = new Connection(`${window.location.origin}/api/solana/rpc-proxy`, 'confirmed')
+  const fromAta = await getAssociatedTokenAddress(INMU_MINT, from, false, TOKEN_2022_PROGRAM_ID)
+  const toAta = await getAssociatedTokenAddress(INMU_MINT, to, false, TOKEN_2022_PROGRAM_ID)
+  const rawAmount = BigInt(Math.round(amount * 10 ** INMU_DECIMALS))
+
+  const transaction = new Transaction().add(
+    createAssociatedTokenAccountIdempotentInstruction(from, toAta, to, INMU_MINT, TOKEN_2022_PROGRAM_ID),
+    createTransferInstruction(fromAta, toAta, from, rawAmount, [], TOKEN_2022_PROGRAM_ID),
+  )
+  transaction.feePayer = from
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+  transaction.recentBlockhash = blockhash
+
+  onProgress?.('Phantomで署名してください…')
+  const signed = await phantom.signTransaction(transaction)
+  onProgress?.('Solanaへ送信しています…')
+  const signature = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 })
+  const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+  if (confirmation.value.err) throw new Error(`送金トランザクションが失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+  return signature
+}

@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
-import { getActionCooldownRemaining, getCareCooldownRemaining, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState } from '@/features/pet/use-pet-state'
+import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState } from '@/features/pet/use-pet-state'
 import {
   BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
   Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
@@ -477,7 +477,7 @@ function CareChoiceDialog({ kind, premiumFood, actionCooldowns, onClose, onChoos
 }
 
 function CharacterInfo({ pet, stats, maxLevel }: { pet: PetDefinition; stats: PetStats; maxLevel: number }) {
-  const requiredExp = stats.level * 20
+  const requiredExp = getRequiredPetExp(stats.level, pet.id)
   const isMaxLevel = stats.level >= maxLevel
   return (
     <section className="rounded-lg border border-fuchsia-300/20 bg-[#0d0916] p-4">
@@ -523,13 +523,12 @@ function SkillPanel({ pet }: { pet: PetDefinition }) {
 type PetRewardRequest = {
   id: number
   sourceKey: string
-  status: 'pending' | 'approved' | 'rejected' | 'paid'
+  status: 'pending' | 'rejected' | 'paid'
   txHash: string | null
 }
 
 const PET_REWARD_STATUS_LABEL: Record<PetRewardRequest['status'], string> = {
   pending: '申請中',
-  approved: '承認済み（送金待ち）',
   rejected: '却下',
   paid: '送金済み',
 }
@@ -979,7 +978,9 @@ export function PetPage() {
     const result = care(action, actionNow)
     if (!result) return false
     setNow(actionNow)
-    const duration = pet.reactionDurations[result.motion]
+    const duration = result.expressionUntil
+      ? Math.max(0, result.expressionUntil - actionNow)
+      : pet.reactionDurations[result.motion]
     setExpression(result.expression, duration, actionNow)
     setReactionMotion(result.motion)
     const careSpeech = result.message === 'overpetted' ? pet.messages.overpetted : pickRandom(pet.dialogues.care) ?? ''

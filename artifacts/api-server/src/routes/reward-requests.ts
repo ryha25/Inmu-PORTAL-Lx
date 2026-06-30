@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, pool } from "@workspace/db";
-import { notificationsTable, pointsTable, profileTable } from "@workspace/db/schema";
+import { notificationsTable, pointsTable, profileTable, transactionsTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireAdmin, requireAuth } from "../middlewares/session";
 import { ensurePetStateTable } from "../services/pet-state-store";
@@ -60,7 +60,8 @@ function ensureRewardRequestTable() {
     for (const definition of requestColumns) {
       await pool.query(`ALTER TABLE "inmuRewardRequests" ${definition}`);
     }
-    await pool.query(`UPDATE "inmuRewardRequests" SET status = 'pending' WHERE status IS NULL OR status NOT IN ('pending', 'approved', 'rejected', 'paid')`);
+    await pool.query(`UPDATE "inmuRewardRequests" SET status = 'pending' WHERE status = 'approved'`);
+    await pool.query(`UPDATE "inmuRewardRequests" SET status = 'pending' WHERE status IS NULL OR status NOT IN ('pending', 'rejected', 'paid')`);
     await pool.query(`
       DELETE FROM "inmuRewardRequests" newer
       USING "inmuRewardRequests" older
@@ -155,13 +156,6 @@ router.post("/pet/level-rewards/claim", requireAuth, async (req, res): Promise<v
 router.get("/pet/reward-requests", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensureRewardRequestTable();
-    await ensurePetStateTable();
-    const petState = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]);
-    const storedLevel = Number(petState.rows[0]?.state?.pets?.[characterId]?.level ?? 0);
-    if (storedLevel < reward.level) {
-      res.status(400).json({ error: `Lv.${reward.level}到達後に申請できます` });
-      return;
-    }
     const { rows } = await pool.query(`
       SELECT id, "rewardType", "sourceKey", "characterId", "characterName",
              "reachedLevel", "inmuAmount", status, "adminNote", "txHash",
@@ -188,6 +182,13 @@ router.post("/pet/reward-requests", requireAuth, async (req, res): Promise<void>
 
   try {
     await ensureRewardRequestTable();
+    await ensurePetStateTable();
+    const petState = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]);
+    const storedLevel = Number(petState.rows[0]?.state?.pets?.[characterId]?.level ?? 0);
+    if (storedLevel < reward.level) {
+      res.status(400).json({ error: `Lv.${reward.level}到達後に申請できます` });
+      return;
+    }
     const owned = await pool.query(
       `SELECT 1 FROM "userPetCharacters" WHERE "userId" = $1 AND "characterId" = $2 LIMIT 1`,
       [req.userId!, characterId],
@@ -228,7 +229,7 @@ router.get("/admin/pet-reward-requests", requireAdmin, async (_req, res): Promis
       LEFT JOIN profile p ON p."userId" = r."userId"
       LEFT JOIN "user" u ON u.id = r."userId"
       ORDER BY
-        CASE r.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 WHEN 'rejected' THEN 2 ELSE 3 END,
+        CASE r.status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
         r."createdAt" DESC
       LIMIT 1000
     `);
@@ -252,9 +253,9 @@ async function updateRequests(
         "adminNote" = COALESCE($2, "adminNote"),
         "txHash" = COALESCE($3, "txHash"),
         "reviewedByAdminId" = $4,
-        "reviewedAt" = CASE WHEN $1 IN ('approved', 'rejected', 'paid') THEN NOW() ELSE "reviewedAt" END,
+        "reviewedAt" = CASE WHEN $1 IN ('rejected', 'paid') THEN NOW() ELSE "reviewedAt" END,
         "paidAt" = CASE WHEN $1 = 'paid' THEN NOW() ELSE "paidAt" END
-    WHERE id = ANY($5::int[])
+    WHERE id = ANY($5::int[]) AND status = 'pending'
     RETURNING *
   `, [status, adminNote, txHash, adminId, ids]);
   return rows;
@@ -262,7 +263,6 @@ async function updateRequests(
 
 async function notifyRequestStatus(rows: Array<Record<string, unknown>>, status: string) {
   const statusCopy: Record<string, { title: string; message: string }> = {
-    approved: { title: "INMU PET報酬申請が承認されました", message: "運営が内容を確認しました。送金完了までお待ちください。" },
     rejected: { title: "INMU PET報酬申請が却下されました", message: "申請内容をご確認ください。" },
     paid: { title: "INMU PET報酬を送金しました", message: "申請されたINMU報酬の送金が完了しました。" },
   };
@@ -279,7 +279,8 @@ async function notifyRequestStatus(rows: Array<Record<string, unknown>>, status:
 router.put("/admin/pet-reward-requests/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const status = typeof req.body?.status === "string" ? req.body.status : "";
-  if (!Number.isInteger(id) || !["pending", "approved", "rejected", "paid"].includes(status)) {
+  const txHash = typeof req.body?.txHash === "string" ? req.body.txHash.trim() : "";
+  if (!Number.isInteger(id) || !["rejected", "paid"].includes(status) || (status === "paid" && !txHash)) {
     res.status(400).json({ error: "申請IDまたはステータスが不正です" });
     return;
   }
@@ -288,13 +289,23 @@ router.put("/admin/pet-reward-requests/:id", requireAdmin, async (req, res): Pro
     const rows = await updateRequests(
       [id], status, req.adminId ?? req.userId ?? "admin",
       typeof req.body?.adminNote === "string" ? req.body.adminNote.trim() || null : null,
-      typeof req.body?.txHash === "string" ? req.body.txHash.trim() || null : null,
+      txHash || null,
     );
     if (rows.length === 0) {
       res.status(404).json({ error: "申請が見つかりません" });
       return;
     }
-    await notifyRequestStatus(rows, status);
+    if (status === "paid") {
+      await Promise.all(rows.map(row => db.insert(transactionsTable).values({
+        userId: String(row.userId),
+        type: "reward",
+        amount: String(row.inmuAmount),
+        memo: `INMU PET Lv.${Number(row.reachedLevel)}報酬（${String(row.characterName ?? "PET")}）`,
+        txHash: String(row.txHash),
+        createdAt: new Date(),
+      }))).catch(error => console.error("[RewardRequests] record paid transaction", error));
+    }
+    await notifyRequestStatus(rows, status).catch(error => console.error("[RewardRequests] notify status", error));
     res.json({ ok: true, request: rows[0] });
   } catch (error) {
     console.error("[RewardRequests] update request", error);
@@ -307,7 +318,8 @@ router.put("/admin/pet-reward-requests", requireAdmin, async (req, res): Promise
     ? [...new Set(req.body.ids.map(Number).filter(Number.isInteger))]
     : [];
   const status = typeof req.body?.status === "string" ? req.body.status : "";
-  if (ids.length === 0 || !["approved", "rejected", "paid"].includes(status)) {
+  const txHash = typeof req.body?.txHash === "string" ? req.body.txHash.trim() : "";
+  if (ids.length === 0 || !["rejected", "paid"].includes(status) || (status === "paid" && !txHash)) {
     res.status(400).json({ error: "対象申請とステータスを指定してください" });
     return;
   }
@@ -316,9 +328,19 @@ router.put("/admin/pet-reward-requests", requireAdmin, async (req, res): Promise
     const rows = await updateRequests(
       ids, status, req.adminId ?? req.userId ?? "admin",
       typeof req.body?.adminNote === "string" ? req.body.adminNote.trim() || null : null,
-      typeof req.body?.txHash === "string" ? req.body.txHash.trim() || null : null,
+      txHash || null,
     );
-    await notifyRequestStatus(rows, status);
+    if (status === "paid") {
+      await Promise.all(rows.map(row => db.insert(transactionsTable).values({
+        userId: String(row.userId),
+        type: "reward",
+        amount: String(row.inmuAmount),
+        memo: `INMU PET Lv.${Number(row.reachedLevel)}報酬（${String(row.characterName ?? "PET")}）`,
+        txHash: String(row.txHash),
+        createdAt: new Date(),
+      }))).catch(error => console.error("[RewardRequests] record bulk paid transactions", error));
+    }
+    await notifyRequestStatus(rows, status).catch(error => console.error("[RewardRequests] notify bulk status", error));
     res.json({ ok: true, updated: rows.length });
   } catch (error) {
     console.error("[RewardRequests] bulk update requests", error);

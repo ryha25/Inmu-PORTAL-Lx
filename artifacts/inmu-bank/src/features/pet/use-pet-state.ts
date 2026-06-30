@@ -20,14 +20,25 @@ export type PetCareResult = {
   expression: 'happy' | 'petted' | 'annoyed' | 'angry'
   motion: 'feed' | 'play' | 'pet' | 'angry'
   message: string
+  expressionUntil?: number
 }
 
 export const PET_PETTING_RESET_MS = 60 * 1000
 export const PET_PETTING_ANGER_COUNT = 6
+export const PET_ANGER_HOLD_MS = 30 * 1000
 export const PET_SLEEP_RECOVERY_MS = 30 * 60 * 1000
 export const PET_FULLNESS_DECAY_MS = 12 * 60 * 1000
 export const PET_SLEEPINESS_GAIN_MS = 10 * 60 * 1000
 export const PET_PREMIUM_DAILY_FREE = 3
+
+export type PetLevelCurve = { baseExp: number; perLevelExp: number }
+export const DEFAULT_PET_LEVEL_CURVE: PetLevelCurve = { baseExp: 100, perLevelExp: 80 }
+export const PET_LEVEL_CURVES: Partial<Record<PetId, PetLevelCurve>> = {}
+
+export function getRequiredPetExp(level: number, petId: PetId) {
+  const curve = PET_LEVEL_CURVES[petId] ?? DEFAULT_PET_LEVEL_CURVE
+  return curve.baseExp + Math.max(0, level - 1) * curve.perLevelExp
+}
 
 export const PET_CARE_CONFIG: Record<PetCareAction, {
   category: PetCareCategory | 'pet'
@@ -42,7 +53,7 @@ export const PET_CARE_CONFIG: Record<PetCareAction, {
   'play-yarn': { category: 'play', cooldownMs: 10 * 60 * 1000, fullness: 0, exp: 5, affection: 3, sleepiness: 5 },
   'play-ball': { category: 'play', cooldownMs: 20 * 60 * 1000, fullness: 0, exp: 10, affection: 5, sleepiness: 10 },
   'play-toy': { category: 'play', cooldownMs: 30 * 60 * 1000, fullness: 0, exp: 15, affection: 7, sleepiness: 15 },
-  pet: { category: 'pet', cooldownMs: 0, fullness: 0, exp: 1, affection: 1, sleepiness: 0 },
+  pet: { category: 'pet', cooldownMs: 0, fullness: 0, exp: 0, affection: 1, sleepiness: 0 },
 }
 
 type PetActionTimes = Record<PetCareAction, number>
@@ -88,7 +99,7 @@ function sanitizeStats(value: Partial<PetStats> | undefined, petId: PetId): PetS
   const level = clamp(readNumber(value?.level, DEFAULT_STATS.level), 1, maxLevel)
   return {
     level,
-    exp: level >= maxLevel ? 0 : clamp(readNumber(value?.exp, DEFAULT_STATS.exp), 0, level * 20 - 1),
+    exp: level >= maxLevel ? 0 : clamp(readNumber(value?.exp, DEFAULT_STATS.exp), 0, getRequiredPetExp(level, petId) - 1),
     fullness: clamp(readNumber(value?.fullness, DEFAULT_STATS.fullness)),
     sleepiness: clamp(readNumber(value?.sleepiness, DEFAULT_STATS.sleepiness)),
     affection: clamp(readNumber(value?.affection, DEFAULT_STATS.affection)),
@@ -193,12 +204,13 @@ function loadSave(source?: unknown): PetSaveData {
   }
 }
 
-function addExp(stats: PetStats, amount: number, maxLevel: number): PetStats {
+function addExp(stats: PetStats, amount: number, petId: PetId): PetStats {
+  const maxLevel = PET_BY_ID[petId].maxLevel
   if (stats.level >= maxLevel) return { ...stats, level: maxLevel, exp: 0 }
   let level = stats.level
   let exp = stats.exp + amount
-  while (level < maxLevel && exp >= level * 20) {
-    exp -= level * 20
+  while (level < maxLevel && exp >= getRequiredPetExp(level, petId)) {
+    exp -= getRequiredPetExp(level, petId)
     level += 1
   }
   return { ...stats, level, exp: level >= maxLevel ? 0 : exp }
@@ -360,12 +372,19 @@ export function usePetState() {
     if (action === 'feed-premium' && getPremiumFoodState(currentEffective.premiumFood, actionNow).totalAvailable <= 0) return null
 
     const previousPetting = save.petting[petId]
+    const currentExpression = currentEffective.expressions[petId]
+    const angryActive = action === 'pet' && currentExpression.kind === 'angry' && currentExpression.until > actionNow
     const petCount = action === 'pet'
       ? (actionNow - previousPetting.lastAt <= PET_PETTING_RESET_MS ? previousPetting.count + 1 : 1)
       : previousPetting.count
-    const angry = action === 'pet' && petCount >= PET_PETTING_ANGER_COUNT
+    const angry = angryActive || (action === 'pet' && petCount >= PET_PETTING_ANGER_COUNT)
     const result: PetCareResult = angry
-      ? { expression: 'angry', motion: 'angry', message: 'overpetted' }
+      ? {
+          expression: 'angry',
+          motion: 'angry',
+          message: 'overpetted',
+          expressionUntil: angryActive ? currentExpression.until : actionNow + PET_ANGER_HOLD_MS,
+        }
       : action === 'pet'
           ? { expression: 'petted', motion: 'pet', message: 'petted' }
           : config.category === 'feed'
@@ -386,14 +405,18 @@ export function usePetState() {
       if (action === 'feed-premium' && premiumState.totalAvailable <= 0) return current
 
       const previous = materialized.petting[currentPetId]
+      const savedExpression = materialized.expressions[currentPetId]
+      const stillAngry = action === 'pet' && savedExpression.kind === 'angry' && savedExpression.until > actionNow
       const count = action === 'pet' ? (actionNow - previous.lastAt <= PET_PETTING_RESET_MS ? previous.count + 1 : 1) : previous.count
-      const overpetted = action === 'pet' && count >= PET_PETTING_ANGER_COUNT
+      const triggeredAnger = action === 'pet' && !stillAngry && count >= PET_PETTING_ANGER_COUNT
+      const overpetted = stillAngry || triggeredAnger
+      const affectionDelta = stillAngry ? 0 : triggeredAnger ? -3 : currentConfig.affection
       const nextStats = addExp({
         ...currentStats,
         fullness: clamp(currentStats.fullness + currentConfig.fullness),
         sleepiness: clamp(currentStats.sleepiness + currentConfig.sleepiness),
-        affection: clamp(currentStats.affection + (overpetted ? -3 : currentConfig.affection)),
-      }, overpetted ? 0 : currentConfig.exp, PET_BY_ID[currentPetId].maxLevel)
+        affection: clamp(currentStats.affection + affectionDelta),
+      }, action === 'pet' ? 0 : currentConfig.exp, currentPetId)
       const startsSleeping = nextStats.sleepiness >= 100
       let premiumFood = materialized.premiumFood
       if (action === 'feed-premium') {
@@ -410,7 +433,10 @@ export function usePetState() {
           ...materialized.cooldownUntil,
           [currentPetId]: { ...materialized.cooldownUntil[currentPetId], [currentConfig.category]: actionNow + currentConfig.cooldownMs },
         },
-        petting: action === 'pet' ? { ...materialized.petting, [currentPetId]: { count: overpetted ? 0 : count, lastAt: actionNow } } : materialized.petting,
+        petting: action === 'pet' ? {
+          ...materialized.petting,
+          [currentPetId]: { count: overpetted ? 0 : count, lastAt: actionNow },
+        } : materialized.petting,
         sleepStartedAt: { ...materialized.sleepStartedAt, [currentPetId]: startsSleeping ? (materialized.sleepStartedAt[currentPetId] || actionNow) : 0 },
         premiumFood,
       }

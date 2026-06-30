@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import {
   purchaseRequestsTable,
   systemSettingsTable,
@@ -11,8 +11,52 @@ import {
 } from "@workspace/db/schema";
 import { eq, desc, and, or, gte, lt, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
+import { ensurePetStateTable } from "../services/pet-state-store";
 
 const router = Router();
+
+type PetRebateBonus = { source: "level_reward" | "skill"; label: string; rate: number; eventOnly: boolean };
+
+const PET_PURCHASE_BONUS_RULES = [
+  { characterId: "inmu-festival", minLevel: 15, source: "level_reward" as const, label: "INMUくん Lv.15報酬", rate: 5, eventOnly: false },
+  { characterId: "inmu-festival", minLevel: 1, source: "skill" as const, label: "固有スキル「810祭り‼️」", rate: 5, eventOnly: true },
+] as const;
+
+async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
+  const result = new Map<string, PetRebateBonus[]>();
+  userIds.forEach(userId => result.set(userId, []));
+  if (userIds.length === 0) return result;
+  try {
+    await ensurePetStateTable();
+    const [states, ownership] = await Promise.all([
+      pool.query(`SELECT "userId", state FROM "userPetStates" WHERE "userId" = ANY($1::text[])`, [userIds]),
+      pool.query(`SELECT "userId", "characterId" FROM "userPetCharacters" WHERE "userId" = ANY($1::text[])`, [userIds]),
+    ]);
+    const stateByUser = new Map(states.rows.map(row => [String(row.userId), row.state ?? {}]));
+    const ownedByUser = new Map<string, Set<string>>();
+    ownership.rows.forEach(row => {
+      const userId = String(row.userId);
+      const owned = ownedByUser.get(userId) ?? new Set<string>();
+      owned.add(String(row.characterId));
+      ownedByUser.set(userId, owned);
+    });
+
+    userIds.forEach(userId => {
+      const state = stateByUser.get(userId) as Record<string, any> | undefined;
+      const owned = ownedByUser.get(userId) ?? new Set<string>();
+      const bonuses = PET_PURCHASE_BONUS_RULES.filter(rule => {
+        if (!owned.has(rule.characterId) || (rule.eventOnly && !isEventDay)) return false;
+        const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
+        const skillEnabled = state?.skillState?.[rule.characterId] !== false;
+        return level >= rule.minLevel && (rule.source !== "skill" || skillEnabled);
+      }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
+      result.set(userId, bonuses);
+    });
+  } catch (error) {
+    console.error("[PurchaseRequests] PET rebate bonus lookup", error);
+  }
+  return result;
+}
 
 // ── JST当月の開始UTC日時を返す ──
 function getMonthStartUTC(now: Date): Date {
@@ -256,7 +300,7 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
 // ── 管理者: 全申請一覧（pending） ──
 router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<void> => {
   try {
-    const requests = await db.select({
+    const [requests, eventSettings] = await Promise.all([db.select({
       id: purchaseRequestsTable.id,
       userId: purchaseRequestsTable.userId,
       amount: purchaseRequestsTable.amount,
@@ -277,8 +321,20 @@ router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<
       .leftJoin(profileTable, eq(purchaseRequestsTable.userId, profileTable.userId))
       .where(eq(purchaseRequestsTable.status, "pending"))
       .orderBy(desc(purchaseRequestsTable.createdAt))
-      .limit(500);
-    res.json(requests);
+      .limit(500), getEventSettings()]);
+    const bonuses = await getPetPurchaseBonuses(
+      [...new Set(requests.map(request => request.userId))],
+      eventSettings.isEventDay,
+    );
+    res.json(requests.map(request => {
+      const petRebateBonuses = bonuses.get(request.userId) ?? [];
+      return {
+        ...request,
+        petRebateBonuses,
+        petRebateBonusRate: petRebateBonuses.reduce((total, bonus) => total + bonus.rate, 0),
+        isEventPurchase: eventSettings.isEventDay,
+      };
+    }));
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
