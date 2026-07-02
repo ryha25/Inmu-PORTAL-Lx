@@ -1,10 +1,17 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 import { ChevronRight, LockKeyhole, WalletCards } from 'lucide-react'
-import { getPhantomProvider, isMobileBrowser, openInPhantomBrowser, sendInmuWithPhantom } from '@/lib/admin-inmu-transfer'
+import {
+  fetchConnectedPhantomInmuBalance,
+  fetchInmuBalanceForWallet,
+  getPhantomProvider,
+  isMobileBrowser,
+  openInPhantomBrowser,
+  sendInmuWithPhantom,
+} from '@/lib/admin-inmu-transfer'
 import { PET_BY_ID, type PetId } from '@/features/pet/pet-data'
 
 import machineImg  from '@assets/generated_images/gacha-machine-v2.png'
@@ -13,7 +20,7 @@ import coinImg     from '@assets/IMG_6637_1782097134955.jpeg'
 import bgImg       from '@assets/generated_images/gacha-bg.png'
 import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
 
-/* ─── types ─── */
+/* 笏笏笏 types 笏笏笏 */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
 type Prize = {
   prizeId:string; label:string; type:'points'|'inmu'|'premium_food'|'character'; amount:number
@@ -22,7 +29,7 @@ type Prize = {
 type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; costInmu?:number; newPoints:number; txId?:string; paidPity?:number|null }
 type HistRow = { id:number; pullType:string; isFree:boolean; results:Prize[]; totalPoints:number; hasInmu:boolean; inmuSentStatus:string; txHash:string|null; wasGuaranteed:boolean; costPoints:number; createdAt:string }
 
-/* ─── capsule color configs (image 5 reference) ─── */
+/* 笏笏笏 capsule color configs (image 5 reference) 笏笏笏 */
 const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;label:string}> = {
   pts100: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(255,255,255,.98) 0%, rgba(210,216,222,.95) 30%, rgba(75,80,88,.86) 58%, rgba(10,11,14,.90) 82%)',
@@ -111,7 +118,7 @@ const COIN_RISES = Array.from({length:12},(_,i)=>({
   x:`${(i*8.3+5)%86}%`,sz:20+(i%4)*9,delay:(i*.28)%3.2,dur:1.8+(i%4)*.6
 }))
 
-/* ─── SE ─── */
+/* 笏笏笏 SE 笏笏笏 */
 function playJackpotSE() {
   try {
     const ctx = new AudioContext()
@@ -125,7 +132,7 @@ function playJackpotSE() {
   } catch{/**/}
 }
 
-/* ─── CSS ─── */
+/* 笏笏笏 CSS 笏笏笏 */
 const CSS=`
   @keyframes ga-float    {0%,100%{transform:translateY(0)}50%{transform:translateY(-11px)}}
   @keyframes ga-floatslow{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
@@ -185,7 +192,7 @@ const CSS=`
   .ga-shake{animation:ga-shake .55s ease-out}
 `
 
-/* ════ Background ════ */
+/* 笊絶武笊絶武 Background 笊絶武笊絶武 */
 function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:boolean}) {
   return (
     <div style={{flex:1,display:'flex',flexDirection:'column',
@@ -426,7 +433,7 @@ function ResultCapsuleReveal({ prizeId, size=210 }: {prizeId:string; size?:numbe
   )
 }
 
-/* ════ Prize Capsule: CSS-drawn colored capsule (image 5 reference) ════ */
+/* 笊絶武笊絶武 Prize Capsule: CSS-drawn colored capsule (image 5 reference) 笊絶武笊絶武 */
 function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:string;size?:number;open?:boolean;showLabel?:boolean}) {
   const c = CAPSULE[prizeId] ?? CAPSULE.pts100
   const r = size/2
@@ -537,7 +544,7 @@ function RateOrb({ id }:{id:string}) {
   )
 }
 
-/* ════ Rate Panel overlay ════ */
+/* 笊絶武笊絶武 Rate Panel overlay 笊絶武笊絶武 */
 function RatePanel() {
   return (
     <div style={{position:'absolute',top:'22%',right:0,zIndex:10,width:132,
@@ -576,7 +583,7 @@ function RatePanel() {
   )
 }
 
-/* ════ Ornate Button (image 3 reference) ════ */
+/* 笊絶武笊絶武 Ornate Button (image 3 reference) 笊絶武笊絶武 */
 function OrnateButton({ gold, enabled, onClick, label, price }:{
   gold:boolean;enabled:boolean;onClick:()=>void;label:string;price:string
 }) {
@@ -628,8 +635,8 @@ function OrnateButton({ gold, enabled, onClick, label, price }:{
   )
 }
 
-/* ════ Points Panel (image 3 reference) ════ */
-function PointsPanel({ pts, loading }:{pts:number;loading:boolean}) {
+/* 笊絶武笊絶武 Points Panel (image 3 reference) 笊絶武笊絶武 */
+function BalancePanel({ label, value, loading, suffix }:{ label:string; value:number|null; loading:boolean; suffix:string }) {
   return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
       background:'linear-gradient(135deg,rgba(14,8,2,.98),rgba(22,12,2,.98))',
@@ -641,13 +648,12 @@ function PointsPanel({ pts, loading }:{pts:number;loading:boolean}) {
           top:pos[0]==='t'?5:undefined, bottom:pos[0]==='b'?5:undefined,
           left:pos[1]==='l'?5:undefined, right:pos[1]==='r'?5:undefined,
           width:9,height:9,
-          borderTop:   pos[0]==='t'?'1.5px solid rgba(218,165,32,.55)':'none',
+          borderTop:pos[0]==='t'?'1.5px solid rgba(218,165,32,.55)':'none',
           borderBottom:pos[0]==='b'?'1.5px solid rgba(218,165,32,.55)':'none',
-          borderLeft:  pos[1]==='l'?'1.5px solid rgba(218,165,32,.55)':'none',
-          borderRight: pos[1]==='r'?'1.5px solid rgba(218,165,32,.55)':'none',
+          borderLeft:pos[1]==='l'?'1.5px solid rgba(218,165,32,.55)':'none',
+          borderRight:pos[1]==='r'?'1.5px solid rgba(218,165,32,.55)':'none',
         }}/>
       ))}
-      {/* coin stack + label */}
       <div style={{display:'flex',alignItems:'center',gap:10}}>
         <div style={{position:'relative',width:42,height:38,flexShrink:0}}>
           {[13,8,3].map((off,i)=>(
@@ -657,23 +663,28 @@ function PointsPanel({ pts, loading }:{pts:number;loading:boolean}) {
               boxShadow:`0 ${2-i}px ${6-i*2}px rgba(0,0,0,.7)`}}/>
           ))}
         </div>
-        <p style={{margin:0,fontSize:13,color:'rgba(218,165,32,.88)',fontWeight:700,
-          letterSpacing:'0.1em'}}>保有ポイント</p>
+        <p style={{margin:0,fontSize:13,color:'rgba(218,165,32,.88)',fontWeight:700,letterSpacing:'0.1em'}}>{label}</p>
       </div>
-      {/* amount */}
       <div style={{display:'flex',alignItems:'baseline',gap:3}}>
         <span style={{fontFamily:'monospace',fontWeight:900,fontSize:27,color:'#ffd700',
           textShadow:'0 0 22px rgba(255,215,0,.65),0 2px 4px rgba(0,0,0,.9)'}}>
-          {loading?'---':pts.toLocaleString()}
+          {loading ? '---' : value == null ? '未接続' : value.toLocaleString()}
         </span>
-        <span style={{fontSize:14,color:'rgba(218,165,32,.82)',fontWeight:700}}>pt</span>
-        <span style={{fontSize:16,color:'rgba(218,165,32,.55)',marginLeft:2}}>›</span>
+        <span style={{fontSize:14,color:'rgba(218,165,32,.82)',fontWeight:700}}>{suffix}</span>
       </div>
     </div>
   )
 }
 
-/* ════ Main GachaPage ════ */
+function PointsPanel({ pts, loading }:{pts:number;loading:boolean}) {
+  return <BalancePanel label="保有ポイント" value={pts} loading={loading} suffix="pt" />
+}
+
+function InmuBalancePanel({ balance, loading }:{balance:number|null;loading:boolean}) {
+  return <BalancePanel label="保有INMU" value={balance} loading={loading} suffix="INMU" />
+}
+
+/* Main GachaPage */
 function GachaModeTabs({ mode, onChange, disabled=false }: { mode:'points'|'paid'; onChange:(mode:'points'|'paid')=>void; disabled?:boolean }) {
   return (
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,padding:4,margin:'6px auto 2px',width:'min(360px,92%)',border:'1px solid rgba(218,165,32,.35)',borderRadius:8,background:'rgba(3,2,10,.78)'}}>
@@ -684,6 +695,12 @@ function GachaModeTabs({ mode, onChange, disabled=false }: { mode:'points'|'paid
       ))}
     </div>
   )
+}
+
+function capsuleIdForPrize(prize?: Prize, result?: Result | null) {
+  if (!prize) return 'pts100'
+  if (prize.type === 'character') return result?.costInmu ? prize.prizeId : 'pts5000'
+  return prize.prizeId
 }
 
 function NewPetCharacterScreen({ prize, profile, unread, onClose }:{ prize:Prize; profile:any; unread:number; onClose:()=>void }) {
@@ -699,7 +716,7 @@ function NewPetCharacterScreen({ prize, profile, unread, onClose }:{ prize:Prize
             {pet&&<img src={pet.image} alt={pet.name} style={{position:'relative',zIndex:2,maxWidth:'100%',maxHeight:'100%',objectFit:'contain',filter:'drop-shadow(0 0 32px rgba(255,215,0,.72))',animation:'ga-jpzoom .8s ease-out both'}}/>}
           </div>
           <p style={{margin:0,color:'#fff',fontSize:28,fontWeight:900}}>{pet?.name??prize.label}</p>
-          <p style={{margin:'5px 0 20px',color:'#ffd700',fontWeight:800}}>★3 ・ Lv.1</p>
+          <p style={{margin:'5px 0 20px',color:'#ffd700',fontWeight:800}}>笘・ 繝ｻ Lv.1</p>
           <button type="button" onClick={onClose} style={{width:'min(320px,90%)',height:52,borderRadius:8,border:'1px solid #ffe47b',background:'linear-gradient(135deg,#ffe47b,#c78a00)',fontWeight:900,color:'#160b00',boxShadow:'0 0 24px rgba(255,190,20,.4)'}}>OK</button>
         </div>
       </PageBg>
@@ -724,6 +741,8 @@ export function GachaPage() {
   const [paidBusy,setPaidBusy] = useState(false)
   const [paidPity,setPaidPity] = useState(0)
   const [paidStatus,setPaidStatus] = useState('')
+  const [inmuBalance,setInmuBalance] = useState<number|null>(null)
+  const [inmuBalanceLoading,setInmuBalanceLoading] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
 
   const loadPts = useCallback(async()=>{
@@ -733,6 +752,29 @@ export function GachaPage() {
     }catch{/**/}finally{setPtsLoading(false)}
   },[])
   useEffect(()=>{loadPts()},[loadPts])
+
+  const loadInmuBalance = useCallback(async(connect=false)=>{
+    setInmuBalanceLoading(true)
+    try {
+      const live = await fetchConnectedPhantomInmuBalance(connect)
+      if (live !== null) {
+        setInmuBalance(live)
+        return
+      }
+      const wallet = (profile as any)?.solWallet ?? (profile as any)?.walletAddress ?? ''
+      if (wallet) setInmuBalance(await fetchInmuBalanceForWallet(wallet))
+      else setInmuBalance(null)
+    } catch {
+      setInmuBalance(null)
+    } finally {
+      setInmuBalanceLoading(false)
+    }
+  },[profile])
+
+  useEffect(()=>{void loadInmuBalance(false)},[loadInmuBalance])
+  useEffect(()=>{
+    if (gachaMode === 'paid') void loadInmuBalance(false)
+  },[gachaMode,loadInmuBalance])
 
   const loadHist = useCallback(async()=>{
     try{
@@ -785,19 +827,19 @@ export function GachaPage() {
   async function spin(type:'single'|'multi'){
     if(phase!=='idle')return
     const cost=type==='multi'?10000:1000
-    if(pts<cost){toast.error(`ポイント不足 (必要: ${cost.toLocaleString()}pt)`);return}
+    if(pts<cost){toast.error(`繝昴う繝ｳ繝井ｸ崎ｶｳ (蠢・ｦ・ ${cost.toLocaleString()}pt)`);return}
     try{
       const res=await fetch('/api/pet-gacha/points',{
         method:'POST',credentials:'include',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({pullType:type})
       })
-      if(!res.ok){const e=await res.json().catch(()=>({})) as {error?:string};throw new Error(e.error??'エラー')}
+      if(!res.ok){const e=await res.json().catch(()=>({})) as {error?:string};throw new Error(e.error??'繧ｨ繝ｩ繝ｼ')}
       const data=await res.json() as Result
-      const r:Result={...data,hasInmu:Boolean(data.hasInmu),wasGuaranteed:Boolean(data.wasGuaranteed)}
+      const r:Result={...data,hasInmu:Boolean(data.hasInmu),wasGuaranteed:Boolean(data.hasInmu)}
       setResult(r);setRevIdx(0);setPts(r.newPoints)
       setPhase(r.wasGuaranteed?'guaranteed':'inserting')
-    }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
+    }catch(e){toast.error(e instanceof Error?e.message:'繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆')}
   }
 
   async function spinFree(){
@@ -808,12 +850,13 @@ export function GachaPage() {
         method:'POST',credentials:'include',
         headers:{'Content-Type':'application/json'},
       })
-      if(!res.ok){const e=await res.json().catch(()=>({})) as {error?:string};throw new Error(e.error??'エラー')}
+      if(!res.ok){const e=await res.json().catch(()=>({})) as {error?:string};throw new Error(e.error??'繧ｨ繝ｩ繝ｼ')}
       const r=await res.json() as Result
-      setResult(r);setRevIdx(0);setPts(r.newPoints)
+      const normalized:Result={...r,hasInmu:Boolean(r.hasInmu),wasGuaranteed:Boolean(r.hasInmu)}
+      setResult(normalized);setRevIdx(0);setPts(normalized.newPoints)
       setFreeUsed(true)
-      setPhase(r.wasGuaranteed?'guaranteed':'inserting')
-    }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
+      setPhase(normalized.wasGuaranteed?'guaranteed':'inserting')
+    }catch(e){toast.error(e instanceof Error?e.message:'繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆')}
     finally{setFreeLoading(false)}
   }
 
@@ -823,13 +866,14 @@ export function GachaPage() {
       body:JSON.stringify({txId,pullType}),
     })
     const data=await response.json().catch(()=>({})) as Result&{error?:string}
-    if(!response.ok)throw new Error(data.error??'有償ガチャの確定に失敗しました')
+    if(!response.ok)throw new Error(data.error??'譛牙─繧ｬ繝√Ε縺ｮ遒ｺ螳壹↓螟ｱ謨励＠縺ｾ縺励◆')
     localStorage.removeItem('inmu-pet-paid-gacha-pending')
     const hasCharacter=data.results.some(prize=>prize.type==='character')
     setResult({...data,hasInmu:false,wasGuaranteed:hasCharacter,costPoints:0})
     setPts(data.newPoints)
     setPaidPity(Number(data.paidPity??0))
     setRevIdx(0)
+    void loadInmuBalance(false)
     setPhase(hasCharacter?'guaranteed':'inserting')
   }
 
@@ -839,18 +883,18 @@ export function GachaPage() {
     if(!getPhantomProvider()){
       if(isMobileBrowser()){
         localStorage.setItem('inmu-pet-paid-gacha-intent',pullType)
-        toast.info('Phantomアプリで開きます…')
+        toast.info('Phantom繧｢繝励Μ縺ｧ髢九″縺ｾ縺吮ｦ')
         window.setTimeout(openInPhantomBrowser,400)
-      }else toast.error('Phantomウォレットをインストールしてください')
+      }else toast.error('Phantom繧ｦ繧ｩ繝ｬ繝・ヨ繧偵う繝ｳ繧ｹ繝医・繝ｫ縺励※縺上□縺輔＞')
       return
     }
     setPaidBusy(true)
     try{
       const txId=await sendInmuWithPhantom('Hatp1W4QCzr7GAVbnQqKTVW2BmX7sRaf7jeHJMvETeU4',amount,setPaidStatus)
       localStorage.setItem('inmu-pet-paid-gacha-pending',JSON.stringify({txId,pullType}))
-      setPaidStatus('送金を確認しています…')
+      setPaidStatus('騾・≡繧堤｢ｺ隱阪＠縺ｦ縺・∪縺吮ｦ')
       await completePaidGacha(txId,pullType)
-    }catch(error){toast.error(error instanceof Error?error.message:'有償ガチャに失敗しました')}
+    }catch(error){toast.error(error instanceof Error?error.message:'譛牙─繧ｬ繝√Ε縺ｫ螟ｱ謨励＠縺ｾ縺励◆')}
     finally{setPaidBusy(false);setPaidStatus('')}
   }
 
@@ -864,12 +908,12 @@ export function GachaPage() {
       const pending=JSON.parse(pendingRaw) as {txId:string;pullType:'single'|'eleven'}
       setPaidBusy(true)
       void completePaidGacha(pending.txId,pending.pullType)
-        .catch(error=>toast.error(error instanceof Error?error.message:'送金済みガチャの復旧に失敗しました'))
+        .catch(error=>toast.error(error instanceof Error?error.message:'騾・≡貂医∩繧ｬ繝√Ε縺ｮ蠕ｩ譌ｧ縺ｫ螟ｱ謨励＠縺ｾ縺励◆'))
         .finally(()=>setPaidBusy(false))
     }catch{localStorage.removeItem('inmu-pet-paid-gacha-pending')}
   },[])
 
-  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);loadPts();loadHist();loadFreeStatus();loadCommerceStatus()}
+  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);loadPts();loadHist();loadFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
   const isMulti=(result?.results.length??0)>1
 
   const newCharacter=result?.results.find(prize=>prize.type==='character'&&prize.isNewCharacter)
@@ -877,12 +921,12 @@ export function GachaPage() {
     return <NewPetCharacterScreen prize={newCharacter} profile={profile} unread={unread} onClose={reset}/>
   }
 
-  /* ════ JACKPOT SCREEN ════ */
+  /* 笊絶武笊絶武 JACKPOT SCREEN 笊絶武笊絶武 */
   if(phase==='done'&&result?.hasInmu){
     return <JackpotScreen pts={pts} onReset={reset} profile={profile} unread={unread} />
   }
 
-  /* ════ IDLE SCREEN ════ */
+  /* 笊絶武笊絶武 IDLE SCREEN 笊絶武笊絶武 */
   if(phase==='idle'&&gachaMode==='paid')return(
     <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
       <style>{CSS}</style>
@@ -893,6 +937,9 @@ export function GachaPage() {
             <WalletCards style={{width:42,height:42,color:'#ffd65a',filter:'drop-shadow(0 0 14px rgba(255,200,40,.65))'}}/>
             <h1 style={{margin:'10px 0 4px',fontFamily:'Georgia,serif',fontSize:25,color:'#f4c84b',letterSpacing:'.12em'}}>INMU PET PREMIUM</h1>
             <p style={{margin:0,color:'rgba(255,255,255,.62)',fontSize:11}}>ニャルシアン・拓也・レオン 各1.2%</p>
+            <div style={{width:'min(430px,100%)',marginTop:14}}>
+              <InmuBalancePanel balance={inmuBalance} loading={inmuBalanceLoading}/>
+            </div>
             <div style={{marginTop:18,width:'min(430px,100%)',padding:16,borderRadius:8,border:'1px solid rgba(218,165,32,.48)',background:'rgba(8,4,14,.82)',boxShadow:'0 14px 45px rgba(0,0,0,.42)'}}>
               <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#f3d97c'}}><span>50連キャラ確定まで</span><strong>{50-paidPity}回</strong></div>
               <div style={{height:6,marginTop:8,borderRadius:99,background:'rgba(255,255,255,.08)',overflow:'hidden'}}><div style={{height:'100%',width:`${paidPity/50*100}%`,background:'linear-gradient(90deg,#a855f7,#ffd700)',boxShadow:'0 0 12px #d8a900'}}/></div>
@@ -916,141 +963,55 @@ export function GachaPage() {
     <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
       <style>{CSS}</style>
       <PageBg>
-        {/* ── Fixed non-scrolling layout matching reference screen 3 ── */}
         <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode}/>
-
-          {/* Title (compact) */}
           <div style={{textAlign:'center',padding:'4px 16px 0',flexShrink:0}}>
-            <h1 className="ga-pulse" style={{margin:0,fontSize:22,fontWeight:900,color:'#daa520',
-              fontFamily:'Georgia,serif',letterSpacing:'0.16em',
-              textShadow:'0 2px 22px rgba(218,165,32,.82)'}}>
-              ✦ INMU GACHA ✦
-            </h1>
-            <p style={{margin:'1px 0 0',fontSize:9,color:'rgba(218,165,32,.42)',
-              letterSpacing:'0.14em',fontWeight:600}}>— PREMIUM CAPSULE MACHINE —</p>
+            <h1 className="ga-pulse" style={{margin:0,fontSize:22,fontWeight:900,color:'#daa520',fontFamily:'Georgia,serif',letterSpacing:'0.16em',textShadow:'0 2px 22px rgba(218,165,32,.82)'}}>INMU GACHA</h1>
+            <p style={{margin:'1px 0 0',fontSize:9,color:'rgba(218,165,32,.42)',letterSpacing:'0.14em',fontWeight:600}}>PREMIUM CAPSULE MACHINE</p>
           </div>
-
-          {/* ── Machine + Mascot + Rate Panel — flex:1, fills all available space ── */}
-          <div style={{flex:1,position:'relative',display:'flex',
-            justifyContent:'center',alignItems:'center',minHeight:0,overflow:'hidden'}}>
-            <img src={machineImg} alt="INMU GACHA Machine"
-              className="ga-machinepulse"
-              style={{maxHeight:'100%',width:'auto',maxWidth:'82vw',
-                display:'block',objectFit:'contain',
-                filter:'drop-shadow(0 22px 66px rgba(0,0,0,.98)) drop-shadow(0 0 30px rgba(184,134,11,.3))'}}/>
-            {/* Mascot bottom-left */}
+          <div style={{flex:1,position:'relative',display:'flex',justifyContent:'center',alignItems:'center',minHeight:0,overflow:'hidden'}}>
+            <img src={machineImg} alt="INMU GACHA Machine" className="ga-machinepulse" style={{maxHeight:'100%',width:'auto',maxWidth:'82vw',display:'block',objectFit:'contain',filter:'drop-shadow(0 22px 66px rgba(0,0,0,.98)) drop-shadow(0 0 30px rgba(184,134,11,.3))'}}/>
             <div className="ga-floatslow" style={{position:'absolute',bottom:0,left:'2%',zIndex:8}}>
-              <img src={mascotImg} alt="INMUくん" style={{
-                width:'min(100px,24vw)',height:'auto',objectFit:'contain',
-                filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))'}}/>
+              <img src={mascotImg} alt="INMUくん" style={{width:'min(100px,24vw)',height:'auto',objectFit:'contain',filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))'}}/>
             </div>
-            {/* Rate panel */}
             <RatePanel />
           </div>
-
-          {/* ── Bottom controls (non-fixed, natural flex child) ── */}
-          <div style={{flexShrink:0,
-            background:'linear-gradient(to top,rgba(2,1,10,.99) 84%,transparent)',
-            backdropFilter:'blur(16px)',
-            padding:`6px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))`}}>
-
-            {/* 無料ガチャボタン */}
-            <button type="button" disabled={freeUsed||freeLoading||phase!=='idle'}
-              onClick={spinFree}
-              style={{
-                width:'100%',marginBottom:8,padding:'10px 16px',
-                border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,
-                borderRadius:8,cursor:freeUsed||freeLoading?'not-allowed':'pointer',
-                background:freeUsed
-                  ?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))'
-                  :'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',
-                opacity:freeUsed?0.6:1,
-                position:'relative',overflow:'hidden',
-                boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',
-                transition:'all .2s',
-              }}>
-              {!freeUsed&&<div style={{position:'absolute',top:0,left:'-32%',width:'32%',height:'100%',
-                background:'rgba(255,255,255,.07)',transform:'skewX(-22deg)',
-                animation:'ga-shimmer 4s ease-in-out infinite',pointerEvents:'none'}}/>}
+          <div style={{flexShrink:0,background:'linear-gradient(to top,rgba(2,1,10,.99) 84%,transparent)',backdropFilter:'blur(16px)',padding:'6px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))'}}>
+            <button type="button" disabled={freeUsed||freeLoading||phase!=='idle'} onClick={spinFree} style={{width:'100%',marginBottom:8,padding:'10px 16px',border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:freeUsed||freeLoading?'not-allowed':'pointer',background:freeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:freeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
-                  <p style={{margin:0,fontSize:14,fontWeight:800,
-                    color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',
-                    letterSpacing:'0.04em'}}>
-                    {freeLoading?'処理中…': freeUsed?'🎁 本日の無料ガチャは使用済みです':'🎁 1日1回 無料ガチャ'}
-                  </p>
-                  {freeUsed&&freeNextReset&&(
-                    <p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>
-                      リセット: {new Date(freeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
-                    </p>
-                  )}
-                  {!freeUsed&&(
-                    <p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なし・通常ガチャと同じ演出</p>
-                  )}
+                  <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{freeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです':'1日1回 無料ガチャ'}</p>
+                  {freeUsed&&freeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(freeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
+                  {!freeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで通常ガチャを引けます</p>}
                 </div>
                 {!freeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
               </div>
             </button>
-
-            {/* Buttons */}
             <div style={{display:'flex',gap:10,marginBottom:8}}>
-              <OrnateButton gold enabled={pts>=1000&&!ptsLoading}
-                onClick={()=>spin('single')} label="1連ガチャ" price="1,000 pt"/>
-              <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading}
-                onClick={()=>spin('multi')} label="10連ガチャ" price="10,000 pt"/>
+              <OrnateButton gold enabled={pts>=1000&&!ptsLoading} onClick={()=>spin('single')} label="1連ガチャ" price="1,000 pt"/>
+              <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading} onClick={()=>spin('multi')} label="10連ガチャ" price="10,000 pt"/>
             </div>
-
-            {/* Points */}
             <PointsPanel pts={pts} loading={ptsLoading}/>
-
-            {/* Compact history (no toggle) */}
-            <div style={{marginTop:7,
-              background:'linear-gradient(135deg,rgba(12,6,2,.92),rgba(6,3,16,.92))',
-              border:'1px solid rgba(184,134,11,.4)',borderRadius:10,
-              backdropFilter:'blur(8px)'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
-                padding:'6px 12px 4px'}}>
+            <div style={{marginTop:7,background:'linear-gradient(135deg,rgba(12,6,2,.92),rgba(6,3,16,.92))',border:'1px solid rgba(184,134,11,.4)',borderRadius:10,backdropFilter:'blur(8px)'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 12px 4px'}}>
                 <span style={{fontSize:11,fontWeight:700,color:'rgba(218,165,32,.88)',letterSpacing:'0.08em'}}>ガチャ履歴</span>
-                <span style={{fontSize:10,color:'rgba(218,165,32,.5)'}}>もっと見る ›</span>
+                <span style={{fontSize:10,color:'rgba(218,165,32,.5)'}}>最新3件</span>
               </div>
               <div style={{borderTop:'1px solid rgba(184,134,11,.15)'}}>
-                {history.length===0
-                  ?<p style={{textAlign:'center',fontSize:10,color:'rgba(255,255,255,.3)',padding:'6px 0',margin:0}}>
-                      ガチャ履歴がありません
-                    </p>
-                  :history.slice(0,3).map((row,i)=>{
-                      const label=row.hasInmu?'10,000 INMUを獲得しました！'
-                        :row.totalPoints>0?`${row.totalPoints.toLocaleString()} ptを獲得しました`
-                        :`${row.costPoints.toLocaleString()}pt 消費`
-                      const time=new Date(row.createdAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
-                      return (
-                        <div key={row.id} style={{display:'flex',alignItems:'center',
-                          padding:'5px 12px',
-                          borderBottom:i<Math.min(history.length-1,2)?'1px solid rgba(184,134,11,.1)':'none'}}>
-                          <span style={{fontSize:9,color:'rgba(255,255,255,.5)',minWidth:60,flexShrink:0}}>
-                            {profile?.displayName??'ユーザー'}
-                          </span>
-                          <span style={{fontSize:9,color:row.hasInmu?'#ffd700':'rgba(255,255,255,.7)',
-                            flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginLeft:4}}>
-                            {label}
-                          </span>
-                          <span style={{fontSize:9,color:'rgba(255,255,255,.3)',flexShrink:0,marginLeft:6}}>
-                            {time}
-                          </span>
-                        </div>
-                      )
-                    })}
+                {history.length===0 ? <p style={{textAlign:'center',fontSize:10,color:'rgba(255,255,255,.3)',padding:'6px 0',margin:0}}>ガチャ履歴がありません</p> : history.slice(0,3).map((row,i)=>{
+                  const label=row.hasInmu?'10,000 INMUを獲得しました':row.totalPoints>0?`${row.totalPoints.toLocaleString()} ptを獲得しました`:`${row.costPoints.toLocaleString()}pt 消費`
+                  const time=new Date(row.createdAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
+                  return <div key={row.id} style={{display:'flex',alignItems:'center',padding:'5px 12px',borderBottom:i<Math.min(history.length-1,2)?'1px solid rgba(184,134,11,.1)':'none'}}><span style={{fontSize:9,color:'rgba(255,255,255,.5)',minWidth:60,flexShrink:0}}>{profile?.displayName??'ユーザー'}</span><span style={{fontSize:9,color:row.hasInmu?'#ffd700':'rgba(255,255,255,.7)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginLeft:4}}>{label}</span><span style={{fontSize:9,color:'rgba(255,255,255,.3)',flexShrink:0,marginLeft:6}}>{time}</span></div>
+                })}
               </div>
             </div>
           </div>
-
         </div>
       </PageBg>
     </AppShell>
   )
 
-  /* ════ ANIMATION + RESULT SCREENS ════ */
+  /* ANIMATION + RESULT SCREENS */
   return (
     <div style={{position:'fixed',inset:0,zIndex:9000,display:'flex',flexDirection:'column',
       background:'#02010a',overflow:'hidden'}}>
@@ -1072,15 +1033,14 @@ export function GachaPage() {
                 border:'1px solid rgba(218,165,32,.48)',borderRadius:12,
                 padding:'9px 14px',color:'#daa520',fontSize:12,cursor:'pointer',fontWeight:800,
                 boxShadow:'0 6px 24px rgba(0,0,0,.55)'}}>
-              ガチャ画面へ戻る
-            </button>
+              繧ｬ繝√Ε逕ｻ髱｢縺ｸ謌ｻ繧・            </button>
           )}
           {phase==='lever'&&<GeneratedScene kind="lever" zIndex={70}/>}
           {phase==='space'&&<GeneratedScene kind="space" prizeId={result?.results[0]?.prizeId??'pts100'} zIndex={70}/>}
-          {phase==='falling'&&<GeneratedScene kind="falling" prizeId={result?.results[0]?.prizeId??'pts100'} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
-          {phase==='opening'&&<GeneratedScene kind="opening" prizeId={result?.results[0]?.prizeId??'pts100'} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
+          {phase==='falling'&&<GeneratedScene kind="falling" prizeId={capsuleIdForPrize(result?.results[0],result)} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
+          {phase==='opening'&&<GeneratedScene kind="opening" prizeId={capsuleIdForPrize(result?.results[0],result)} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
 
-          {/* ════ Phase 1: GUARANTEED ════ */}
+          {/* 笊絶武笊絶武 Phase 1: GUARANTEED 笊絶武笊絶武 */}
           {phase==='guaranteed'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'center',justifyContent:'center',gap:18,padding:'18px 0',
@@ -1111,7 +1071,7 @@ export function GachaPage() {
                 background:'rgba(24,10,0,.92)',border:'2px solid #daa520',
                 borderRadius:22,padding:'14px 38px',textAlign:'center',backdropFilter:'blur(10px)'}}>
                 <p style={{margin:0,fontWeight:900,fontSize:22,color:'#ffd700',letterSpacing:'0.08em',
-                  textShadow:'0 0 28px rgba(255,215,0,.9)'}}>🎊 INMU 確定！ 🎊</p>
+                  textShadow:'0 0 28px rgba(255,215,0,.9)'}}>至 INMU 遒ｺ螳夲ｼ・至</p>
                 <div style={{display:'flex',gap:9,justifyContent:'center',marginTop:8}}>
                   {['✦','✧','★','✧','✦'].map((s,i)=>(
                     <span key={i} style={{fontSize:18,color:'#ffd700',
@@ -1122,13 +1082,13 @@ export function GachaPage() {
             </div>
           )}
 
-          {/* ════ Phase 2: COIN INSERT — machine top close-up, coin falls into slot ════ */}
+          {/* 笊絶武笊絶武 Phase 2: COIN INSERT 窶・machine top close-up, coin falls into slot 笊絶武笊絶武 */}
           {phase==='inserting'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
                 letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
-                position:'relative',zIndex:12}}>コイン投入</p>
+                position:'relative',zIndex:12}}>繧ｳ繧､繝ｳ謚募・</p>
 
               {/* Machine cropped to show only the top dome area */}
               <div style={{width:'100%',flex:1,minHeight:0,borderRadius:0,overflow:'hidden',
@@ -1137,7 +1097,7 @@ export function GachaPage() {
                 border:'none',
                 boxShadow:'inset 0 0 90px rgba(0,0,0,.9),0 0 32px rgba(0,0,0,.8)'}}>
 
-                {/* Machine image — only top portion visible */}
+                {/* Machine image 窶・only top portion visible */}
                 <img src={machineImg} alt="" style={{
                   position:'absolute',
                   width:'min(520px,118vw)',
@@ -1146,7 +1106,7 @@ export function GachaPage() {
                   opacity:.34,
                   filter:'drop-shadow(0 4px 32px rgba(0,0,0,.9))'}}/>
 
-                {/* Focus vignette: spotlight on coin slot (~12% from machine top ≈ 46px) */}
+                {/* Focus vignette: spotlight on coin slot (~12% from machine top 竕・46px) */}
                 <div style={{position:'absolute',inset:0,pointerEvents:'none',
                   background:'radial-gradient(ellipse 62% 38% at 50% 22%, transparent 0%, rgba(0,0,0,0) 36%, rgba(0,0,0,.78) 72%, rgba(0,0,0,.96) 100%)'}}/>
 
@@ -1175,7 +1135,7 @@ export function GachaPage() {
                   ))}
                 </div>
 
-                {/* INMU coin — falls from above container into slot */}
+                {/* INMU coin 窶・falls from above container into slot */}
                 <img src={coinImg} style={{
                   position:'absolute',left:'50%',
                   width:136,height:136,borderRadius:'50%',objectFit:'cover',
@@ -1207,18 +1167,17 @@ export function GachaPage() {
 
               <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em',
                 textAlign:'center',padding:'8px 0 14px'}}>
-                INMUコインを投入します
-              </p>
+                INMU繧ｳ繧､繝ｳ繧呈兜蜈･縺励∪縺・              </p>
             </div>
           )}
 
-          {/* ════ Phase 3: LEVER — CSS-only lever mechanism close-up ════ */}
+          {/* 笊絶武笊絶武 Phase 3: LEVER 窶・CSS-only lever mechanism close-up 笊絶武笊絶武 */}
           {false&&phase==='lever'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
                 letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
-                position:'relative',zIndex:12}}>レバー回転</p>
+                position:'relative',zIndex:12}}>繝ｬ繝舌・蝗櫁ｻ｢</p>
               <div style={{position:'absolute',left:'28%',top:'36%',width:260,height:160,zIndex:48,
                 pointerEvents:'none',filter:'drop-shadow(0 0 34px rgba(255,190,50,.72)) drop-shadow(0 16px 24px rgba(0,0,0,.82))'}}>
                 <div style={{position:'absolute',left:0,top:58,width:72,height:72,borderRadius:'50%',
@@ -1264,10 +1223,10 @@ export function GachaPage() {
                     boxShadow:'0 0 8px rgba(218,165,32,.48), inset -2px -2px 3px rgba(0,0,0,.65)'}}/>
                 ))}
 
-                {/* ── LEVER ASSEMBLY (centered, 3D metallic quality) ── */}
+                {/* 笏笏 LEVER ASSEMBLY (centered, 3D metallic quality) 笏笏 */}
                 <div style={{position:'absolute',left:'41%',top:'7%',transform:'translateX(-50%)'}}>
 
-                  {/* Cylindrical post — deep metallic gold gradient for 3D cylinder look */}
+                  {/* Cylindrical post 窶・deep metallic gold gradient for 3D cylinder look */}
                   <div style={{
                     width:62,height:214,borderRadius:18,position:'relative',
                     background:'linear-gradient(90deg,#030100 0%,#150900 5%,#402300 13%,#8e5600 22%,#d49a22 32%,#fff1a8 42%,#c88710 52%,#7a4500 66%,#291300 84%,#050200 100%)',
@@ -1296,7 +1255,7 @@ export function GachaPage() {
                       }}/>
                     ))}
 
-                    {/* ── LEVER ARM (pivots from post top-right) ── */}
+                    {/* 笏笏 LEVER ARM (pivots from post top-right) 笏笏 */}
                     <div style={{
                       position:'absolute',top:24,left:'88%',
                       transformOrigin:'0px 14px',
@@ -1306,14 +1265,14 @@ export function GachaPage() {
                         background:'radial-gradient(circle at 32% 25%,#fff6c7 0%,#dca72a 26%,#805100 62%,#160900 100%)',
                         border:'2px solid rgba(255,224,120,.45)',
                         boxShadow:'0 0 28px rgba(218,165,32,.7),0 8px 18px rgba(0,0,0,.74),inset -5px -5px 10px rgba(0,0,0,.55)'}}/>
-                      {/* Arm rod — cylindrical tube */}
+                      {/* Arm rod 窶・cylindrical tube */}
                       <div style={{
                         width:118,height:26,borderRadius:13,
                         background:'linear-gradient(180deg,#060200 0%,#2a1600 10%,#8f5b00 22%,#d8a21d 36%,#fff0a2 48%,#d19610 61%,#794500 78%,#160900 100%)',
                         border:'1px solid rgba(255,224,120,.25)',
                         boxShadow:'0 8px 26px rgba(0,0,0,.78),0 0 18px rgba(218,165,32,.32),inset 0 2px 2px rgba(255,255,220,.3)',position:'relative'
                       }}>
-                        {/* Arm knob — 3D metallic sphere with specular highlight */}
+                        {/* Arm knob 窶・3D metallic sphere with specular highlight */}
                         <div style={{
                           position:'absolute',right:-43,top:-29,
                           width:84,height:84,borderRadius:'50%',
@@ -1327,7 +1286,7 @@ export function GachaPage() {
                       </div>
                     </div>
 
-                    {/* Bottom knob — large 3D metallic sphere */}
+                    {/* Bottom knob 窶・large 3D metallic sphere */}
                     <div style={{
                       position:'absolute',bottom:-34,left:'50%',transform:'translateX(-50%)',
                       width:86,height:86,borderRadius:'50%',
@@ -1339,14 +1298,14 @@ export function GachaPage() {
                     </div>
                   </div>
 
-                  {/* Large rotation arrow — bold & glowing */}
+                  {/* Large rotation arrow 窶・bold & glowing */}
                   <div style={{
                     position:'absolute',bottom:-58,right:-108,
                     fontSize:96,lineHeight:1,
                     color:'rgba(255,211,74,.82)',fontWeight:900,
                     textShadow:'0 0 26px rgba(218,165,32,.86),0 0 58px rgba(218,165,32,.45)',
                     transform:'scaleX(.86)'
-                  }}>↷</div>
+                  }}>竊ｷ</div>
                 </div>
 
                 {/* Gold sparkles */}
@@ -1354,27 +1313,26 @@ export function GachaPage() {
                   <span key={i} style={{position:'absolute',left:p.l,top:p.t,
                     fontSize:14+i*2,color:'#ffd700',
                     textShadow:'0 0 14px rgba(255,215,0,.98)',
-                    animation:`ga-sparkle ${.52+i*.18}s ease-in-out ${i*.14}s infinite`}}>✦</span>
+                    animation:`ga-sparkle ${.52+i*.18}s ease-in-out ${i*.14}s infinite`}}>笨ｦ</span>
                 ))}
               </div>
 
               <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em',
                 textAlign:'center',padding:'8px 0 14px'}}>
-                レバーを回すとガチャが動き出します
-              </p>
+                繝ｬ繝舌・繧貞屓縺吶→繧ｬ繝√Ε縺悟虚縺榊・縺励∪縺・              </p>
             </div>
           )}
 
-          {/* ════ Phase 4: SPACE — cosmic scene, beam from below, coins orbit, glass orb ════ */}
+          {/* 笊絶武笊絶武 Phase 4: SPACE 窶・cosmic scene, beam from below, coins orbit, glass orb 笊絶武笊絶武 */}
           {false&&phase==='space'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
               <p className="ga-pulse" style={{fontSize:16,fontWeight:800,color:'#daa520',
                 letterSpacing:'0.22em',margin:0,textAlign:'center',padding:'14px 0 8px',
-                position:'relative',zIndex:12}}>カプセル排出</p>
+                position:'relative',zIndex:12}}>繧ｫ繝励そ繝ｫ謗貞・</p>
               <div style={{position:'absolute',left:'50%',top:'58%',zIndex:48,pointerEvents:'none',
                 animation:'ga-capportal 2.05s cubic-bezier(.18,.78,.24,1) forwards'}}>
-                <CapsuleVisual prizeId={result?.results[0]?.prizeId??'pts100'} size={170}/>
+                <CapsuleVisual prizeId={capsuleIdForPrize(result?.results[0],result)} size={170}/>
                 <div style={{position:'absolute',inset:-30,borderRadius:'50%',
                   background:'radial-gradient(circle,rgba(255,230,100,.46),rgba(218,165,32,.16) 42%,transparent 70%)',
                   filter:'blur(8px)',animation:'ga-stageflash .8s ease-in-out infinite'}}/>
@@ -1411,7 +1369,7 @@ export function GachaPage() {
                     animation:'ga-stageflash 1.2s ease-in-out infinite'}}/>
                 </div>
 
-                {/* ── Cone light beam — wide at ground, narrows going up ── */}
+                {/* 笏笏 Cone light beam 窶・wide at ground, narrows going up 笏笏 */}
                 {/* Outer soft cone */}
                 <div style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
                   width:'112%',height:'96%',zIndex:1,
@@ -1469,7 +1427,7 @@ export function GachaPage() {
                   background:'radial-gradient(ellipse,rgba(255,200,0,.68) 0%,rgba(218,165,32,.32) 44%,transparent 70%)',
                   filter:'blur(9px)',zIndex:2}}/>
 
-                {/* ── Amber glass orb materializes (warm golden glow) ── */}
+                {/* 笏笏 Amber glass orb materializes (warm golden glow) 笏笏 */}
                 <div style={{position:'absolute',bottom:'22%',left:'50%',transform:'translateX(-50%)',
                   animation:'ga-reveal .7s ease-out .32s both',zIndex:8}}>
                   <div style={{position:'relative',width:122,height:122,borderRadius:'50%',
@@ -1505,12 +1463,11 @@ export function GachaPage() {
 
               <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,textAlign:'center',
                 letterSpacing:'0.12em',padding:'8px 0 14px'}}>
-                宇宙の神秘の中、カプセルが排出されます
-              </p>
+                螳・ｮ吶・逾樒ｧ倥・荳ｭ縲√き繝励そ繝ｫ縺梧賜蜃ｺ縺輔ｌ縺ｾ縺・              </p>
             </div>
           )}
 
-          {/* ════ Phase 5: FALLING — glass orb falls through starfield, lands with shockwave ════ */}
+          {/* 笊絶武笊絶武 Phase 5: FALLING 窶・glass orb falls through starfield, lands with shockwave 笊絶武笊絶武 */}
           {false&&phase==='falling'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'stretch',gap:0,width:'100%',height:'100%'}}>
@@ -1519,7 +1476,7 @@ export function GachaPage() {
                 position:'relative',zIndex:12}}>カプセル落下</p>
               <div style={{position:'absolute',left:'50%',zIndex:48,pointerEvents:'none',
                 animation:'ga-capdropfull 1.95s cubic-bezier(.22,.72,.18,1) forwards'}}>
-                <CapsuleVisual prizeId={result?.results[0]?.prizeId??'pts100'} size={190}/>
+                <CapsuleVisual prizeId={capsuleIdForPrize(result?.results[0],result)} size={190}/>
                 <div style={{position:'absolute',inset:-26,borderRadius:'50%',
                   background:'radial-gradient(circle,rgba(255,240,140,.38),rgba(218,165,32,.18) 44%,transparent 72%)',
                   filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
@@ -1627,25 +1584,24 @@ export function GachaPage() {
                   <div key={i} style={{position:'absolute',left:p.l,bottom:p.b,
                     fontSize:12,color:'#ffd700',
                     textShadow:'0 0 10px rgba(255,215,0,.9)',
-                    animation:`ga-sparkle ${.5+i*.16}s ease-in-out ${.8+i*.12}s infinite`}}>✦</div>
+                    animation:`ga-sparkle ${.5+i*.16}s ease-in-out ${.8+i*.12}s infinite`}}>笨ｦ</div>
                 ))}
               </div>
 
               <p style={{fontSize:11,color:'rgba(218,165,32,.65)',margin:0,letterSpacing:'0.12em',
                 textAlign:'center',padding:'8px 0 14px'}}>
-                カプセルが下へ落ちていきます
-              </p>
+                繧ｫ繝励そ繝ｫ縺御ｸ九∈關ｽ縺｡縺ｦ縺・″縺ｾ縺・              </p>
             </div>
           )}
 
-          {/* ════ Phase 6: OPENING ════ */}
+          {/* 笊絶武笊絶武 Phase 6: OPENING 笊絶武笊絶武 */}
           {false&&phase==='opening'&&(
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
               alignItems:'center',justifyContent:'center',gap:16,
               background:'radial-gradient(circle at 50% 42%,rgba(218,165,32,.18),transparent 58%)'}}>
               <p style={{fontSize:14,fontWeight:800,color:'#daa520',letterSpacing:'0.18em',margin:0,
                 position:'relative',zIndex:52,
-                animation:'ga-glowtext 1.1s ease-in-out infinite'}}>カプセル開封中…</p>
+                animation:'ga-glowtext 1.1s ease-in-out infinite'}}>繧ｫ繝励そ繝ｫ髢句ｰ∽ｸｭ窶ｦ</p>
               <div style={{position:'relative',height:'min(72vw,360px)',width:'min(72vw,360px)',
                 zIndex:52,
                 animation:'ga-capopenfore .8s ease-out forwards',
@@ -1659,12 +1615,12 @@ export function GachaPage() {
                     border:`1px solid rgba(218,165,32,${.52-i*.14})`,
                     animation:`ga-ring ${.5+i*.26}s ease-out ${.16+i*.14}s forwards`}}/>
                 ))}
-                <ResultCapsuleReveal prizeId={result?.results[0]?.prizeId??'pts100'} size={230}/>
+                <ResultCapsuleReveal prizeId={capsuleIdForPrize(result?.results[0],result)} size={230}/>
               </div>
             </div>
           )}
 
-          {/* ════ DONE: Single result ════ */}
+          {/* 笊絶武笊絶武 DONE: Single result 笊絶武笊絶武 */}
           {phase==='done'&&result&&!isMulti&&(
             <div className="ga-reveal" style={{
               position:'absolute',inset:0,display:'flex',flexDirection:'column',
@@ -1692,7 +1648,7 @@ export function GachaPage() {
               ))}
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',margin:0,
-                  animation:'ga-glowtext 1.5s ease-in-out infinite'}}>✨ 確定演出が発動しました！</p>
+                  animation:'ga-glowtext 1.5s ease-in-out infinite'}}>★ 確定演出が発動しました！</p>
               )}
               {result.results.map((prize)=>{
                 const c=CAPSULE[prize.prizeId]??CAPSULE.pts100
@@ -1700,7 +1656,7 @@ export function GachaPage() {
                   <div key={prize.prizeId} style={{width:'100%',display:'flex',
                     flexDirection:'column',alignItems:'center',gap:14,position:'relative',zIndex:2}}>
                     <div style={{position:'relative'}}>
-                      <ResultCapsuleReveal prizeId={prize.prizeId} size={230}/>
+                      <ResultCapsuleReveal prizeId={capsuleIdForPrize(prize,result)} size={230}/>
                       {prize.prizeId==='inmu10k'&&(
                         <div style={{position:'absolute',inset:-18,borderRadius:'50%',
                           background:`radial-gradient(circle,${c.glow} 0%,transparent 65%)`,
@@ -1719,7 +1675,7 @@ export function GachaPage() {
                         {prize.label}
                       </p>
                       <p style={{margin:'6px 0 10px',fontSize:12,color:'rgba(255,255,255,.5)'}}>
-                        ポイントを即時付与しました
+                        繝昴う繝ｳ繝医ｒ蜊ｳ譎ゆｻ倅ｸ弱＠縺ｾ縺励◆
                       </p>
                       <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
                         filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',
@@ -1731,7 +1687,7 @@ export function GachaPage() {
             </div>
           )}
 
-          {/* ════ DONE: Multi result (10連) ════ */}
+          {/* 笊絶武笊絶武 DONE: Multi result (10騾｣) 笊絶武笊絶武 */}
           {phase==='done'&&result&&isMulti&&(
             <div className="ga-reveal" style={{
               position:'absolute',inset:0,display:'flex',flexDirection:'column',
@@ -1747,13 +1703,12 @@ export function GachaPage() {
                 <h2 style={{margin:0,fontFamily:'Georgia,serif',fontSize:26,letterSpacing:'0.08em',
                   color:'#daa520',textShadow:'0 0 20px rgba(218,165,32,.46)'}}>INMU GACHA</h2>
                 <p style={{margin:'4px 0 0',fontSize:14,color:'rgba(255,255,255,.68)'}}>
-                  所持: <b style={{color:'#ffd700'}}>{result.newPoints.toLocaleString()} pt</b>
+                  謇謖・ <b style={{color:'#ffd700'}}>{result.newPoints.toLocaleString()} pt</b>
                 </p>
               </div>
               {result.wasGuaranteed&&(
                 <p style={{fontSize:12,fontWeight:700,color:'#ffd700',textAlign:'center',margin:0}}>
-                  ✨ 確定演出が発動しました！
-                </p>
+                  笨ｨ 遒ｺ螳壽ｼ泌・縺檎匱蜍輔＠縺ｾ縺励◆・・                </p>
               )}
               <div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:'10px 4px',
                 width:'100%',position:'relative',zIndex:2,boxSizing:'border-box'}}>
@@ -1777,7 +1732,7 @@ export function GachaPage() {
                         background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
                         opacity:prize.prizeId==='inmu10k' ? .55 : .24,
                         filter:'blur(2px)',pointerEvents:'none'}}/>
-                      <CapsuleVisual prizeId={prize.prizeId} size={58} open/>
+                      <CapsuleVisual prizeId={capsuleIdForPrize(prize,result)} size={58} open/>
                       <p style={{fontSize:7,fontWeight:800,color:c.border,
                         margin:0,textAlign:'center',lineHeight:1.2}}>
                         {c.label}
@@ -1790,8 +1745,7 @@ export function GachaPage() {
                 <p style={{margin:0,fontSize:20,color:'#ffd700',textAlign:'center',fontWeight:900,
                   position:'relative',zIndex:2,
                   textShadow:'0 0 22px rgba(255,215,0,.75)'}}>
-                  合計 +{result.totalPoints.toLocaleString()} pt 獲得！
-                </p>
+                  蜷郁ｨ・+{result.totalPoints.toLocaleString()} pt 迯ｲ蠕暦ｼ・                </p>
               )}
               <div style={{display:'flex',justifyContent:'center'}}>
                 <img src={mascotImg} style={{width:60,height:'auto',objectFit:'contain',
@@ -1807,7 +1761,7 @@ export function GachaPage() {
   )
 }
 
-/* ════ JACKPOT SCREEN (10,000 INMU) — multi-step sequential reveal ════ */
+/* 笊絶武笊絶武 JACKPOT SCREEN (10,000 INMU) 窶・multi-step sequential reveal 笊絶武笊絶武 */
 function JackpotScreen({ pts, onReset, profile, unread }:{
   pts:number; onReset:()=>void;
   profile:{role?:string;displayName?:string}|null;
@@ -1885,10 +1839,9 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
               <h1 style={{margin:0,fontSize:'min(10vw,36px)',fontWeight:900,
                 fontFamily:'Georgia,serif',letterSpacing:'0.12em',color:'#ffd700',
                 animation:'ga-jppulse 1.3s ease-in-out infinite, ga-jpzoom .52s ease-out forwards',opacity:0}}>
-                ◆ JACKPOT !! ◆
-              </h1>
+                笳・JACKPOT !! 笳・              </h1>
               <div style={{display:'flex',justifyContent:'center',gap:9,marginTop:5}}>
-                {['✦','★','✦','★','✦'].map((s,i)=>(
+                {['✦', '✧', '★', '✧', '✦'].map((s,i)=>(
                   <span key={i} style={{fontSize:20,color:'#ffd700',
                     animation:`ga-sparkle ${.68+i*.17}s ease-in-out ${i*.13}s infinite`}}>{s}</span>
                 ))}
@@ -1975,15 +1928,12 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
               boxShadow:'inset 0 1px 0 rgba(255,255,255,.12),0 0 44px rgba(218,165,32,.38)'}}>
               <p style={{margin:0,fontWeight:900,fontSize:22,color:'#ffd700',letterSpacing:'0.04em',
                 textShadow:'0 0 28px rgba(255,215,0,.95)'}}>
-                🏆 おめでとうございます！
-              </p>
+                醇 縺翫ａ縺ｧ縺ｨ縺・＃縺悶＞縺ｾ縺呻ｼ・              </p>
               <p style={{margin:'6px 0 0',fontSize:16,fontWeight:900,color:'#ffe566',
                 textShadow:'0 0 18px rgba(255,215,0,.78)'}}>
-                10,000 INMU 獲得！
-              </p>
+                10,000 INMU 迯ｲ蠕暦ｼ・              </p>
               <p style={{margin:'5px 0 0',fontSize:11,color:'rgba(253,230,138,.72)',lineHeight:1.6}}>
-                報酬は後日運営より送金されます
-              </p>
+                蝣ｱ驟ｬ縺ｯ蠕梧律驕句霧繧医ｊ騾・≡縺輔ｌ縺ｾ縺・              </p>
             </div>
           )}
 
@@ -2014,8 +1964,7 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
                 color:'#2a1800',fontWeight:900,fontSize:15,cursor:'pointer',letterSpacing:'0.06em',
                 boxShadow:'0 8px 18px rgba(0,0,0,.6),inset 0 2px 2px rgba(255,255,255,.55)',
                 marginBottom:28}}>
-              ガチャ画面へ戻る
-            </button>
+              繧ｬ繝√Ε逕ｻ髱｢縺ｸ謌ｻ繧・            </button>
           )}
 
         </div>
@@ -2023,3 +1972,7 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
+
+
+
+
