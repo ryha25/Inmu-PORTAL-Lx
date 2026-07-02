@@ -32,12 +32,13 @@ export function isMobileBrowser() {
 export function openInPhantomBrowser() {
   const url = encodeURIComponent(window.location.href)
   const ref = encodeURIComponent(window.location.origin)
-  const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
+  const deepLink = `phantom://browse/${url}?ref=${ref}`
+  const universalLink = `https://phantom.app/ul/browse/${url}?ref=${ref}`
   if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    window.location.href = phantomUrl
+    window.location.href = deepLink
     return
   }
-  window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+  window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(universalLink)};end`
 }
 
 export async function fetchInmuBalanceForWallet(wallet: string): Promise<number> {
@@ -45,6 +46,13 @@ export async function fetchInmuBalanceForWallet(wallet: string): Promise<number>
   const response = await fetch(`/api/solana/inmu-balance?wallet=${encodeURIComponent(wallet)}`, {
     credentials: 'include',
   })
+  const data = await response.json().catch(() => ({})) as { balance?: number; error?: string }
+  if (!response.ok) throw new Error(data.error ?? 'INMU残高を取得できませんでした')
+  return Number(data.balance ?? 0)
+}
+
+export async function fetchMyInmuBalance(): Promise<number> {
+  const response = await fetch('/api/pet-commerce/inmu-balance', { credentials: 'include' })
   const data = await response.json().catch(() => ({})) as { balance?: number; error?: string }
   if (!response.ok) throw new Error(data.error ?? 'INMU残高を取得できませんでした')
   return Number(data.balance ?? 0)
