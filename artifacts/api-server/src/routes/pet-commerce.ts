@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
 
@@ -121,23 +121,37 @@ function randomCharacter() {
   return CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
 }
 
-async function verifyInmuPayment(signature: string, expectedAmount: number) {
-  if (!/^[1-9A-HJ-NP-Za-km-z]{64,100}$/.test(signature)) throw new Error("TXIDの形式が正しくありません");
+function wait(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchConfirmedTransaction(signature: string) {
   const rpcUrl = process.env.SOLANA_RPC;
-  if (!rpcUrl) throw new Error("SOLANA_RPCが設定されていません");
-  const response = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "getTransaction",
-      params: [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }],
-    }),
-  });
-  const rpc = await response.json() as any;
-  const transaction = rpc?.result;
-  if (!response.ok || rpc?.error || !transaction || transaction.meta?.err) throw new Error("送金成功を確認できませんでした");
+  if (!rpcUrl) throw new Error("SOLANA_RPC is not configured");
+  let lastError: any = null;
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getTransaction",
+        params: [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }],
+      }),
+    });
+    const rpc = await response.json() as any;
+    if (response.ok && !rpc?.error && rpc?.result) return rpc.result;
+    lastError = rpc?.error ?? null;
+    await wait(Math.min(500 + attempt * 150, 1800));
+  }
+  throw new Error(lastError?.message ?? "送金の確認に時間がかかっています。少し待ってから再試行してください");
+}
+
+async function verifyInmuPayment(signature: string, expectedAmount: number) {
+  if (!/^[1-9A-HJ-NP-Za-km-z]{64,100}$/.test(signature)) throw new Error("TXIDの形式が不正です");
+  const transaction = await fetchConfirmedTransaction(signature);
+  if (transaction.meta?.err) throw new Error(`送金トランザクションが失敗しています: ${JSON.stringify(transaction.meta.err)}`);
   const nowSeconds = Math.floor(Date.now() / 1000);
   if (!transaction.blockTime || Math.abs(nowSeconds - Number(transaction.blockTime)) > 60 * 60) {
     throw new Error("この送金は有効期限を過ぎています");
@@ -226,7 +240,7 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
   if (totalPoints > 0) {
     const month = new Date().toISOString().slice(0, 7);
     await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [totalPoints, userId]);
-    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_reward','INMU PETガチャ報酬',$3)`, [userId, totalPoints, month]);
+    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_reward','INMU PET繧ｬ繝√Ε蝣ｱ驟ｬ',$3)`, [userId, totalPoints, month]);
   }
   return { results, totalPoints, premiumFood, inmuCount, hasInmu: inmuCount > 0 };
 }
@@ -262,7 +276,7 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
     const currentPoints = await getCurrentPoints(client, req.userId!);
     if (currentPoints < costPoints) throw new Error("ポイントが不足しています");
     await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"-$1,"updatedAt"=NOW() WHERE "userId"=$2`, [costPoints, req.userId!]);
-    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PET通常ガチャ', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
+    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PET騾壼ｸｸ繧ｬ繝√Ε', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
     const rolled = Array.from({ length: count }, () => weightedRoll(POINT_PRIZES));
     const applied = await applyPrizes(client, req.userId!, rolled);
     const history = await client.query(`
@@ -356,7 +370,7 @@ router.post("/pet-slots/unlock", requireAuth, async (req, res): Promise<void> =>
     }
     const current = await pool.query(`SELECT COUNT(*)::int AS count FROM "petSlotUnlocks" WHERE "userId"=$1`, [req.userId!]);
     const slotNumber = Number(current.rows[0]?.count ?? 0) + 2;
-    if (slotNumber > 3) throw new Error("育成枠はすでに最大です");
+    if (slotNumber > 3) throw new Error("育成枠は既に最大です");
     const paidInmu = slotNumber === 2 ? 1_000_000 : 2_000_000;
     const payment = await verifyInmuPayment(txId, paidInmu);
     await client.query("BEGIN");
@@ -376,3 +390,4 @@ router.post("/pet-slots/unlock", requireAuth, async (req, res): Promise<void> =>
 });
 
 export default router;
+
