@@ -1,4 +1,4 @@
-﻿import type { ElementType, ReactNode } from 'react'
+import type { ElementType, ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import {
   fetchConnectedPhantomInmuBalance,
   fetchInmuBalanceForWallet,
+  fetchMyInmuBalance,
   getPhantomProvider,
   isMobileBrowser,
   openInPhantomBrowser,
@@ -22,7 +23,7 @@ import {
 } from 'lucide-react'
 
 const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementType; tone: string }> = [
-  { id: 'feed', label: '縺秘｣ｯ', icon: Utensils, tone: 'border-pink-400/50 text-pink-200 shadow-[0_0_18px_rgba(244,114,182,.12)]' },
+  { id: 'feed', label: 'ご飯', icon: Utensils, tone: 'border-pink-400/50 text-pink-200 shadow-[0_0_18px_rgba(244,114,182,.12)]' },
   { id: 'play', label: '驕翫・', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
@@ -372,8 +373,8 @@ function PetRoom({
           <button
             type="button"
             onClick={onPet}
-            aria-label="縺ｪ縺ｧ繧・
-            title="縺ｪ縺ｧ繧・
+            aria-label="なでる"
+            title="なでる"
             className="flex size-11 items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25"
             data-pet-interaction="pet"
           >
@@ -513,7 +514,7 @@ function CharacterInfo({ pet, stats, maxLevel }: { pet: PetDefinition; stats: Pe
 function SkillPanel({ pet }: { pet: PetDefinition }) {
   return (
     <section className="rounded-lg border border-cyan-300/20 bg-[linear-gradient(145deg,rgba(8,30,40,.7),rgba(13,9,22,.96))] p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">蝗ｺ譛峨せ繧ｭ繝ｫ</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">固有スキル</p>
       <div className="mt-2 flex items-center gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-cyan-300/25 bg-cyan-300/10">
           <Sparkles className="size-5 text-cyan-200" />
@@ -524,7 +525,7 @@ function SkillPanel({ pet }: { pet: PetDefinition }) {
         </div>
       </div>
       <ul className="mt-3 space-y-1 border-t border-cyan-300/10 pt-3">
-        {pet.skill.notes.map(note => <li key={note} className="flex gap-2 text-[10px] leading-relaxed text-cyan-50/60"><span className="text-cyan-300">窶｢</span><span>{note}</span></li>)}
+        {pet.skill.notes.map(note => <li key={note} className="flex gap-2 text-[10px] leading-relaxed text-cyan-50/60"><span className="text-cyan-300">•</span><span>{note}</span></li>)}
       </ul>
     </section>
   )
@@ -831,14 +832,14 @@ export function PetPage() {
       body: JSON.stringify({ characterId: displayedPetId, currentLevel: selectedStats.level }),
     }).then(async response => {
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error ?? '繝昴う繝ｳ繝亥ｱ驟ｬ縺ｮ蜿怜叙縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
+      if (!response.ok) throw new Error(data.error ?? 'ポイント報酬の受取に失敗しました')
       if (!data.alreadyClaimed) {
         toast.success('Lv.10報酬として100,000ポイントを受け取りました！')
         setBalances(current => ({ ...current, points: current.points + 100_000 }))
       }
     }).catch(error => {
       levelRewardSyncRef.current.delete(key)
-      toast.error(error instanceof Error ? error.message : '繝昴う繝ｳ繝亥ｱ驟ｬ縺ｮ蜿怜叙縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
+      toast.error(error instanceof Error ? error.message : 'ポイント報酬の受取に失敗しました')
     })
   }, [displayedPetId, isHydrated, ownedPetIds, selectedStats.level])
 
@@ -928,8 +929,12 @@ export function PetPage() {
       const points = Number(dashboard?.monthlyPoints) || 0
       let inmu: number | null = await fetchConnectedPhantomInmuBalance(connect)
       if (inmu === null) {
-        const wallet = (profile as any)?.solWallet ?? (profile as any)?.walletAddress ?? ''
-        inmu = wallet ? await fetchInmuBalanceForWallet(wallet) : 0
+        try {
+          inmu = await fetchMyInmuBalance()
+        } catch {
+          const wallet = (profile as any)?.solWallet ?? (profile as any)?.walletAddress ?? ''
+          inmu = wallet ? await fetchInmuBalanceForWallet(wallet) : 0
+        }
       }
       setBalances({ inmu: Number(inmu) || 0, points })
     } catch {
@@ -1034,8 +1039,8 @@ export function PetPage() {
   }, [selectedPetId, pet.walk.enabled, pet.walk.tickMs])
 
   function openCareMenu(category: PetCareCategory) {
-    if (isSleeping) { setMessage('逵縺｣縺ｦ縺・ｋ縺ｮ縺ｧ莉翫・縺ｧ縺阪∪縺帙ｓ'); return }
-    if (category === 'feed' && isFull) { setMessage('貅閻ｹ縺ｪ縺ｮ縺ｧ縺秘｣ｯ繧偵≠縺偵ｉ繧後∪縺帙ｓ'); return }
+    if (isSleeping) { setMessage('眠っているので今はできません'); return }
+    if (category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return }
     const remaining = getCareCooldownRemaining(category, cooldownUntil, Date.now())
     if (remaining > 0) { setMessage(formatCooldown(remaining)); return }
     setCareMenu(category)
@@ -1045,11 +1050,11 @@ export function PetPage() {
     const actionNow = Date.now()
     const config = PET_CARE_CONFIG[action]
     if (config.category !== 'pet') {
-      if (isSleeping) { setMessage('逵縺｣縺ｦ縺・ｋ縺ｮ縺ｧ莉翫・縺ｧ縺阪∪縺帙ｓ'); return false }
-      if (config.category === 'feed' && isFull) { setMessage('貅閻ｹ縺ｪ縺ｮ縺ｧ縺秘｣ｯ繧偵≠縺偵ｉ繧後∪縺帙ｓ'); return false }
+      if (isSleeping) { setMessage('眠っているので今はできません'); return false }
+      if (config.category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return false }
       const actionRemaining = getActionCooldownRemaining(action, lastCareAt, actionNow)
       if (config.category === 'feed' && actionRemaining > 0) { setMessage(formatCooldown(actionRemaining)); return false }
-      if (action === 'feed-premium' && premiumFood.totalAvailable <= 0) { setMessage('鬮倡ｴ壹＃縺ｯ繧薙・辟｡譁吝・繝ｻ謇謖∝・縺後≠繧翫∪縺帙ｓ'); return false }
+      if (action === 'feed-premium' && premiumFood.totalAvailable <= 0) { setMessage('高級ごはんの無料分・所持分がありません'); return false }
       const remaining = getCareCooldownRemaining(config.category, cooldownUntil, actionNow)
       if (remaining > 0) { setMessage(formatCooldown(remaining)); return false }
     }
@@ -1097,7 +1102,7 @@ export function PetPage() {
     if (!ownedPetIds?.includes(id)) return
     setActivePetIds(current => current.length < unlockedSlots ? [...current, id] : [...current.slice(1), id])
     handleSelect(id)
-    setMessage(`${PET_BY_ID[id].name}繧定ご謌舌↓繧ｻ繝・ヨ縺励∪縺励◆`)
+    setMessage(`${PET_BY_ID[id].name}を育成にセットしました`)
   }
 
   async function unlockNextSlot() {
@@ -1106,9 +1111,9 @@ export function PetPage() {
     if (!getPhantomProvider()) {
       if (isMobileBrowser()) {
         localStorage.setItem('inmu-pet-slot-unlock-intent', String(unlockedSlots + 1))
-        toast.info('Phantom繧｢繝励Μ縺ｧ髢九″縺ｾ縺吮ｦ')
+        toast.info('Phantomアプリで開きます…')
         window.setTimeout(openInPhantomBrowser, 400)
-      } else toast.error('Phantom繧ｦ繧ｩ繝ｬ繝・ヨ繧偵う繝ｳ繧ｹ繝医・繝ｫ縺励※縺上□縺輔＞')
+      } else toast.error('Phantomウォレットをインストールしてください')
       return
     }
     setSlotBusy(true)
@@ -1119,13 +1124,13 @@ export function PetPage() {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ txId }),
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error ?? '閧ｲ謌先棧縺ｮ隗｣謾ｾ縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
+      if (!response.ok) throw new Error(data.error ?? '育成枠の解放に失敗しました')
       localStorage.removeItem('inmu-pet-slot-unlock-pending')
       setUnlockedSlots(Number(data.unlockedSlots))
       void refreshBalances(false)
-      toast.success(`閧ｲ謌先棧${data.slotNumber}繧定ｧ｣謾ｾ縺励∪縺励◆`)
+      toast.success(`育成枠${data.slotNumber}を解放しました`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '閧ｲ謌先棧縺ｮ隗｣謾ｾ縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
+      toast.error(error instanceof Error ? error.message : '育成枠の解放に失敗しました')
     } finally {
       setSlotBusy(false)
       setMessage('')
@@ -1136,7 +1141,7 @@ export function PetPage() {
     if (!getPhantomProvider()) return
     if (localStorage.getItem('inmu-pet-slot-unlock-intent')) {
       localStorage.removeItem('inmu-pet-slot-unlock-intent')
-      toast.info('閧ｲ謌先棧縺ｮ隗｣謾ｾ繝懊ち繝ｳ繧呈款縺励※騾・≡繧堤ｶ壹￠縺ｦ縺上□縺輔＞')
+      toast.info('育成枠の解放ボタンを押して送金を続けてください')
     }
     const pendingRaw = localStorage.getItem('inmu-pet-slot-unlock-pending')
     if (!pendingRaw || slotBusy) return
@@ -1147,12 +1152,12 @@ export function PetPage() {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ txId: pending.txId }),
       }).then(async response => {
         const data = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(data.error ?? '閧ｲ謌先棧縺ｮ蠕ｩ譌ｧ縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
+        if (!response.ok) throw new Error(data.error ?? '育成枠の復旧に失敗しました')
         localStorage.removeItem('inmu-pet-slot-unlock-pending')
         setUnlockedSlots(Number(data.unlockedSlots))
         void refreshBalances(false)
-        toast.success(`閧ｲ謌先棧${data.slotNumber}繧定ｧ｣謾ｾ縺励∪縺励◆`)
-      }).catch(error => toast.error(error instanceof Error ? error.message : '閧ｲ謌先棧縺ｮ蠕ｩ譌ｧ縺ｫ螟ｱ謨励＠縺ｾ縺励◆')).finally(() => setSlotBusy(false))
+        toast.success(`育成枠${data.slotNumber}を解放しました`)
+      }).catch(error => toast.error(error instanceof Error ? error.message : '育成枠の復旧に失敗しました')).finally(() => setSlotBusy(false))
     } catch {
       localStorage.removeItem('inmu-pet-slot-unlock-pending')
     }
