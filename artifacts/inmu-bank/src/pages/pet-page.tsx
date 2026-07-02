@@ -1,11 +1,18 @@
-import type { ElementType, ReactNode } from 'react'
-import { useEffect, useRef, useState } from 'react'
+﻿import type { ElementType, ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
-import { getPhantomProvider, isMobileBrowser, openInPhantomBrowser, sendInmuWithPhantom } from '@/lib/admin-inmu-transfer'
+import {
+  fetchConnectedPhantomInmuBalance,
+  fetchInmuBalanceForWallet,
+  getPhantomProvider,
+  isMobileBrowser,
+  openInPhantomBrowser,
+  sendInmuWithPhantom,
+} from '@/lib/admin-inmu-transfer'
 import { toast } from 'sonner'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
 import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState } from '@/features/pet/use-pet-state'
@@ -15,8 +22,8 @@ import {
 } from 'lucide-react'
 
 const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementType; tone: string }> = [
-  { id: 'feed', label: 'ご飯', icon: Utensils, tone: 'border-pink-400/50 text-pink-200 shadow-[0_0_18px_rgba(244,114,182,.12)]' },
-  { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
+  { id: 'feed', label: '縺秘｣ｯ', icon: Utensils, tone: 'border-pink-400/50 text-pink-200 shadow-[0_0_18px_rgba(244,114,182,.12)]' },
+  { id: 'play', label: '驕翫・', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
 const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'inmu-festival'])
@@ -178,7 +185,7 @@ function StatusBar({
         <span className="font-mono text-muted-foreground">{display ?? value}</span>
       </div>
       <div className="h-2.5 overflow-hidden rounded-full border border-white/10 bg-black/55 shadow-[inset_0_1px_3px_rgba(0,0,0,.75)]">
-        <div className="relative h-full overflow-hidden rounded-full shadow-[0_0_10px_currentColor]" style={{ width: `${percent}%`, background: color }}>
+        <div className="relative h-full overflow-hidden rounded-full shadow-[0_0_10px_currentColor]" style={{ width: String(percent) + '%', background: color }}>
           <span className="pet-meter-shine absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
         </div>
       </div>
@@ -328,7 +335,7 @@ function PetRoom({
       <div
         key={petId}
         className="pet-room-enter absolute inset-0 z-[1] bg-cover bg-center"
-        style={{ backgroundImage: `url(${roomImage})` }}
+        style={{ backgroundImage: 'url(' + roomImage + ')' }}
         data-pet-room={roomTheme}
       />
       <div className="absolute inset-0 z-[2] bg-[linear-gradient(180deg,rgba(2,1,8,.08),rgba(3,2,10,.18)_55%,rgba(2,1,7,.68))]" />
@@ -365,8 +372,8 @@ function PetRoom({
           <button
             type="button"
             onClick={onPet}
-            aria-label="なでる"
-            title="なでる"
+            aria-label="縺ｪ縺ｧ繧・
+            title="縺ｪ縺ｧ繧・
             className="flex size-11 items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25"
             data-pet-interaction="pet"
           >
@@ -377,13 +384,13 @@ function PetRoom({
           className={cn(
             'relative z-10 flex max-h-full items-end justify-center',
             !walkMotion.active && !reactionMotion && !isSleeping && 'pet-character-motion',
-            reactionMotion && `pet-react-${reactionMotion}`,
+            reactionMotion && ('pet-react-' + reactionMotion),
             isSleeping && !reactionMotion && 'pet-sleeping-motion',
           )}
           style={{
             width: roomWidth,
             transform: walkMotion.active
-              ? `translate3d(${walkMotion.offsetPercent}%, ${walkMotion.bob}px, 0) scaleX(${walkMotion.facing}) rotate(${walkMotion.stride * 1.4}deg) scaleY(${walkMotion.moving ? (walkMotion.frame ? .985 : 1.012) : 1})`
+              ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + walkMotion.bob + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.stride * 1.4) + 'deg) scaleY(' + (walkMotion.moving ? (walkMotion.frame ? .985 : 1.012) : 1) + ')'
               : undefined,
             transition: walkMotion.active ? 'transform 280ms linear' : undefined,
           }}
@@ -391,7 +398,7 @@ function PetRoom({
         >
           <div
             className="absolute bottom-1 left-1/2 h-7 w-[72%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md transition-transform duration-200"
-            style={{ transform: `translateX(-50%) scaleX(${walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1})` }}
+            style={{ transform: 'translateX(-50%) scaleX(' + (walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1) + ')' }}
             data-pet-shadow
           />
           {roomTheme === 'festival' ? (
@@ -415,7 +422,9 @@ function PetRoom({
           <StatusBar label="愛情度" value={stats.affection} display={`${stats.affection}`} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
         </div>
         <div className="mt-2 flex min-h-4 items-center justify-end">
-          <p className="break-words text-right text-[9px] text-cyan-200" role="status">{isSleeping ? 'すやすや眠っています' : isFull ? '満腹なのでご飯をあげられません' : message}</p>
+          <p className="break-words text-right text-[9px] text-cyan-200" role="status">
+            {isSleeping ? 'すやすや眠っています' : isFull ? '満腹なのでご飯をあげられません' : message}
+          </p>
         </div>
         <div className="mt-1 grid grid-cols-2 gap-2">
           {ROOM_ACTIONS.map(action => {
@@ -437,8 +446,8 @@ function PetRoom({
 
 const CARE_CHOICES: Record<PetCareCategory, Array<{ id: PetCareAction; label: string; detail: string }>> = {
   feed: [
-    { id: 'feed-basic', label: '🍖 普通ごはん', detail: '満腹度 +20 / 愛情度 +2 / EXP +5 / 個数制限なし / CT 10分' },
-    { id: 'feed-premium', label: '🍱 高級ごはん', detail: '満腹度 +40 / 愛情度 +10 / EXP +15' },
+    { id: 'feed-basic', label: '普通ごはん', detail: '満腹度 +20 / 愛情度 +2 / EXP +5 / CT 10分' },
+    { id: 'feed-premium', label: '高級ごはん', detail: '満腹度 +40 / 愛情度 +10 / EXP +15' },
   ],
   play: [
     { id: 'play-yarn', label: '毛糸', detail: 'EXP +5 / 愛情度 +3 / 眠気 +5 / CT 10分' },
@@ -456,7 +465,7 @@ function CareChoiceDialog({ kind, premiumFood, actionCooldowns, onClose, onChoos
         {kind === 'feed' && (
           <div className="grid grid-cols-2 gap-2 rounded-lg border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-[10px] text-amber-100/80">
             <span>本日の無料分 <strong className="ml-1 text-amber-200">{premiumFood.dailyRemaining} / 3</strong></span>
-            <span>所持分 <strong className="ml-1 text-amber-200">{premiumFood.inventory}個</strong></span>
+            <span>所持数 <strong className="ml-1 text-amber-200">{premiumFood.inventory}個</strong></span>
           </div>
         )}
         <div className="grid gap-2 pt-2">
@@ -467,7 +476,7 @@ function CareChoiceDialog({ kind, premiumFood, actionCooldowns, onClose, onChoos
             return (
               <button key={choice.id} type="button" disabled={unavailable} onClick={() => onChoose(choice.id)} className="flex items-center gap-3 rounded-lg border border-violet-300/20 bg-violet-400/5 p-3 text-left transition hover:border-fuchsia-300/45 hover:bg-fuchsia-400/10 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-40">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fuchsia-400/10 text-fuchsia-200"><Icon className="size-5" /></span>
-                <span className="min-w-0"><span className="block font-bold text-white">{choice.label}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{choice.detail}</span>{cooldown > 0 && <span className="mt-1 block font-mono text-[9px] text-cyan-200">{formatCooldown(cooldown)}</span>}{choice.id === 'feed-premium' && <span className="mt-1 block text-[9px] text-amber-200/75">無料分を先に消費し、その後に所持分を使用</span>}</span>
+                <span className="min-w-0"><span className="block font-bold text-white">{choice.label}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{choice.detail}</span>{cooldown > 0 && <span className="mt-1 block font-mono text-[9px] text-cyan-200">{formatCooldown(cooldown)}</span>}{choice.id === 'feed-premium' && <span className="mt-1 block text-[9px] text-amber-200/75">無料分を先に消費し、その後に所持分を使用します</span>}</span>
               </button>
             )
           })}
@@ -504,7 +513,7 @@ function CharacterInfo({ pet, stats, maxLevel }: { pet: PetDefinition; stats: Pe
 function SkillPanel({ pet }: { pet: PetDefinition }) {
   return (
     <section className="rounded-lg border border-cyan-300/20 bg-[linear-gradient(145deg,rgba(8,30,40,.7),rgba(13,9,22,.96))] p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">固有スキル</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">蝗ｺ譛峨せ繧ｭ繝ｫ</p>
       <div className="mt-2 flex items-center gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-cyan-300/25 bg-cyan-300/10">
           <Sparkles className="size-5 text-cyan-200" />
@@ -515,7 +524,7 @@ function SkillPanel({ pet }: { pet: PetDefinition }) {
         </div>
       </div>
       <ul className="mt-3 space-y-1 border-t border-cyan-300/10 pt-3">
-        {pet.skill.notes.map(note => <li key={note} className="flex gap-2 text-[10px] leading-relaxed text-cyan-50/60"><span className="text-cyan-300">•</span><span>{note}</span></li>)}
+        {pet.skill.notes.map(note => <li key={note} className="flex gap-2 text-[10px] leading-relaxed text-cyan-50/60"><span className="text-cyan-300">窶｢</span><span>{note}</span></li>)}
       </ul>
     </section>
   )
@@ -549,7 +558,7 @@ function RewardsPanel({
 }) {
   return (
     <section className="rounded-lg border border-amber-300/15 bg-[#0d0916] p-4">
-      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-100"><Gift className="size-4 text-amber-300" />Lv報酬</h2>
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-100"><Gift className="size-4 text-amber-300" />レベル報酬</h2>
       <div className="flex flex-col gap-2">
         {pet.levelRewards.map(reward => {
           const unlocked = level >= reward.level
@@ -615,7 +624,7 @@ function CharacterRoster({ candidates, selectedPetId, petStats, onSelect, vertic
               <div className="border-t border-white/5 p-2">
                 <p className="break-words text-xs font-bold">{candidate.name}</p>
                 <div className="mt-1 flex items-center justify-between gap-1 text-[9px]">
-                  <span className="text-amber-300">★{candidate.rarity}</span>
+                  <span className="text-amber-300">{'★'.repeat(candidate.rarity)}</span>
                   <span className="rounded bg-cyan-400/10 px-1 py-0.5 font-mono font-bold text-cyan-200">Lv.{stats.level}</span>
                 </div>
               </div>
@@ -645,12 +654,12 @@ function OwnedCharacters({ ownedPetIds, activePetIds, onSet }: { ownedPetIds: re
             </div>
             <div className="min-w-0 flex-1">
               <p className="break-words text-sm font-bold text-white">{candidate.name}</p>
-              <p className="mt-0.5 text-[10px] text-amber-300">★{candidate.rarity}{candidate.costume ? ` ・ ${candidate.costume.label}` : ''}</p>
+              <p className="mt-0.5 text-[10px] text-amber-300">{'★'.repeat(candidate.rarity)}{candidate.costume ? `・${candidate.costume.label}` : ''}</p>
             </div>
             <Button type="button" size="sm" onClick={() => onSet(candidate.id)} className="shrink-0 border border-fuchsia-300/35 bg-fuchsia-500/15 text-[11px] text-fuchsia-100 hover:bg-fuchsia-500/25">育成にセット</Button>
           </div>
         ))}
-        {owned.length === 0 && <p className="rounded-lg border border-violet-300/10 bg-black/20 px-3 py-4 text-center text-xs text-muted-foreground">育成中のキャラクター以外は所持していません</p>}
+        {owned.length === 0 && <p className="rounded-lg border border-violet-300/10 bg-black/20 px-3 py-4 text-center text-xs text-muted-foreground">育成中以外の所持キャラクターはいません</p>}
       </div>
     </section>
   )
@@ -763,7 +772,7 @@ export function PetPage() {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error ?? '報酬申請に失敗しました')
-      toast.success('INMU報酬を申請しました。運営の承認をお待ちください。')
+      toast.success('INMU報酬を申請しました。運営の送金をお待ちください。')
       await loadRewardRequests()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '報酬申請に失敗しました')
@@ -822,14 +831,14 @@ export function PetPage() {
       body: JSON.stringify({ characterId: displayedPetId, currentLevel: selectedStats.level }),
     }).then(async response => {
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error ?? 'ポイント報酬の受取に失敗しました')
+      if (!response.ok) throw new Error(data.error ?? '繝昴う繝ｳ繝亥ｱ驟ｬ縺ｮ蜿怜叙縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
       if (!data.alreadyClaimed) {
         toast.success('Lv.10報酬として100,000ポイントを受け取りました！')
         setBalances(current => ({ ...current, points: current.points + 100_000 }))
       }
     }).catch(error => {
       levelRewardSyncRef.current.delete(key)
-      toast.error(error instanceof Error ? error.message : 'ポイント報酬の受取に失敗しました')
+      toast.error(error instanceof Error ? error.message : '繝昴う繝ｳ繝亥ｱ驟ｬ縺ｮ蜿怜叙縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
     })
   }, [displayedPetId, isHydrated, ownedPetIds, selectedStats.level])
 
@@ -911,12 +920,26 @@ export function PetPage() {
     }
   }, [unlockedSlots])
 
+  const refreshBalances = useCallback(async (connect = false) => {
+    try {
+      const dashboard = await fetch('/api/dashboard', { credentials: 'include' })
+        .then(response => response.ok ? response.json() : null)
+        .catch(() => null)
+      const points = Number(dashboard?.monthlyPoints) || 0
+      let inmu: number | null = await fetchConnectedPhantomInmuBalance(connect)
+      if (inmu === null) {
+        const wallet = (profile as any)?.solWallet ?? (profile as any)?.walletAddress ?? ''
+        inmu = wallet ? await fetchInmuBalanceForWallet(wallet) : 0
+      }
+      setBalances({ inmu: Number(inmu) || 0, points })
+    } catch {
+      setBalances(current => ({ ...current, inmu: 0 }))
+    }
+  }, [profile])
+
   useEffect(() => {
-    fetch('/api/dashboard', { credentials: 'include' })
-      .then(response => response.ok ? response.json() : null)
-      .then(data => { if (data) setBalances({ inmu: Number(data.balance) || 0, points: Number(data.monthlyPoints) || 0 }) })
-      .catch(() => {})
-  }, [])
+    void refreshBalances(false)
+  }, [refreshBalances])
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000)
@@ -1011,8 +1034,8 @@ export function PetPage() {
   }, [selectedPetId, pet.walk.enabled, pet.walk.tickMs])
 
   function openCareMenu(category: PetCareCategory) {
-    if (isSleeping) { setMessage('眠っているので今はできません'); return }
-    if (category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return }
+    if (isSleeping) { setMessage('逵縺｣縺ｦ縺・ｋ縺ｮ縺ｧ莉翫・縺ｧ縺阪∪縺帙ｓ'); return }
+    if (category === 'feed' && isFull) { setMessage('貅閻ｹ縺ｪ縺ｮ縺ｧ縺秘｣ｯ繧偵≠縺偵ｉ繧後∪縺帙ｓ'); return }
     const remaining = getCareCooldownRemaining(category, cooldownUntil, Date.now())
     if (remaining > 0) { setMessage(formatCooldown(remaining)); return }
     setCareMenu(category)
@@ -1022,11 +1045,11 @@ export function PetPage() {
     const actionNow = Date.now()
     const config = PET_CARE_CONFIG[action]
     if (config.category !== 'pet') {
-      if (isSleeping) { setMessage('眠っているので今はできません'); return false }
-      if (config.category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return false }
+      if (isSleeping) { setMessage('逵縺｣縺ｦ縺・ｋ縺ｮ縺ｧ莉翫・縺ｧ縺阪∪縺帙ｓ'); return false }
+      if (config.category === 'feed' && isFull) { setMessage('貅閻ｹ縺ｪ縺ｮ縺ｧ縺秘｣ｯ繧偵≠縺偵ｉ繧後∪縺帙ｓ'); return false }
       const actionRemaining = getActionCooldownRemaining(action, lastCareAt, actionNow)
       if (config.category === 'feed' && actionRemaining > 0) { setMessage(formatCooldown(actionRemaining)); return false }
-      if (action === 'feed-premium' && premiumFood.totalAvailable <= 0) { setMessage('高級ごはんの無料分・所持分がありません'); return false }
+      if (action === 'feed-premium' && premiumFood.totalAvailable <= 0) { setMessage('鬮倡ｴ壹＃縺ｯ繧薙・辟｡譁吝・繝ｻ謇謖∝・縺後≠繧翫∪縺帙ｓ'); return false }
       const remaining = getCareCooldownRemaining(config.category, cooldownUntil, actionNow)
       if (remaining > 0) { setMessage(formatCooldown(remaining)); return false }
     }
@@ -1041,7 +1064,12 @@ export function PetPage() {
     const careSpeech = result.message === 'overpetted' ? pet.messages.overpetted : pickRandom(pet.dialogues.care) ?? ''
     if (speechResetTimer.current) clearTimeout(speechResetTimer.current)
     setSpeechBubble(careSpeech)
-    setMessage({ fed: 'ご飯をあげました', played: '一緒に遊びました', petted: 'うれしそうにしています', overpetted: pet.messages.overpetted }[result.message] ?? '')
+    setMessage({
+      fed: 'ご飯をあげました',
+      played: '一緒に遊びました',
+      petted: 'うれしそうにしています',
+      overpetted: pet.messages.overpetted,
+    }[result.message] ?? '')
     setCareMenu(null)
     if (motionTimer.current) clearTimeout(motionTimer.current)
     motionTimer.current = setTimeout(() => {
@@ -1069,7 +1097,7 @@ export function PetPage() {
     if (!ownedPetIds?.includes(id)) return
     setActivePetIds(current => current.length < unlockedSlots ? [...current, id] : [...current.slice(1), id])
     handleSelect(id)
-    setMessage(`${PET_BY_ID[id].name}を育成にセットしました`)
+    setMessage(`${PET_BY_ID[id].name}繧定ご謌舌↓繧ｻ繝・ヨ縺励∪縺励◆`)
   }
 
   async function unlockNextSlot() {
@@ -1078,9 +1106,9 @@ export function PetPage() {
     if (!getPhantomProvider()) {
       if (isMobileBrowser()) {
         localStorage.setItem('inmu-pet-slot-unlock-intent', String(unlockedSlots + 1))
-        toast.info('Phantomアプリで開きます…')
+        toast.info('Phantom繧｢繝励Μ縺ｧ髢九″縺ｾ縺吮ｦ')
         window.setTimeout(openInPhantomBrowser, 400)
-      } else toast.error('Phantomウォレットをインストールしてください')
+      } else toast.error('Phantom繧ｦ繧ｩ繝ｬ繝・ヨ繧偵う繝ｳ繧ｹ繝医・繝ｫ縺励※縺上□縺輔＞')
       return
     }
     setSlotBusy(true)
@@ -1091,12 +1119,13 @@ export function PetPage() {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ txId }),
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error ?? '育成枠の解放に失敗しました')
+      if (!response.ok) throw new Error(data.error ?? '閧ｲ謌先棧縺ｮ隗｣謾ｾ縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
       localStorage.removeItem('inmu-pet-slot-unlock-pending')
       setUnlockedSlots(Number(data.unlockedSlots))
-      toast.success(`育成枠${data.slotNumber}を解放しました`)
+      void refreshBalances(false)
+      toast.success(`閧ｲ謌先棧${data.slotNumber}繧定ｧ｣謾ｾ縺励∪縺励◆`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '育成枠の解放に失敗しました')
+      toast.error(error instanceof Error ? error.message : '閧ｲ謌先棧縺ｮ隗｣謾ｾ縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
     } finally {
       setSlotBusy(false)
       setMessage('')
@@ -1107,7 +1136,7 @@ export function PetPage() {
     if (!getPhantomProvider()) return
     if (localStorage.getItem('inmu-pet-slot-unlock-intent')) {
       localStorage.removeItem('inmu-pet-slot-unlock-intent')
-      toast.info('育成枠の解放ボタンを押して送金を続けてください')
+      toast.info('閧ｲ謌先棧縺ｮ隗｣謾ｾ繝懊ち繝ｳ繧呈款縺励※騾・≡繧堤ｶ壹￠縺ｦ縺上□縺輔＞')
     }
     const pendingRaw = localStorage.getItem('inmu-pet-slot-unlock-pending')
     if (!pendingRaw || slotBusy) return
@@ -1118,15 +1147,16 @@ export function PetPage() {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ txId: pending.txId }),
       }).then(async response => {
         const data = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(data.error ?? '育成枠の復旧に失敗しました')
+        if (!response.ok) throw new Error(data.error ?? '閧ｲ謌先棧縺ｮ蠕ｩ譌ｧ縺ｫ螟ｱ謨励＠縺ｾ縺励◆')
         localStorage.removeItem('inmu-pet-slot-unlock-pending')
         setUnlockedSlots(Number(data.unlockedSlots))
-        toast.success(`育成枠${data.slotNumber}を解放しました`)
-      }).catch(error => toast.error(error instanceof Error ? error.message : '育成枠の復旧に失敗しました')).finally(() => setSlotBusy(false))
+        void refreshBalances(false)
+        toast.success(`閧ｲ謌先棧${data.slotNumber}繧定ｧ｣謾ｾ縺励∪縺励◆`)
+      }).catch(error => toast.error(error instanceof Error ? error.message : '閧ｲ謌先棧縺ｮ蠕ｩ譌ｧ縺ｫ螟ｱ謨励＠縺ｾ縺励◆')).finally(() => setSlotBusy(false))
     } catch {
       localStorage.removeItem('inmu-pet-slot-unlock-pending')
     }
-  }, [])
+  }, [refreshBalances, slotBusy])
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
@@ -1144,7 +1174,7 @@ export function PetPage() {
         </header>
 
         {!isHydrated && <p className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100">育成データを同期しています…</p>}
-        {syncError && <p className="rounded-md border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs text-rose-100">{syncError}。一時データを表示しています。</p>}
+        {syncError && <p className="rounded-md border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs text-rose-100">{syncError} 一時データを表示しています。</p>}
 
         {ownedPetIds === null ? (
           <div className="flex min-h-64 items-center justify-center rounded-lg border border-violet-300/15 bg-black/25 text-sm text-muted-foreground">所持キャラクターを読み込んでいます…</div>
@@ -1154,7 +1184,7 @@ export function PetPage() {
               <LockKeyhole className="mb-4 size-10 text-fuchsia-300" />
               <h2 className="text-lg font-black text-white">育成キャラクターはまだいません</h2>
               <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
-                イベントミッション「ログイン日数通算7日達成」の報酬を受け取ると、INMUくん（810祭りVer.）が所持キャラクターに追加されます。
+                イベントミッションの報酬を受け取ると、所持キャラクターへ追加されます。
               </p>
               {ownershipError && <p className="mt-3 text-xs text-rose-300">所持情報を取得できませんでした。画面を再読み込みしてください。</p>}
             </section>
@@ -1206,3 +1236,4 @@ export function PetPage() {
     </AppShell>
   )
 }
+
