@@ -69,7 +69,7 @@ async function rpcFetch(body: unknown): Promise<Response> {
   throw lastErr;
 }
 
-async function fetchInmuBalance(wallet: string): Promise<number> {
+export async function fetchInmuBalance(wallet: string): Promise<number> {
   const res = await rpcFetch({
     jsonrpc: "2.0", id: 1,
     method: "getTokenAccountsByOwner",
