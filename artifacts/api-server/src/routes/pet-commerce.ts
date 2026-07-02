@@ -1,6 +1,7 @@
 ﻿import { Router } from "express";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
+import { fetchInmuBalance } from "./solana";
 
 const router = Router();
 
@@ -100,6 +101,19 @@ export function ensurePetCommerceTables() {
         UNIQUE ("userId", "slotNumber")
       )
     `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS "petPaymentAttempts" (
+        "txId" TEXT PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        purpose TEXT NOT NULL,
+        "expectedAmount" BIGINT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        "lastError" TEXT,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "verifiedAt" TIMESTAMPTZ,
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `),
   ]).then(() => undefined).catch(error => {
     tablePromise = null;
     throw error;
@@ -129,7 +143,22 @@ async function fetchConfirmedTransaction(signature: string) {
   const rpcUrl = process.env.SOLANA_RPC;
   if (!rpcUrl) throw new Error("SOLANA_RPC is not configured");
   let lastError: any = null;
-  for (let attempt = 0; attempt < 18; attempt += 1) {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const statusResponse = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getSignatureStatuses",
+        params: [[signature], { searchTransactionHistory: true }],
+      }),
+    });
+    const statusRpc = await statusResponse.json() as any;
+    const signatureStatus = statusRpc?.result?.value?.[0];
+    if (signatureStatus?.err) throw new Error(`送金トランザクションが失敗しています: ${JSON.stringify(signatureStatus.err)}`);
+    const commitment = signatureStatus?.confirmationStatus === "finalized" ? "finalized" : "confirmed";
     const response = await fetch(rpcUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -137,15 +166,32 @@ async function fetchConfirmedTransaction(signature: string) {
         jsonrpc: "2.0",
         id: 1,
         method: "getTransaction",
-        params: [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }],
+        params: [signature, { encoding: "jsonParsed", commitment, maxSupportedTransactionVersion: 0 }],
       }),
     });
     const rpc = await response.json() as any;
     if (response.ok && !rpc?.error && rpc?.result) return rpc.result;
     lastError = rpc?.error ?? null;
-    await wait(Math.min(500 + attempt * 150, 1800));
+    await wait(1_500);
   }
-  throw new Error(lastError?.message ?? "送金の確認に時間がかかっています。少し待ってから再試行してください");
+  throw new Error(lastError?.message ?? "送金確認を継続しています。しばらく待ってから同じ操作を再試行してください");
+}
+
+async function verifyStoredPayment(userId: string, signature: string, expectedAmount: number, purpose: string) {
+  await pool.query(`
+    INSERT INTO "petPaymentAttempts" ("txId","userId",purpose,"expectedAmount",status)
+    VALUES ($1,$2,$3,$4,'pending')
+    ON CONFLICT ("txId") DO UPDATE SET "updatedAt"=NOW()
+  `, [signature, userId, purpose, expectedAmount]);
+  try {
+    const payment = await verifyInmuPayment(signature, expectedAmount);
+    await pool.query(`UPDATE "petPaymentAttempts" SET status='verified',"lastError"=NULL,"verifiedAt"=NOW(),"updatedAt"=NOW() WHERE "txId"=$1`, [signature]);
+    return payment;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await pool.query(`UPDATE "petPaymentAttempts" SET "lastError"=$2,"updatedAt"=NOW() WHERE "txId"=$1`, [signature, message]);
+    throw error;
+  }
 }
 
 async function verifyInmuPayment(signature: string, expectedAmount: number) {
@@ -265,6 +311,27 @@ router.get("/pet-commerce/status", requireAuth, async (req, res): Promise<void> 
   }
 });
 
+router.get("/pet-commerce/inmu-balance", requireAuth, async (req, res): Promise<void> => {
+  try {
+    await ensurePetCommerceTables();
+    const walletResult = await pool.query(`
+      SELECT COALESCE(
+        NULLIF(p."solWallet", ''),
+        (SELECT h."payerWallet" FROM "petGachaHistory" h WHERE h."userId"=$1 AND h."payerWallet" IS NOT NULL ORDER BY h."createdAt" DESC LIMIT 1),
+        (SELECT s."payerWallet" FROM "petSlotUnlocks" s WHERE s."userId"=$1 AND s."payerWallet" IS NOT NULL ORDER BY s."unlockedAt" DESC LIMIT 1)
+      ) AS wallet
+      FROM profile p WHERE p."userId"=$1
+    `, [req.userId!]);
+    const wallet = String(walletResult.rows[0]?.wallet ?? '');
+    if (!wallet) { res.json({ balance: 0, wallet: null }); return; }
+    const balance = await fetchInmuBalance(wallet);
+    res.json({ balance, wallet });
+  } catch (error) {
+    console.error("[PetCommerce] INMU balance", error);
+    res.status(502).json({ error: "INMU残高を取得できませんでした", balance: 0 });
+  }
+});
+
 router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> => {
   const pullType: PullType = req.body?.pullType === "multi" ? "multi" : "single";
   const count = pullType === "multi" ? 10 : 1;
@@ -322,7 +389,7 @@ router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
       res.json({ results: recoveredResults, totalPoints, premiumFood: recoveredResults.filter((prize: any) => prize.type === "premium_food").length, hasInmu: false, costPoints: 0, costInmu: Number(existing.rows[0].costInmu), txId, newPoints: currentPoints, paidPity: Number(state.rows[0]?.paidPity ?? 0), recovered: true });
       return;
     }
-    const payment = await verifyInmuPayment(txId, costInmu);
+    const payment = await verifyStoredPayment(req.userId!, txId, costInmu, `paid-gacha:${pullType}`);
     await client.query("BEGIN");
     const duplicateTx = await client.query(`SELECT id FROM "petGachaHistory" WHERE "txId"=$1`, [txId]);
     if (duplicateTx.rowCount) throw new Error("このTXIDは既に使用されています");
@@ -372,7 +439,7 @@ router.post("/pet-slots/unlock", requireAuth, async (req, res): Promise<void> =>
     const slotNumber = Number(current.rows[0]?.count ?? 0) + 2;
     if (slotNumber > 3) throw new Error("育成枠は既に最大です");
     const paidInmu = slotNumber === 2 ? 1_000_000 : 2_000_000;
-    const payment = await verifyInmuPayment(txId, paidInmu);
+    const payment = await verifyStoredPayment(req.userId!, txId, paidInmu, `slot-unlock:${slotNumber}`);
     await client.query("BEGIN");
     const inserted = await client.query(`
       INSERT INTO "petSlotUnlocks" ("userId","slotNumber","paidInmu","txId","payerWallet")
