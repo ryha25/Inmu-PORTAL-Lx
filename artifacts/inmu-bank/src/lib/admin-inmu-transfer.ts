@@ -8,7 +8,7 @@ import {
 
 type PhantomProvider = {
   isPhantom: boolean
-  connect(): Promise<{ publicKey: { toString(): string } }>
+  connect(options?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>
   signTransaction(transaction: Transaction): Promise<Transaction>
 }
 
@@ -40,6 +40,27 @@ export function openInPhantomBrowser() {
   window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
 }
 
+export async function fetchInmuBalanceForWallet(wallet: string): Promise<number> {
+  if (!wallet) return 0
+  const response = await fetch(`/api/solana/inmu-balance?wallet=${encodeURIComponent(wallet)}`, {
+    credentials: 'include',
+  })
+  const data = await response.json().catch(() => ({})) as { balance?: number; error?: string }
+  if (!response.ok) throw new Error(data.error ?? 'INMU残高を取得できませんでした')
+  return Number(data.balance ?? 0)
+}
+
+export async function fetchConnectedPhantomInmuBalance(connect = false): Promise<number | null> {
+  const phantom = getPhantomProvider()
+  if (!phantom) return null
+  try {
+    const response = await phantom.connect(connect ? undefined : { onlyIfTrusted: true })
+    return await fetchInmuBalanceForWallet(response.publicKey.toString())
+  } catch {
+    return null
+  }
+}
+
 export async function sendInmuWithPhantom(
   wallet: string,
   amount: number,
@@ -49,7 +70,7 @@ export async function sendInmuWithPhantom(
   if (!phantom) throw new Error('Phantomウォレットが見つかりません')
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('送金枚数が不正です')
 
-  onProgress?.('Phantomに接続しています…')
+  onProgress?.('Phantomに接続しています...')
   const response = await phantom.connect()
   const from = new PublicKey(response.publicKey.toString())
   const to = new PublicKey(wallet)
@@ -63,14 +84,16 @@ export async function sendInmuWithPhantom(
     createTransferInstruction(fromAta, toAta, from, rawAmount, [], TOKEN_2022_PROGRAM_ID),
   )
   transaction.feePayer = from
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+  const { blockhash } = await connection.getLatestBlockhash('processed')
   transaction.recentBlockhash = blockhash
 
-  onProgress?.('Phantomで署名してください…')
+  onProgress?.('Phantomで署名してください...')
   const signed = await phantom.signTransaction(transaction)
-  onProgress?.('Solanaへ送信しています…')
-  const signature = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 })
-  const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
-  if (confirmation.value.err) throw new Error(`送金トランザクションが失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+  onProgress?.('Solanaへ送信しています...')
+  const signature = await connection.sendRawTransaction(signed.serialize(), {
+    skipPreflight: true,
+    maxRetries: 5,
+  })
+  onProgress?.('送信完了。サーバーで確認しています...')
   return signature
 }
