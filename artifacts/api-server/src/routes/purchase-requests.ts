@@ -45,11 +45,12 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
     userIds.forEach(userId => {
       const state = stateByUser.get(userId) as Record<string, any> | undefined;
       const owned = ownedByUser.get(userId) ?? new Set<string>();
+      const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.slice(0, 3).map(String) : [];
       const bonuses = PET_PURCHASE_BONUS_RULES.filter(rule => {
         if (!owned.has(rule.characterId) || (rule.eventOnly && !isEventDay)) return false;
         const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
         const skillEnabled = state?.skillState?.[rule.characterId] !== false;
-        return level >= rule.minLevel && (rule.source !== "skill" || skillEnabled);
+        return level >= rule.minLevel && (rule.source !== "skill" || (skillEnabled && activePetIds.includes(rule.characterId)));
       }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
       result.set(userId, bonuses);
     });

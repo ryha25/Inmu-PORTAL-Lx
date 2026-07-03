@@ -24,7 +24,7 @@ import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
 type Prize = {
-  prizeId:string; label:string; type:'points'|'inmu'|'premium_food'|'character'; amount:number
+  prizeId:string; label:string; type:'points'|'inmu'|'premium_food'|'sleep_tea'|'character'; amount:number
   characterId?:PetId; isNewCharacter?:boolean; isDuplicate?:boolean; convertedPoints?:number
 }
 type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; costInmu?:number; newPoints:number; txId?:string; paidPity?:number|null }
@@ -78,6 +78,11 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     bot:'radial-gradient(ellipse at 67% 72%,rgba(255,222,112,.96),rgba(198,112,18,.9) 44%,rgba(83,31,4,.8) 78%)',
     glow:'rgba(255,184,54,.78)', border:'rgba(255,222,132,.75)', label:'高級ごはん',
   },
+  'sleep-tea': {
+    top:'radial-gradient(ellipse at 33% 28%,rgba(210,250,255,.99),rgba(55,184,220,.94) 42%,rgba(7,74,126,.82) 78%)',
+    bot:'radial-gradient(ellipse at 67% 72%,rgba(150,238,255,.96),rgba(22,139,190,.9) 44%,rgba(4,45,92,.8) 78%)',
+    glow:'rgba(65,210,255,.82)', border:'rgba(160,240,255,.8)', label:'アイスティー',
+  },
   'character-nyarushian': {
     top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
     bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
@@ -96,24 +101,25 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
 }
 
 const BALLS = [
-  { id:'pts100',  label:'100pt',       rate:'51.1%', color:'rgba(210,220,235,.9)' },
-  { id:'pts300',  label:'300pt',       rate:'22%',   color:'rgba(255,88,196,.9)'  },
-  { id:'pts500',  label:'500pt',       rate:'12%',   color:'rgba(166,255,58,.9)'  },
-  { id:'pts1000', label:'1,000pt',     rate:'6%',    color:'rgba(70,140,255,.9)'  },
-  { id:'pts3000', label:'3,000pt',     rate:'3%',    color:'rgba(255,92,58,.9)'   },
-  { id:'pts5000', label:'5,000pt',     rate:'1.5%',  color:'rgba(180,60,255,.9)'  },
+  { id:'pts300',  label:'300pt',       rate:'38%', color:'rgba(255,88,196,.9)'  },
+  { id:'pts500',  label:'500pt',       rate:'25%', color:'rgba(166,255,58,.9)'  },
+  { id:'pts1000', label:'1,000pt',     rate:'15%', color:'rgba(70,140,255,.9)'  },
+  { id:'pts3000', label:'3,000pt',     rate:'8%', color:'rgba(255,92,58,.9)'   },
+  { id:'pts5000', label:'5,000pt',     rate:'4%', color:'rgba(180,60,255,.9)'  },
   { id:'inmu10k', label:'10,000 INMU', rate:'0.5%',  color:'rgba(255,215,0,.9)'   },
-  { id:'premium-food', label:'高級ごはん', rate:'3%', color:'rgba(255,184,54,.9)' },
+  { id:'premium-food', label:'高級ごはん', rate:'5%', color:'rgba(255,184,54,.9)' },
+  { id:'sleep-tea', label:'アイスティー（睡眠薬入り）', rate:'3.6%', color:'rgba(65,210,255,.9)' },
   { id:'character-nyarushian', label:'ニャルシアン', rate:'0.3%', color:'rgba(255,215,0,.9)' },
   { id:'character-takuya', label:'拓也', rate:'0.3%', color:'rgba(255,215,0,.9)' },
   { id:'character-leon', label:'レオン', rate:'0.3%', color:'rgba(255,215,0,.9)' },
 ]
 const PAID_BALLS = [
   { id:'pts1000', label:'1,000pt', rate:'60%' },
-  { id:'pts3000', label:'3,000pt', rate:'22%' },
-  { id:'pts5000', label:'5,000pt', rate:'8%' },
-  { id:'pts10000', label:'10,000pt', rate:'2.4%' },
+  { id:'pts3000', label:'3,000pt', rate:'20%' },
+  { id:'pts5000', label:'5,000pt', rate:'7%' },
+  { id:'pts10000', label:'10,000pt', rate:'2%' },
   { id:'premium-food', label:'高級ごはん', rate:'4%' },
+  { id:'sleep-tea', label:'アイスティー（睡眠薬入り）', rate:'3.4%' },
   { id:'character-nyarushian', label:'ニャルシアン', rate:'1.2%' },
   { id:'character-takuya', label:'拓也', rate:'1.2%' },
   { id:'character-leon', label:'レオン', rate:'1.2%' },
@@ -466,6 +472,7 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
     : prizeId==='pts3000' ? '#ff4b3f'
     : prizeId==='pts5000' ? '#a62ee9'
     : prizeId==='premium-food' ? '#ff922e'
+    : prizeId==='sleep-tea' ? '#35cbea'
     : '#f5bd16'
   const shellGradient = isCharacter
     ? 'linear-gradient(145deg,rgba(255,255,255,.98),transparent 28%),linear-gradient(135deg,#ff4f9a,#ffe24f 20%,#68ff9c 40%,#55c9ff 61%,#a66cff 81%,#ff63d3)'
@@ -479,7 +486,7 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
       transition:'transform .42s cubic-bezier(.2,.8,.2,1)'}}>
       <div style={{position:'absolute',inset:0,clipPath:appleShape,background:'#090a0d'}}/>
       <div style={{position:'absolute',inset,clipPath:appleShape,background:shellGradient,overflow:'hidden'}}>
-        <div style={{position:'absolute',left:'-2%',right:'-2%',top:'66%',bottom:'-4%',background:'#090a0d',
+        <div style={{position:'absolute',left:'-2%',right:'-2%',top:'51%',bottom:'-4%',background:'#090a0d',
           clipPath:'polygon(0 20%,12% 8%,25% 24%,39% 5%,53% 21%,67% 4%,82% 20%,100% 9%,100% 100%,0 100%)'}}/>
         <div style={{position:'absolute',left:'18%',top:'22%',width:'26%',height:'52%',background:'#fff400',
           clipPath:'polygon(14% 0,62% 4%,100% 25%,79% 48%,97% 74%,62% 100%,20% 86%,0 55%,18% 34%,0 18%)'}}>
@@ -533,7 +540,7 @@ function RateOrb({ id }:{id:string}) {
   const shellColor = id==='pts100' ? '#f3f5f7' : id==='pts300' ? '#ff4daf'
     : id==='pts500' ? '#a6ed35' : id==='pts1000' ? '#2678f3'
     : id==='pts3000' ? '#ff4b3f' : id==='pts5000' ? '#a62ee9'
-    : id==='premium-food' ? '#ff922e' : '#f5bd16'
+    : id==='premium-food' ? '#ff922e' : id==='sleep-tea' ? '#35cbea' : '#f5bd16'
   const body=isCharacter?'linear-gradient(135deg,#ff58a0,#ffe34f 22%,#66ff9c 44%,#55c8ff 65%,#a76aff 84%,#ff63d2)':shellColor
   return <div style={{position:'relative',width:34,height:25,flexShrink:0,filter:`drop-shadow(0 0 7px ${c.glow})`}}>
     <div style={{position:'absolute',inset:0,background:'#090a0d',clipPath:'polygon(6% 43%,12% 22%,28% 11%,47% 16%,62% 12%,82% 20%,94% 42%,88% 70%,70% 88%,42% 90%,18% 78%)'}}/>
@@ -712,6 +719,9 @@ function PrizeResultIcon({ prize, size=72 }:{prize:Prize;size?:number}) {
   }
   if (prize.type === 'premium_food') {
     return <div aria-label="高級ごはん" style={{width:size,height:size,borderRadius:'50%',display:'grid',placeItems:'center',fontSize:size*.62,background:'radial-gradient(circle at 35% 25%,#fff7b0,#ff9f1c 52%,#8b3100)',boxShadow:'0 0 18px rgba(255,170,40,.75)',border:'2px solid #ffe69a'}}>🍱</div>
+  }
+  if (prize.type === 'sleep_tea') {
+    return <div aria-label="アイスティー（睡眠薬入り）" style={{width:size,height:size,borderRadius:'18%',display:'grid',placeItems:'center',fontSize:size*.58,background:'radial-gradient(circle at 35% 25%,#eaffff,#35cbea 52%,#074b75)',boxShadow:'0 0 18px rgba(65,210,255,.78)',border:'2px solid #a8f3ff'}}>🧋</div>
   }
   return <CapsuleVisual prizeId={capsuleIdForPrize(prize)} size={size} open/>
 }
@@ -1716,7 +1726,7 @@ export function GachaPage() {
                       <p style={{margin:'6px 0 10px',fontSize:12,color:'rgba(255,255,255,.5)'}}>
                         ポイントを即時付与しました
                       </p>
-                      {(prize.type==='character'||prize.type==='premium_food')
+                      {(prize.type==='character'||prize.type==='premium_food'||prize.type==='sleep_tea')
                         ? <div style={{display:'flex',justifyContent:'center'}}><PrizeResultIcon prize={prize} size={82}/></div>
                         : <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',animation:'ga-bounce 1.1s ease-in-out infinite'}}/>}
                     </div>

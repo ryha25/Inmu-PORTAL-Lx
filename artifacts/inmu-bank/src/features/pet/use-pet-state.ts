@@ -16,6 +16,7 @@ export type PetCareCategory = 'feed' | 'play'
 export type PetExpressionState = { kind: PetExpression; until: number }
 export type PettingState = { count: number; lastAt: number }
 export type PremiumFoodState = { dailyRemaining: number; inventory: number; totalAvailable: number }
+export type PetItemState = { sleepTea: number }
 export type PetCareResult = {
   expression: 'happy' | 'petted' | 'annoyed' | 'angry'
   motion: 'feed' | 'play' | 'pet' | 'angry'
@@ -76,6 +77,7 @@ type PetSaveData = {
   sleepStartedAt: Record<PetId, number>
   progress: Record<PetId, PetProgressState>
   premiumFood: PremiumFoodSave
+  items: PetItemState
   skillState: Record<PetId, boolean>
 }
 
@@ -159,6 +161,7 @@ function createDefaultSave(): PetSaveData {
     sleepStartedAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, 0])) as Record<PetId, number>,
     progress: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { fullnessAt: now, sleepinessAt: now }])) as Record<PetId, PetProgressState>,
     premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
+    items: { sleepTea: 0 },
     skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, true])) as Record<PetId, boolean>,
   }
 }
@@ -200,6 +203,7 @@ function loadSave(source?: unknown): PetSaveData {
         sleepinessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.sleepinessAt, Date.now())),
       }])) as Record<PetId, PetProgressState>,
       premiumFood: sanitizePremiumFood(parsed.premiumFood),
+      items: { sleepTea: Math.max(0, Math.floor(readNumber(parsed.items?.sleepTea, 0))) },
       skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, parsed.skillState?.[pet.id] !== false])) as Record<PetId, boolean>,
     }
   } catch {
@@ -466,6 +470,39 @@ export function usePetState() {
     }))
   }
 
+  function useSleepTea(amount: number) {
+    const requested = Math.min(3, Math.max(1, Math.floor(amount)))
+    const petId = effectiveSave.selectedPetId
+    const available = Math.max(0, Math.floor(effectiveSave.items?.sleepTea ?? 0))
+    const used = Math.min(requested, available, Math.max(0, PET_BY_ID[petId].maxLevel - effectiveSave.pets[petId].level))
+    if (used <= 0) return 0
+    setSave(current => {
+      const materialized = materializeSaveAt(current, Date.now())
+      const currentPetId = materialized.selectedPetId
+      const stats = materialized.pets[currentPetId]
+      const currentAvailable = Math.max(0, Math.floor(materialized.items?.sleepTea ?? 0))
+      const applied = Math.min(used, currentAvailable, Math.max(0, PET_BY_ID[currentPetId].maxLevel - stats.level))
+      if (applied <= 0) return current
+      const nextStats = {
+        ...stats,
+        level: stats.level + applied,
+        exp: 0,
+        sleepiness: clamp(stats.sleepiness + 33 * applied),
+      }
+      const actionNow = Date.now()
+      return {
+        ...materialized,
+        pets: { ...materialized.pets, [currentPetId]: nextStats },
+        items: { ...materialized.items, sleepTea: currentAvailable - applied },
+        sleepStartedAt: {
+          ...materialized.sleepStartedAt,
+          [currentPetId]: nextStats.sleepiness >= PET_SLEEP_THRESHOLD ? (materialized.sleepStartedAt[currentPetId] || actionNow) : 0,
+        },
+      }
+    })
+    return used
+  }
+
   return {
     selectedPetId: save.selectedPetId,
     activePetIds: effectiveSave.activePetIds,
@@ -476,12 +513,14 @@ export function usePetState() {
     expressionState: effectiveSave.expressions[save.selectedPetId],
     pettingState: effectiveSave.petting[save.selectedPetId],
     premiumFood,
+    items: effectiveSave.items,
     isSleeping,
     selectPet,
     setActivePetIds,
     care,
     setExpression,
     grantPremiumFood,
+    useSleepTea,
     maxLevel: PET_BY_ID[save.selectedPetId].maxLevel,
     isHydrated,
     syncError,

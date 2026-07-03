@@ -20,6 +20,7 @@ import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp
 import {
   BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
   Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
+  CupSoda,
 } from 'lucide-react'
 
 const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementType; tone: string }> = [
@@ -531,6 +532,34 @@ function SkillPanel({ pet }: { pet: PetDefinition }) {
   )
 }
 
+function ItemPanel({ inventory, level, maxLevel, onUse }: { inventory: number; level: number; maxLevel: number; onUse: (amount: number) => void }) {
+  const [amount, setAmount] = useState(1)
+  const maxUsable = Math.min(3, inventory, Math.max(0, maxLevel - level))
+  useEffect(() => setAmount(current => Math.max(1, Math.min(current, Math.max(1, maxUsable)))), [maxUsable])
+  return (
+    <section className="rounded-lg border border-sky-300/20 bg-[linear-gradient(145deg,rgba(8,28,42,.82),rgba(12,8,22,.97))] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-sky-100"><CupSoda className="size-4 text-sky-300" />所持アイテム</h2>
+        <span className="rounded border border-sky-300/20 bg-sky-300/10 px-2 py-1 font-mono text-xs text-sky-100">{inventory}個</span>
+      </div>
+      <p className="mt-2 text-xs font-bold text-white">アイスティー（睡眠薬入り）</p>
+      <p className="mt-1 text-[10px] leading-relaxed text-sky-100/65">1個につきLv.+1、眠気+33。最大3個まで同時に使用できます。</p>
+      <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+        <select
+          value={Math.min(amount, Math.max(1, maxUsable))}
+          onChange={event => setAmount(Number(event.target.value))}
+          disabled={maxUsable <= 0}
+          className="h-10 rounded-md border border-sky-300/25 bg-black/45 px-3 text-sm text-sky-50 outline-none disabled:opacity-40"
+        >
+          {[1, 2, 3].filter(value => value <= maxUsable).map(value => <option key={value} value={value}>{value}個使用</option>)}
+          {maxUsable <= 0 && <option value={1}>{level >= maxLevel ? 'レベルMAX' : '所持数0'}</option>}
+        </select>
+        <Button type="button" disabled={maxUsable <= 0} onClick={() => onUse(amount)} className="h-10 border border-sky-300/35 bg-sky-500/20 text-sky-50 hover:bg-sky-500/30">使う</Button>
+      </div>
+    </section>
+  )
+}
+
 type PetRewardRequest = {
   id: number
   sourceKey: string
@@ -732,7 +761,7 @@ function TrainingSlotsV2({ activePets, unlockedSlots }: { activePets: PetDefinit
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, isSleeping, selectPet, setActivePetIds, care, setExpression, maxLevel, isHydrated, syncError } = usePetState()
+  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, selectPet, setActivePetIds, care, setExpression, useSleepTea, maxLevel, isHydrated, syncError } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
@@ -1088,6 +1117,17 @@ export function PetPage() {
     handleCare('pet')
   }
 
+  function handleUseSleepTea(amount: number) {
+    const used = useSleepTea(amount)
+    if (used <= 0) {
+      setMessage(selectedStats.level >= maxLevel ? 'レベルは既に最大です' : 'アイスティーを所持していません')
+      return
+    }
+    setNow(Date.now())
+    setMessage(`アイスティーを${used}個使用しました。Lv.+${used}、眠気+${33 * used}`)
+    setExpression('sleepy', 4200)
+  }
+
   function handleSelect(id: PetId) {
     setIsBlinking(false)
     setReactionMotion(null)
@@ -1223,6 +1263,7 @@ export function PetPage() {
                 onPet={handlePet}
               />
               <div className="lg:hidden"><SkillPanel pet={pet} /></div>
+              <div className="lg:hidden"><ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} /></div>
               <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} /></div>
               <TrainingSlotsV2 activePets={activePets} unlockedSlots={unlockedSlots} />
               <SlotUnlockPanel unlockedSlots={unlockedSlots} busy={slotBusy} onUnlock={unlockNextSlot} />
@@ -1232,6 +1273,7 @@ export function PetPage() {
             <aside className="hidden flex-col gap-3 lg:flex">
               <CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} />
               <SkillPanel pet={pet} />
+              <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} />
               <RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} />
             </aside>
           </div>

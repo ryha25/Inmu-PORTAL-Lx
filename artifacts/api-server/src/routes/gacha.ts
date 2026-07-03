@@ -4,18 +4,20 @@ import { profileTable, pointsTable, notificationsTable, transactionsTable } from
 import { eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
 import { hasActivePetSkill } from "../services/pet-skills";
+import { ensurePetStateTable } from "../services/pet-state-store";
 
 const router = Router();
 
 // ── 確率テーブル（合計 10000）──
 const PRIZES = [
-  { id: "pts100",  label: "100ポイント",    type: "points" as const, amount: 100,   weight: 5500 },
-  { id: "pts300",  label: "300ポイント",    type: "points" as const, amount: 300,   weight: 2200 },
-  { id: "pts500",  label: "500ポイント",    type: "points" as const, amount: 500,   weight: 1200 },
-  { id: "pts1000", label: "1,000ポイント",  type: "points" as const, amount: 1000,  weight: 600  },
-  { id: "pts3000", label: "3,000ポイント",  type: "points" as const, amount: 3000,  weight: 300  },
-  { id: "pts5000", label: "5,000ポイント",  type: "points" as const, amount: 5000,  weight: 150  },
-  { id: "inmu10k", label: "10,000 INMU",   type: "inmu"   as const, amount: 10000, weight: 50   },
+  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 4_190 },
+  { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 2_500 },
+  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 1_500 },
+  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 800 },
+  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 400 },
+  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 50 },
+  { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 500 },
+  { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 60 },
 ] as const;
 type Prize = (typeof PRIZES)[number];
 
@@ -35,11 +37,26 @@ function rollMany(count: number, guaranteed: boolean): Prize[] {
   const results: Prize[] = [];
   for (let i = 0; i < count; i++) results.push(rollPrize());
   if (guaranteed && !results.some(r => r.type === "inmu")) {
-    const lastSmall = results.map(r => r.id).lastIndexOf("pts100");
-    const idx = lastSmall >= 0 ? lastSmall : results.length - 1;
-    results[idx] = PRIZES[6];
+    results[results.length - 1] = PRIZES.find(prize => prize.id === "inmu10k")!;
   }
   return results;
+}
+
+async function addFreeGachaItem(userId: string, prize: Prize) {
+  if (prize.type !== "premium_food" && prize.type !== "sleep_tea") return;
+  await ensurePetStateTable();
+  const result = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1`, [userId]);
+  const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+  if (prize.type === "premium_food") {
+    const food = state.premiumFood && typeof state.premiumFood === "object" ? state.premiumFood : { dailyDate: "", dailyUsed: 0, inventory: 0 };
+    state.premiumFood = { ...food, inventory: Math.max(0, Number(food.inventory ?? 0)) + 1 };
+  } else {
+    const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0 };
+    state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + 1 };
+  }
+  await pool.query(`INSERT INTO "userPetStates" ("userId",state,"clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
+    ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()`,
+    [userId, JSON.stringify(state), Date.now()]);
 }
 
 // ── DB テーブル初期化 ──
@@ -158,7 +175,8 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
 
   const wasGuaranteed = Math.random() < GUARANTEED_RATE;
   const prizeResults  = rollMany(count, wasGuaranteed);
-  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + p.amount, 0);
+  const pointMultiplier = await hasActivePetSkill(userId, "nyarushian") ? 2 : 1;
+  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + p.amount, 0) * pointMultiplier;
   const inmuList      = prizeResults.filter(p => p.type === "inmu");
   const hasInmu       = inmuList.length > 0;
   const inmuCount     = inmuList.length;
@@ -166,6 +184,7 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
   const month         = new Date().toISOString().slice(0, 7);
 
   try {
+    for (const prize of prizeResults) await addFreeGachaItem(userId, prize);
     await db.update(profileTable).set({
       monthlyPoints: sql`${profileTable.monthlyPoints} + ${netPoints}`,
       updatedAt: new Date(),
@@ -179,7 +198,12 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
     }
     await db.insert(pointsTable).values(pointsRows);
 
-    const resultsJson = prizeResults.map(p => ({ prizeId: p.id, label: p.label, type: p.type, amount: p.amount }));
+    const resultsJson = prizeResults.map(p => ({
+      prizeId: p.id,
+      label: p.type === "points" ? `${(p.amount * pointMultiplier).toLocaleString()}ポイント` : p.label,
+      type: p.type,
+      amount: p.type === "points" ? p.amount * pointMultiplier : p.amount,
+    }));
     const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
        VALUES ($1,$2,$3::jsonb,$4,$5,$6,'pending',$7,$8,false) RETURNING id`,
@@ -234,7 +258,8 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
 
   const wasGuaranteed = Math.random() < GUARANTEED_RATE;
   const prizeResults  = rollMany(1, wasGuaranteed);
-  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + p.amount, 0);
+  const pointMultiplier = await hasActivePetSkill(userId, "nyarushian") ? 2 : 1;
+  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + p.amount, 0) * pointMultiplier;
   const inmuList      = prizeResults.filter(p => p.type === "inmu");
   const hasInmu       = inmuList.length > 0;
   const inmuCount     = inmuList.length;
@@ -242,6 +267,7 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
   const currentPoints = Number(profile.monthlyPoints);
 
   try {
+    for (const prize of prizeResults) await addFreeGachaItem(userId, prize);
     if (totalPoints > 0) {
       await db.update(profileTable).set({
         monthlyPoints: sql`${profileTable.monthlyPoints} + ${totalPoints}`,
@@ -253,7 +279,12 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
       });
     }
 
-    const resultsJson = prizeResults.map(p => ({ prizeId: p.id, label: p.label, type: p.type, amount: p.amount }));
+    const resultsJson = prizeResults.map(p => ({
+      prizeId: p.id,
+      label: p.type === "points" ? `${(p.amount * pointMultiplier).toLocaleString()}ポイント` : p.label,
+      type: p.type,
+      amount: p.type === "points" ? p.amount * pointMultiplier : p.amount,
+    }));
     const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
        VALUES ($1,'free',$2::jsonb,$3,$4,$5,'pending',$6,0,true) RETURNING id`,

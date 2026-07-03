@@ -2,6 +2,7 @@
 import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
 import { fetchInmuBalance } from "./solana";
+import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
 
@@ -21,7 +22,7 @@ type GachaMode = "points" | "paid";
 type PetGachaPrize = {
   prizeId: string;
   label: string;
-  type: "points" | "inmu" | "premium_food" | "character";
+  type: "points" | "inmu" | "premium_food" | "sleep_tea" | "character";
   amount: number;
   characterId?: string;
   isNewCharacter?: boolean;
@@ -31,10 +32,11 @@ type PetGachaPrize = {
 
 const PAID_PRIZES = [
   { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 6_000 },
-  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 2_200 },
-  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 800 },
-  { id: "pts10000", label: "10,000ポイント", type: "points" as const, amount: 10_000, weight: 240 },
+  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 2_000 },
+  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 700 },
+  { id: "pts10000", label: "10,000ポイント", type: "points" as const, amount: 10_000, weight: 200 },
   { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 400 },
+  { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 340 },
   ...CHARACTERS.map(character => ({
     id: `character-${character.id}`,
     label: character.name,
@@ -46,14 +48,14 @@ const PAID_PRIZES = [
 ];
 
 const POINT_PRIZES = [
-  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 5_110 },
-  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 2_200 },
-  { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 1_200 },
-  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 600 },
-  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 300 },
-  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 150 },
+  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 3_800 },
+  { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 2_500 },
+  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 1_500 },
+  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 800 },
+  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 400 },
   { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 50 },
-  { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 300 },
+  { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 500 },
+  { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 360 },
   ...CHARACTERS.map(character => ({
     id: `character-${character.id}`,
     label: character.name,
@@ -230,6 +232,18 @@ async function addPremiumFood(client: any, userId: string, amount: number) {
   `, [userId, JSON.stringify(state), now]);
 }
 
+async function addSleepTea(client: any, userId: string, amount: number) {
+  const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
+  const now = Date.now();
+  const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+  const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0 };
+  state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
+  await client.query(`
+    INSERT INTO "userPetStates" ("userId",state,"clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
+    ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()
+  `, [userId, JSON.stringify(state), now]);
+}
+
 async function initializeCharacterAtLevelOne(client: any, userId: string, characterId: string) {
   const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
   const now = Date.now();
@@ -251,7 +265,9 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
   const results: PetGachaPrize[] = [];
   let totalPoints = 0;
   let premiumFood = 0;
+  let sleepTea = 0;
   let inmuCount = 0;
+  const pointMultiplier = await hasActivePetSkill(userId, "nyarushian") ? 2 : 1;
   for (const raw of rawPrizes) {
     if (raw.type === "character") {
       const inserted = await client.query(`
@@ -260,35 +276,41 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
       `, [userId, raw.characterId]);
       const isNew = inserted.rowCount === 1;
       if (isNew) await initializeCharacterAtLevelOne(client, userId, raw.characterId);
-      if (!isNew) totalPoints += DUPLICATE_CHARACTER_POINTS;
+      const convertedPoints = isNew ? 0 : DUPLICATE_CHARACTER_POINTS * pointMultiplier;
+      if (!isNew) totalPoints += convertedPoints;
       results.push({
         prizeId: raw.id,
-        label: isNew ? raw.label : `${raw.label}は既に所持しています。100,000ポイントに変換されました。`,
+        label: isNew ? raw.label : `${raw.label}は既に所持しています。${convertedPoints.toLocaleString()}ポイントに変換されました。`,
         type: "character",
         amount: 1,
         characterId: raw.characterId,
         isNewCharacter: isNew,
         isDuplicate: !isNew,
-        convertedPoints: isNew ? 0 : DUPLICATE_CHARACTER_POINTS,
+        convertedPoints,
       });
     } else if (raw.type === "premium_food") {
       premiumFood += raw.amount;
       results.push({ prizeId: raw.id, label: raw.label, type: "premium_food", amount: raw.amount });
+    } else if (raw.type === "sleep_tea") {
+      sleepTea += raw.amount;
+      results.push({ prizeId: raw.id, label: raw.label, type: "sleep_tea", amount: raw.amount });
     } else if (raw.type === "inmu") {
       inmuCount += 1;
       results.push({ prizeId: raw.id, label: raw.label, type: "inmu", amount: raw.amount });
     } else {
-      totalPoints += raw.amount;
-      results.push({ prizeId: raw.id, label: raw.label, type: "points", amount: raw.amount });
+      const awarded = raw.amount * pointMultiplier;
+      totalPoints += awarded;
+      results.push({ prizeId: raw.id, label: `${awarded.toLocaleString()}ポイント`, type: "points", amount: awarded });
     }
   }
   if (premiumFood > 0) await addPremiumFood(client, userId, premiumFood);
+  if (sleepTea > 0) await addSleepTea(client, userId, sleepTea);
   if (totalPoints > 0) {
     const month = new Date().toISOString().slice(0, 7);
     await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [totalPoints, userId]);
     await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_reward','INMU PETガチャ報酬',$3)`, [userId, totalPoints, month]);
   }
-  return { results, totalPoints, premiumFood, inmuCount, hasInmu: inmuCount > 0 };
+  return { results, totalPoints, premiumFood, sleepTea, pointMultiplier, inmuCount, hasInmu: inmuCount > 0 };
 }
 
 async function getCurrentPoints(client: any, userId: string) {
