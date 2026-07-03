@@ -64,9 +64,18 @@ const PET_CHARACTER_NAMES: Record<string, string> = {
   "inmu-festival": "INMUくん（810祭りVer.）",
 };
 
+type MissionRewardItemType = "premium_food" | "sleep_tea";
+const VALID_REWARD_ITEM_TYPES = new Set<MissionRewardItemType>(["premium_food", "sleep_tea"]);
+const REWARD_ITEM_NAMES: Record<MissionRewardItemType, string> = {
+  premium_food: "高級ごはん",
+  sleep_tea: "アイスティー（睡眠薬入り）",
+};
+
 type MissionExtraReward = {
   missionId: number;
   characterId: string | null;
+  rewardItemType: MissionRewardItemType | null;
+  rewardItemAmount: number;
 };
 
 let rewardTablesPromise: Promise<void> | null = null;
@@ -81,6 +90,8 @@ function ensureRewardTables(): Promise<void> {
         "characterId"  TEXT
       )
     `);
+    await pool.query(`ALTER TABLE "missionExtraRewards" ADD COLUMN IF NOT EXISTS "rewardItemType" TEXT`);
+    await pool.query(`ALTER TABLE "missionExtraRewards" ADD COLUMN IF NOT EXISTS "rewardItemAmount" INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "userPetCharacters" (
         id                SERIAL PRIMARY KEY,
@@ -101,24 +112,58 @@ function ensureRewardTables(): Promise<void> {
 async function loadMissionExtraRewards(): Promise<Map<number, MissionExtraReward>> {
   await ensureRewardTables();
   const { rows } = await pool.query(
-    `SELECT "missionId", "characterId" FROM "missionExtraRewards"`,
+    `SELECT "missionId", "characterId", "rewardItemType", "rewardItemAmount" FROM "missionExtraRewards"`,
   );
   return new Map(rows.map(row => [Number(row.missionId), {
     missionId: Number(row.missionId),
     characterId: typeof row.characterId === "string" && row.characterId ? row.characterId : null,
+    rewardItemType: VALID_REWARD_ITEM_TYPES.has(row.rewardItemType) ? row.rewardItemType as MissionRewardItemType : null,
+    rewardItemAmount: Number(row.rewardItemAmount ?? 0),
   }]));
 }
 
-async function saveMissionExtraReward(missionId: number, characterId: string | null) {
+async function saveMissionExtraReward(missionId: number, characterId: string | null, rewardItemType?: MissionRewardItemType | null, rewardItemAmount?: number | null) {
   await ensureRewardTables();
   const safeCharacter = characterId?.trim() || null;
+  const safeItemType = rewardItemType && VALID_REWARD_ITEM_TYPES.has(rewardItemType) ? rewardItemType : null;
+  const safeItemAmount = safeItemType && rewardItemAmount != null ? Math.max(0, Math.floor(Number(rewardItemAmount)) || 0) : 0;
   await pool.query(
-    `INSERT INTO "missionExtraRewards" ("missionId", "characterId")
-     VALUES ($1, $2)
+    `INSERT INTO "missionExtraRewards" ("missionId", "characterId", "rewardItemType", "rewardItemAmount")
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT ("missionId") DO UPDATE
-       SET "characterId" = EXCLUDED."characterId"`,
-    [missionId, safeCharacter],
+       SET "characterId" = EXCLUDED."characterId", "rewardItemType" = EXCLUDED."rewardItemType", "rewardItemAmount" = EXCLUDED."rewardItemAmount"`,
+    [missionId, safeCharacter, safeItemType, safeItemAmount],
   );
+}
+
+async function grantMissionRewardItem(userId: string, itemType: MissionRewardItemType, amount: number) {
+  if (amount <= 0) return;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
+    const now = Date.now();
+    const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+    if (itemType === "premium_food") {
+      const premiumFood = state.premiumFood && typeof state.premiumFood === "object"
+        ? state.premiumFood
+        : { dailyDate: "", dailyUsed: 0, inventory: 0 };
+      state.premiumFood = { ...premiumFood, inventory: Math.max(0, Number(premiumFood.inventory ?? 0)) + amount };
+    } else {
+      const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0 };
+      state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
+    }
+    await client.query(`
+      INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
+      ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()
+    `, [userId, JSON.stringify(state), now]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function ensureTesterPetMission() {
@@ -175,6 +220,8 @@ async function ensureTesterPetMission() {
 function withExtraReward<T extends { id: number }>(mission: T, rewards: Map<number, MissionExtraReward>) {
   const reward = rewards.get(mission.id);
   const rewardCharacterId = reward?.characterId ?? null;
+  const rewardItemType = reward?.rewardItemType ?? null;
+  const rewardItemAmount = reward?.rewardItemAmount ?? 0;
   const rawMission = mission as T & { title?: string; description?: string | null; type?: string };
   const fallbackTypeNames: Record<string, string> = {
     daily: "デイリー",
@@ -194,6 +241,9 @@ function withExtraReward<T extends { id: number }>(mission: T, rewards: Map<numb
     description,
     rewardCharacterId,
     rewardCharacterName: rewardCharacterId ? (PET_CHARACTER_NAMES[rewardCharacterId] ?? rewardCharacterId) : null,
+    rewardItemType,
+    rewardItemAmount,
+    rewardItemName: rewardItemType ? REWARD_ITEM_NAMES[rewardItemType] : null,
   };
 }
 
@@ -821,9 +871,18 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       });
     }
 
+    if (extraReward?.rewardItemType && extraReward.rewardItemAmount > 0) {
+      await grantMissionRewardItem(userId, extraReward.rewardItemType, extraReward.rewardItemAmount).catch(error => {
+        console.error("[Missions] grant reward item", error);
+      });
+    }
+
     const rewardParts: string[] = [];
     if (awardedPoints > 0) rewardParts.push(`${awardedPoints.toLocaleString()}ポイント${pointMultiplier > 1 ? "（幸運の肉球 ×2）" : ""}`);
     if (extraReward?.characterId) rewardParts.push(PET_CHARACTER_NAMES[extraReward.characterId] ?? extraReward.characterId);
+    if (extraReward?.rewardItemType && extraReward.rewardItemAmount > 0) {
+      rewardParts.push(`${REWARD_ITEM_NAMES[extraReward.rewardItemType]} ×${extraReward.rewardItemAmount}`);
+    }
 
     await db.insert(notificationsTable).values({
       userId, type: "mission", title: "ミッション達成！",
@@ -836,6 +895,9 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       pointMultiplier,
       characterId: extraReward?.characterId ?? null,
       characterName: extraReward?.characterId ? (PET_CHARACTER_NAMES[extraReward.characterId] ?? extraReward.characterId) : null,
+      rewardItemType: extraReward?.rewardItemType ?? null,
+      rewardItemAmount: extraReward?.rewardItemAmount ?? 0,
+      rewardItemName: extraReward?.rewardItemType ? REWARD_ITEM_NAMES[extraReward.rewardItemType] : null,
     });
   } catch {
     res.status(500).json({ error: "Internal error" });
@@ -892,8 +954,8 @@ router.put("/admin/missions/reorder", requireAdmin, async (req, res): Promise<vo
 });
 
 router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => {
-  const { title, description, type, points, rewardCharacterId, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
-    req.body as { title?: string; description?: string; type?: string; points?: number; rewardCharacterId?: string | null; startAt?: string; endAt?: string; linkUrl?: string; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
+  const { title, description, type, points, rewardCharacterId, rewardItemType, rewardItemAmount, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
+    req.body as { title?: string; description?: string; type?: string; points?: number; rewardCharacterId?: string | null; rewardItemType?: MissionRewardItemType | null; rewardItemAmount?: number | null; startAt?: string; endAt?: string; linkUrl?: string; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
   if (!title?.trim() || !type) { res.status(400).json({ error: "title and type required" }); return; }
   const validType = VALID_MISSION_TYPES.has(type) ? type : "daily";
   const VALID_STATUSES = new Set(["active", "inactive", "draft"]);
@@ -921,7 +983,7 @@ router.post("/admin/missions", requireAdmin, async (req, res): Promise<void> => 
       prerequisiteMissionId: prerequisiteMissionId ?? null,
       displayOrder: autoOrder,
     }).returning();
-    await saveMissionExtraReward(mission.id, rewardCharacterId ?? null);
+    await saveMissionExtraReward(mission.id, rewardCharacterId ?? null, rewardItemType ?? null, rewardItemAmount ?? null);
     const extraRewards = await loadMissionExtraRewards();
     res.status(201).json(withExtraReward(mission, extraRewards));
   } catch {
@@ -1084,8 +1146,8 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
 router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { title, description, type, points, rewardCharacterId, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
-    req.body as { title?: string; description?: string; type?: string; points?: number; rewardCharacterId?: string | null; startAt?: string | null; endAt?: string | null; linkUrl?: string | null; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
+  const { title, description, type, points, rewardCharacterId, rewardItemType, rewardItemAmount, startAt, endAt, linkUrl, isActive, status, conditionType, conditionValue, prerequisiteMissionId, displayOrder } =
+    req.body as { title?: string; description?: string; type?: string; points?: number; rewardCharacterId?: string | null; rewardItemType?: MissionRewardItemType | null; rewardItemAmount?: number | null; startAt?: string | null; endAt?: string | null; linkUrl?: string | null; isActive?: boolean; status?: string; conditionType?: string | null; conditionValue?: number | null; prerequisiteMissionId?: number | null; displayOrder?: number };
   const VALID_STATUSES_P = new Set(["active", "inactive", "draft"]);
   const missionStatus = status && VALID_STATUSES_P.has(status) ? status : undefined;
   try {
@@ -1105,8 +1167,14 @@ router.put("/admin/missions/:id", requireAdmin, async (req, res): Promise<void> 
       ...(prerequisiteMissionId !== undefined && { prerequisiteMissionId: prerequisiteMissionId ?? null }),
       ...(displayOrder !== undefined && { displayOrder }),
     }).where(eq(missionsTable.id, id));
-    if (rewardCharacterId !== undefined) {
-      await saveMissionExtraReward(id, rewardCharacterId);
+    if (rewardCharacterId !== undefined || rewardItemType !== undefined || rewardItemAmount !== undefined) {
+      const existingReward = (await loadMissionExtraRewards()).get(id);
+      await saveMissionExtraReward(
+        id,
+        rewardCharacterId !== undefined ? rewardCharacterId : existingReward?.characterId ?? null,
+        rewardItemType !== undefined ? rewardItemType : existingReward?.rewardItemType ?? null,
+        rewardItemAmount !== undefined ? rewardItemAmount : existingReward?.rewardItemAmount ?? null,
+      );
     }
     res.json({ ok: true });
   } catch {
