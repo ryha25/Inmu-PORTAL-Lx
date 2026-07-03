@@ -391,7 +391,8 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
               background:'radial-gradient(circle,rgba(255,235,150,.78),rgba(218,165,32,.32) 42%,transparent 70%)',
               filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
             <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
-            <img src={mascotImg} style={{position:'absolute',width:72,height:'auto',bottom:46,zIndex:8,
+            <img src={mascotImg} style={{position:'absolute',width:68,height:'auto',left:'50%',top:'78%',zIndex:9,
+              transform:'translate(-50%,-50%)',
               filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
               animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
           </div>
@@ -441,14 +442,23 @@ function ResultCapsuleReveal({ prizeId, size=210 }: {prizeId:string; size?:numbe
 /* 笊絶武笊絶武 Prize Capsule: CSS-drawn colored capsule (image 5 reference) 笊絶武笊絶武 */
 function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:string;size?:number;open?:boolean;showLabel?:boolean}) {
   const c = CAPSULE[prizeId] ?? CAPSULE.pts100
-  const r = size/2
-  const width = size*1.18
-  const sep = open ? Math.max(7, size*.1) : 0
+  const width = size*1.3
+  const halfHeight = size*.38
+  const sep = open ? Math.max(8, size*.12) : 0
   const isJackpot = prizeId === 'inmu10k'
   const labelSize = Math.max(9, Math.min(28, size*.17))
-  const rimColor = isJackpot ? 'rgba(255,225,120,.92)' : c.border
+  const shellColor = prizeId==='pts100' ? '#f3f5f7'
+    : prizeId==='pts300' ? '#ff4daf'
+    : prizeId==='pts500' ? '#a6ed35'
+    : prizeId==='pts1000' ? '#2678f3'
+    : prizeId==='pts3000' ? '#ff4b3f'
+    : prizeId==='pts5000' ? '#a62ee9'
+    : prizeId==='premium-food' ? '#ff922e'
+    : '#f5bd16'
+  const shellGradient = `linear-gradient(145deg,rgba(255,255,255,.92),transparent 30%),linear-gradient(160deg,${shellColor},${shellColor} 62%,rgba(0,0,0,.2))`
+  const outline = Math.max(2.5,size*.035)
   return (
-    <div style={{position:'relative',width,height:size+sep*2,display:'flex',
+    <div style={{position:'relative',width,height:halfHeight*2+sep*2,display:'flex',
       flexDirection:'column',alignItems:'center',
       filter:`drop-shadow(0 0 ${Math.max(16,size*.22)}px ${c.glow})`}}>
       {!open&&(
@@ -457,36 +467,38 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
           opacity:isJackpot ? .42 : .22,pointerEvents:'none'}}/>
       )}
       {/* Top half */}
-      <div style={{width,height:r,
-        borderRadius:'44% 44% 14% 14% / 62% 62% 10% 10%',
-        clipPath:'polygon(5% 100%,2% 70%,5% 36%,15% 13%,30% 4%,43% 12%,50% 3%,57% 12%,72% 4%,87% 14%,96% 39%,98% 72%,94% 100%)',
-        background:`${c.top}, linear-gradient(135deg,rgba(255,255,255,.42),transparent 34%)`,
-        border:`1.8px solid ${rimColor}`,borderBottom:'none',
-        boxShadow:`0 -4px 24px ${c.glow},inset 0 3px 14px rgba(255,255,255,.58),inset 0 -9px 14px rgba(0,0,0,.42)`,
+      <div style={{width,height:halfHeight,
+        borderRadius:'48% 48% 12% 12% / 78% 78% 18% 18%',
+        background:shellGradient,
+        border:`${outline}px solid #111217`,
+        boxShadow:`0 -4px 24px ${c.glow},inset 0 3px 8px rgba(255,255,255,.72)`,
         transform:`translateY(${-sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',top:size*.1,left:size*.16,width:size*.28,height:size*.12,
-          borderRadius:'50%',background:'rgba(255,255,255,.74)',filter:'blur(.2px)',
-          transform:'rotate(-22deg)'}}/>
-        <div style={{position:'absolute',top:size*.23,left:size*.11,width:size*.12,height:size*.055,
-          borderRadius:'50%',background:'rgba(255,255,255,.38)',transform:'rotate(-18deg)'}}/>
+        <div style={{position:'absolute',top:'17%',left:'17%',width:'28%',height:'67%',background:'#fff400',
+          clipPath:'polygon(16% 4%,58% 0,92% 20%,78% 44%,94% 73%,62% 100%,25% 88%,4% 57%,18% 34%,0 20%)',
+          filter:'drop-shadow(0 0 5px rgba(255,244,0,.7))'}}/>
+        <div style={{position:'absolute',top:'16%',right:'16%',width:'28%',height:'68%',background:'#fff400',
+          clipPath:'polygon(42% 0,84% 6%,100% 27%,82% 45%,96% 70%,70% 96%,32% 100%,5% 72%,20% 48%,3% 25%)',
+          filter:'drop-shadow(0 0 5px rgba(255,244,0,.7))'}}/>
+        <div style={{position:'absolute',top:'-5%',left:'50%',width:'5%',height:'25%',borderRadius:99,
+          background:'#111217',transform:'translateX(-50%) rotate(9deg)'}}/>
       </div>
       {/* Bottom half */}
-      <div style={{width,height:r,
-        borderRadius:'14% 14% 48% 48% / 10% 10% 60% 60%',
-        clipPath:'polygon(5% 0,95% 0,98% 28%,95% 62%,86% 87%,68% 97%,52% 92%,35% 98%,17% 88%,6% 63%,2% 30%)',
-        background:c.bot,
-        border:`1.8px solid ${rimColor}`,borderTop:'none',
-        boxShadow:`0 6px 24px ${c.glow},inset 0 9px 14px rgba(0,0,0,.38),inset 0 -3px 9px rgba(255,255,255,.28)`,
+      <div style={{width,height:halfHeight,
+        borderRadius:'12% 12% 48% 48% / 18% 18% 78% 78%',
+        background:shellGradient,
+        border:`${outline}px solid #111217`,
+        boxShadow:`0 6px 24px ${c.glow},inset 0 -3px 8px rgba(255,255,255,.5)`,
         transform:`translateY(${sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',bottom:size*.08,right:size*.13,width:size*.2,height:size*.08,
-          borderRadius:'50%',background:'rgba(255,255,255,.2)',filter:'blur(1px)',
-          transform:'rotate(-18deg)'}}/>
+        <div style={{position:'absolute',left:'9%',right:'9%',top:'17%',height:'48%',background:'#111217',
+          clipPath:'polygon(0 15%,12% 5%,23% 22%,35% 7%,49% 25%,62% 5%,75% 23%,88% 7%,100% 16%,92% 74%,72% 93%,50% 100%,27% 92%,8% 73%)'}}/>
+        <div style={{position:'absolute',bottom:'10%',right:'14%',width:'20%',height:'12%',
+          borderRadius:'50%',background:'rgba(255,255,255,.34)',transform:'rotate(-16deg)'}}/>
       </div>
       {!open&&(
         <>
-          <div style={{position:'absolute',top:`calc(50% - ${Math.max(1,size*.012)}px)`,
-            left:width*.07,right:width*.07,height:Math.max(2,size*.024),borderRadius:999,
-            background:rimColor,
+          <div style={{position:'absolute',top:`calc(50% - ${outline/2}px)`,
+            left:width*.04,right:width*.04,height:outline,borderRadius:999,
+            background:'#111217',
             boxShadow:`0 0 ${Math.max(7,size*.08)}px ${c.glow}`,
             zIndex:4}}/>
           <div style={{position:'absolute',inset:0,borderRadius:'50%',overflow:'hidden',zIndex:6,
@@ -501,17 +513,12 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
         <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
           minWidth:size*.66,padding:`${Math.max(1,size*.018)}px ${Math.max(4,size*.048)}px`,
           borderRadius:999,textAlign:'center',zIndex:7,
-          color:isJackpot?'#3a2100':'#fff',
+          color:'#fff',
           fontSize:labelSize,fontWeight:900,lineHeight:1.05,whiteSpace:'pre-line',
           fontFamily:'system-ui, sans-serif',
-          textShadow:isJackpot?'0 1px 0 rgba(255,255,255,.55),0 0 14px rgba(255,215,0,.9)':'0 2px 5px rgba(0,0,0,.82),0 0 10px rgba(255,255,255,.22)'}}>
+          textShadow:'0 2px 5px rgba(0,0,0,.9),0 0 10px rgba(255,255,255,.3)'}}>
           {c.label}
         </div>
-      )}
-      {isJackpot&&size>=120&&(
-        <img src={mascotImg} style={{position:'absolute',left:'50%',top:'55%',
-          width:size*.34,height:'auto',objectFit:'contain',transform:'translate(-50%,-50%)',
-          opacity:open ? .28 : .48,filter:'drop-shadow(0 2px 8px rgba(95,48,0,.8))',zIndex:5}}/>
       )}
       {isJackpot&&open&&(
         <div style={{position:'absolute',inset:-12,borderRadius:'50%',
@@ -524,25 +531,19 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
 
 function RateOrb({ id }:{id:string}) {
   const c = CAPSULE[id] ?? CAPSULE.pts100
-  const isJackpot = id === 'inmu10k'
+  const shellColor = id==='pts100' ? '#f3f5f7' : id==='pts300' ? '#ff4daf'
+    : id==='pts500' ? '#a6ed35' : id==='pts1000' ? '#2678f3'
+    : id==='pts3000' ? '#ff4b3f' : id==='pts5000' ? '#a62ee9'
+    : id==='premium-food' ? '#ff922e' : '#f5bd16'
   return (
-    <div style={{position:'relative',width:30,height:25,borderRadius:'44% 44% 50% 50% / 58% 58% 48% 48%',flexShrink:0,
-      background:`${c.top}, ${c.bot}`,
-      border:`1px solid ${isJackpot?'rgba(255,224,120,.9)':c.border}`,
-      boxShadow:`0 0 12px ${c.glow}, inset -4px -4px 9px rgba(0,0,0,.45), inset 3px 3px 6px rgba(255,255,255,.34)`,
+    <div style={{position:'relative',width:32,height:25,borderRadius:'46% 46% 48% 48% / 64% 64% 48% 48%',flexShrink:0,
+      background:shellColor,border:'1.5px solid #111217',boxShadow:`0 0 12px ${c.glow}`,
       overflow:'hidden'}}>
-      <div style={{position:'absolute',left:2,right:2,top:'49%',height:1.5,
-        background:isJackpot ? 'rgba(255,232,130,.95)' : c.border,
-        boxShadow:`0 0 7px ${c.glow}`}}/>
-      <div style={{position:'absolute',top:4,left:5,width:9,height:6,borderRadius:'50%',
-        background:'rgba(255,255,255,.82)',filter:'blur(.2px)',transform:'rotate(-24deg)'}}/>
-      <div style={{position:'absolute',top:12,left:4,width:4,height:3,borderRadius:'50%',
-        background:'rgba(255,255,255,.34)',transform:'rotate(-20deg)'}}/>
-      {isJackpot&&(
-        <div style={{position:'absolute',inset:5,borderRadius:'50%',
-          background:'radial-gradient(circle,rgba(255,246,160,.76) 0%,rgba(218,165,32,.28) 42%,transparent 70%)',
-          boxShadow:'0 0 10px rgba(255,215,0,.8)'}}/>
-      )}
+      <div style={{position:'absolute',left:0,right:0,top:'49%',height:1.5,background:'#111217'}}/>
+      <div style={{position:'absolute',top:3,left:6,width:8,height:7,borderRadius:'50%',background:'#fff400'}}/>
+      <div style={{position:'absolute',top:3,right:6,width:8,height:7,borderRadius:'50%',background:'#fff400'}}/>
+      <div style={{position:'absolute',left:4,right:4,bottom:2,height:8,background:'#111217',
+        clipPath:'polygon(0 15%,18% 0,34% 30%,50% 4%,66% 30%,82% 0,100% 15%,90% 80%,50% 100%,10% 80%)'}}/>
     </div>
   )
 }
