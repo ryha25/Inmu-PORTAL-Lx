@@ -30,12 +30,20 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
       pool.query(`SELECT 1 FROM "userPetCharacters" WHERE "userId"=$1 AND "characterId"=$2 LIMIT 1`, [userId, characterId]),
       pool.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 LIMIT 1`, [userId]),
     ]);
-    if (!ownership.rowCount) return false;
     const state = saved.rows[0]?.state ?? {};
-    const level = Number(state?.pets?.[characterId]?.level ?? 1);
+    const normalizeId = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/_/g, "-");
+    const targetId = normalizeId(characterId);
+    const statePetId = Object.keys(state?.pets ?? {}).find(id => normalizeId(id) === targetId) ?? characterId;
+    const level = Number(state?.pets?.[statePetId]?.level ?? 1);
     const enabled = state?.skillState?.[characterId] !== false;
-    const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.map(String) : [];
-    if (!enabled || !activePetIds.includes(characterId) || level < minLevel) return false;
+    const activePetIds = Array.isArray(state?.activePetIds)
+      ? state.activePetIds.map(normalizeId)
+      : [];
+    // Older PET saves can contain the character state without a matching ownership row.
+    // The server-saved active slots remain the source of truth for skill activation.
+    const hasCharacterData = Boolean(ownership.rowCount) || Boolean(state?.pets?.[statePetId]);
+    const legacySelectedActive = activePetIds.length === 0 && normalizeId(state?.selectedPetId) === targetId;
+    if (!hasCharacterData || !enabled || (!activePetIds.includes(targetId) && !legacySelectedActive) || level < minLevel) return false;
 
     const client = await pool.connect();
     try {

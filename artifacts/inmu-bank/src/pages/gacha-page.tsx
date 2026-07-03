@@ -458,9 +458,8 @@ function ResultCapsuleReveal({ prizeId, size=210 }: {prizeId:string; size?:numbe
 /* 笊絶武笊絶武 Prize Capsule: CSS-drawn colored capsule (image 5 reference) 笊絶武笊絶武 */
 function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:string;size?:number;open?:boolean;showLabel?:boolean}) {
   const c = CAPSULE[prizeId] ?? CAPSULE.pts100
-  const width = size*1.3
-  const halfHeight = size*.38
-  const sep = open ? Math.max(8, size*.12) : 0
+  const width = size*1.42
+  const height = size*.9
   const isJackpot = prizeId === 'inmu10k'
   const labelSize = Math.max(9, Math.min(28, size*.17))
   const isCharacter = prizeId.startsWith('character-')
@@ -475,59 +474,43 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
   const shellGradient = isCharacter
     ? 'linear-gradient(145deg,rgba(255,255,255,.98),transparent 28%),linear-gradient(135deg,#ff4f9a,#ffe24f 20%,#68ff9c 40%,#55c9ff 61%,#a66cff 81%,#ff63d3)'
     : `linear-gradient(145deg,rgba(255,255,255,.92),transparent 30%),linear-gradient(160deg,${shellColor},${shellColor} 62%,rgba(0,0,0,.2))`
-  const outline = Math.max(2.5,size*.035)
+  const appleShape = 'polygon(7% 43%,10% 26%,20% 14%,34% 10%,48% 15%,59% 12%,76% 16%,88% 28%,93% 48%,88% 68%,77% 82%,60% 89%,42% 88%,24% 82%,12% 68%)'
+  const inset = Math.max(4,size*.055)
+  const shell = (part:'whole'|'top'|'bottom') => (
+    <div style={{position:'absolute',inset:0,
+      clipPath:part==='top'?'inset(0 0 49% 0)':part==='bottom'?'inset(49% 0 0 0)':'none',
+      transform:part==='top'&&open?`translateY(${-size*.15}px) rotate(-3deg)`:part==='bottom'&&open?`translateY(${size*.15}px) rotate(2deg)`:'none',
+      transition:'transform .42s cubic-bezier(.2,.8,.2,1)'}}>
+      <div style={{position:'absolute',inset:0,clipPath:appleShape,background:'#090a0d'}}/>
+      <div style={{position:'absolute',inset,clipPath:appleShape,background:shellGradient,overflow:'hidden'}}>
+        <div style={{position:'absolute',left:'-2%',right:'-2%',top:'51%',bottom:'-4%',background:'#090a0d',
+          clipPath:'polygon(0 18%,12% 8%,25% 20%,39% 6%,53% 18%,67% 4%,82% 18%,100% 8%,100% 100%,0 100%)'}}/>
+        <div style={{position:'absolute',left:'18%',top:'22%',width:'26%',height:'52%',background:'#fff400',
+          clipPath:'polygon(14% 0,62% 4%,100% 25%,79% 48%,97% 74%,62% 100%,20% 86%,0 55%,18% 34%,0 18%)'}}>
+          <div style={{position:'absolute',inset:'14% 26% 12% 20%',background:'#fff',clipPath:'polygon(22% 0,75% 8%,100% 32%,75% 58%,93% 83%,52% 100%,16% 79%,0 42%)'}}/>
+        </div>
+        <div style={{position:'absolute',right:'17%',top:'21%',width:'27%',height:'53%',background:'#fff400',
+          clipPath:'polygon(33% 0,82% 7%,100% 32%,78% 52%,95% 77%,61% 100%,19% 88%,0 62%,18% 39%,2% 20%)'}}>
+          <div style={{position:'absolute',inset:'13% 20% 14% 24%',background:'#fff',clipPath:'polygon(19% 0,75% 9%,100% 39%,78% 62%,88% 84%,46% 100%,10% 76%,0 34%)'}}/>
+        </div>
+        <div style={{position:'absolute',left:'13%',top:'8%',width:'29%',height:'18%',borderRadius:'50%',background:'rgba(255,255,255,.48)',transform:'rotate(-12deg)'}}/>
+      </div>
+    </div>
+  )
   return (
-    <div style={{position:'relative',width,height:halfHeight*2+sep*2,display:'flex',
-      flexDirection:'column',alignItems:'center',
+    <div style={{position:'relative',width,height,display:'flex',alignItems:'center',justifyContent:'center',
       filter:`drop-shadow(0 0 ${Math.max(16,size*.22)}px ${c.glow})`}}>
       {!open&&(
         <div style={{position:'absolute',inset:-Math.max(8,size*.08),borderRadius:'50%',
           background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
           opacity:isJackpot ? .42 : .22,pointerEvents:'none'}}/>
       )}
-      {/* Top half */}
-      <div style={{width,height:halfHeight,
-        borderRadius:'48% 48% 12% 12% / 78% 78% 18% 18%',
-        background:shellGradient,
-        border:`${outline}px solid #111217`,
-        boxShadow:`0 -4px 24px ${c.glow},inset 0 3px 8px rgba(255,255,255,.72)`,
-        transform:`translateY(${-sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',top:'17%',left:'17%',width:'28%',height:'67%',background:'#fff400',
-          clipPath:'polygon(16% 4%,58% 0,92% 20%,78% 44%,94% 73%,62% 100%,25% 88%,4% 57%,18% 34%,0 20%)',
-          filter:'drop-shadow(0 0 5px rgba(255,244,0,.7))'}}/>
-        <div style={{position:'absolute',top:'16%',right:'16%',width:'28%',height:'68%',background:'#fff400',
-          clipPath:'polygon(42% 0,84% 6%,100% 27%,82% 45%,96% 70%,70% 96%,32% 100%,5% 72%,20% 48%,3% 25%)',
-          filter:'drop-shadow(0 0 5px rgba(255,244,0,.7))'}}/>
-        <div style={{position:'absolute',top:'-5%',left:'50%',width:'5%',height:'25%',borderRadius:99,
-          background:'#111217',transform:'translateX(-50%) rotate(9deg)'}}/>
+      {open ? <>{shell('top')}{shell('bottom')}</> : shell('whole')}
+      <div style={{position:'absolute',left:'52%',top:'-5%',width:'4%',height:'24%',borderRadius:99,
+        background:'#090a0d',transform:'rotate(13deg)',transformOrigin:'bottom',zIndex:5}}/>
+      <div style={{position:'absolute',inset:0,clipPath:appleShape,overflow:'hidden',zIndex:6,pointerEvents:'none'}}>
+        <div style={{position:'absolute',top:'-18%',bottom:'-18%',left:'10%',width:'24%',background:'linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent)',animation:'ga-capglint 2.2s ease-in-out infinite'}}/>
       </div>
-      {/* Bottom half */}
-      <div style={{width,height:halfHeight,
-        borderRadius:'12% 12% 48% 48% / 18% 18% 78% 78%',
-        background:shellGradient,
-        border:`${outline}px solid #111217`,
-        boxShadow:`0 6px 24px ${c.glow},inset 0 -3px 8px rgba(255,255,255,.5)`,
-        transform:`translateY(${sep}px)`,flexShrink:0,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',left:'9%',right:'9%',top:'17%',height:'48%',background:'#111217',
-          clipPath:'polygon(0 15%,12% 5%,23% 22%,35% 7%,49% 25%,62% 5%,75% 23%,88% 7%,100% 16%,92% 74%,72% 93%,50% 100%,27% 92%,8% 73%)'}}/>
-        <div style={{position:'absolute',bottom:'10%',right:'14%',width:'20%',height:'12%',
-          borderRadius:'50%',background:'rgba(255,255,255,.34)',transform:'rotate(-16deg)'}}/>
-      </div>
-      {!open&&(
-        <>
-          <div style={{position:'absolute',top:`calc(50% - ${outline/2}px)`,
-            left:width*.04,right:width*.04,height:outline,borderRadius:999,
-            background:'#111217',
-            boxShadow:`0 0 ${Math.max(7,size*.08)}px ${c.glow}`,
-            zIndex:4}}/>
-          <div style={{position:'absolute',inset:0,borderRadius:'50%',overflow:'hidden',zIndex:6,
-            pointerEvents:'none'}}>
-            <div style={{position:'absolute',top:'-12%',bottom:'-12%',left:'16%',width:'24%',
-              background:'linear-gradient(90deg,transparent,rgba(255,255,255,.68),transparent)',
-              animation:'ga-capglint 2.2s ease-in-out infinite'}}/>
-          </div>
-        </>
-      )}
       {showLabel&&(
         <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
           minWidth:size*.66,padding:`${Math.max(1,size*.018)}px ${Math.max(4,size*.048)}px`,
@@ -555,17 +538,16 @@ function RateOrb({ id }:{id:string}) {
     : id==='pts500' ? '#a6ed35' : id==='pts1000' ? '#2678f3'
     : id==='pts3000' ? '#ff4b3f' : id==='pts5000' ? '#a62ee9'
     : id==='premium-food' ? '#ff922e' : '#f5bd16'
-  return (
-    <div style={{position:'relative',width:32,height:25,borderRadius:'46% 46% 48% 48% / 64% 64% 48% 48%',flexShrink:0,
-      background:isCharacter?'linear-gradient(135deg,#ff58a0,#ffe34f 22%,#66ff9c 44%,#55c8ff 65%,#a76aff 84%,#ff63d2)':shellColor,border:'1.5px solid #111217',boxShadow:`0 0 12px ${c.glow}`,
-      overflow:'hidden'}}>
-      <div style={{position:'absolute',left:0,right:0,top:'49%',height:1.5,background:'#111217'}}/>
-      <div style={{position:'absolute',top:3,left:6,width:8,height:7,borderRadius:'50%',background:'#fff400'}}/>
-      <div style={{position:'absolute',top:3,right:6,width:8,height:7,borderRadius:'50%',background:'#fff400'}}/>
-      <div style={{position:'absolute',left:4,right:4,bottom:2,height:8,background:'#111217',
-        clipPath:'polygon(0 15%,18% 0,34% 30%,50% 4%,66% 30%,82% 0,100% 15%,90% 80%,50% 100%,10% 80%)'}}/>
+  const body=isCharacter?'linear-gradient(135deg,#ff58a0,#ffe34f 22%,#66ff9c 44%,#55c8ff 65%,#a76aff 84%,#ff63d2)':shellColor
+  return <div style={{position:'relative',width:34,height:25,flexShrink:0,filter:`drop-shadow(0 0 7px ${c.glow})`}}>
+    <div style={{position:'absolute',inset:0,background:'#090a0d',clipPath:'polygon(6% 43%,12% 22%,28% 11%,47% 16%,62% 12%,82% 20%,94% 42%,88% 70%,70% 88%,42% 90%,18% 78%)'}}/>
+    <div style={{position:'absolute',inset:2,background:body,clipPath:'polygon(6% 43%,12% 22%,28% 11%,47% 16%,62% 12%,82% 20%,94% 42%,88% 70%,70% 88%,42% 90%,18% 78%)',overflow:'hidden'}}>
+      <div style={{position:'absolute',left:0,right:0,top:'54%',bottom:0,background:'#090a0d'}}/>
+      <i style={{position:'absolute',left:'20%',top:'20%',width:'25%',height:'45%',background:'#fff400',clipPath:'polygon(20% 0,100% 22%,72% 50%,100% 82%,45% 100%,0 60%)'}}/>
+      <i style={{position:'absolute',right:'18%',top:'20%',width:'25%',height:'45%',background:'#fff400',clipPath:'polygon(30% 0,100% 30%,75% 55%,95% 84%,35% 100%,0 62%)'}}/>
     </div>
-  )
+    <div style={{position:'absolute',left:'53%',top:-2,width:2,height:7,borderRadius:3,background:'#090a0d',transform:'rotate(12deg)'}}/>
+  </div>
 }
 
 /* 笊絶武笊絶武 Rate Panel overlay 笊絶武笊絶武 */
