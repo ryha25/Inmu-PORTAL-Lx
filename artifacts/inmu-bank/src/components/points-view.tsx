@@ -122,6 +122,9 @@ type Mission = {
   prerequisiteMissionTitle: string | null
   rewardCharacterId: string | null
   rewardCharacterName: string | null
+  rewardItemType: string | null
+  rewardItemAmount: number
+  rewardItemName: string | null
 }
 
 const CHARACTER_REWARD_NAMES: Record<string, string> = {
@@ -131,6 +134,11 @@ const CHARACTER_REWARD_NAMES: Record<string, string> = {
   'inmu-festival': 'INMUくん（810祭りVer.）',
 }
 
+const REWARD_ITEM_NAMES: Record<string, string> = {
+  premium_food: '高級ごはん',
+  sleep_tea: 'アイスティー（睡眠薬入り）',
+}
+
 function getCanonicalCharacterName(characterId: string, fallback?: string | null) {
   return CHARACTER_REWARD_NAMES[characterId] ?? fallback ?? characterId
 }
@@ -138,6 +146,12 @@ function getCanonicalCharacterName(characterId: string, fallback?: string | null
 function getCharacterRewardName(mission: Mission) {
   if (!mission.rewardCharacterId) return null
   return getCanonicalCharacterName(mission.rewardCharacterId, mission.rewardCharacterName)
+}
+
+function getItemRewardLabel(mission: Mission) {
+  if (!mission.rewardItemType || mission.rewardItemAmount <= 0) return null
+  const name = REWARD_ITEM_NAMES[mission.rewardItemType] ?? mission.rewardItemName ?? mission.rewardItemType
+  return `${name} ×${mission.rewardItemAmount}`
 }
 
 const POINT_TYPE_LABEL: Record<string, string> = {
@@ -295,7 +309,11 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
           setCharacterReveal({ characterId: d.characterId, characterName: getCanonicalCharacterName(d.characterId, d.characterName), points: Number(d.points ?? 0) })
           window.dispatchEvent(new CustomEvent('inmu-pet-ownership-changed'))
         } else {
-          toast.success(`${Number(d.points ?? 0).toLocaleString()}ポイントを獲得しました！`)
+          const itemName = d.rewardItemType && Number(d.rewardItemAmount ?? 0) > 0
+            ? (REWARD_ITEM_NAMES[d.rewardItemType] ?? d.rewardItemName ?? d.rewardItemType)
+            : null
+          const itemPart = itemName ? `、${itemName} ×${d.rewardItemAmount}` : ''
+          toast.success(`${Number(d.points ?? 0).toLocaleString()}ポイント${itemPart}を獲得しました！`)
         }
         loadMissions()
         onRefresh()
@@ -328,6 +346,7 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {m.points > 0 && <span className="rounded bg-yellow-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-300">{m.points.toLocaleString()} pt</span>}
               {getCharacterRewardName(m) && <span className="rounded bg-fuchsia-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-300">{getCharacterRewardName(m)}</span>}
+              {getItemRewardLabel(m) && <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">{getItemRewardLabel(m)}</span>}
             </div>
             {m.conditionType && m.conditionType !== 'none' && m.conditionCurrent !== null && m.conditionValue && (
               <p className="text-[10px] text-muted-foreground mt-0.5">

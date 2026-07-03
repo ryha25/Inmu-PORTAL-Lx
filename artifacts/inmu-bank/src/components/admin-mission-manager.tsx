@@ -31,11 +31,14 @@ type MissionRow = {
   displayOrder: number
   rewardCharacterId: string | null
   rewardCharacterName: string | null
+  rewardItemType: string | null
+  rewardItemAmount: number
 }
 type StageForm = { title: string; description: string; points: string; conditionValue: string }
 type MissionForm = {
   title: string; description: string; type: string; points: string
   rewardCharacterId: string
+  rewardItemType: string; rewardItemAmount: string
   startAt: string; endAt: string; linkUrl: string
   conditionType: string; conditionValue: string
 }
@@ -70,9 +73,13 @@ const TYPE_CATEGORIES = [
   { value: 'event',       label: 'イベントミッション',    color: 'bg-purple-500/20 text-purple-400' },
   { value: 'achievement', label: 'アチーブメント',        color: 'bg-yellow-500/20 text-yellow-400' },
 ]
-const BLANK_FORM: MissionForm = { title: '', description: '', type: 'daily', points: '', rewardCharacterId: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' }
+const BLANK_FORM: MissionForm = { title: '', description: '', type: 'daily', points: '', rewardCharacterId: '', rewardItemType: '', rewardItemAmount: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' }
 const BLANK_STAGE: StageForm = { title: '', description: '', points: '', conditionValue: '' }
 const PET_REWARD_OPTIONS = PET_DEFINITIONS.map(pet => ({ value: pet.id, label: pet.name }))
+const REWARD_ITEM_OPTIONS = [
+  { value: 'premium_food', label: '高級ごはん' },
+  { value: 'sleep_tea', label: 'アイスティー（睡眠薬入り）' },
+]
 
 /* ── Chain helpers ── */
 function buildChains(missions: MissionRow[]): Map<number, MissionRow[]> {
@@ -186,6 +193,8 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
       type: m.type,
       points: String(m.points),
       rewardCharacterId: m.rewardCharacterId ?? '',
+      rewardItemType: m.rewardItemType ?? '',
+      rewardItemAmount: m.rewardItemAmount ? String(m.rewardItemAmount) : '',
       startAt: m.startAt ? new Date(m.startAt).toISOString().slice(0, 16) : '',
       endAt: m.endAt ? new Date(m.endAt).toISOString().slice(0, 16) : '',
       linkUrl: m.linkUrl ?? '',
@@ -233,6 +242,8 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
       title: form.title, description: form.description, type: form.type,
       points: Number(form.points) || 0,
       rewardCharacterId: form.rewardCharacterId || null,
+      rewardItemType: form.rewardItemType || null,
+      rewardItemAmount: form.rewardItemType ? (Number(form.rewardItemAmount) || 0) : 0,
       startAt: form.startAt || null, endAt: form.endAt || null,
       linkUrl: form.linkUrl || null,
       conditionType: condTypeVal, conditionValue: condVal,
@@ -396,6 +407,11 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
             {m.description && <p className="text-xs text-muted-foreground mt-0.5 ml-0.5">{m.description}</p>}
             <div className="mt-1 flex flex-wrap gap-1.5">
               {m.rewardCharacterName && <span className="rounded bg-fuchsia-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-300">キャラ: {m.rewardCharacterName}</span>}
+              {m.rewardItemType && m.rewardItemAmount > 0 && (
+                <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                  {REWARD_ITEM_OPTIONS.find(o => o.value === m.rewardItemType)?.label ?? m.rewardItemType} ×{m.rewardItemAmount}
+                </span>
+              )}
             </div>
             {ct && (
               <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -687,6 +703,25 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
             <option value="">なし</option>
             {PET_REWARD_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs text-muted-foreground">アイテム報酬（任意）</Label>
+          <div className="flex gap-2">
+            <select value={form.rewardItemType} onChange={e => setForm(p => ({ ...p, rewardItemType: e.target.value, rewardItemAmount: e.target.value ? (p.rewardItemAmount || '1') : '' }))} className={`${SELECT_CLS} flex-1`}>
+              <option value="">なし</option>
+              {REWARD_ITEM_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+            <Input
+              type="number"
+              min={1}
+              placeholder="個数"
+              aria-label="アイテム報酬個数"
+              value={form.rewardItemAmount}
+              disabled={!form.rewardItemType}
+              onChange={e => setForm(p => ({ ...p, rewardItemAmount: e.target.value }))}
+              className="min-h-10 w-24"
+            />
+          </div>
         </div>
         {/* Status selector */}
         <div className="flex gap-2 items-center">

@@ -356,11 +356,11 @@ router.get("/pet-gacha/free-status", requireAuth, async (req, res): Promise<void
     await ensurePetCommerceTables();
     const todayStart = jstTodayStartUtc();
     const { rows } = await pool.query(
-      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind"='paid' AND "createdAt" >= $2`,
+      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind" IN ('normal','paid') AND "createdAt" >= $2`,
       [userId, todayStart.toISOString()],
     );
     const bonusPulls = await hasActivePetSkill(userId, "takuya") ? 3 : 0;
-    const allowance = 1 + bonusPulls;
+    const allowance = 2 + bonusPulls; // 通常+有償それぞれの無料1回 + 拓也スキルの合算ボーナス3回
     const usedCount = Number(rows[0].cnt);
     const used = usedCount >= allowance;
     const nextReset = jstTomorrowStartUtc().toISOString();
@@ -490,18 +490,18 @@ router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void>
     await ensurePetCommerceTables();
     const todayStart = jstTodayStartUtc();
     const checkRows = await pool.query(
-      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind"='paid' AND "createdAt" >= $2`,
+      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind" IN ('normal','paid') AND "createdAt" >= $2`,
       [req.userId!, todayStart.toISOString()],
     );
     const bonusPulls = await hasActivePetSkill(req.userId!, "takuya") ? 3 : 0;
-    const allowance = 1 + bonusPulls;
+    const allowance = 2 + bonusPulls; // 通常+有償それぞれの無料1回 + 拓也スキルの合算ボーナス3回
     if (Number(checkRows.rows[0].cnt) >= allowance) {
       res.status(400).json({ error: "本日の無料ガチャは使用済みです" });
       return;
     }
     await client.query("BEGIN");
     const recheck = await client.query(
-      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind"='paid' AND "createdAt" >= $2`,
+      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind" IN ('normal','paid') AND "createdAt" >= $2`,
       [req.userId!, todayStart.toISOString()],
     );
     if (Number(recheck.rows[0].cnt) >= allowance) throw new Error("本日の無料ガチャは使用済みです");
