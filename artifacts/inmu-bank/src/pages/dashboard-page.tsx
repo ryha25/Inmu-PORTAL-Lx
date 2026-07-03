@@ -99,11 +99,11 @@ export function DashboardPage() {
     if (mob && !hasPhantom) {
       const url = encodeURIComponent(window.location.href)
       const ref = encodeURIComponent(window.location.origin)
-      const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
+      const phantomUrl = `phantom://browse/${url}?ref=${ref}`
       if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        window.location.href = phantomUrl
+        window.location.assign(phantomUrl)
       } else {
-        window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+        window.location.assign(`intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;end`)
       }
       return
     }
