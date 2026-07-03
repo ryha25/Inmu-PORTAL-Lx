@@ -33,12 +33,11 @@ export function openInPhantomBrowser() {
   const url = encodeURIComponent(window.location.href)
   const ref = encodeURIComponent(window.location.origin)
   const deepLink = `phantom://browse/${url}?ref=${ref}`
-  const universalLink = `https://phantom.app/ul/browse/${url}?ref=${ref}`
   if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    window.location.href = deepLink
+    window.location.assign(deepLink)
     return
   }
-  window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(universalLink)};end`
+  window.location.assign(`intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;end`)
 }
 
 export async function fetchInmuBalanceForWallet(wallet: string): Promise<number> {
