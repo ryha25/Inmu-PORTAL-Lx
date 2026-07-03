@@ -167,10 +167,10 @@ export function AdminProfilePage() {
       if (isMobile()) {
         const url = encodeURIComponent(window.location.href)
         const ref = encodeURIComponent(window.location.origin)
-        const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
-        window.location.href = isIOS()
+        const phantomUrl = `phantom://browse/${url}?ref=${ref}`
+        window.location.assign(isIOS()
           ? phantomUrl
-          : `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+          : `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;end`)
         return
       }
       toast.error('Phantom ウォレットをインストールしてください')
