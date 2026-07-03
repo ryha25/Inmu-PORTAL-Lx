@@ -29,6 +29,7 @@ type Prize = {
 }
 type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; costInmu?:number; newPoints:number; txId?:string; paidPity?:number|null }
 type HistRow = { id:number; pullType:string; isFree:boolean; results:Prize[]; totalPoints:number; hasInmu:boolean; inmuSentStatus:string; txHash:string|null; wasGuaranteed:boolean; costPoints:number; createdAt:string }
+type CommerceHistRow = { id:number; gachaType:'points'|'paid'; pullType:string; costPoints:number; costInmu:number; txId:string|null; results:Prize[]; createdAt:string }
 
 /* ─── capsule color configs (image 5 reference) ─── */
 const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;label:string}> = {
@@ -62,6 +63,11 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     bot:'radial-gradient(ellipse at 67% 72%, rgba(188,58,248,.93) 0%, rgba(125,8,212,.86) 42%, rgba(66,0,172,.6) 72%)',
     glow:'rgba(162,55,255,.68)', border:'rgba(182,78,255,.58)', label:'5,000pt',
   },
+  pts10000: {
+    top:'radial-gradient(ellipse at 33% 28%,rgba(255,248,174,.99),rgba(255,179,20,.94) 42%,rgba(151,65,0,.78) 76%)',
+    bot:'radial-gradient(ellipse at 67% 72%,rgba(255,224,102,.96),rgba(232,124,8,.9) 44%,rgba(105,36,0,.76) 78%)',
+    glow:'rgba(255,190,35,.82)', border:'rgba(255,225,125,.82)', label:'10,000pt',
+  },
   inmu10k: {
     top:'radial-gradient(ellipse at 33% 28%, rgba(255,250,130,.99) 0%, rgba(238,180,15,.93) 38%, rgba(185,125,5,.72) 70%)',
     bot:'radial-gradient(ellipse at 67% 72%, rgba(248,215,78,.95) 0%, rgba(218,155,8,.9) 38%, rgba(165,105,0,.67) 70%)',
@@ -73,19 +79,19 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     glow:'rgba(255,184,54,.78)', border:'rgba(255,222,132,.75)', label:'高級ごはん',
   },
   'character-nyarushian': {
-    top:'radial-gradient(ellipse at 33% 28%,#fffbd0,#ffd31a 42%,#9b5700 78%)',
-    bot:'radial-gradient(ellipse at 67% 72%,#fff28a,#e8a400 44%,#784000 78%)',
-    glow:'rgba(255,215,0,.95)', border:'rgba(255,242,138,.9)', label:'ニャルシアン',
+    top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'ニャルシアン',
   },
   'character-takuya': {
-    top:'radial-gradient(ellipse at 33% 28%,#fffbd0,#ffd31a 42%,#9b5700 78%)',
-    bot:'radial-gradient(ellipse at 67% 72%,#fff28a,#e8a400 44%,#784000 78%)',
-    glow:'rgba(255,215,0,.95)', border:'rgba(255,242,138,.9)', label:'拓也',
+    top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'拓也',
   },
   'character-leon': {
-    top:'radial-gradient(ellipse at 33% 28%,#fffbd0,#ffd31a 42%,#9b5700 78%)',
-    bot:'radial-gradient(ellipse at 67% 72%,#fff28a,#e8a400 44%,#784000 78%)',
-    glow:'rgba(255,215,0,.95)', border:'rgba(255,242,138,.9)', label:'レオン',
+    top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'レオン',
   },
 }
 
@@ -101,6 +107,16 @@ const BALLS = [
   { id:'character-nyarushian', label:'ニャルシアン', rate:'0.3%', color:'rgba(255,215,0,.9)' },
   { id:'character-takuya', label:'拓也', rate:'0.3%', color:'rgba(255,215,0,.9)' },
   { id:'character-leon', label:'レオン', rate:'0.3%', color:'rgba(255,215,0,.9)' },
+]
+const PAID_BALLS = [
+  { id:'pts1000', label:'1,000pt', rate:'60%' },
+  { id:'pts3000', label:'3,000pt', rate:'22%' },
+  { id:'pts5000', label:'5,000pt', rate:'8%' },
+  { id:'pts10000', label:'10,000pt', rate:'2.4%' },
+  { id:'premium-food', label:'高級ごはん', rate:'4%' },
+  { id:'character-nyarushian', label:'ニャルシアン', rate:'1.2%' },
+  { id:'character-takuya', label:'拓也', rate:'1.2%' },
+  { id:'character-leon', label:'レオン', rate:'1.2%' },
 ]
 const ORBIT_POSITIONS = [
   { left:'13%', top:'69%' },
@@ -447,6 +463,7 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
   const sep = open ? Math.max(8, size*.12) : 0
   const isJackpot = prizeId === 'inmu10k'
   const labelSize = Math.max(9, Math.min(28, size*.17))
+  const isCharacter = prizeId.startsWith('character-')
   const shellColor = prizeId==='pts100' ? '#f3f5f7'
     : prizeId==='pts300' ? '#ff4daf'
     : prizeId==='pts500' ? '#a6ed35'
@@ -455,7 +472,9 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
     : prizeId==='pts5000' ? '#a62ee9'
     : prizeId==='premium-food' ? '#ff922e'
     : '#f5bd16'
-  const shellGradient = `linear-gradient(145deg,rgba(255,255,255,.92),transparent 30%),linear-gradient(160deg,${shellColor},${shellColor} 62%,rgba(0,0,0,.2))`
+  const shellGradient = isCharacter
+    ? 'linear-gradient(145deg,rgba(255,255,255,.98),transparent 28%),linear-gradient(135deg,#ff4f9a,#ffe24f 20%,#68ff9c 40%,#55c9ff 61%,#a66cff 81%,#ff63d3)'
+    : `linear-gradient(145deg,rgba(255,255,255,.92),transparent 30%),linear-gradient(160deg,${shellColor},${shellColor} 62%,rgba(0,0,0,.2))`
   const outline = Math.max(2.5,size*.035)
   return (
     <div style={{position:'relative',width,height:halfHeight*2+sep*2,display:'flex',
@@ -531,13 +550,14 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
 
 function RateOrb({ id }:{id:string}) {
   const c = CAPSULE[id] ?? CAPSULE.pts100
+  const isCharacter = id.startsWith('character-')
   const shellColor = id==='pts100' ? '#f3f5f7' : id==='pts300' ? '#ff4daf'
     : id==='pts500' ? '#a6ed35' : id==='pts1000' ? '#2678f3'
     : id==='pts3000' ? '#ff4b3f' : id==='pts5000' ? '#a62ee9'
     : id==='premium-food' ? '#ff922e' : '#f5bd16'
   return (
     <div style={{position:'relative',width:32,height:25,borderRadius:'46% 46% 48% 48% / 64% 64% 48% 48%',flexShrink:0,
-      background:shellColor,border:'1.5px solid #111217',boxShadow:`0 0 12px ${c.glow}`,
+      background:isCharacter?'linear-gradient(135deg,#ff58a0,#ffe34f 22%,#66ff9c 44%,#55c8ff 65%,#a76aff 84%,#ff63d2)':shellColor,border:'1.5px solid #111217',boxShadow:`0 0 12px ${c.glow}`,
       overflow:'hidden'}}>
       <div style={{position:'absolute',left:0,right:0,top:'49%',height:1.5,background:'#111217'}}/>
       <div style={{position:'absolute',top:3,left:6,width:8,height:7,borderRadius:'50%',background:'#fff400'}}/>
@@ -549,7 +569,7 @@ function RateOrb({ id }:{id:string}) {
 }
 
 /* 笊絶武笊絶武 Rate Panel overlay 笊絶武笊絶武 */
-function RatePanel() {
+function RatePanel({ balls=BALLS }:{balls?:readonly {id:string;label:string;rate:string}[]}) {
   return (
     <div style={{position:'absolute',top:'12%',right:0,zIndex:10,width:148,maxHeight:'76%',overflowY:'auto',
       background:'linear-gradient(180deg,rgba(8,5,1,.98),rgba(1,1,1,.98) 52%,rgba(10,5,1,.98))',
@@ -570,7 +590,7 @@ function RatePanel() {
       <p style={{margin:'0 0 8px',fontSize:15,color:'#e8c65a',
         textAlign:'center',letterSpacing:'0.1em',fontWeight:900,
         textShadow:'0 0 12px rgba(218,165,32,.58)'}}>&#25490;&#20986;&#29575;</p>
-      {BALLS.map(b=>(
+      {balls.map(b=>(
         <div key={b.id} style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
           <RateOrb id={b.id}/>
           <div style={{minWidth:0}}>
@@ -703,8 +723,19 @@ function GachaModeTabs({ mode, onChange, disabled=false }: { mode:'points'|'paid
 
 function capsuleIdForPrize(prize?: Prize, result?: Result | null) {
   if (!prize) return 'pts100'
-  if (prize.type === 'character') return result?.costInmu ? prize.prizeId : 'pts5000'
+  if (prize.type === 'character') return prize.prizeId
   return prize.prizeId
+}
+
+function PrizeResultIcon({ prize, size=72 }:{prize:Prize;size?:number}) {
+  if (prize.type === 'character' && prize.characterId) {
+    const pet = PET_BY_ID[prize.characterId]
+    return <img src={pet?.image} alt={pet?.name ?? prize.label} style={{width:size,height:size,objectFit:'contain',filter:'drop-shadow(0 0 15px rgba(196,120,255,.8))'}}/>
+  }
+  if (prize.type === 'premium_food') {
+    return <div aria-label="高級ごはん" style={{width:size,height:size,borderRadius:'50%',display:'grid',placeItems:'center',fontSize:size*.62,background:'radial-gradient(circle at 35% 25%,#fff7b0,#ff9f1c 52%,#8b3100)',boxShadow:'0 0 18px rgba(255,170,40,.75)',border:'2px solid #ffe69a'}}>🍱</div>
+  }
+  return <CapsuleVisual prizeId={capsuleIdForPrize(prize)} size={size} open/>
 }
 
 function NewPetCharacterScreen({ prize, profile, unread, onClose }:{ prize:Prize; profile:any; unread:number; onClose:()=>void }) {
@@ -720,7 +751,7 @@ function NewPetCharacterScreen({ prize, profile, unread, onClose }:{ prize:Prize
             {pet&&<img src={pet.image} alt={pet.name} style={{position:'relative',zIndex:2,maxWidth:'100%',maxHeight:'100%',objectFit:'contain',filter:'drop-shadow(0 0 32px rgba(255,215,0,.72))',animation:'ga-jpzoom .8s ease-out both'}}/>}
           </div>
           <p style={{margin:0,color:'#fff',fontSize:28,fontWeight:900}}>{pet?.name??prize.label}</p>
-          <p style={{margin:'5px 0 20px',color:'#ffd700',fontWeight:800}}>☁E ・ Lv.1</p>
+          <p style={{margin:'5px 0 20px',color:'#ffd700',fontWeight:800}}>★3 ・ Lv.1</p>
           <button type="button" onClick={onClose} style={{width:'min(320px,90%)',height:52,borderRadius:8,border:'1px solid #ffe47b',background:'linear-gradient(135deg,#ffe47b,#c78a00)',fontWeight:900,color:'#160b00',boxShadow:'0 0 24px rgba(255,190,20,.4)'}}>OK</button>
         </div>
       </PageBg>
@@ -736,10 +767,12 @@ export function GachaPage() {
   const [result,setResult]       = useState<Result|null>(null)
   const [revIdx,setRevIdx]       = useState(0)
   const [history,setHistory]     = useState<HistRow[]>([])
+  const [commerceHistory,setCommerceHistory] = useState<CommerceHistRow[]>([])
   const [histOpen,setHistOpen]   = useState(true)
   const [openFlash,setOpenFlash] = useState(false)
   const [newCharacterRevealIndex,setNewCharacterRevealIndex] = useState(0)
   const [freeUsed,setFreeUsed]   = useState(true)
+  const [freeRemaining,setFreeRemaining] = useState(0)
   const [freeNextReset,setFreeNextReset] = useState<string|null>(null)
   const [freeLoading,setFreeLoading] = useState(false)
   const [gachaMode,setGachaMode] = useState<'points'|'paid'>('points')
@@ -796,7 +829,7 @@ export function GachaPage() {
   const loadFreeStatus = useCallback(async()=>{
     try{
       const r=await fetch('/api/gacha/free-status',{credentials:'include'})
-      if(r.ok){const d=await r.json() as {used:boolean;nextReset:string};setFreeUsed(d.used);setFreeNextReset(d.nextReset)}
+      if(r.ok){const d=await r.json() as {used:boolean;remaining?:number;nextReset:string};setFreeUsed(d.used);setFreeRemaining(Number(d.remaining??(d.used?0:1)));setFreeNextReset(d.nextReset)}
     }catch{/**/}
   },[])
   useEffect(()=>{loadFreeStatus()},[loadFreeStatus])
@@ -804,7 +837,7 @@ export function GachaPage() {
   const loadCommerceStatus = useCallback(async()=>{
     try{
       const response=await fetch('/api/pet-commerce/status',{credentials:'include'})
-      if(response.ok){const data=await response.json() as {paidPity?:number};setPaidPity(Number(data.paidPity??0))}
+      if(response.ok){const data=await response.json() as {paidPity?:number;history?:CommerceHistRow[]};setPaidPity(Number(data.paidPity??0));setCommerceHistory(Array.isArray(data.history)?data.history:[])}
     }catch{/**/}
   },[])
   useEffect(()=>{loadCommerceStatus()},[loadCommerceStatus])
@@ -863,7 +896,7 @@ export function GachaPage() {
       const r=await res.json() as Result
       const normalized:Result={...r,hasInmu:Boolean(r.hasInmu),wasGuaranteed:Boolean(r.hasInmu)}
       setResult(normalized);setRevIdx(0);setNewCharacterRevealIndex(0);setPts(normalized.newPoints)
-      setFreeUsed(true)
+      void loadFreeStatus()
       setPhase(normalized.wasGuaranteed?'guaranteed':'inserting')
     }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
     finally{setFreeLoading(false)}
@@ -948,6 +981,9 @@ export function GachaPage() {
       <PageBg>
         <div style={{display:'flex',flexDirection:'column',minHeight:'100%',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode} disabled={paidBusy}/>
+          <div style={{position:'relative',height:310,margin:'2px 12px 0',borderRadius:10,overflow:'hidden',background:'radial-gradient(circle at 45% 42%,rgba(255,197,45,.12),rgba(2,1,10,.96) 68%)'}}>
+            <RatePanel balls={PAID_BALLS}/>
+          </div>
           <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'18px 18px 8px',textAlign:'center'}}>
             <WalletCards style={{width:42,height:42,color:'#ffd65a',filter:'drop-shadow(0 0 14px rgba(255,200,40,.65))'}}/>
             <h1 style={{margin:'10px 0 4px',fontFamily:'Georgia,serif',fontSize:25,color:'#f4c84b',letterSpacing:'.12em'}}>INMU PET PREMIUM</h1>
@@ -968,6 +1004,11 @@ export function GachaPage() {
               <OrnateButton gold={false} enabled={!paidBusy} onClick={()=>spinPaid('eleven')} label={paidBusy?'処理中…':'11連ガチャ'} price="100,000 INMU"/>
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,marginTop:12,color:'rgba(255,255,255,.38)',fontSize:9}}><LockKeyhole style={{width:12}}/>送金成功をサーバーで確認後に抽選します</div>
+            <div style={{marginTop:10,border:'1px solid rgba(184,134,11,.35)',borderRadius:8,overflow:'hidden'}}>
+              <p style={{margin:0,padding:'7px 10px',fontSize:11,fontWeight:800,color:'#e8c65a'}}>有償ガチャ履歴</p>
+              {commerceHistory.filter(row=>row.gachaType==='paid').slice(0,3).map(row=><div key={row.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'6px 10px',borderTop:'1px solid rgba(184,134,11,.15)',fontSize:9,color:'rgba(255,255,255,.68)'}}><span>{row.pullType==='eleven'?'11連':'1連'}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.results.map(prize=>prize.label).join(' / ')}</span><span>{new Date(row.createdAt).toLocaleDateString('ja-JP')}</span></div>)}
+              {commerceHistory.filter(row=>row.gachaType==='paid').length===0&&<p style={{margin:0,padding:'8px 10px',fontSize:9,color:'rgba(255,255,255,.35)'}}>履歴はありません</p>}
+            </div>
           </div>
         </div>
       </PageBg>
@@ -995,7 +1036,7 @@ export function GachaPage() {
             <button type="button" disabled={freeUsed||freeLoading||phase!=='idle'} onClick={spinFree} style={{width:'100%',marginBottom:8,padding:'10px 16px',border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:freeUsed||freeLoading?'not-allowed':'pointer',background:freeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:freeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
-                  <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{freeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです':'1日1回 無料ガチャ'}</p>
+                  <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{freeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${freeRemaining}回）`}</p>
                   {freeUsed&&freeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(freeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
                   {!freeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで通常ガチャを引けます</p>}
                 </div>
@@ -1697,9 +1738,9 @@ export function GachaPage() {
                       <p style={{margin:'6px 0 10px',fontSize:12,color:'rgba(255,255,255,.5)'}}>
                         ポイントを即時付与しました
                       </p>
-                      <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',
-                        filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',
-                        animation:'ga-bounce 1.1s ease-in-out infinite'}}/>
+                      {(prize.type==='character'||prize.type==='premium_food')
+                        ? <div style={{display:'flex',justifyContent:'center'}}><PrizeResultIcon prize={prize} size={82}/></div>
+                        : <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',animation:'ga-bounce 1.1s ease-in-out infinite'}}/>}
                     </div>
                   </div>
                 )
@@ -1753,7 +1794,7 @@ export function GachaPage() {
                         background:`radial-gradient(circle,${c.glow} 0%,transparent 64%)`,
                         opacity:prize.prizeId==='inmu10k' ? .55 : .24,
                         filter:'blur(2px)',pointerEvents:'none'}}/>
-                      <CapsuleVisual prizeId={capsuleIdForPrize(prize,result)} size={52} open/>
+                      <PrizeResultIcon prize={prize} size={52}/>
                       <p style={{fontSize:7,fontWeight:800,color:c.border,
                         margin:0,textAlign:'center',lineHeight:1.2}}>
                         {c.label}
