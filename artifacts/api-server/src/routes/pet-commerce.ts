@@ -3,6 +3,7 @@ import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
 import { fetchInmuBalance } from "./solana";
 import { hasActivePetSkill } from "../services/pet-skills";
+import { getSystemSettingNumber } from "../services/system-settings-store";
 
 const router = Router();
 
@@ -434,7 +435,9 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
 router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
   const pullType: PullType = req.body?.pullType === "eleven" ? "eleven" : "single";
   const count = pullType === "eleven" ? 11 : 1;
-  const costInmu = pullType === "eleven" ? 100_000 : 10_000;
+  const costInmu = pullType === "eleven"
+    ? await getSystemSettingNumber("gacha_paid_eleven_inmu", 100_000)
+    : await getSystemSettingNumber("gacha_paid_single_inmu", 10_000);
   const txId = String(req.body?.txId ?? "").trim();
   const client = await pool.connect();
   try {
@@ -551,7 +554,9 @@ router.post("/pet-slots/unlock", requireAuth, async (req, res): Promise<void> =>
     const current = await pool.query(`SELECT COUNT(*)::int AS count FROM "petSlotUnlocks" WHERE "userId"=$1`, [req.userId!]);
     const slotNumber = Number(current.rows[0]?.count ?? 0) + 2;
     if (slotNumber > 3) throw new Error("育成枠は既に最大です");
-    const paidInmu = slotNumber === 2 ? 1_000_000 : 2_000_000;
+    const paidInmu = slotNumber === 2
+      ? await getSystemSettingNumber("slot_unlock_2_inmu", 1_000_000)
+      : await getSystemSettingNumber("slot_unlock_3_inmu", 2_000_000);
     const payment = await verifyStoredPayment(req.userId!, txId, paidInmu, `slot-unlock:${slotNumber}`);
     await client.query("BEGIN");
     const inserted = await client.query(`

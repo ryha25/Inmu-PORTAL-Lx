@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { profileTable, tradeHistoryTable } from "@workspace/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import { requireAuth, requireAdmin } from "../middlewares/session";
+import { requireAuth, requireAdmin, requireAuthOrAdmin } from "../middlewares/session";
 
 const router = Router();
 
@@ -601,7 +601,7 @@ router.post("/admin/solana/reclassify-trades", requireAdmin, async (req, res): P
 let priceCache: { usdPrice: number; jpyRate: number; cachedAt: number } | null = null;
 const PRICE_CACHE_MS = 5 * 60 * 1000;
 
-router.get("/solana/inmu-price", requireAuth, async (_req, res): Promise<void> => {
+router.get("/solana/inmu-price", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
     const now = Date.now();
     if (priceCache && now - priceCache.cachedAt < PRICE_CACHE_MS) {

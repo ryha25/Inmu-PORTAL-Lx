@@ -4,9 +4,11 @@ import { notificationsTable, pointsTable, profileTable, transactionsTable } from
 import { eq, sql } from "drizzle-orm";
 import { requireAdmin, requireAuth } from "../middlewares/session";
 import { ensurePetStateTable } from "../services/pet-state-store";
+import { getSystemSettingNumber } from "../services/system-settings-store";
 
 const router = Router();
 
+// amount はデフォルト値。実際の付与額は管理画面の「価格連動 報酬計算機」（reward_level_inmu）で上書き可能。
 const PET_LEVEL_INMU_REWARDS: Record<string, { characterName: string; level: number; amount: number }> = {
   "inmu-festival:15": {
     characterName: "INMUくん（810祭りVer.）",
@@ -201,13 +203,14 @@ router.post("/pet/reward-requests", requireAuth, async (req, res): Promise<void>
     const sourceKey = `pet:${characterId}:level:${reward.level}`;
     const profile = await pool.query(`SELECT "displayName" FROM profile WHERE "userId" = $1 LIMIT 1`, [req.userId!]);
     const displayName = typeof profile.rows[0]?.displayName === "string" ? profile.rows[0].displayName : null;
+    const inmuAmount = await getSystemSettingNumber("reward_level_inmu", reward.amount);
     const { rows } = await pool.query(`
       INSERT INTO "inmuRewardRequests"
         ("userId", "displayName", "rewardType", "sourceKey", "characterId", "characterName", "reachedLevel", "inmuAmount")
       VALUES ($1, $2, 'pet_level', $3, $4, $5, $6, $7)
       ON CONFLICT ("userId", "rewardType", "sourceKey") DO NOTHING
       RETURNING *
-    `, [req.userId!, displayName, sourceKey, characterId, reward.characterName, reward.level, reward.amount]);
+    `, [req.userId!, displayName, sourceKey, characterId, reward.characterName, reward.level, inmuAmount]);
 
     if (rows.length === 0) {
       res.status(409).json({ error: "このレベル報酬は既に申請済みです" });

@@ -219,6 +219,16 @@ const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
   event_end_date:     'date',
 }
 
+const REWARD_CALC_KEYS: Array<{ key: string; label: string }> = [
+  { key: 'reward_level_inmu',      label: 'レベル報酬INMU' },
+  { key: 'reward_event_inmu',      label: 'イベント報酬INMU' },
+  { key: 'reward_airdrop_inmu',    label: 'エアドロップ報酬INMU' },
+  { key: 'gacha_paid_single_inmu', label: 'ガチャ関連INMU価格（有償単発）' },
+  { key: 'gacha_paid_eleven_inmu', label: 'ガチャ関連INMU価格（有償11連）' },
+  { key: 'slot_unlock_2_inmu',     label: 'スロット解放INMU価格（2枠目）' },
+  { key: 'slot_unlock_3_inmu',     label: 'スロット解放INMU価格（3枠目）' },
+]
+
 type GachaResultRow = {
   id: number              // gachaInmuWins.id（当選個別ID）
   spinId: number          // gachaResults.id（スピンID）
@@ -858,6 +868,20 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [editingSettingKey, setEditingSettingKey] = useState<string | null>(null)
   const [settingEditValue, setSettingEditValue] = useState('')
   const [settingSaving, setSettingSaving] = useState(false)
+  const [calcInmuPrice, setCalcInmuPrice] = useState<number | null>(null)
+  const [calcPriceLoading, setCalcPriceLoading] = useState(false)
+  const [calcTargetUsd, setCalcTargetUsd] = useState('20')
+  const [calcEditValues, setCalcEditValues] = useState<Record<string, string>>({})
+  const [calcSaving, setCalcSaving] = useState(false)
+
+  useEffect(() => {
+    const map: Record<string, string> = {}
+    for (const { key } of REWARD_CALC_KEYS) {
+      const s = systemSettings.find(x => x.key === key)
+      if (s) map[key] = s.value
+    }
+    if (Object.keys(map).length) setCalcEditValues(map)
+  }, [systemSettings])
 
   const [emergencySearch, setEmergencySearch] = useState('')
   const [emergencyUserId, setEmergencyUserId] = useState<string | null>(null)
@@ -1241,6 +1265,32 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     finally { setSettingSaving(false) }
   }
 
+  async function loadRewardCalc() {
+    setCalcPriceLoading(true)
+    try {
+      const price = await api('/solana/inmu-price', 'GET') as { usdPrice?: number }
+      setCalcInmuPrice(typeof price.usdPrice === 'number' ? price.usdPrice : 0)
+    } catch { setCalcInmuPrice(0) }
+    finally { setCalcPriceLoading(false) }
+    await loadSystemSettings()
+  }
+
+  async function saveRewardCalc() {
+    setCalcSaving(true)
+    try {
+      for (const { key } of REWARD_CALC_KEYS) {
+        const val = calcEditValues[key]
+        const current = systemSettings.find(s => s.key === key)?.value
+        if (val !== undefined && val !== '' && val !== current) {
+          await api(`/admin/system-settings/${key}`, 'PUT', { value: val })
+        }
+      }
+      toast.success('報酬設定を保存しました')
+      await loadSystemSettings()
+    } catch (e) { toast.error(e instanceof Error ? e.message : t('error')) }
+    finally { setCalcSaving(false) }
+  }
+
 
   return (
     <div className="flex flex-col gap-4">
@@ -1278,6 +1328,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           </TabsTrigger>
           <TabsTrigger value="settings" className="text-xs py-1.5" onClick={loadSystemSettings}>
             <Settings className="size-3 mr-1" />設定
+          </TabsTrigger>
+          <TabsTrigger value="reward-calc" className="text-xs py-1.5" onClick={loadRewardCalc}>
+            <Coins className="size-3 mr-1" />報酬計算機
           </TabsTrigger>
         </TabsList>
 
@@ -2058,6 +2111,83 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
               })}
             </div>
           )}
+        </TabsContent>
+
+        {/* ── 価格連動 報酬計算機 tab ── */}
+        <TabsContent value="reward-calc" className="flex flex-col gap-3 mt-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold flex items-center gap-2">
+              <Coins className="size-4 text-primary" />価格連動 報酬計算機
+            </p>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={loadRewardCalc} disabled={calcPriceLoading || settingsLoading}>
+              <RefreshCw className={`size-3 mr-1 ${(calcPriceLoading || settingsLoading) ? 'animate-spin' : ''}`} />更新
+            </Button>
+          </div>
+
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <p className="text-[11px] text-muted-foreground">
+              ※この計算機は購入申請還元率・購入上限の計算とは別機能です。INMU価格の変動に合わせて、各種報酬・価格をUSD相当額で調整するためのものです。
+            </p>
+          </div>
+
+          <Card className="border-border bg-card p-3 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">現在価格</p>
+              <p className="font-mono font-bold text-sm text-primary">
+                {calcPriceLoading ? '取得中…' : calcInmuPrice != null ? `${calcInmuPrice} USD` : '—'}
+              </p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">目標USD</Label>
+              <Input
+                type="number"
+                value={calcTargetUsd}
+                onChange={e => setCalcTargetUsd(e.target.value)}
+                placeholder="20"
+                className="min-h-9"
+              />
+            </div>
+            <div className="rounded-md bg-secondary/30 p-3 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{calcTargetUsd || 0}USD相当</span>
+              <span className="font-mono font-bold text-sm text-primary">
+                {calcInmuPrice && calcInmuPrice > 0 && Number(calcTargetUsd) > 0
+                  ? `${Math.round(Number(calcTargetUsd) / calcInmuPrice).toLocaleString()} INMU`
+                  : '—'}
+              </span>
+            </div>
+          </Card>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold text-muted-foreground pt-1">報酬設定への反映</p>
+            {settingsLoading ? (
+              <p className="text-sm text-center text-muted-foreground py-6">読み込み中…</p>
+            ) : (
+              REWARD_CALC_KEYS.map(({ key, label }) => {
+                const val = calcEditValues[key] ?? ''
+                const n = Number(val)
+                const usd = calcInmuPrice && calcInmuPrice > 0 && val !== '' && !isNaN(n) ? n * calcInmuPrice : null
+                return (
+                  <Card key={key} className="border-border bg-card p-3 flex flex-col gap-1.5">
+                    <p className="text-xs font-medium">{label}</p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        value={val}
+                        onChange={e => setCalcEditValues(prev => ({ ...prev, [key]: e.target.value }))}
+                        className="min-h-9 flex-1"
+                      />
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                        {usd != null ? `≈ ${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD` : ''}
+                      </span>
+                    </div>
+                  </Card>
+                )
+              })
+            )}
+            <Button className="min-h-9" disabled={calcSaving || settingsLoading} onClick={saveRewardCalc}>
+              {calcSaving ? '保存中…' : 'まとめて保存'}
+            </Button>
+          </div>
         </TabsContent>
 
         {/* ── 売買履歴 tab ── */}

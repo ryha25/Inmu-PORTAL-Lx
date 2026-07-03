@@ -13,6 +13,13 @@ const DEFAULTS: Record<string, { value: string; description: string }> = {
   event_mode_enabled:          { value: "false",   description: "イベント申請モード（ON/OFF）" },
   event_start_date:            { value: "",        description: "イベント対象開始日（YYYY-MM-DD）" },
   event_end_date:              { value: "",        description: "イベント対象終了日（YYYY-MM-DD）" },
+  reward_level_inmu:           { value: "30000",   description: "レベル報酬INMU（価格連動 報酬計算機）" },
+  reward_event_inmu:           { value: "20000",   description: "イベント報酬INMU（価格連動 報酬計算機）" },
+  reward_airdrop_inmu:         { value: "20000",   description: "エアドロップ報酬INMU（価格連動 報酬計算機）" },
+  gacha_paid_single_inmu:      { value: "10000",   description: "ガチャ関連INMU価格（有償単発）" },
+  gacha_paid_eleven_inmu:      { value: "100000",  description: "ガチャ関連INMU価格（有償11連）" },
+  slot_unlock_2_inmu:          { value: "1000000", description: "スロット解放INMU価格（2枠目）" },
+  slot_unlock_3_inmu:          { value: "2000000", description: "スロット解放INMU価格（3枠目）" },
 };
 
 // DBに残っているが表示・編集しない旧設定キー
