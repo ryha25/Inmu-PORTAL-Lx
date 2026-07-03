@@ -35,20 +35,24 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
     const targetId = normalizeId(characterId);
     const statePetId = Object.keys(state?.pets ?? {}).find(id => normalizeId(id) === targetId) ?? characterId;
     const level = Number(state?.pets?.[statePetId]?.level ?? 1);
-    const enabled = state?.skillState?.[characterId] !== false;
-    const activePetIds = Array.isArray(state?.activePetIds)
-      ? state.activePetIds.map(normalizeId)
-      : [];
-    // Older PET saves can contain the character state without a matching ownership row.
-    // The server-saved active slots remain the source of truth for skill activation.
-    const hasCharacterData = Boolean(ownership.rowCount) || Boolean(state?.pets?.[statePetId]);
-    const legacySelectedActive = activePetIds.length === 0 && normalizeId(state?.selectedPetId) === targetId;
-    if (!hasCharacterData || !enabled || (!activePetIds.includes(targetId) && !legacySelectedActive) || level < minLevel) return false;
+    const enabled = state?.skillState?.[statePetId] !== false;
+    // Ownership is authoritative. PET saves contain default stats for characters the
+    // user does not own, so character-state presence must never unlock a skill.
+    if (!ownership.rowCount || !enabled || level < minLevel) return false;
 
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`pet-skill:${userId}`]);
+      await client.query(`
+        DELETE FROM "userPetSkillActivations" activation
+        WHERE activation."userId"=$1
+          AND NOT EXISTS (
+            SELECT 1 FROM "userPetCharacters" owned
+            WHERE owned."userId"=activation."userId"
+              AND owned."characterId"=activation."characterId"
+          )
+      `, [userId]);
       const existing = await client.query(
         `SELECT "slotIndex" FROM "userPetSkillActivations" WHERE "userId"=$1 AND "characterId"=$2 LIMIT 1`,
         [userId, characterId],

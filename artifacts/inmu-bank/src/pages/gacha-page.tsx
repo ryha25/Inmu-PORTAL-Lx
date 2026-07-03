@@ -407,10 +407,6 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
               background:'radial-gradient(circle,rgba(255,235,150,.78),rgba(218,165,32,.32) 42%,transparent 70%)',
               filter:'blur(8px)',animation:'ga-stageflash .9s ease-in-out infinite'}}/>
             <PrizeCapsule prizeId={prizeId} size={210} open showLabel={false}/>
-            <img src={mascotImg} style={{position:'absolute',width:68,height:'auto',left:'50%',top:'78%',zIndex:9,
-              transform:'translate(-50%,-50%)',
-              filter:'drop-shadow(0 0 18px rgba(255,215,0,.84)) drop-shadow(0 6px 10px rgba(0,0,0,.8))',
-              animation:'ga-bounce 1.05s ease-in-out infinite'}}/>
           </div>
         </div>
       )}
@@ -483,8 +479,8 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
       transition:'transform .42s cubic-bezier(.2,.8,.2,1)'}}>
       <div style={{position:'absolute',inset:0,clipPath:appleShape,background:'#090a0d'}}/>
       <div style={{position:'absolute',inset,clipPath:appleShape,background:shellGradient,overflow:'hidden'}}>
-        <div style={{position:'absolute',left:'-2%',right:'-2%',top:'51%',bottom:'-4%',background:'#090a0d',
-          clipPath:'polygon(0 18%,12% 8%,25% 20%,39% 6%,53% 18%,67% 4%,82% 18%,100% 8%,100% 100%,0 100%)'}}/>
+        <div style={{position:'absolute',left:'-2%',right:'-2%',top:'66%',bottom:'-4%',background:'#090a0d',
+          clipPath:'polygon(0 20%,12% 8%,25% 24%,39% 5%,53% 21%,67% 4%,82% 20%,100% 9%,100% 100%,0 100%)'}}/>
         <div style={{position:'absolute',left:'18%',top:'22%',width:'26%',height:'52%',background:'#fff400',
           clipPath:'polygon(14% 0,62% 4%,100% 25%,79% 48%,97% 74%,62% 100%,20% 86%,0 55%,18% 34%,0 18%)'}}>
           <div style={{position:'absolute',inset:'14% 26% 12% 20%',background:'#fff',clipPath:'polygon(22% 0,75% 8%,100% 32%,75% 58%,93% 83%,52% 100%,16% 79%,0 42%)'}}/>
