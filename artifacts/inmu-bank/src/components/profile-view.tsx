@@ -203,13 +203,13 @@ export function ProfileView({
       if (isMobile()) {
         const currentUrl = encodeURIComponent(window.location.href)
         const ref = encodeURIComponent(window.location.origin)
-        const phantomBrowse = `https://phantom.app/ul/browse/${currentUrl}?ref=${ref}`
+        const phantomBrowse = `phantom://browse/${currentUrl}?ref=${ref}`
 
         if (isIOS()) {
-          window.location.href = phantomBrowse
+          window.location.assign(phantomBrowse)
         } else {
-          const intentUrl = `intent://browse/${encodeURIComponent(window.location.href)}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomBrowse)};end`
-          window.location.href = intentUrl
+          const intentUrl = `intent://browse/${currentUrl}#Intent;scheme=phantom;package=app.phantom;end`
+          window.location.assign(intentUrl)
         }
         return
       }
