@@ -286,7 +286,7 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
   if (totalPoints > 0) {
     const month = new Date().toISOString().slice(0, 7);
     await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [totalPoints, userId]);
-    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_reward','INMU PET繧ｬ繝√Ε蝣ｱ驟ｬ',$3)`, [userId, totalPoints, month]);
+    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_reward','INMU PETガチャ報酬',$3)`, [userId, totalPoints, month]);
   }
   return { results, totalPoints, premiumFood, inmuCount, hasInmu: inmuCount > 0 };
 }
@@ -343,7 +343,7 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
     const currentPoints = await getCurrentPoints(client, req.userId!);
     if (currentPoints < costPoints) throw new Error("ポイントが不足しています");
     await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"-$1,"updatedAt"=NOW() WHERE "userId"=$2`, [costPoints, req.userId!]);
-    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PET騾壼ｸｸ繧ｬ繝√Ε', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
+    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PET通常ガチャ', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
     const rolled = Array.from({ length: count }, () => weightedRoll(POINT_PRIZES));
     const applied = await applyPrizes(client, req.userId!, rolled);
     const history = await client.query(`
