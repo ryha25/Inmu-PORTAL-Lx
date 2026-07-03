@@ -1088,8 +1088,7 @@ export function GachaPage() {
           </div>
           <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'18px 18px 8px',textAlign:'center'}}>
             <WalletCards style={{width:42,height:42,color:'#ffd65a',filter:'drop-shadow(0 0 14px rgba(255,200,40,.65))'}}/>
-            <h1 style={{margin:'10px 0 4px',fontFamily:'Georgia,serif',fontSize:25,color:'#f4c84b',letterSpacing:'.12em'}}>INMU PET PREMIUM</h1>
-            <p style={{margin:0,color:'rgba(255,255,255,.62)',fontSize:11}}>ニャルシアン・拓也・レオン 各1.2%</p>
+            <h1 style={{margin:'10px 0 0',fontFamily:'Georgia,serif',fontSize:25,color:'#f4c84b',letterSpacing:'.12em'}}>INMU PET PREMIUM</h1>
             <div style={{width:'min(430px,100%)',marginTop:14}}>
               <InmuBalancePanel balance={inmuBalance} loading={inmuBalanceLoading}/>
             </div>
