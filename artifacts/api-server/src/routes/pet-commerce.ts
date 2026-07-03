@@ -28,6 +28,7 @@ type PetGachaPrize = {
   isNewCharacter?: boolean;
   isDuplicate?: boolean;
   convertedPoints?: number;
+  baseAmount?: number;
 };
 
 const PAID_PRIZES = [
@@ -287,6 +288,7 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
         isNewCharacter: isNew,
         isDuplicate: !isNew,
         convertedPoints,
+        ...(!isNew ? { baseAmount: DUPLICATE_CHARACTER_POINTS } : {}),
       });
     } else if (raw.type === "premium_food") {
       premiumFood += raw.amount;
@@ -300,7 +302,7 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
     } else {
       const awarded = raw.amount * pointMultiplier;
       totalPoints += awarded;
-      results.push({ prizeId: raw.id, label: `${awarded.toLocaleString()}ポイント`, type: "points", amount: awarded });
+      results.push({ prizeId: raw.id, label: `${awarded.toLocaleString()}ポイント`, type: "points", amount: awarded, baseAmount: raw.amount });
     }
   }
   if (premiumFood > 0) await addPremiumFood(client, userId, premiumFood);
@@ -316,6 +318,20 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
 async function getCurrentPoints(client: any, userId: string) {
   const result = await client.query(`SELECT "monthlyPoints" FROM profile WHERE "userId"=$1`, [userId]);
   return Number(result.rows[0]?.monthlyPoints ?? 0);
+}
+
+function jstTodayStartUtc(): Date {
+  const jstOffset = 9 * 3600 * 1000;
+  const nowJst = new Date(Date.now() + jstOffset);
+  const y = nowJst.getUTCFullYear();
+  const m = nowJst.getUTCMonth();
+  const d = nowJst.getUTCDate();
+  return new Date(Date.UTC(y, m, d, 0, 0, 0) - jstOffset);
+}
+
+function jstTomorrowStartUtc(): Date {
+  const today = jstTodayStartUtc();
+  return new Date(today.getTime() + 24 * 3600 * 1000);
 }
 
 router.get("/pet-commerce/status", requireAuth, async (req, res): Promise<void> => {
@@ -441,6 +457,59 @@ router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetCommerce] paid gacha", error);
     res.status(400).json({ error: error instanceof Error ? error.message : "有償ガチャに失敗しました" });
+  } finally {
+    client.release();
+  }
+});
+
+router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await ensurePetCommerceTables();
+    const todayStart = jstTodayStartUtc();
+    const checkRows = await pool.query(
+      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2`,
+      [req.userId!, todayStart.toISOString()],
+    );
+    const bonusPulls = await hasActivePetSkill(req.userId!, "takuya") ? 3 : 0;
+    const allowance = 1 + bonusPulls;
+    if (Number(checkRows.rows[0].cnt) >= allowance) {
+      res.status(400).json({ error: "本日の無料ガチャは使用済みです" });
+      return;
+    }
+    await client.query("BEGIN");
+    const recheck = await client.query(
+      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2 FOR UPDATE`,
+      [req.userId!, todayStart.toISOString()],
+    );
+    if (Number(recheck.rows[0].cnt) >= allowance) throw new Error("本日の無料ガチャは使用済みです");
+    const state = await client.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1 FOR UPDATE`, [req.userId!]);
+    let pity = Number(state.rows[0]?.paidPity ?? 0);
+    const prize = pity >= 49
+      ? (() => { const character = randomCharacter(); return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id }; })()
+      : weightedRoll(PAID_PRIZES);
+    pity = prize.type === "character" ? 0 : pity + 1;
+    const applied = await applyPrizes(client, req.userId!, [prize]);
+    await client.query(`
+      INSERT INTO "petGachaState" ("userId","paidPity") VALUES ($1,$2)
+      ON CONFLICT ("userId") DO UPDATE SET "paidPity"=EXCLUDED."paidPity","updatedAt"=NOW()
+    `, [req.userId!, pity]);
+    const history = await client.query(`
+      INSERT INTO "petGachaHistory" ("userId","gachaType","pullType","costInmu",results)
+      VALUES ($1,'paid','free',0,$2::jsonb) RETURNING id,"createdAt"
+    `, [req.userId!, JSON.stringify(applied.results)]);
+    const wasGuaranteed = applied.results.some(prize => prize.type === "character");
+    await client.query(`
+      INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
+      VALUES ($1,'free',$2::jsonb,$3,false,0,'pending',$4,0,true)
+    `, [req.userId!, JSON.stringify(applied.results), applied.totalPoints, wasGuaranteed]);
+    const newPoints = await getCurrentPoints(client, req.userId!);
+    await client.query("COMMIT");
+    res.json({ ...applied, costPoints: 0, costInmu: 0, txId: null, newPoints, paidPity: pity, historyId: history.rows[0].id, wasGuaranteed });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[PetCommerce] paid free gacha", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "無料ガチャに失敗しました" });
   } finally {
     client.release();
   }

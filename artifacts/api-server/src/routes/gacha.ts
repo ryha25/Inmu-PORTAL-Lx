@@ -203,6 +203,7 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
       label: p.type === "points" ? `${(p.amount * pointMultiplier).toLocaleString()}ポイント` : p.label,
       type: p.type,
       amount: p.type === "points" ? p.amount * pointMultiplier : p.amount,
+      ...(p.type === "points" ? { baseAmount: p.amount } : {}),
     }));
     const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
@@ -228,7 +229,7 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
       ]);
     }
 
-    res.json({ results: resultsJson, totalPoints, hasInmu, inmuCount, wasGuaranteed, costPoints, newPoints: currentPoints + netPoints });
+    res.json({ results: resultsJson, totalPoints, hasInmu, inmuCount, wasGuaranteed, costPoints, newPoints: currentPoints + netPoints, pointMultiplier });
   } catch (e) {
     console.error("[Gacha] spin error:", e);
     res.status(500).json({ error: "ガチャの実行中にエラーが発生しました" });
@@ -284,6 +285,7 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
       label: p.type === "points" ? `${(p.amount * pointMultiplier).toLocaleString()}ポイント` : p.label,
       type: p.type,
       amount: p.type === "points" ? p.amount * pointMultiplier : p.amount,
+      ...(p.type === "points" ? { baseAmount: p.amount } : {}),
     }));
     const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
@@ -306,7 +308,7 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
       ]);
     }
 
-    res.json({ results: resultsJson, totalPoints, hasInmu, inmuCount, wasGuaranteed, costPoints: 0, newPoints: currentPoints + totalPoints });
+    res.json({ results: resultsJson, totalPoints, hasInmu, inmuCount, wasGuaranteed, costPoints: 0, newPoints: currentPoints + totalPoints, pointMultiplier });
   } catch (e) {
     console.error("[Gacha] free-spin error:", e);
     res.status(500).json({ error: "ガチャの実行中にエラーが発生しました" });

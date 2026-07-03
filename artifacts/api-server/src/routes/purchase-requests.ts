@@ -60,25 +60,32 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
   return result;
 }
 
-// ── JST当月の開始UTC日時を返す ──
+// ── JSTの購入サイクル開始UTC日時を返す（毎月15日始まり〜翌月14日終わり） ──
 function getMonthStartUTC(now: Date): Date {
   const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  // JSTの月初 00:00:00 → UTC変換
-  const jstMonthStartMs = Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), 1);
-  return new Date(jstMonthStartMs - 9 * 60 * 60 * 1000);
+  const y = jstNow.getUTCFullYear();
+  const m = jstNow.getUTCMonth();
+  const d = jstNow.getUTCDate();
+  // 15日以降なら当月15日始まり、15日未満なら前月15日始まり
+  const jstCycleStartMs = d >= 15 ? Date.UTC(y, m, 15) : Date.UTC(y, m - 1, 15);
+  return new Date(jstCycleStartMs - 9 * 60 * 60 * 1000);
 }
 
-// ── JST当月の終了UTC日時（翌月初）を返す ──
+// ── JSTの購入サイクル終了UTC日時（次の15日0時）を返す ──
 function getMonthEndUTC(now: Date): Date {
   const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  const jstNextMonthStartMs = Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth() + 1, 1);
-  return new Date(jstNextMonthStartMs - 9 * 60 * 60 * 1000);
+  const y = jstNow.getUTCFullYear();
+  const m = jstNow.getUTCMonth();
+  const d = jstNow.getUTCDate();
+  const jstCycleEndMs = d >= 15 ? Date.UTC(y, m + 1, 15) : Date.UTC(y, m, 15);
+  return new Date(jstCycleEndMs - 9 * 60 * 60 * 1000);
 }
 
-// ── JST当月の日数 ──
+// ── 現在の購入サイクル（15日〜翌月14日）の日数 ──
 function getDaysInCurrentMonth(now: Date): number {
-  const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  return new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth() + 1, 0)).getUTCDate();
+  const start = getMonthStartUTC(now);
+  const end = getMonthEndUTC(now);
+  return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 // ── 全体申請上限（管理者設定） ──
@@ -194,16 +201,17 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const monthEnd   = getMonthEndUTC(now);
     const daysInMonth = getDaysInCurrentMonth(now);
 
-    const [eventSettings, requests, normalDailyLimit] = await Promise.all([
+    const [eventSettings, requests, normalDailyLimit, hasLeonSkill] = await Promise.all([
       getEventSettings(),
       db.select().from(purchaseRequestsTable)
         .where(eq(purchaseRequestsTable.userId, userId))
         .orderBy(desc(purchaseRequestsTable.createdAt))
         .limit(50),
       getNormalDailyLimit(),
+      hasActivePetSkill(userId, "leon"),
     ]);
 
-    const monthlyCapacity = normalDailyLimit * daysInMonth;
+    const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
 
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
@@ -255,12 +263,13 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
     const monthEnd   = getMonthEndUTC(now);
     const daysInMonth = getDaysInCurrentMonth(now);
 
-    const [eventSettings, normalDailyLimit] = await Promise.all([
+    const [eventSettings, normalDailyLimit, hasLeonSkill] = await Promise.all([
       getEventSettings(),
       getNormalDailyLimit(),
+      hasActivePetSkill(userId, "leon"),
     ]);
 
-    const monthlyCapacity = normalDailyLimit * daysInMonth;
+    const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
 
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
