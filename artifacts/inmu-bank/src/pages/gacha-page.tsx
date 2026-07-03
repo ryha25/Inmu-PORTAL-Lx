@@ -834,6 +834,9 @@ export function GachaPage() {
   const [inmuBalance,setInmuBalance] = useState<number|null>(null)
   const [inmuBalanceLoading,setInmuBalanceLoading] = useState(false)
   const [paidFreeLoading,setPaidFreeLoading] = useState(false)
+  const [paidFreeUsed,setPaidFreeUsed] = useState(true)
+  const [paidFreeRemaining,setPaidFreeRemaining] = useState(0)
+  const [paidFreeNextReset,setPaidFreeNextReset] = useState<string|null>(null)
   const [rateModalOpen,setRateModalOpen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
 
@@ -887,6 +890,14 @@ export function GachaPage() {
     }catch{/**/}
   },[])
   useEffect(()=>{loadFreeStatus()},[loadFreeStatus])
+
+  const loadPaidFreeStatus = useCallback(async()=>{
+    try{
+      const r=await fetch('/api/pet-gacha/free-status',{credentials:'include'})
+      if(r.ok){const d=await r.json() as {used:boolean;remaining?:number;nextReset:string};setPaidFreeUsed(d.used);setPaidFreeRemaining(Number(d.remaining??(d.used?0:1)));setPaidFreeNextReset(d.nextReset)}
+    }catch{/**/}
+  },[])
+  useEffect(()=>{loadPaidFreeStatus()},[loadPaidFreeStatus])
 
   const loadCommerceStatus = useCallback(async()=>{
     try{
@@ -975,7 +986,7 @@ export function GachaPage() {
   }
 
   async function spinPaidFree(){
-    if(phase!=='idle'||freeUsed||paidFreeLoading)return
+    if(phase!=='idle'||paidFreeUsed||paidFreeLoading)return
     setPaidFreeLoading(true)
     try{
       const res=await fetch('/api/pet-gacha/paid-free',{
@@ -989,7 +1000,7 @@ export function GachaPage() {
       setPts(data.newPoints)
       setPaidPity(Number(data.paidPity??0))
       setRevIdx(0);setNewCharacterRevealIndex(0)
-      void loadFreeStatus()
+      void loadPaidFreeStatus()
       setPhase(hasCharacter?'guaranteed':'inserting')
     }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
     finally{setPaidFreeLoading(false)}
@@ -1031,7 +1042,7 @@ export function GachaPage() {
     }catch{localStorage.removeItem('inmu-pet-paid-gacha-pending')}
   },[])
 
-  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);setNewCharacterRevealIndex(0);loadPts();loadHist();loadFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
+  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);setNewCharacterRevealIndex(0);loadPts();loadHist();loadFreeStatus();loadPaidFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
   const isMulti=(result?.results.length??0)>1
   const animationPrize=result?.results.find(prize=>prize.type==='character')??result?.results[0]
 
@@ -1063,14 +1074,14 @@ export function GachaPage() {
             </button>
           </div>
           <div style={{margin:'8px 12px 0'}}>
-            <button type="button" disabled={freeUsed||paidFreeLoading||phase!=='idle'} onClick={spinPaidFree} style={{width:'100%',padding:'10px 16px',border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:freeUsed||paidFreeLoading?'not-allowed':'pointer',background:freeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:freeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
+            <button type="button" disabled={paidFreeUsed||paidFreeLoading||phase!=='idle'} onClick={spinPaidFree} style={{width:'100%',padding:'10px 16px',border:`1.5px solid ${paidFreeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:paidFreeUsed||paidFreeLoading?'not-allowed':'pointer',background:paidFreeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:paidFreeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:paidFreeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
-                  <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{paidFreeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${freeRemaining}回）`}</p>
-                  {freeUsed&&freeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(freeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
-                  {!freeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで有償ガチャを引けます</p>}
+                  <p style={{margin:0,fontSize:14,fontWeight:800,color:paidFreeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{paidFreeLoading?'処理中…': paidFreeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${paidFreeRemaining}回）`}</p>
+                  {paidFreeUsed&&paidFreeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(paidFreeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
+                  {!paidFreeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで有償ガチャを引けます</p>}
                 </div>
-                {!freeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
+                {!paidFreeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
               </div>
             </button>
           </div>
@@ -1102,6 +1113,7 @@ export function GachaPage() {
           </div>
         </div>
       </PageBg>
+      <EmissionRateModal open={rateModalOpen} onClose={()=>setRateModalOpen(false)}/>
     </AppShell>
   )
 
@@ -1149,6 +1161,7 @@ export function GachaPage() {
           </div>
         </div>
       </PageBg>
+      <EmissionRateModal open={rateModalOpen} onClose={()=>setRateModalOpen(false)}/>
     </AppShell>
   )
 

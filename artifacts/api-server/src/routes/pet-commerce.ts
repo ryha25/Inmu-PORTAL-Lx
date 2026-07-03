@@ -117,6 +117,7 @@ export function ensurePetCommerceTables() {
         "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `),
+    pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "gachaKind" TEXT NOT NULL DEFAULT 'normal'`).catch(() => undefined),
   ]).then(() => undefined).catch(error => {
     tablePromise = null;
     throw error;
@@ -349,6 +350,27 @@ router.get("/pet-commerce/status", requireAuth, async (req, res): Promise<void> 
   }
 });
 
+router.get("/pet-gacha/free-status", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  try {
+    await ensurePetCommerceTables();
+    const todayStart = jstTodayStartUtc();
+    const { rows } = await pool.query(
+      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind"='paid' AND "createdAt" >= $2`,
+      [userId, todayStart.toISOString()],
+    );
+    const bonusPulls = await hasActivePetSkill(userId, "takuya") ? 3 : 0;
+    const allowance = 1 + bonusPulls;
+    const usedCount = Number(rows[0].cnt);
+    const used = usedCount >= allowance;
+    const nextReset = jstTomorrowStartUtc().toISOString();
+    res.json({ used, usedCount, allowance, remaining: Math.max(0, allowance - usedCount), nextReset });
+  } catch (e) {
+    console.error("[PetCommerce] free-status error:", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 router.get("/pet-commerce/inmu-balance", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensurePetCommerceTables();
@@ -390,8 +412,8 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
     `, [req.userId!, pullType, costPoints, JSON.stringify(applied.results)]);
     if (applied.inmuCount > 0) {
       const legacySpin = await client.query(`
-        INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
-        VALUES ($1,$2,$3::jsonb,$4,true,$5,'pending',false,$6,false) RETURNING id
+        INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree","gachaKind")
+        VALUES ($1,$2,$3::jsonb,$4,true,$5,'pending',false,$6,false,'paid') RETURNING id
       `, [req.userId!, pullType, JSON.stringify(applied.results), applied.totalPoints, applied.inmuCount, costPoints]);
       for (let index = 0; index < applied.inmuCount; index += 1) {
         await client.query(`INSERT INTO "gachaInmuWins" ("spinId","userId","pullType","inmuAmount","inmuSentStatus") VALUES ($1,$2,$3,10000,'pending')`, [legacySpin.rows[0].id, req.userId!, pullType]);
@@ -468,7 +490,7 @@ router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void>
     await ensurePetCommerceTables();
     const todayStart = jstTodayStartUtc();
     const checkRows = await pool.query(
-      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2`,
+      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind"='paid' AND "createdAt" >= $2`,
       [req.userId!, todayStart.toISOString()],
     );
     const bonusPulls = await hasActivePetSkill(req.userId!, "takuya") ? 3 : 0;
@@ -479,7 +501,7 @@ router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void>
     }
     await client.query("BEGIN");
     const recheck = await client.query(
-      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2 FOR UPDATE`,
+      `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind"='paid' AND "createdAt" >= $2`,
       [req.userId!, todayStart.toISOString()],
     );
     if (Number(recheck.rows[0].cnt) >= allowance) throw new Error("本日の無料ガチャは使用済みです");
@@ -500,8 +522,8 @@ router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void>
     `, [req.userId!, JSON.stringify(applied.results)]);
     const wasGuaranteed = applied.results.some(prize => prize.type === "character");
     await client.query(`
-      INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
-      VALUES ($1,'free',$2::jsonb,$3,false,0,'pending',$4,0,true)
+      INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree","gachaKind")
+      VALUES ($1,'free',$2::jsonb,$3,false,0,'pending',$4,0,true,'paid')
     `, [req.userId!, JSON.stringify(applied.results), applied.totalPoints, wasGuaranteed]);
     const newPoints = await getCurrentPoints(client, req.userId!);
     await client.query("COMMIT");

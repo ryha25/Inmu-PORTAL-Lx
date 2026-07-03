@@ -83,6 +83,7 @@ async function ensureTable() {
     await pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "txHash"        TEXT`);
     await pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "solWallet"     TEXT`);
     await pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "failureReason" TEXT`);
+    await pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "gachaKind"     TEXT NOT NULL DEFAULT 'normal'`);
   } catch (e) {
     console.warn("[Gacha] ensureTable:", e instanceof Error ? e.message : e);
   }
@@ -137,7 +138,7 @@ router.get("/gacha/free-status", requireAuth, async (req, res): Promise<void> =>
     const todayStart = jstTodayStartUtc();
     const { rows } = await pool.query(
       `SELECT COUNT(*) as cnt FROM "gachaResults"
-       WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2`,
+       WHERE "userId"=$1 AND "isFree"=true AND "gachaKind"='normal' AND "createdAt" >= $2`,
       [userId, todayStart.toISOString()],
     );
     const bonusPulls = await hasActivePetSkill(userId, "takuya") ? 3 : 0;
@@ -242,7 +243,7 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
 
   const todayStart = jstTodayStartUtc();
   const { rows: checkRows } = await pool.query(
-    `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2`,
+    `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind"='normal' AND "createdAt" >= $2`,
     [userId, todayStart.toISOString()],
   );
   const bonusPulls = await hasActivePetSkill(userId, "takuya") ? 3 : 0;
