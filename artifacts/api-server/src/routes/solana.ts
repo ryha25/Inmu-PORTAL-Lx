@@ -610,15 +610,15 @@ router.get("/solana/inmu-price", requireAuthOrAdmin, async (_req, res): Promise<
     }
 
     const [jupRes, fxRes] = await Promise.all([
-      fetch(`https://lite-api.jup.ag/price/v2?ids=${INMU_TOKEN_MINT}`).catch(() => null),
+      fetch(`https://api.jup.ag/price/v3?ids=${INMU_TOKEN_MINT}`).catch(() => null),
       fetch("https://open.er-api.com/v6/latest/USD").catch(() => null),
     ]);
 
     let usdPrice = 0;
     if (jupRes?.ok) {
-      const jupData = await jupRes.json() as { data?: Record<string, { price?: string }> };
-      const tokenData = jupData?.data?.[INMU_TOKEN_MINT];
-      usdPrice = tokenData?.price ? parseFloat(tokenData.price) : 0;
+      const jupData = await jupRes.json() as Record<string, { usdPrice?: number }>;
+      const tokenData = jupData?.[INMU_TOKEN_MINT];
+      usdPrice = typeof tokenData?.usdPrice === "number" ? tokenData.usdPrice : 0;
     }
 
     let jpyRate = 150;
