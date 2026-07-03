@@ -47,11 +47,10 @@ function openPhantomBrowser() {
   const url = encodeURIComponent(window.location.href)
   const ref = encodeURIComponent(window.location.origin)
   const deepLink = `phantom://browse/${url}?ref=${ref}`
-  const universalLink = `https://phantom.app/ul/browse/${url}?ref=${ref}`
   if (isIOS()) {
-    window.location.href = deepLink
+    window.location.assign(deepLink)
   } else {
-    window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(universalLink)};end`
+    window.location.assign(`intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;end`)
   }
 }
 
