@@ -12,8 +12,7 @@ import { Connection, PublicKey, Transaction } from '@solana/web3.js'
 import {
   getAssociatedTokenAddress,
   createTransferInstruction,
-  getAccount,
-  createAssociatedTokenAccountInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
 
@@ -47,11 +46,12 @@ function isIOS() { return /iPhone|iPad|iPod/i.test(navigator.userAgent) }
 function openPhantomBrowser() {
   const url = encodeURIComponent(window.location.href)
   const ref = encodeURIComponent(window.location.origin)
-  const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
+  const deepLink = `phantom://browse/${url}?ref=${ref}`
+  const universalLink = `https://phantom.app/ul/browse/${url}?ref=${ref}`
   if (isIOS()) {
-    window.location.href = phantomUrl
+    window.location.href = deepLink
   } else {
-    window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+    window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(universalLink)};end`
   }
 }
 
@@ -194,15 +194,11 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       const fromATA = await getAssociatedTokenAddress(INMU_MINT, fromPubkey, false, TOKEN_2022_PROGRAM_ID)
       const toATA = await getAssociatedTokenAddress(INMU_MINT, toPubkey, false, TOKEN_2022_PROGRAM_ID)
 
-      const instructions = []
-
-      try {
-        await getAccount(connection, toATA, 'confirmed', TOKEN_2022_PROGRAM_ID)
-      } catch {
-        instructions.push(
-          createAssociatedTokenAccountInstruction(fromPubkey, toATA, toPubkey, INMU_MINT, TOKEN_2022_PROGRAM_ID)
-        )
-      }
+      const instructions = [
+        createAssociatedTokenAccountIdempotentInstruction(
+          fromPubkey, toATA, toPubkey, INMU_MINT, TOKEN_2022_PROGRAM_ID,
+        ),
+      ]
 
       const rawAmount = Math.floor(amountNum * Math.pow(10, INMU_DECIMALS))
       instructions.push(
@@ -213,7 +209,7 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       tx.add(...instructions)
       tx.feePayer = fromPubkey
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+      const { blockhash } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: 'signing' })
@@ -223,9 +219,8 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       toast.loading('Solanaネットワークへ送信中…', { id: 'sending' })
       const rawTx = signedTx.serialize()
       const signature = await connection.sendRawTransaction(rawTx, {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-        maxRetries: 3,
+        skipPreflight: true,
+        maxRetries: 5,
       })
       toast.dismiss('sending')
 
@@ -247,29 +242,12 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
         toast.warning(`送金は完了しましたが記録に失敗しました: ${d.error ?? ''}`)
       }
 
-      // 確認はベストエフォート — BlockHeightExceeded 等でも送金成功扱い
-      toast.loading('トランザクション確認中…', { id: 'confirming' })
-      try {
-        const result = await connection.confirmTransaction(
-          { signature, blockhash, lastValidBlockHeight },
-          'confirmed',
-        )
-        toast.dismiss('confirming')
-        if (result.value.err) {
-          toast.warning(`オンチェーン確認エラー。Solscanでトランザクションを確認してください。`)
-        }
-      } catch {
-        toast.dismiss('confirming')
-        // BlockHeightExceeded 等: tx は送信済み。Solscanで確認可能。
-      }
-
       setTxHash(signature)
       toast.success(`送金が完了しました！ ${formatInmu(amountNum)} INMU → ${recipient.displayName}`)
       onSuccess?.()
     } catch (e: unknown) {
       toast.dismiss('signing')
       toast.dismiss('sending')
-      toast.dismiss('confirming')
       if (e instanceof Error && e.message !== 'User rejected the request.') {
         toast.error(`送金失敗: ${e.message}`)
       }
