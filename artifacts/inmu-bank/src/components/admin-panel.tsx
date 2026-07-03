@@ -22,8 +22,6 @@ import { Connection, PublicKey, Transaction } from '@solana/web3.js'
 import {
   getAssociatedTokenAddress,
   createTransferInstruction,
-  getAccount,
-  createAssociatedTokenAccountInstruction,
   createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
@@ -51,11 +49,12 @@ function isIOS() { return /iPhone|iPad|iPod/i.test(navigator.userAgent) }
 function openPhantomBrowser() {
   const url = encodeURIComponent(window.location.href)
   const ref = encodeURIComponent(window.location.origin)
-  const phantomUrl = `https://phantom.app/ul/browse/${url}?ref=${ref}`
+  const deepLink = `phantom://browse/${url}?ref=${ref}`
+  const universalLink = `https://phantom.app/ul/browse/${url}?ref=${ref}`
   if (isIOS()) {
-    window.location.href = phantomUrl
+    window.location.href = deepLink
   } else {
-    window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(phantomUrl)};end`
+    window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(universalLink)};end`
   }
 }
 function getAdminRpcUrl() { return `${window.location.origin}/api/solana/rpc-proxy` }
@@ -686,7 +685,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         createTransferInstruction(fromATA, toATA, adminPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID),
       )
       tx.feePayer = adminPubkey
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+      const { blockhash } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: toastId })
@@ -694,10 +693,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       toast.dismiss(toastId)
 
       toast.loading('Solana へ送信中…', { id: toastId })
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false, maxRetries: 3 })
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
       toast.dismiss(toastId)
 
-      try { await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed') } catch { /* best-effort */ }
 
       await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
 
@@ -781,7 +779,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         )
       }
       tx.feePayer = adminPubkey
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+      const { blockhash } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading(`Phantom で署名してください（${sendable.length}件 まとめて送金）…`, { id: toastId })
@@ -789,10 +787,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       toast.dismiss(toastId)
 
       toast.loading('Solana へ送信中…', { id: toastId })
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false, maxRetries: 3 })
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
       toast.dismiss(toastId)
 
-      try { await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed') } catch { /* best-effort */ }
 
       // 全件を mark-sent（同一 txHash で各 ID を個別に記録）
       const sentAt = new Date().toISOString()
@@ -984,7 +981,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         const tx = new Transaction()
         tx.add(...instrs)
         tx.feePayer = fromPubkey
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+        const { blockhash } = await connection.getLatestBlockhash('processed')
         tx.recentBlockhash = blockhash
 
         toast.loading(`Phantom で署名してください${chunkLabel}…`, { id: 'ph-airdrop-sign' })
@@ -992,10 +989,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         toast.dismiss('ph-airdrop-sign')
 
         toast.loading(`Solana へ送信中${chunkLabel}…`, { id: 'ph-airdrop-send' })
-        const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false, maxRetries: 3 })
+        const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
         toast.dismiss('ph-airdrop-send')
 
-        try { await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed') } catch { /* best-effort */ }
 
         await api('/admin/record-airdrop-batch', 'POST', {
           users: chunk.map(u => ({ userId: u.userId, wallet: u.solWallet })),
@@ -1169,8 +1165,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           const fromATA = await getAssociatedTokenAddress(INMU_MINT_KEY, fromPubkey, false, TOKEN_2022_PROGRAM_ID)
           const toATA   = await getAssociatedTokenAddress(INMU_MINT_KEY, toPubkey,   false, TOKEN_2022_PROGRAM_ID)
           const instrs: Parameters<typeof Transaction.prototype.add>[0][] = []
-          try { await getAccount(connection, toATA, 'confirmed', TOKEN_2022_PROGRAM_ID) }
-          catch { instrs.push(createAssociatedTokenAccountInstruction(fromPubkey, toATA, toPubkey, INMU_MINT_KEY, TOKEN_2022_PROGRAM_ID)) }
+          instrs.push(createAssociatedTokenAccountIdempotentInstruction(
+            fromPubkey, toATA, toPubkey, INMU_MINT_KEY, TOKEN_2022_PROGRAM_ID,
+          ))
 
           const rawAmount = Math.floor(numRebate * Math.pow(10, INMU_DEC))
           instrs.push(createTransferInstruction(fromATA, toATA, fromPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID))
@@ -1178,7 +1175,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           const tx = new Transaction()
           tx.add(...instrs)
           tx.feePayer = fromPubkey
-          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+          const { blockhash } = await connection.getLatestBlockhash('processed')
           tx.recentBlockhash = blockhash
 
           toast.loading('Phantom で署名してください…', { id: 'ph-sign' })
@@ -1186,11 +1183,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           toast.dismiss('ph-sign')
 
           toast.loading('Solana へ送信中…', { id: 'ph-send' })
-          const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false, maxRetries: 3 })
+          const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
           toast.dismiss('ph-send')
           rebateTxSignature = signature
 
-          try { await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed') } catch { /* best-effort */ }
           toast.success(`オンチェーン送金完了: ${numRebate.toLocaleString()} INMU → ${pr.displayName ?? pr.userId}`)
         } catch (e: unknown) {
           toast.dismiss('ph-admin'); toast.dismiss('ph-sign'); toast.dismiss('ph-send')
