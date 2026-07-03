@@ -220,9 +220,9 @@ const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
 }
 
 const REWARD_CALC_KEYS: Array<{ key: string; label: string }> = [
-  { key: 'reward_level_inmu',      label: 'レベル報酬INMU' },
-  { key: 'reward_event_inmu',      label: 'イベント報酬INMU' },
-  { key: 'reward_airdrop_inmu',    label: 'エアドロップ報酬INMU' },
+  { key: 'reward_level_inmu',      label: '配布キャラ Lv.15 報酬INMU' },
+  { key: 'reward_gacha_lv20_inmu', label: 'ガチャキャラ Lv.20 報酬INMU' },
+  { key: 'reward_gacha_lv30_inmu', label: 'ガチャキャラ Lv.30 報酬INMU' },
   { key: 'gacha_paid_single_inmu', label: 'ガチャ関連INMU価格（有償単発）' },
   { key: 'gacha_paid_eleven_inmu', label: 'ガチャ関連INMU価格（有償11連）' },
   { key: 'slot_unlock_2_inmu',     label: 'スロット解放INMU価格（2枠目）' },

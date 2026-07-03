@@ -8,13 +8,21 @@ import { getSystemSettingNumber } from "../services/system-settings-store";
 
 const router = Router();
 
-// amount はデフォルト値。実際の付与額は管理画面の「価格連動 報酬計算機」（reward_level_inmu）で上書き可能。
-const PET_LEVEL_INMU_REWARDS: Record<string, { characterName: string; level: number; amount: number }> = {
+// amount はデフォルト値。実際の付与額は管理画面の「価格連動 報酬計算機」（settingKey）で上書き可能。
+// 配布キャラ（inmu-festival）は Lv.15、ガチャキャラ（nyarushian/takuya/leon）は Lv.20・Lv.30 で報酬設定が異なる。
+const PET_LEVEL_INMU_REWARDS: Record<string, { characterName: string; level: number; amount: number; settingKey: string }> = {
   "inmu-festival:15": {
     characterName: "INMUくん（810祭りVer.）",
     level: 15,
     amount: 30_000,
+    settingKey: "reward_level_inmu",
   },
+  "nyarushian:20": { characterName: "ニャルシアン", level: 20, amount: 50_000,  settingKey: "reward_gacha_lv20_inmu" },
+  "nyarushian:30": { characterName: "ニャルシアン", level: 30, amount: 250_000, settingKey: "reward_gacha_lv30_inmu" },
+  "takuya:20":     { characterName: "拓也",          level: 20, amount: 50_000,  settingKey: "reward_gacha_lv20_inmu" },
+  "takuya:30":     { characterName: "拓也",          level: 30, amount: 250_000, settingKey: "reward_gacha_lv30_inmu" },
+  "leon:20":       { characterName: "レオン",         level: 20, amount: 50_000,  settingKey: "reward_gacha_lv20_inmu" },
+  "leon:30":       { characterName: "レオン",         level: 30, amount: 250_000, settingKey: "reward_gacha_lv30_inmu" },
 };
 
 let rewardRequestTablePromise: Promise<void> | null = null;
@@ -203,7 +211,7 @@ router.post("/pet/reward-requests", requireAuth, async (req, res): Promise<void>
     const sourceKey = `pet:${characterId}:level:${reward.level}`;
     const profile = await pool.query(`SELECT "displayName" FROM profile WHERE "userId" = $1 LIMIT 1`, [req.userId!]);
     const displayName = typeof profile.rows[0]?.displayName === "string" ? profile.rows[0].displayName : null;
-    const inmuAmount = await getSystemSettingNumber("reward_level_inmu", reward.amount);
+    const inmuAmount = await getSystemSettingNumber(reward.settingKey, reward.amount);
     const { rows } = await pool.query(`
       INSERT INTO "inmuRewardRequests"
         ("userId", "displayName", "rewardType", "sourceKey", "characterId", "characterName", "reachedLevel", "inmuAmount")
