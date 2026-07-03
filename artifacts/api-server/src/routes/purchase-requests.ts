@@ -12,6 +12,7 @@ import {
 import { eq, desc, and, or, gte, lt, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
 import { ensurePetStateTable } from "../services/pet-state-store";
+import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
 
@@ -133,6 +134,11 @@ async function getDailyLimit(isEventDay: boolean): Promise<number> {
   } catch { return defaultVal; }
 }
 
+async function getUserDailyLimit(userId: string, isEventDay: boolean): Promise<number> {
+  const baseLimit = await getDailyLimit(isEventDay);
+  return baseLimit + (await hasActivePetSkill(userId, "leon") ? 100_000 : 0);
+}
+
 // ── JST当月の購入実績合計（tradeHistoryTable の buy）──
 async function getMonthlyBought(userId: string, monthStart: Date, monthEnd: Date): Promise<number> {
   const [row] = await db
@@ -201,7 +207,7 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
       getMonthlyApplied(userId, monthStart),
-      getDailyLimit(eventSettings.isEventDay),
+      getUserDailyLimit(userId, eventSettings.isEventDay),
       getDailyUsed(userId),
     ]);
 
@@ -258,7 +264,7 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
       getMonthlyApplied(userId, monthStart),
-      getDailyLimit(eventSettings.isEventDay),
+      getUserDailyLimit(userId, eventSettings.isEventDay),
       getDailyUsed(userId),
     ]);
 
