@@ -50,11 +50,10 @@ function openPhantomBrowser() {
   const url = encodeURIComponent(window.location.href)
   const ref = encodeURIComponent(window.location.origin)
   const deepLink = `phantom://browse/${url}?ref=${ref}`
-  const universalLink = `https://phantom.app/ul/browse/${url}?ref=${ref}`
   if (isIOS()) {
-    window.location.href = deepLink
+    window.location.assign(deepLink)
   } else {
-    window.location.href = `intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent(universalLink)};end`
+    window.location.assign(`intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;end`)
   }
 }
 function getAdminRpcUrl() { return `${window.location.origin}/api/solana/rpc-proxy` }
@@ -794,6 +793,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       // 全件を mark-sent（同一 txHash で各 ID を個別に記録）
       const sentAt = new Date().toISOString()
       let successCount = 0
+      const successfulIds = new Set<number>()
       for (const row of sendable) {
         const wallet = row.profileSolWallet ?? row.solWallet!
         try {
@@ -803,6 +803,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
             : r
           ))
           successCount++
+          successfulIds.add(row.id)
         } catch {
           // API 失敗は個別に failed 扱い（TX は成功しているので DB だけ再試行可能）
           setGachaResults(p => p.map(r => r.id === row.id
@@ -811,7 +812,11 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           ))
         }
       }
-      setGachaSelectedIds(new Set())
+      setGachaSelectedIds(previous => {
+        const remaining = new Set(previous)
+        successfulIds.forEach(id => remaining.delete(id))
+        return remaining
+      })
       toast.success(`✅ 一括送金完了！ ${successCount}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
 
     } catch (e: unknown) {
@@ -2244,17 +2249,19 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 {/* 一括操作バー（未送金・失敗フィルタ時のみ表示）*/}
                 {(gachaFilter === 'inmu_pending' || gachaFilter === 'inmu_failed') && sendableInFiltered.length > 0 && (
                   <div className="flex items-center gap-2 flex-wrap p-2.5 rounded-lg border border-border bg-card">
-                    <button
-                      type="button"
-                      onClick={() => {
+                    <label className="flex cursor-pointer items-center gap-2 text-xs px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground transition-colors">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-primary"
+                        checked={sendableInFiltered.every(r => gachaSelectedIds.has(r.id))}
+                        onChange={() => {
                         const allIds = new Set(sendableInFiltered.map(r => r.id))
                         const allSelected = sendableInFiltered.every(r => gachaSelectedIds.has(r.id))
                         setGachaSelectedIds(allSelected ? new Set() : allIds)
                       }}
-                      className="text-xs px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {sendableInFiltered.every(r => gachaSelectedIds.has(r.id)) ? '☑ 全解除' : '☐ 全選択'}
-                    </button>
+                      />
+                      {sendableInFiltered.every(r => gachaSelectedIds.has(r.id)) ? '全解除' : '全選択'}
+                    </label>
                     {gachaSelectedIds.size > 0 && (
                       <>
                         <span className="text-xs text-muted-foreground">{gachaSelectedIds.size}件選択中</span>
@@ -2298,10 +2305,13 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                           <Card key={row.id} className={`p-3 border-border ${cardBorder} ${isSelected ? 'ring-1 ring-primary' : ''}`}>
                             <div className="flex items-start gap-2">
                               {canSelect ? (
-                                <button type="button" className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                                  onClick={() => setGachaSelectedIds(prev => { const n = new Set(prev); n.has(row.id) ? n.delete(row.id) : n.add(row.id); return n })}>
-                                  {isSelected ? <CheckSquare className="size-4 text-primary" /> : <Square className="size-4" />}
-                                </button>
+                                <input
+                                  type="checkbox"
+                                  aria-label={`${row.displayName || row.userId}を選択`}
+                                  className="mt-0.5 size-4 shrink-0 cursor-pointer accent-primary"
+                                  checked={isSelected}
+                                  onChange={() => setGachaSelectedIds(prev => { const n = new Set(prev); n.has(row.id) ? n.delete(row.id) : n.add(row.id); return n })}
+                                />
                               ) : <div className="w-4 shrink-0" />}
 
                               <div className="flex-1 min-w-0">
