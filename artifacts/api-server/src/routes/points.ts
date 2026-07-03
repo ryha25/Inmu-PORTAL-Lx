@@ -7,6 +7,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
+import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
 
@@ -92,7 +93,8 @@ router.post("/points/claim-daily", requireAuth, async (req, res): Promise<void> 
     const newStreak = isConsecutive ? (streak?.streak ?? 0) + 1 : 1;
     const basePoints = 10;
     const streakBonus = Math.min(newStreak - 1, 6) * 5;
-    const totalPoints = basePoints + streakBonus;
+    const hasLuckyPaw = await hasActivePetSkill(userId, "nyarushian");
+    const totalPoints = (basePoints + streakBonus) * (hasLuckyPaw ? 2 : 1);
 
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -122,7 +124,7 @@ router.post("/points/claim-daily", requireAuth, async (req, res): Promise<void> 
       })
       .where(eq(profileTable.userId, userId));
 
-    res.json({ points: totalPoints, streak: newStreak });
+    res.json({ points: totalPoints, streak: newStreak, petSkillMultiplier: hasLuckyPaw ? 2 : 1 });
   } catch {
     res.status(500).json({ error: "Internal error" });
   }
