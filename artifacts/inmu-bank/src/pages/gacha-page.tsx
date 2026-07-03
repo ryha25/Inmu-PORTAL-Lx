@@ -20,6 +20,11 @@ import mascotImg   from '@assets/generated_images/mascot-v2-nobg.png'
 import coinImg     from '@assets/IMG_6637_1782097134955.jpeg'
 import bgImg       from '@assets/generated_images/gacha-bg.png'
 import jackpotBg   from '@assets/generated_images/gacha-jackpot-bg.png'
+import normalBannerImg from '@assets/gacha-banners/normal-main.jpg'
+import takuyaBannerImg from '@assets/gacha-banners/takuya.jpg'
+import nyarushianBannerImg from '@assets/gacha-banners/nyarushian.jpg'
+import leonBannerImg from '@assets/gacha-banners/leon.jpg'
+import paidBannerImg from '@assets/gacha-banners/paid-main.jpg'
 
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
@@ -250,7 +255,7 @@ function PageBg({ children, jackpot=false }:{children:React.ReactNode;jackpot?:b
   )
 }
 
-function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:{
+function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts300' }:{
   kind:'lever'|'space'|'falling'|'opening'; guaranteed?:boolean; zIndex?:number; prizeId?:string
 }) {
   const stars = Array.from({length:kind==='lever'?22:44},(_,i)=>({
@@ -417,17 +422,7 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts100' }:
         </div>
       )}
 
-      {(kind==='falling'||kind==='opening')&&guaranteed&&(
-        <>
-          {[8,82,13,86,5,91].map((left,i)=>(
-            <img key={i} src={mascotImg} style={{position:'absolute',
-              left:`${left}%`,bottom:`${i%3*9+2}%`,width:70+(i%2)*16,
-              transform:`translateX(-50%) rotate(${i%2?-8:8}deg)`,
-              filter:'drop-shadow(0 0 18px rgba(218,165,32,.64))',
-              animation:`ga-bounce ${1.2+i*.08}s ease-in-out ${i*.12}s infinite`}}/>
-          ))}
-        </>
-      )}
+      {guaranteed&&<div style={{position:'absolute',inset:0,pointerEvents:'none',boxShadow:'inset 0 0 70px rgba(255,215,0,.32)'}}/>}
     </div>
   )
 }
@@ -459,7 +454,7 @@ function ResultCapsuleReveal({ prizeId, size=210 }: {prizeId:string; size?:numbe
 
 /* 笊絶武笊絶武 Prize Capsule: CSS-drawn colored capsule (image 5 reference) 笊絶武笊絶武 */
 function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:string;size?:number;open?:boolean;showLabel?:boolean}) {
-  const c = CAPSULE[prizeId] ?? CAPSULE.pts100
+  const c = CAPSULE[prizeId] ?? CAPSULE.pts300
   const width = size*1.42
   const height = size*.9
   const isJackpot = prizeId === 'inmu10k'
@@ -535,7 +530,7 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
 }
 
 function RateOrb({ id }:{id:string}) {
-  const c = CAPSULE[id] ?? CAPSULE.pts100
+  const c = CAPSULE[id] ?? CAPSULE.pts300
   const isCharacter = id.startsWith('character-')
   const shellColor = id==='pts100' ? '#f3f5f7' : id==='pts300' ? '#ff4daf'
     : id==='pts500' ? '#a6ed35' : id==='pts1000' ? '#2678f3'
@@ -706,8 +701,50 @@ function GachaModeTabs({ mode, onChange, disabled=false }: { mode:'points'|'paid
   )
 }
 
+const GACHA_BANNERS = {
+  points: [normalBannerImg, takuyaBannerImg, nyarushianBannerImg, leonBannerImg],
+  paid: [paidBannerImg, takuyaBannerImg, nyarushianBannerImg, leonBannerImg],
+} as const
+
+function GachaBannerCarousel({ mode }:{mode:'points'|'paid'}) {
+  const scroller = useRef<HTMLDivElement>(null)
+  const [active,setActive] = useState(0)
+  const banners = GACHA_BANNERS[mode]
+
+  useEffect(()=>{
+    setActive(0)
+    scroller.current?.scrollTo({left:0,behavior:'auto'})
+  },[mode])
+
+  const goTo = (index:number) => {
+    const next = (index+banners.length)%banners.length
+    const node = scroller.current
+    if(node) node.scrollTo({left:node.clientWidth*next,behavior:'smooth'})
+    setActive(next)
+  }
+
+  return (
+    <div style={{position:'relative',width:'100%',flexShrink:0}}>
+      <div ref={scroller} onScroll={event=>{
+        const node=event.currentTarget
+        if(node.clientWidth)setActive(Math.round(node.scrollLeft/node.clientWidth))
+      }} style={{display:'flex',overflowX:'auto',scrollSnapType:'x mandatory',scrollbarWidth:'none',touchAction:'pan-x',borderRadius:8,border:'1px solid rgba(218,165,32,.38)',background:'#030207'}}>
+        {banners.map((src,index)=><div key={src} style={{position:'relative',minWidth:'100%',scrollSnapAlign:'center'}}>
+          <img src={src} alt={`${mode==='points'?'通常':'有償'}ガチャ バナー ${index+1}`} draggable={false} style={{display:'block',width:'100%',height:'auto',aspectRatio:'1280 / 850',objectFit:'contain'}}/>
+        </div>)}
+      </div>
+      <div className="ga-floatslow" style={{position:'absolute',left:'1.5%',bottom:'2%',zIndex:5,pointerEvents:'none'}}>
+        <img src={mascotImg} alt="INMUくん" style={{width:'clamp(92px,25vw,138px)',height:'auto',objectFit:'contain',filter:'drop-shadow(0 10px 20px rgba(0,0,0,.9)) drop-shadow(0 0 16px rgba(218,165,32,.4))'}}/>
+      </div>
+      <button type="button" aria-label="前のバナー" onClick={()=>goTo(active-1)} style={{position:'absolute',left:6,top:'50%',transform:'translateY(-50%)',width:32,height:42,borderRadius:6,border:'1px solid rgba(255,215,100,.42)',background:'rgba(0,0,0,.62)',color:'#ffe58a',fontSize:22,zIndex:7}}>‹</button>
+      <button type="button" aria-label="次のバナー" onClick={()=>goTo(active+1)} style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',width:32,height:42,borderRadius:6,border:'1px solid rgba(255,215,100,.42)',background:'rgba(0,0,0,.62)',color:'#ffe58a',fontSize:22,zIndex:7}}>›</button>
+      <div style={{display:'flex',justifyContent:'center',gap:6,paddingTop:7}}>{banners.map((_,index)=><button key={index} type="button" aria-label={`バナー${index+1}`} onClick={()=>goTo(index)} style={{width:index===active?20:7,height:7,borderRadius:99,border:0,padding:0,background:index===active?'#ffd54b':'rgba(255,255,255,.28)',transition:'width .2s'}}/>)}</div>
+    </div>
+  )
+}
+
 function capsuleIdForPrize(prize?: Prize, result?: Result | null) {
-  if (!prize) return 'pts100'
+  if (!prize) return 'pts300'
   if (prize.type === 'character') return prize.prizeId
   return prize.prizeId
 }
@@ -969,9 +1006,7 @@ export function GachaPage() {
       <PageBg>
         <div style={{display:'flex',flexDirection:'column',minHeight:'100%',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode} disabled={paidBusy}/>
-          <div style={{position:'relative',height:310,margin:'2px 12px 0',borderRadius:10,overflow:'hidden',background:'radial-gradient(circle at 45% 42%,rgba(255,197,45,.12),rgba(2,1,10,.96) 68%)'}}>
-            <RatePanel balls={PAID_BALLS}/>
-          </div>
+          <div style={{margin:'6px 12px 0'}}><GachaBannerCarousel mode="paid"/></div>
           <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'18px 18px 8px',textAlign:'center'}}>
             <WalletCards style={{width:42,height:42,color:'#ffd65a',filter:'drop-shadow(0 0 14px rgba(255,200,40,.65))'}}/>
             <h1 style={{margin:'10px 0 4px',fontFamily:'Georgia,serif',fontSize:25,color:'#f4c84b',letterSpacing:'.12em'}}>INMU PET PREMIUM</h1>
@@ -1007,19 +1042,9 @@ export function GachaPage() {
     <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
       <style>{CSS}</style>
       <PageBg>
-        <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden'}}>
+        <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflowY:'auto',overflowX:'hidden'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode}/>
-          <div style={{textAlign:'center',padding:'4px 16px 0',flexShrink:0}}>
-            <h1 className="ga-pulse" style={{margin:0,fontSize:22,fontWeight:900,color:'#daa520',fontFamily:'Georgia,serif',letterSpacing:'0.16em',textShadow:'0 2px 22px rgba(218,165,32,.82)'}}>INMU GACHA</h1>
-            <p style={{margin:'1px 0 0',fontSize:9,color:'rgba(218,165,32,.42)',letterSpacing:'0.14em',fontWeight:600}}>PREMIUM CAPSULE MACHINE</p>
-          </div>
-          <div style={{flex:1,position:'relative',display:'flex',justifyContent:'center',alignItems:'center',minHeight:0,overflow:'hidden'}}>
-            <img src={machineImg} alt="INMU GACHA Machine" className="ga-machinepulse" style={{maxHeight:'100%',width:'auto',maxWidth:'82vw',display:'block',objectFit:'contain',filter:'drop-shadow(0 22px 66px rgba(0,0,0,.98)) drop-shadow(0 0 30px rgba(184,134,11,.3))'}}/>
-            <div className="ga-floatslow" style={{position:'absolute',bottom:0,left:'2%',zIndex:8}}>
-              <img src={mascotImg} alt="INMUくん" style={{width:'min(100px,24vw)',height:'auto',objectFit:'contain',filter:'drop-shadow(-4px 14px 24px rgba(0,0,0,.88)) drop-shadow(0 0 18px rgba(218,165,32,.38))'}}/>
-            </div>
-            <RatePanel />
-          </div>
+          <div style={{margin:'6px 12px 10px'}}><GachaBannerCarousel mode="points"/></div>
           <div style={{flexShrink:0,background:'linear-gradient(to top,rgba(2,1,10,.99) 84%,transparent)',backdropFilter:'blur(16px)',padding:'6px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))'}}>
             <button type="button" disabled={freeUsed||freeLoading||phase!=='idle'} onClick={spinFree} style={{width:'100%',marginBottom:8,padding:'10px 16px',border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:freeUsed||freeLoading?'not-allowed':'pointer',background:freeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:freeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -1098,19 +1123,10 @@ export function GachaPage() {
                     border:`1px solid rgba(218,165,32,${.36-i*.1})`,
                     animation:`ga-ring 2s ease-out ${i*.5}s infinite`}}/>
                 ))}
-                {[{s:100,d:'0ms'},{s:80,d:'180ms'},{s:80,d:'360ms'},{s:66,d:'540ms'},{s:66,d:'720ms'}].map((m,i)=>(
-                  <div key={i} style={{
-                    position:'absolute',
-                    left:['50%','14%','72%','24%','60%'][i],
-                    top:['40%','45%','45%','58%','58%'][i],
-                    width:m.s,height:m.s,borderRadius:'50%',
-                    overflow:'hidden',border:'2.5px solid #daa520',
-                    boxShadow:`0 0 ${i===0?44:24}px rgba(218,165,32,${i===0?.95:.7})`,
-                    transform:i===0?'translate(-50%,-50%)':'translate(-50%,-50%)',
-                    animation:`ga-popin .42s ease-out ${m.d} both, ga-bounce .72s ease-in-out ${500+parseInt(m.d)}ms infinite`}}>
-                    <img src={mascotImg} style={{width:'100%',height:'100%',objectFit:'contain',background:'rgba(4,2,14,.4)'}}/>
-                  </div>
-                ))}
+                <div style={{position:'relative',animation:'ga-popin .42s ease-out both, ga-floatslow 2s ease-in-out .4s infinite'}}>
+                  <PrizeCapsule prizeId="inmu10k" size={190} showLabel={false}/>
+                  <div style={{position:'absolute',inset:-28,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,244,150,.58),rgba(255,190,20,.22) 46%,transparent 70%)',filter:'blur(8px)',zIndex:-1}}/>
+                </div>
               </div>
               <div className="ga-glow" style={{
                 background:'rgba(24,10,0,.92)',border:'2px solid #daa520',
@@ -1700,7 +1716,7 @@ export function GachaPage() {
                   animation:'ga-glowtext 1.5s ease-in-out infinite'}}>★ 確定演出が発動しました！</p>
               )}
               {result.results.map((prize)=>{
-                const c=CAPSULE[prize.prizeId]??CAPSULE.pts100
+                const c=CAPSULE[prize.prizeId]??CAPSULE.pts300
                 return (
                   <div key={prize.prizeId} style={{width:'100%',display:'flex',
                     flexDirection:'column',alignItems:'center',gap:14,position:'relative',zIndex:2}}>
@@ -1763,7 +1779,7 @@ export function GachaPage() {
               <div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:'8px 4px',
                 width:'100%',position:'relative',zIndex:2,boxSizing:'border-box'}}>
                 {result.results.map((prize,i)=>{
-                  const c=CAPSULE[prize.prizeId]??CAPSULE.pts100
+                  const c=CAPSULE[prize.prizeId]??CAPSULE.pts300
                   return (
                     <div key={i} style={{display:'flex',flexDirection:'column',
                       alignItems:'center',gap:3,

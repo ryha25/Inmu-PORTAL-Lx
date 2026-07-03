@@ -778,7 +778,7 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Form */}
-      <FormArea />
+      {FormArea()}
 
       {/* Active missions — by type + chains */}
       {activeMissions.length > 0 || Array.from(chainMap.values()).some(c => all.find(m => m.id === c[0].id)?.status === 'active') ? (

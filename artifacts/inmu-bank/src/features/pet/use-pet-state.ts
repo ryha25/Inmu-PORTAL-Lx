@@ -36,7 +36,8 @@ export const PET_SLEEPINESS_GAIN_MS = 10 * 60 * 1000
 export const PET_PREMIUM_DAILY_FREE = 3
 
 export type PetLevelCurve = { baseExp: number; perLevelExp: number }
-export const DEFAULT_PET_LEVEL_CURVE: PetLevelCurve = { baseExp: 100, perLevelExp: 80 }
+// Keep progression deliberate, but avoid the previous early-level spike.
+export const DEFAULT_PET_LEVEL_CURVE: PetLevelCurve = { baseExp: 90, perLevelExp: 70 }
 export const PET_LEVEL_CURVES: Partial<Record<PetId, PetLevelCurve>> = {}
 
 export function getRequiredPetExp(level: number, petId: PetId) {
