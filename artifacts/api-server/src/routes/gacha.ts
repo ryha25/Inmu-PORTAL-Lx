@@ -3,6 +3,7 @@ import { db, pool } from "@workspace/db";
 import { profileTable, pointsTable, notificationsTable, transactionsTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
+import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
 
@@ -122,9 +123,12 @@ router.get("/gacha/free-status", requireAuth, async (req, res): Promise<void> =>
        WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2`,
       [userId, todayStart.toISOString()],
     );
-    const used = Number(rows[0].cnt) > 0;
+    const bonusPulls = await hasActivePetSkill(userId, "takuya") ? 3 : 0;
+    const allowance = 1 + bonusPulls;
+    const usedCount = Number(rows[0].cnt);
+    const used = usedCount >= allowance;
     const nextReset = jstTomorrowStartUtc().toISOString();
-    res.json({ used, nextReset });
+    res.json({ used, usedCount, allowance, remaining: Math.max(0, allowance - usedCount), nextReset });
   } catch (e) {
     console.error("[Gacha] free-status error:", e);
     res.status(500).json({ error: "Internal error" });
@@ -216,7 +220,9 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
     `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "createdAt" >= $2`,
     [userId, todayStart.toISOString()],
   );
-  if (Number(checkRows[0].cnt) > 0) {
+  const bonusPulls = await hasActivePetSkill(userId, "takuya") ? 3 : 0;
+  const allowance = 1 + bonusPulls;
+  if (Number(checkRows[0].cnt) >= allowance) {
     res.status(400).json({ error: "本日の無料ガチャは使用済みです" });
     return;
   }
@@ -443,4 +449,3 @@ router.put("/admin/gacha/results/:id/reset-pending", requireAdmin, async (req, r
 });
 
 export default router;
-
