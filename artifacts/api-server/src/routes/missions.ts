@@ -51,6 +51,7 @@ async function fetchInmuBalance(wallet: string): Promise<number> {
 
 import { requireAuth, requireAdmin } from "../middlewares/session";
 import { initializePetCharacterState } from "../services/pet-state-store";
+import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
 
@@ -797,11 +798,14 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       }
     }
 
-    if (mission.points > 0) {
+    const pointMultiplier = mission.points > 0 && await hasActivePetSkill(userId, "nyarushian") ? 2 : 1;
+    const awardedPoints = mission.points * pointMultiplier;
+
+    if (awardedPoints > 0) {
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      await db.insert(pointsTable).values({ userId, amount: String(mission.points), type: "mission", source: mission.title, month });
+      await db.insert(pointsTable).values({ userId, amount: String(awardedPoints), type: "mission", source: mission.title, month });
       await db.update(profileTable)
-        .set({ monthlyPoints: sql`${profileTable.monthlyPoints} + ${mission.points}`, updatedAt: now })
+        .set({ monthlyPoints: sql`${profileTable.monthlyPoints} + ${awardedPoints}`, updatedAt: now })
         .where(eq(profileTable.userId, userId));
     }
 
@@ -818,7 +822,7 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
     }
 
     const rewardParts: string[] = [];
-    if (mission.points > 0) rewardParts.push(`${mission.points.toLocaleString()}ポイント`);
+    if (awardedPoints > 0) rewardParts.push(`${awardedPoints.toLocaleString()}ポイント${pointMultiplier > 1 ? "（幸運の肉球 ×2）" : ""}`);
     if (extraReward?.characterId) rewardParts.push(PET_CHARACTER_NAMES[extraReward.characterId] ?? extraReward.characterId);
 
     await db.insert(notificationsTable).values({
@@ -828,7 +832,8 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
 
     res.json({
       ok: true,
-      points: mission.points,
+      points: awardedPoints,
+      pointMultiplier,
       characterId: extraReward?.characterId ?? null,
       characterName: extraReward?.characterId ? (PET_CHARACTER_NAMES[extraReward.characterId] ?? extraReward.characterId) : null,
     });
