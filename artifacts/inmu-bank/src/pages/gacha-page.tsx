@@ -1068,6 +1068,7 @@ export function GachaPage() {
         <div style={{display:'flex',flexDirection:'column',minHeight:'100%',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode} disabled={paidBusy}/>
           <div style={{margin:'6px 12px 0'}}><GachaBannerCarousel mode="paid"/></div>
+          <p style={{margin:'4px 12px 0',fontSize:9,lineHeight:1.4,color:'rgba(255,255,255,.4)',textAlign:'center'}}>※レベル報酬で得られる購入申請還元は最大10%までです。(各キャラ保持で上乗せし最大＋30%効果はあり)次回更新時に誤記変更予定。</p>
           <div style={{margin:'8px 12px 0'}}>
             <button type="button" onClick={()=>setRateModalOpen(true)} style={{width:'100%',padding:'8px 14px',border:'1px solid rgba(218,165,32,.5)',borderRadius:8,background:'rgba(8,4,14,.7)',color:'#e8c65a',fontSize:11,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
               排出率を見る <ChevronRight style={{width:14,height:14}}/>
@@ -1124,6 +1125,7 @@ export function GachaPage() {
         <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflowY:'auto',overflowX:'hidden'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode}/>
           <div style={{margin:'6px 12px 10px'}}><GachaBannerCarousel mode="points"/></div>
+          <p style={{margin:'-6px 12px 8px',fontSize:9,lineHeight:1.4,color:'rgba(255,255,255,.4)',textAlign:'center'}}>※レベル報酬で得られる購入申請還元は最大10%までです。(各キャラ保持で上乗せし最大＋30%効果はあり)次回更新時に誤記変更予定。</p>
           <div style={{margin:'0 12px 8px'}}>
             <button type="button" onClick={()=>setRateModalOpen(true)} style={{width:'100%',padding:'8px 14px',border:'1px solid rgba(218,165,32,.5)',borderRadius:8,background:'rgba(8,4,14,.7)',color:'#e8c65a',fontSize:11,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
               排出率を見る <ChevronRight style={{width:14,height:14}}/>

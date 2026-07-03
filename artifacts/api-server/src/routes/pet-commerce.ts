@@ -269,7 +269,7 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
   let premiumFood = 0;
   let sleepTea = 0;
   let inmuCount = 0;
-  const pointMultiplier = await hasActivePetSkill(userId, "nyarushian") ? 2 : 1;
+  const pointMultiplier = 1; // ニャルシアン効果はガチャポイントの対象外
   for (const raw of rawPrizes) {
     if (raw.type === "character") {
       const inserted = await client.query(`

@@ -176,7 +176,7 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
 
   const wasGuaranteed = Math.random() < GUARANTEED_RATE;
   const prizeResults  = rollMany(count, wasGuaranteed);
-  const pointMultiplier = await hasActivePetSkill(userId, "nyarushian") ? 2 : 1;
+  const pointMultiplier = 1; // ニャルシアン効果はガチャポイントの対象外
   const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + p.amount, 0) * pointMultiplier;
   const inmuList      = prizeResults.filter(p => p.type === "inmu");
   const hasInmu       = inmuList.length > 0;
@@ -260,7 +260,7 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
 
   const wasGuaranteed = Math.random() < GUARANTEED_RATE;
   const prizeResults  = rollMany(1, wasGuaranteed);
-  const pointMultiplier = await hasActivePetSkill(userId, "nyarushian") ? 2 : 1;
+  const pointMultiplier = 1; // ニャルシアン効果はガチャポイントの対象外
   const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + p.amount, 0) * pointMultiplier;
   const inmuList      = prizeResults.filter(p => p.type === "inmu");
   const hasInmu       = inmuList.length > 0;
