@@ -66,28 +66,28 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
   return result;
 }
 
-// ── JSTの購入サイクル開始UTC日時を返す（毎月15日始まり〜翌月14日終わり） ──
+// ── JSTの購入サイクル開始UTC日時を返す（毎月16日0時始まり〜翌月15日23:59終わり） ──
 function getMonthStartUTC(now: Date): Date {
   const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const y = jstNow.getUTCFullYear();
   const m = jstNow.getUTCMonth();
   const d = jstNow.getUTCDate();
-  // 15日以降なら当月15日始まり、15日未満なら前月15日始まり
-  const jstCycleStartMs = d >= 15 ? Date.UTC(y, m, 15) : Date.UTC(y, m - 1, 15);
+  // 16日以降なら当月16日始まり、16日未満（15日以前）なら前月16日始まり
+  const jstCycleStartMs = d >= 16 ? Date.UTC(y, m, 16) : Date.UTC(y, m - 1, 16);
   return new Date(jstCycleStartMs - 9 * 60 * 60 * 1000);
 }
 
-// ── JSTの購入サイクル終了UTC日時（次の15日0時）を返す ──
+// ── JSTの購入サイクル終了UTC日時（次の16日0時＝15日23:59の直後）を返す ──
 function getMonthEndUTC(now: Date): Date {
   const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const y = jstNow.getUTCFullYear();
   const m = jstNow.getUTCMonth();
   const d = jstNow.getUTCDate();
-  const jstCycleEndMs = d >= 15 ? Date.UTC(y, m + 1, 15) : Date.UTC(y, m, 15);
+  const jstCycleEndMs = d >= 16 ? Date.UTC(y, m + 1, 16) : Date.UTC(y, m, 16);
   return new Date(jstCycleEndMs - 9 * 60 * 60 * 1000);
 }
 
-// ── 現在の購入サイクル（15日〜翌月14日）の日数 ──
+// ── 現在の購入サイクル（16日〜翌月15日）の日数 ──
 function getDaysInCurrentMonth(now: Date): number {
   const start = getMonthStartUTC(now);
   const end = getMonthEndUTC(now);
