@@ -49,15 +49,15 @@ const PAID_PRIZES = [
   })),
 ];
 
-const POINT_INMU_PRIZE = { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 51 };
-const POINT_INMU_RATE = 1 / 514;
+const POINT_GUARANTEED_EFFECT_RATE = 1 / 514;
 
-const POINT_PRIZES_NON_INMU = [
-  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 3_948 },
-  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 2_632 },
+const POINT_PRIZES = [
+  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 8_550 },
+  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 5_130 },
   { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 1_491 },
   { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 702 },
   { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 200 },
+  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 51 },
   { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 514 },
   { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 370 },
   ...CHARACTERS.map((character, index) => ({
@@ -69,13 +69,6 @@ const POINT_PRIZES_NON_INMU = [
     weight: index < 2 ? 31 : 30,
   })),
 ];
-
-const POINT_PRIZES = [POINT_INMU_PRIZE, ...POINT_PRIZES_NON_INMU];
-
-function rollPointPrize() {
-  if (Math.random() < POINT_INMU_RATE) return POINT_INMU_PRIZE;
-  return weightedRoll(POINT_PRIZES_NON_INMU);
-}
 
 let tablePromise: Promise<void> | null = null;
 export function ensurePetCommerceTables() {
@@ -414,13 +407,13 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
     if (currentPoints < costPoints) throw new Error("ポイントが不足しています");
     await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"-$1,"updatedAt"=NOW() WHERE "userId"=$2`, [costPoints, req.userId!]);
     await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PET通常ガチャ', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
-    const rolled = Array.from({ length: count }, () => rollPointPrize());
+    const rolled = Array.from({ length: count }, () => weightedRoll(POINT_PRIZES));
     const applied = await applyPrizes(client, req.userId!, rolled);
     const history = await client.query(`
       INSERT INTO "petGachaHistory" ("userId","gachaType","pullType","costPoints",results)
       VALUES ($1,'points',$2,$3,$4::jsonb) RETURNING id,"createdAt"
     `, [req.userId!, pullType, costPoints, JSON.stringify(applied.results)]);
-    const wasGuaranteed = applied.results.some(prize => prize.type === "character");
+    const wasGuaranteed = Math.random() < POINT_GUARANTEED_EFFECT_RATE;
     const legacySpin = await client.query(`
       INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree","gachaKind")
       VALUES ($1,$2,$3::jsonb,$4,$5,$6,'pending',$7,$8,false,'normal') RETURNING id

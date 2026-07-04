@@ -106,17 +106,17 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
 }
 
 const BALLS = [
-  { id:'pts100',  label:'100pt',       rate:'39.48%', color:'rgba(255,236,180,.9)'  },
-  { id:'pts300',  label:'300pt',       rate:'26.32%', color:'rgba(255,88,196,.9)'  },
-  { id:'pts500',  label:'500pt',       rate:'14.91%', color:'rgba(166,255,58,.9)'  },
-  { id:'pts1000', label:'1,000pt',     rate:'7.02%', color:'rgba(70,140,255,.9)'  },
-  { id:'pts5000', label:'5,000pt',     rate:'2%', color:'rgba(180,60,255,.9)'  },
-  { id:'inmu10k', label:'10,000 INMU', rate:'0.51%',  color:'rgba(255,215,0,.9)'   },
-  { id:'premium-food', label:'高級ごはん', rate:'5.14%', color:'rgba(255,184,54,.9)' },
-  { id:'sleep-tea', label:'アイスティー（睡眠薬入り）', rate:'3.7%', color:'rgba(65,210,255,.9)' },
-  { id:'character-nyarushian', label:'ニャルシアン', rate:'0.31%', color:'rgba(255,215,0,.9)' },
-  { id:'character-takuya', label:'拓也', rate:'0.31%', color:'rgba(255,215,0,.9)' },
-  { id:'character-leon', label:'レオン', rate:'0.30%', color:'rgba(255,215,0,.9)' },
+  { id:'pts100',  label:'100pt',       rate:'50.00%', color:'rgba(255,236,180,.9)'  },
+  { id:'pts300',  label:'300pt',       rate:'30.00%', color:'rgba(255,88,196,.9)'  },
+  { id:'pts500',  label:'500pt',       rate:'8.72%', color:'rgba(166,255,58,.9)'  },
+  { id:'pts1000', label:'1,000pt',     rate:'4.11%', color:'rgba(70,140,255,.9)'  },
+  { id:'pts5000', label:'5,000pt',     rate:'1.17%', color:'rgba(180,60,255,.9)'  },
+  { id:'inmu10k', label:'10,000 INMU', rate:'0.30%',  color:'rgba(255,215,0,.9)'   },
+  { id:'premium-food', label:'高級ごはん', rate:'3.01%', color:'rgba(255,184,54,.9)' },
+  { id:'sleep-tea', label:'アイスティー（睡眠薬入り）', rate:'2.16%', color:'rgba(65,210,255,.9)' },
+  { id:'character-nyarushian', label:'ニャルシアン', rate:'0.18%', color:'rgba(255,215,0,.9)' },
+  { id:'character-takuya', label:'拓也', rate:'0.18%', color:'rgba(255,215,0,.9)' },
+  { id:'character-leon', label:'レオン', rate:'0.18%', color:'rgba(255,215,0,.9)' },
 ]
 const PAID_BALLS = [
   { id:'pts1000', label:'1,000pt', rate:'60%' },
@@ -763,7 +763,6 @@ function EmissionRateModal({ open, onClose }:{ open:boolean; onClose:()=>void })
               <span style={{fontSize:13,color:'#ffd54b',fontWeight:800}}>{item.rate}</span>
             </div>
           ))}
-          <p style={{margin:'12px 0 0',fontSize:10,color:'rgba(255,255,255,.4)',lineHeight:1.5}}>※ ニャルシアン確率で当選した場合、ポイント景品はポイント×2で獲得できます（ニャルシアン効果）。</p>
         </div>
       </div>
     </div>
@@ -943,7 +942,7 @@ export function GachaPage() {
       })
       if(!res.ok){const e=await res.json().catch(()=>({})) as {error?:string};throw new Error(e.error??'エラー')}
       const data=await res.json() as Result
-      const r:Result={...data,hasInmu:Boolean(data.hasInmu),wasGuaranteed:Boolean(data.hasInmu)}
+      const r:Result={...data,hasInmu:Boolean(data.hasInmu),wasGuaranteed:Boolean(data.wasGuaranteed)}
       setResult(r);setRevIdx(0);setNewCharacterRevealIndex(0);setPts(r.newPoints)
       setPhase(r.wasGuaranteed?'guaranteed':'inserting')
     }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
