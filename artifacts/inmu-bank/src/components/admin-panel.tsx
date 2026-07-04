@@ -25,6 +25,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
+import { confirmSignaturePolling } from '@/lib/solana-confirm'
 
 interface PhantomProvider {
   isPhantom: boolean
@@ -708,10 +709,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
       // 記録してしまうのを防ぐ）
       toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
-      const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+      const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
       toast.dismiss(toastId)
-      if (confirmation.value.err) {
-        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+      if (confirmation.err) {
+        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
       }
 
       await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
@@ -796,7 +797,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         )
       }
       tx.feePayer = adminPubkey
-      const { blockhash } = await connection.getLatestBlockhash('processed')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading(`Phantom で署名してください（${sendable.length}件 まとめて送金）…`, { id: toastId })
@@ -810,15 +811,11 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       // オンチェーンでの確定を待つ（未確定のうちに DB 反映してしまうと、失敗TXでも
       // 送金済みとして記録してしまうため）
       toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
-      const confirmation = await connection.confirmTransaction({
-        signature,
-        blockhash: tx.recentBlockhash!,
-        lastValidBlockHeight: (await connection.getLatestBlockhash('processed')).lastValidBlockHeight,
-      }, 'confirmed')
+      const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
       toast.dismiss(toastId)
 
-      if (confirmation.value.err) {
-        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+      if (confirmation.err) {
+        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
       }
 
       // TX は1つの atomic 命令セット（全員成功 or 全員失敗）なので、DB側も
@@ -1071,10 +1068,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
         // 記録してしまうのを防ぐ）
         toast.loading(`オンチェーンでの確定を待っています${chunkLabel}…`, { id: 'ph-airdrop-confirm' })
-        const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+        const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
         toast.dismiss('ph-airdrop-confirm')
-        if (confirmation.value.err) {
-          throw new Error(`トランザクションがオンチェーンで失敗しました${chunkLabel}: ${JSON.stringify(confirmation.value.err)}`)
+        if (confirmation.err) {
+          throw new Error(`トランザクションがオンチェーンで失敗しました${chunkLabel}: ${JSON.stringify(confirmation.err)}`)
         }
 
         await api('/admin/record-airdrop-batch', 'POST', {
@@ -1273,10 +1270,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           // オンチェーンでの確定を待ってから成功として記録する（未確定・失敗TXを
           // 送金済みとして記録してしまうのを防ぐ）
           toast.loading('オンチェーンでの確定を待っています…', { id: 'ph-confirm' })
-          const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+          const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
           toast.dismiss('ph-confirm')
-          if (confirmation.value.err) {
-            throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+          if (confirmation.err) {
+            throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
           }
           rebateTxSignature = signature
 

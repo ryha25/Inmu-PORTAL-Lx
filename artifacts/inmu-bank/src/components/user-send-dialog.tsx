@@ -15,6 +15,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
+import { confirmSignaturePolling } from '@/lib/solana-confirm'
 
 const INMU_MINT = new PublicKey('4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump')
 const INMU_DECIMALS = 6
@@ -226,10 +227,10 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       // オンチェーンでの確定を待ってから履歴記録する（未確定・失敗TXを送金済みとして
       // 記録してしまうのを防ぐ。ハッシュだけ発行されて実際には送られていない状態を防止）
       toast.loading('オンチェーンでの確定を待っています…', { id: 'confirming' })
-      const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+      const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
       toast.dismiss('confirming')
-      if (confirmation.value.err) {
-        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+      if (confirmation.err) {
+        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
       }
 
       const recordRes = await fetch('/api/transfer/send', {
