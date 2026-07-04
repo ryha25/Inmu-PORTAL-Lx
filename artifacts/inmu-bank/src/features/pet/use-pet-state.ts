@@ -80,7 +80,7 @@ type PetSaveData = {
   premiumFood: PremiumFoodSave
   items: PetItemState
   skillState: Record<PetId, boolean>
-  skillActiveCharacterId: PetId | null
+  skillActiveCharacterIds: PetId[]
 }
 
 type LegacySaveData = Partial<PetSaveData> & {
@@ -165,7 +165,7 @@ function createDefaultSave(): PetSaveData {
     premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
     items: { sleepTea: 0 },
     skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, true])) as Record<PetId, boolean>,
-    skillActiveCharacterId: null,
+    skillActiveCharacterIds: [],
   }
 }
 
@@ -208,7 +208,13 @@ function loadSave(source?: unknown): PetSaveData {
       premiumFood: sanitizePremiumFood(parsed.premiumFood),
       items: { sleepTea: Math.max(0, Math.floor(readNumber(parsed.items?.sleepTea, 0))) },
       skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, parsed.skillState?.[pet.id] !== false])) as Record<PetId, boolean>,
-      skillActiveCharacterId: PET_DEFINITIONS.some(pet => pet.id === parsed.skillActiveCharacterId) ? (parsed.skillActiveCharacterId as PetId) : null,
+      skillActiveCharacterIds: (() => {
+        const legacySingle = (parsed as { skillActiveCharacterId?: unknown }).skillActiveCharacterId
+        const rawList = Array.isArray(parsed.skillActiveCharacterIds)
+          ? parsed.skillActiveCharacterIds
+          : legacySingle != null ? [legacySingle] : []
+        return rawList.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id as PetId]) && list.indexOf(id) === index).slice(0, 3)
+      })(),
     }
   } catch {
     return fallback
@@ -370,8 +376,16 @@ export function usePetState() {
     })
   }
 
-  function setSkillActiveCharacterId(id: PetId | null) {
-    setSave(current => ({ ...current, skillActiveCharacterId: id }))
+  function setSkillActiveCharacterIds(nextIds: PetId[] | ((current: PetId[]) => PetId[])) {
+    setSave(current => {
+      const skillActiveCharacterIds = typeof nextIds === 'function'
+        ? nextIds(current.skillActiveCharacterIds)
+        : nextIds
+      return {
+        ...current,
+        skillActiveCharacterIds: skillActiveCharacterIds.filter((id, index, list) => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3),
+      }
+    })
   }
 
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
@@ -535,8 +549,8 @@ export function usePetState() {
     isHydrated,
     syncError,
     skillState: effectiveSave.skillState,
-    skillActiveCharacterId: effectiveSave.skillActiveCharacterId,
-    setSkillActiveCharacterId,
+    skillActiveCharacterIds: effectiveSave.skillActiveCharacterIds,
+    setSkillActiveCharacterIds,
   }
 }
 

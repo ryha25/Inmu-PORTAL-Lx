@@ -52,14 +52,18 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
       const state = stateByUser.get(userId) as Record<string, any> | undefined;
       const owned = ownedByUser.get(userId) ?? new Set<string>();
       const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.slice(0, 3).map(String) : [];
-      const skillActiveCharacterId = String(state?.skillActiveCharacterId ?? "");
+      const legacySkillSingle = state?.skillActiveCharacterId;
+      const skillActiveCharacterIds: string[] = (Array.isArray(state?.skillActiveCharacterIds)
+        ? state.skillActiveCharacterIds
+        : legacySkillSingle != null ? [legacySkillSingle] : []
+      ).slice(0, 3).map(String);
       const bonuses = PET_PURCHASE_BONUS_RULES.filter(rule => {
         if (!owned.has(rule.characterId) || (rule.eventOnly && !isEventDay)) return false;
         const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
         if (level < rule.minLevel) return false;
-        // レベル報酬は育成枠（activePetIds）、固有スキルは「固有スキル発動」で選択された1体のみに紐づく。
+        // レベル報酬は育成枠（activePetIds）、固有スキルは「固有スキル発動」で選択された最大3体に紐づく。
         return rule.source === "skill"
-          ? skillActiveCharacterId === rule.characterId
+          ? skillActiveCharacterIds.includes(rule.characterId)
           : activePetIds.includes(rule.characterId);
       }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
       result.set(userId, bonuses);
