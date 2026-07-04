@@ -91,7 +91,7 @@ export async function sendInmuWithPhantom(
     createTransferInstruction(fromAta, toAta, from, rawAmount, [], TOKEN_2022_PROGRAM_ID),
   )
   transaction.feePayer = from
-  const { blockhash } = await connection.getLatestBlockhash('processed')
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
   transaction.recentBlockhash = blockhash
 
   onProgress?.('Phantomで署名してください...')
@@ -101,6 +101,15 @@ export async function sendInmuWithPhantom(
     skipPreflight: true,
     maxRetries: 5,
   })
+
+  // オンチェーンでの確定を待ってから成功として扱う（未確定・失敗TXを送金済みとして
+  // 記録してしまうのを防ぐ。ハッシュだけ発行されて実際には送られていない状態を防止）
+  onProgress?.('オンチェーンでの確定を待っています...')
+  const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+  if (confirmation.value.err) {
+    throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+  }
+
   onProgress?.('送信完了。サーバーで確認しています...')
   return signature
 }

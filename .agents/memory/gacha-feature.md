@@ -55,6 +55,11 @@ description: gachaResults + gachaInmuWins tables; free daily gacha; bulk Phantom
 - TTY エラーになるため使用不可
 - 全マイグレーションは raw SQL `ALTER TABLE ADD COLUMN IF NOT EXISTS` か `CREATE TABLE IF NOT EXISTS`
 
+## Phantom送金「ハッシュ発行されたが実際は送られていない」バグ（全送金フロー共通）
+- **症状:** UIは「送金完了」と表示するが、後でsolscanで見るとtxハッシュが "not found"（オンチェーンに一度も乗っていない）。同一txHashが複数の異なるDB行に記録されることもある（stale blockhash/未確定txの再利用）。
+- **Why:** `sendRawTransaction({ skipPreflight: true })` はブロックチェーンが実際にtxを処理する前に signature を返す。それを `connection.confirmTransaction()` で待たずに即DB「sent」記録すると、失効/失敗したtxでも成功扱いになる。
+- **How to apply:** Phantom経由で送金するコードは全て `sendRawTransaction` の後に必ず `getLatestBlockhash` の `lastValidBlockHeight` を保持し `connection.confirmTransaction({signature, blockhash, lastValidBlockHeight}, 'confirmed')` を待ち、`confirmation.value.err` をチェックしてから成功として扱う/DBに記録すること。該当箇所: `user-send-dialog.tsx`(ユーザー間送金), `admin-panel.tsx`のmarkGachaSent/markGachaBulkSent/handlePhantomAirdropSend/購入申請リベート送金, `lib/admin-inmu-transfer.ts`のsendInmuWithPhantom（ペット購入・ガチャ課金・報酬申請で共用）。新しい送金コードを書く際は必ずこのパターンに従うこと。
+
 ## 二重ガチャシステムの罠（要注意）
 - legacy (`gacha.ts`: `/gacha/spin`, `/gacha/free-spin`) と新 PET系 (`pet-commerce.ts`: `/pet-gacha/points`, `/pet-gacha/paid`, `/pet-gacha/paid-free`) が並存
 - 管理画面「全スピン履歴」(`/admin/gacha/spins`) は `gachaResults` テーブルを無条件・無フィルタで読む

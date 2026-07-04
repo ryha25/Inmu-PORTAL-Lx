@@ -694,7 +694,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         createTransferInstruction(fromATA, toATA, adminPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID),
       )
       tx.feePayer = adminPubkey
-      const { blockhash } = await connection.getLatestBlockhash('processed')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: toastId })
@@ -705,6 +705,14 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
       toast.dismiss(toastId)
 
+      // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
+      // 記録してしまうのを防ぐ）
+      toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
+      const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+      toast.dismiss(toastId)
+      if (confirmation.value.err) {
+        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+      }
 
       await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
 
@@ -1049,7 +1057,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         const tx = new Transaction()
         tx.add(...instrs)
         tx.feePayer = fromPubkey
-        const { blockhash } = await connection.getLatestBlockhash('processed')
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
         tx.recentBlockhash = blockhash
 
         toast.loading(`Phantom で署名してください${chunkLabel}…`, { id: 'ph-airdrop-sign' })
@@ -1060,6 +1068,14 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
         toast.dismiss('ph-airdrop-send')
 
+        // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
+        // 記録してしまうのを防ぐ）
+        toast.loading(`オンチェーンでの確定を待っています${chunkLabel}…`, { id: 'ph-airdrop-confirm' })
+        const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+        toast.dismiss('ph-airdrop-confirm')
+        if (confirmation.value.err) {
+          throw new Error(`トランザクションがオンチェーンで失敗しました${chunkLabel}: ${JSON.stringify(confirmation.value.err)}`)
+        }
 
         await api('/admin/record-airdrop-batch', 'POST', {
           users: chunk.map(u => ({ userId: u.userId, wallet: u.solWallet })),
@@ -1243,7 +1259,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           const tx = new Transaction()
           tx.add(...instrs)
           tx.feePayer = fromPubkey
-          const { blockhash } = await connection.getLatestBlockhash('processed')
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
           tx.recentBlockhash = blockhash
 
           toast.loading('Phantom で署名してください…', { id: 'ph-sign' })
@@ -1253,11 +1269,20 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           toast.loading('Solana へ送信中…', { id: 'ph-send' })
           const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
           toast.dismiss('ph-send')
+
+          // オンチェーンでの確定を待ってから成功として記録する（未確定・失敗TXを
+          // 送金済みとして記録してしまうのを防ぐ）
+          toast.loading('オンチェーンでの確定を待っています…', { id: 'ph-confirm' })
+          const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+          toast.dismiss('ph-confirm')
+          if (confirmation.value.err) {
+            throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+          }
           rebateTxSignature = signature
 
           toast.success(`オンチェーン送金完了: ${numRebate.toLocaleString()} INMU → ${pr.displayName ?? pr.userId}`)
         } catch (e: unknown) {
-          toast.dismiss('ph-admin'); toast.dismiss('ph-sign'); toast.dismiss('ph-send')
+          toast.dismiss('ph-admin'); toast.dismiss('ph-sign'); toast.dismiss('ph-send'); toast.dismiss('ph-confirm')
           const msg = e instanceof Error ? e.message : '不明なエラー'
           if (msg !== 'User rejected the request.') toast.error(`Phantom 送金失敗: ${msg}`)
           setPrSaving(false)

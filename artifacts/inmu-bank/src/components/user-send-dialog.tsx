@@ -208,7 +208,7 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       tx.add(...instructions)
       tx.feePayer = fromPubkey
 
-      const { blockhash } = await connection.getLatestBlockhash('processed')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: 'signing' })
@@ -223,7 +223,15 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       })
       toast.dismiss('sending')
 
-      // 署名取得後すぐに履歴記録（確認タイムアウト前に保存）
+      // オンチェーンでの確定を待ってから履歴記録する（未確定・失敗TXを送金済みとして
+      // 記録してしまうのを防ぐ。ハッシュだけ発行されて実際には送られていない状態を防止）
+      toast.loading('オンチェーンでの確定を待っています…', { id: 'confirming' })
+      const confirmation = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+      toast.dismiss('confirming')
+      if (confirmation.value.err) {
+        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+      }
+
       const recordRes = await fetch('/api/transfer/send', {
         method: 'POST',
         credentials: 'include',
