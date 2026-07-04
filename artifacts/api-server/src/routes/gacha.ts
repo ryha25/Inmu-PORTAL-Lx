@@ -3,7 +3,7 @@ import { db, pool } from "@workspace/db";
 import { profileTable, pointsTable, notificationsTable, transactionsTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
-import { hasActivePetSkill } from "../services/pet-skills";
+import { hasActivePetSkill, getFreeGachaState } from "../services/pet-skills";
 import { ensurePetStateTable } from "../services/pet-state-store";
 
 const router = Router();
@@ -135,18 +135,18 @@ function jstTomorrowStartUtc(): Date {
 router.get("/gacha/free-status", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
-    const todayStart = jstTodayStartUtc();
-    const { rows } = await pool.query(
-      `SELECT COUNT(*) as cnt FROM "gachaResults"
-       WHERE "userId"=$1 AND "isFree"=true AND "gachaKind" IN ('normal','paid') AND "createdAt" >= $2`,
-      [userId, todayStart.toISOString()],
-    );
-    const bonusPulls = await hasActivePetSkill(userId, "takuya") ? 3 : 0;
-    const allowance = 2 + bonusPulls; // 通常+有償それぞれの無料1回 + 拓也スキルの合算ボーナス3回
-    const usedCount = Number(rows[0].cnt);
-    const used = usedCount >= allowance;
+    const state = await getFreeGachaState(userId);
     const nextReset = jstTomorrowStartUtc().toISOString();
-    res.json({ used, usedCount, allowance, remaining: Math.max(0, allowance - usedCount), nextReset });
+    res.json({
+      used: !state.canDrawNormal,
+      usedCount: state.normalUsed,
+      allowance: 1 + state.sharedBonus,
+      remaining: state.normalRemaining,
+      baseRemaining: state.normalBaseRemaining,
+      sharedRemaining: state.sharedRemaining,
+      sharedBonus: state.sharedBonus,
+      nextReset,
+    });
   } catch (e) {
     console.error("[Gacha] free-status error:", e);
     res.status(500).json({ error: "Internal error" });
@@ -241,14 +241,8 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
 router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
 
-  const todayStart = jstTodayStartUtc();
-  const { rows: checkRows } = await pool.query(
-    `SELECT COUNT(*) as cnt FROM "gachaResults" WHERE "userId"=$1 AND "isFree"=true AND "gachaKind" IN ('normal','paid') AND "createdAt" >= $2`,
-    [userId, todayStart.toISOString()],
-  );
-  const bonusPulls = await hasActivePetSkill(userId, "takuya") ? 3 : 0;
-  const allowance = 2 + bonusPulls; // 通常+有償それぞれの無料1回 + 拓也スキルの合算ボーナス3回
-  if (Number(checkRows[0].cnt) >= allowance) {
+  const initialState = await getFreeGachaState(userId);
+  if (!initialState.canDrawNormal) {
     res.status(400).json({ error: "本日の無料ガチャは使用済みです" });
     return;
   }

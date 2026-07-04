@@ -638,12 +638,14 @@ function SkillActivationPanel({
     petStats,
     onSetSkillCharacter,
     onUnsetSkillCharacter,
+    skillLockStatus,
   }: {
     ownedPetIds: readonly PetId[]
     skillActiveCharacterIds: PetId[]
     petStats: Record<PetId, PetStats>
     onSetSkillCharacter: (id: PetId) => void
     onUnsetSkillCharacter: (id: PetId) => void
+    skillLockStatus?: Record<string, boolean>
   }) {
     const [pickerOpen, setPickerOpen] = useState(false)
     const [previewId, setPreviewId] = useState<PetId | null>(null)
@@ -663,12 +665,13 @@ function SkillActivationPanel({
     }
 
     return (
-      <section className="rounded-lg border border-cyan-300/20 bg-[linear-gradient(145deg,rgba(8,30,40,.7),rgba(13,9,22,.96))] p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-fuchsia-200">固有スキル発動</h2>
+      <section className="rounded-lg border border-cyan-300/20 bg-[linear-gradient(145deg,rgba(8,30,40,.7),rgba(13,9,22,.96))] p-2">
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="text-xs font-bold text-fuchsia-200">固有スキル発動</h2>
           <span className="rounded bg-cyan-400/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-cyan-200">{activePets.length} / 3</span>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <p className="mb-1.5 text-[9px] leading-tight text-cyan-100/60">スキル効果を本日中に使用すると「外す」がロックされます（毎日0:00にリセット）</p>
+        <div className="grid grid-cols-3 gap-1.5">
             {[0, 1, 2].map(slotIndex => {
               const activePet = activePets[slotIndex]
               if (!activePet) {
@@ -690,9 +693,9 @@ function SkillActivationPanel({
                       ? <FestivalCharacter image={activePet.image} expression="default" name={activePet.name} className="h-full w-full" />
                       : <img src={activePet.image} alt="" className="max-h-full max-w-full object-contain" />}
                   </div>
-                  <div className="flex flex-col gap-1 p-1.5">
+                  <div className="flex flex-col gap-0.5 p-1">
                     <p className="truncate text-[10px] font-bold text-white">{activePet.name}</p>
-                    <Button type="button" size="sm" onClick={() => onUnsetSkillCharacter(activePet.id)} className="h-6 w-full shrink-0 border border-rose-300/35 bg-rose-500/15 px-1 text-[10px] text-rose-100 hover:bg-rose-500/25">外す</Button>
+                    <Button type="button" size="sm" disabled={Boolean(skillLockStatus?.[activePet.id])} onClick={() => onUnsetSkillCharacter(activePet.id)} className="h-5 w-full shrink-0 border border-rose-300/35 bg-rose-500/15 px-1 text-[9px] text-rose-100 hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-40">{skillLockStatus?.[activePet.id] ? 'ロック中' : '外す'}</Button>
                   </div>
                 </div>
               )
@@ -760,16 +763,31 @@ function getAchievedRebateLabel(pet: PetDefinition, level: number): string | nul
 }
 
 function SlotUnlockPanel({ unlockedSlots, busy, onUnlock }: { unlockedSlots: number; busy: boolean; onUnlock: () => void }) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
   if (unlockedSlots >= 3) return <p className="rounded-lg border border-emerald-300/25 bg-emerald-300/5 px-3 py-2 text-center text-xs text-emerald-200">育成枠は3枠すべて解放済みです</p>
   const price = unlockedSlots === 1 ? 1_000_000 : 2_000_000
   return (
     <div className="rounded-lg border border-amber-300/25 bg-amber-300/5 p-3 text-center">
       <p className="text-xs font-bold text-amber-100">Slot {unlockedSlots + 1} を解放</p>
       <p className="mt-1 text-lg font-black text-amber-300">{price.toLocaleString()} INMU</p>
-      <Button type="button" disabled={busy} onClick={onUnlock} className="mt-2 w-full border border-amber-200/40 bg-amber-300/15 text-amber-100 hover:bg-amber-300/25 disabled:opacity-40">
+      <Button type="button" disabled={busy} onClick={() => setConfirmOpen(true)} className="mt-2 w-full border border-amber-200/40 bg-amber-300/15 text-amber-100 hover:bg-amber-300/25 disabled:opacity-40">
         <LockKeyhole className="size-4" />{busy ? '送金確認中…' : 'Phantomで解放'}
       </Button>
       <p className="mt-2 text-[9px] text-muted-foreground">送金成功をサーバーで確認後に解放します</p>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Slot {unlockedSlots + 1} の解放を確認</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">Phantomウォレットから {price.toLocaleString()} INMU を送金します。よろしいですか？</p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" className="min-h-10 flex-1" onClick={() => setConfirmOpen(false)}>キャンセル</Button>
+              <Button type="button" className="min-h-10 flex-1 border border-amber-200/40 bg-amber-300/20 text-amber-100 hover:bg-amber-300/30" onClick={() => { setConfirmOpen(false); onUnlock() }}>送金して解放する</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -855,7 +873,7 @@ function TrainingSlotsV2({
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, selectPet, setActivePetIds, care, setExpression, useSleepTea, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds } = usePetState()
+  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, selectPet, setActivePetIds, care, setExpression, useSleepTea, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds, skillLockStatus, refreshSkillLockStatus } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
@@ -1260,6 +1278,7 @@ export function PetPage() {
 
   function handleUnsetSkillCharacter(id: PetId) {
     if (!skillActiveCharacterIds.includes(id)) return
+    if (skillLockStatus?.[id]) { setMessage(`${PET_BY_ID[id].name}は本日のスキル効果を使用済みのため外せません（0:00にリセット）`); return }
     setMessage(`${PET_BY_ID[id].name}の固有スキルを外しました`)
     setSkillActiveCharacterIds(current => current.filter(existingId => existingId !== id))
   }
@@ -1357,11 +1376,11 @@ export function PetPage() {
           </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-[140px_minmax(360px,1fr)_260px] lg:items-start lg:gap-4">
-            <aside className="hidden lg:block"><SkillActivationPanel ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} /></aside>
+            <aside className="hidden lg:block"><SkillActivationPanel ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} skillLockStatus={skillLockStatus} /></aside>
 
             <main className="flex min-w-0 flex-col gap-3">
               <div className="lg:hidden"><CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} /></div>
-              <div className="lg:hidden"><SkillActivationPanel ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} /></div>
+              <div className="lg:hidden"><SkillActivationPanel ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} skillLockStatus={skillLockStatus} /></div>
               <PetRoom
                 petId={pet.id}
                 name={pet.name}

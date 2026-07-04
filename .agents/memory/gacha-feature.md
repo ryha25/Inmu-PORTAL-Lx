@@ -65,6 +65,15 @@ description: gachaResults + gachaInmuWins tables; free daily gacha; bulk Phantom
 - **Why:** 送金直後は `localStorage`（例: `inmu-pet-paid-gacha-pending`）に txId を保存し、ページ再訪問時に useEffect で復旧・結果取得する設計だった。その復旧処理が誤って `getPhantomProvider()!=null` を前提条件にしていたため、Phantom拡張機能の非同期注入がまだ完了していないタイミングでマウントされると復旧自体が丸ごとスキップされ、結果が二度と表示されなかった。
 - **How to apply:** 「送金/決済のtxIdをlocalStorageに保存して後で結果を取りに行く」系の復旧ロジックは、その取得APIがwalletを必要としない（txIdのみで完結する）なら、ウォレットプロバイダの検出条件と絶対に結合しないこと。ウォレット検出が必要なのは別の目的（例: mobile intentからの自動タブ切り替え）だけであり、それとは別のuseEffect/分岐にする。
 
+## 無料ガチャ「残り回数」表示の仕様（誤バグ報告に注意）
+- `getFreeGachaState`: normalRemaining = normalBaseRemaining(1本分) + sharedRemaining（拓也スキル有効時+3の共有プール）、paidRemainingも同様に共有プールを足す。
+- **Why:** 仕様上、共有プールは各ガチャ種別の自前1回分を使い切った後にのみ消費される「合算表示」。自前1回を使用済みでも共有分が残っていれば「残り3回」等と表示されるのは意図通りであり、バグではない（誤って「本日利用済み」的な表示を期待しないこと）。
+- **How to apply:** このロジックを変更/テストする際は、表示される remaining は「自前+共有の合算」であるという前提を崩さないこと。UIのサブキャプション「うち拓也共通ボーナス残りX回」は sharedRemaining>0 の時だけ出す。
+
+## gacha-page.tsx の改行コード混在に注意
+- **症状:** `gacha-page.tsx` は CRLF と bare LF が混在したファイルだったことがある（他の pet-page.tsx は純CRLF）。`/\r\n/` のみで split して行番号ベース編集をすると位置がずれ、JSXの閉じタグを誤挿入/削除して壊れる。
+- **How to apply:** 行番号ベースでNode script編集する前に、対象ファイルの改行コードが統一されているか確認する（bare LF数をカウント）。混在していれば `/\r\n|\n/` で split するか、先にファイル全体を `\n` に正規化してから編集する。JSX破損時は div/要素の開閉深度を行ごとに集計するスクリプトで壊れた行を特定するのが有効。
+
 ## 二重ガチャシステムの罠（要注意）
 - legacy (`gacha.ts`: `/gacha/spin`, `/gacha/free-spin`) と新 PET系 (`pet-commerce.ts`: `/pet-gacha/points`, `/pet-gacha/paid`, `/pet-gacha/paid-free`) が並存
 - 管理画面「全スピン履歴」(`/admin/gacha/spins`) は `gachaResults` テーブルを無条件・無フィルタで読む

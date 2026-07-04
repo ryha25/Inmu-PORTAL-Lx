@@ -824,6 +824,7 @@ export function GachaPage() {
   const [newCharacterRevealIndex,setNewCharacterRevealIndex] = useState(0)
   const [freeUsed,setFreeUsed]   = useState(true)
   const [freeRemaining,setFreeRemaining] = useState(0)
+  const [freeSharedRemaining,setFreeSharedRemaining] = useState(0)
   const [freeNextReset,setFreeNextReset] = useState<string|null>(null)
   const [freeLoading,setFreeLoading] = useState(false)
   const [gachaMode,setGachaMode] = useState<'points'|'paid'>('points')
@@ -835,6 +836,7 @@ export function GachaPage() {
   const [paidFreeLoading,setPaidFreeLoading] = useState(false)
   const [paidFreeUsed,setPaidFreeUsed] = useState(true)
   const [paidFreeRemaining,setPaidFreeRemaining] = useState(0)
+  const [paidFreeSharedRemaining,setPaidFreeSharedRemaining] = useState(0)
   const [paidFreeNextReset,setPaidFreeNextReset] = useState<string|null>(null)
   const [rateModalOpen,setRateModalOpen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
@@ -885,7 +887,7 @@ export function GachaPage() {
   const loadFreeStatus = useCallback(async()=>{
     try{
       const r=await fetch('/api/gacha/free-status',{credentials:'include'})
-      if(r.ok){const d=await r.json() as {used:boolean;remaining?:number;nextReset:string};setFreeUsed(d.used);setFreeRemaining(Number(d.remaining??(d.used?0:1)));setFreeNextReset(d.nextReset)}
+      if(r.ok){const d=await r.json() as {used:boolean;remaining?:number;sharedRemaining?:number;nextReset:string};setFreeUsed(d.used);setFreeRemaining(Number(d.remaining??(d.used?0:1)));setFreeSharedRemaining(Number(d.sharedRemaining??0));setFreeNextReset(d.nextReset)}
     }catch{/**/}
   },[])
   useEffect(()=>{loadFreeStatus()},[loadFreeStatus])
@@ -893,7 +895,7 @@ export function GachaPage() {
   const loadPaidFreeStatus = useCallback(async()=>{
     try{
       const r=await fetch('/api/pet-gacha/free-status',{credentials:'include'})
-      if(r.ok){const d=await r.json() as {used:boolean;remaining?:number;nextReset:string};setPaidFreeUsed(d.used);setPaidFreeRemaining(Number(d.remaining??(d.used?0:1)));setPaidFreeNextReset(d.nextReset)}
+      if(r.ok){const d=await r.json() as {used:boolean;remaining?:number;sharedRemaining?:number;nextReset:string};setPaidFreeUsed(d.used);setPaidFreeRemaining(Number(d.remaining??(d.used?0:1)));setPaidFreeSharedRemaining(Number(d.sharedRemaining??0));setPaidFreeNextReset(d.nextReset)}
     }catch{/**/}
   },[])
   useEffect(()=>{loadPaidFreeStatus()},[loadPaidFreeStatus])
@@ -1100,6 +1102,7 @@ export function GachaPage() {
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
                   <p style={{margin:0,fontSize:14,fontWeight:800,color:paidFreeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{paidFreeLoading?'処理中…': paidFreeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${paidFreeRemaining}回）`}</p>
+                  {!paidFreeUsed&&paidFreeSharedRemaining>0&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.5)',marginTop:2}}>うち拓也共通ボーナス残り{paidFreeSharedRemaining}回</p>}
                   {paidFreeUsed&&paidFreeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(paidFreeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
                   {!paidFreeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで有償ガチャを引けます</p>}
                 </div>
@@ -1156,13 +1159,13 @@ export function GachaPage() {
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
                   <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{freeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${freeRemaining}回）`}</p>
+                  {!freeUsed&&freeSharedRemaining>0&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.5)',marginTop:2}}>うち拓也共通ボーナス残り{freeSharedRemaining}回</p>}
                   {freeUsed&&freeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(freeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
                   {!freeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで通常ガチャを引けます</p>}
                 </div>
                 {!freeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
               </div>
             </button>
-            <div style={{display:'flex',gap:10,marginBottom:8}}>
               <OrnateButton gold enabled={pts>=1000&&!ptsLoading} onClick={()=>spin('single')} label="1連ガチャ" price="1,000 pt"/>
               <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading} onClick={()=>spin('multi')} label="10連ガチャ" price="10,000 pt"/>
             </div>
@@ -1170,7 +1173,6 @@ export function GachaPage() {
             <div style={{marginTop:7,background:'linear-gradient(135deg,rgba(12,6,2,.92),rgba(6,3,16,.92))',border:'1px solid rgba(184,134,11,.4)',borderRadius:10,backdropFilter:'blur(8px)'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 12px 4px'}}>
                 <span style={{fontSize:11,fontWeight:700,color:'rgba(218,165,32,.88)',letterSpacing:'0.08em'}}>ガチャ履歴</span>
-                <span style={{fontSize:10,color:'rgba(218,165,32,.5)'}}>最新3件</span>
               </div>
               <div style={{borderTop:'1px solid rgba(184,134,11,.15)'}}>
                 {history.length===0 ? <p style={{textAlign:'center',fontSize:10,color:'rgba(255,255,255,.3)',padding:'6px 0',margin:0}}>ガチャ履歴がありません</p> : history.slice(0,3).map((row,i)=>{
@@ -1181,7 +1183,6 @@ export function GachaPage() {
               </div>
             </div>
           </div>
-        </div>
       </PageBg>
       <EmissionRateModal open={rateModalOpen} onClose={()=>setRateModalOpen(false)}/>
     </AppShell>

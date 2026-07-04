@@ -295,6 +295,7 @@ export function usePetState() {
   const [save, setSave] = useState<PetSaveData>(loadSave)
   const [isHydrated, setIsHydrated] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [skillLockStatus, setSkillLockStatus] = useState<Record<string, boolean>>({})
   const initialLocalSave = useRef(save)
   const now = Date.now()
   const effectiveSave = materializeSaveAt(save, now)
@@ -312,6 +313,7 @@ export function usePetState() {
         if (cancelled) return
         if (data.hasState && data.state) {
           setSave(loadSave(data.state))
+          setSkillLockStatus(data.skillLockStatus && typeof data.skillLockStatus === 'object' ? data.skillLockStatus : {})
         } else {
           const migrateResponse = await fetch('/api/pet/state', {
             method: 'PUT',
@@ -387,6 +389,17 @@ export function usePetState() {
       }
     })
   }
+
+  const refreshSkillLockStatus = useRef(async () => {
+    try {
+      const response = await fetch('/api/pet/skill-lock-status', { credentials: 'include' })
+      if (!response.ok) return
+      const data = await response.json().catch(() => ({}))
+      setSkillLockStatus(data.skillLockStatus && typeof data.skillLockStatus === 'object' ? data.skillLockStatus : {})
+    } catch {
+      // Keep the previously known lock status on transient network errors.
+    }
+  }).current
 
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
     const petId = save.selectedPetId
@@ -551,6 +564,8 @@ export function usePetState() {
     skillState: effectiveSave.skillState,
     skillActiveCharacterIds: effectiveSave.skillActiveCharacterIds,
     setSkillActiveCharacterIds,
+    skillLockStatus,
+    refreshSkillLockStatus,
   }
 }
 
