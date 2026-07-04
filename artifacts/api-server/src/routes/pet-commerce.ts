@@ -52,12 +52,12 @@ const PAID_PRIZES = [
 const POINT_GUARANTEED_EFFECT_RATE = 1 / 514;
 
 const POINT_PRIZES = [
-  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 85_500 },
+  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 86_878 },
   { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 51_300 },
   { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 8_550 },
   { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 5_130 },
   { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 2_000 },
-  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 3_054 },
+  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 2_138 },
   { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 7_684 },
   { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 6_243 },
   ...CHARACTERS.map(character => ({
@@ -66,7 +66,7 @@ const POINT_PRIZES = [
     type: "character" as const,
     amount: 1,
     characterId: character.id,
-    weight: 513,
+    weight: 359,
   })),
 ];
 
