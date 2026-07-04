@@ -54,3 +54,9 @@ description: gachaResults + gachaInmuWins tables; free daily gacha; bulk Phantom
 ## drizzle-kit push 禁止
 - TTY エラーになるため使用不可
 - 全マイグレーションは raw SQL `ALTER TABLE ADD COLUMN IF NOT EXISTS` か `CREATE TABLE IF NOT EXISTS`
+
+## 二重ガチャシステムの罠（要注意）
+- legacy (`gacha.ts`: `/gacha/spin`, `/gacha/free-spin`) と新 PET系 (`pet-commerce.ts`: `/pet-gacha/points`, `/pet-gacha/paid`, `/pet-gacha/paid-free`) が並存
+- 管理画面「全スピン履歴」(`/admin/gacha/spins`) は `gachaResults` テーブルを無条件・無フィルタで読む
+- **Why:** `pet-gacha/points`（現行「通常ガチャ」ポイント消費タブ）が以前は INMU当選時だけ `gachaResults` に insert していたため、それ以外の大半のスピンが管理画面「全スピン履歴」に一切反映されなかった。加えて insert時に `gachaKind` を誤って `'paid'` 固定にしていた（本来 `'normal'`）
+- **How to apply:** PET系のどのエンドポイントを新設/変更する際も、`gachaResults` へは **勝敗に関わらず毎スピン** insert すること。`gachaKind` は実際のタブ（'normal'=ポイント消費, 'paid'=INMU消費TXID）と一致させる。PAID_PRIZES に "inmu" type が無いため `/pet-gacha/paid` は元々 INMU当選しない設計 — gachaResults未挿入で問題ない

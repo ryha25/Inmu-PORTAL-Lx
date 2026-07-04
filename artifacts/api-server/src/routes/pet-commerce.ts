@@ -411,18 +411,19 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
       INSERT INTO "petGachaHistory" ("userId","gachaType","pullType","costPoints",results)
       VALUES ($1,'points',$2,$3,$4::jsonb) RETURNING id,"createdAt"
     `, [req.userId!, pullType, costPoints, JSON.stringify(applied.results)]);
+    const wasGuaranteed = applied.results.some(prize => prize.type === "character");
+    const legacySpin = await client.query(`
+      INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree","gachaKind")
+      VALUES ($1,$2,$3::jsonb,$4,$5,$6,'pending',$7,$8,false,'normal') RETURNING id
+    `, [req.userId!, pullType, JSON.stringify(applied.results), applied.totalPoints, applied.inmuCount > 0, applied.inmuCount, wasGuaranteed, costPoints]);
     if (applied.inmuCount > 0) {
-      const legacySpin = await client.query(`
-        INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree","gachaKind")
-        VALUES ($1,$2,$3::jsonb,$4,true,$5,'pending',false,$6,false,'paid') RETURNING id
-      `, [req.userId!, pullType, JSON.stringify(applied.results), applied.totalPoints, applied.inmuCount, costPoints]);
       for (let index = 0; index < applied.inmuCount; index += 1) {
         await client.query(`INSERT INTO "gachaInmuWins" ("spinId","userId","pullType","inmuAmount","inmuSentStatus") VALUES ($1,$2,$3,10000,'pending')`, [legacySpin.rows[0].id, req.userId!, pullType]);
       }
     }
     const newPoints = await getCurrentPoints(client, req.userId!);
     await client.query("COMMIT");
-    res.json({ ...applied, costPoints, costInmu: 0, newPoints, historyId: history.rows[0].id, paidPity: null, wasGuaranteed: applied.results.some(prize => prize.type === "character") });
+    res.json({ ...applied, costPoints, costInmu: 0, newPoints, historyId: history.rows[0].id, paidPity: null, wasGuaranteed });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetCommerce] points gacha", error);
