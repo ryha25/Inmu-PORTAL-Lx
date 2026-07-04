@@ -106,10 +106,10 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
 }
 
 const BALLS = [
-  { id:'pts300',  label:'300pt',       rate:'43.64%', color:'rgba(255,88,196,.9)'  },
-  { id:'pts500',  label:'500pt',       rate:'25.68%', color:'rgba(166,255,58,.9)'  },
-  { id:'pts1000', label:'1,000pt',     rate:'15.41%', color:'rgba(70,140,255,.9)'  },
-  { id:'pts3000', label:'3,000pt',     rate:'3%', color:'rgba(255,92,58,.9)'   },
+  { id:'pts100',  label:'100pt',       rate:'39.48%', color:'rgba(255,236,180,.9)'  },
+  { id:'pts300',  label:'300pt',       rate:'26.32%', color:'rgba(255,88,196,.9)'  },
+  { id:'pts500',  label:'500pt',       rate:'14.91%', color:'rgba(166,255,58,.9)'  },
+  { id:'pts1000', label:'1,000pt',     rate:'7.02%', color:'rgba(70,140,255,.9)'  },
   { id:'pts5000', label:'5,000pt',     rate:'2%', color:'rgba(180,60,255,.9)'  },
   { id:'inmu10k', label:'10,000 INMU', rate:'0.51%',  color:'rgba(255,215,0,.9)'   },
   { id:'premium-food', label:'高級ごはん', rate:'5.14%', color:'rgba(255,184,54,.9)' },
@@ -385,7 +385,7 @@ function GeneratedScene({ kind, guaranteed=false, zIndex=30, prizeId='pts300' }:
         </>
       )}
 
-      {kind==='space'&&BALLS.filter(b=>b.id!=='pts100').map((b,i)=>{
+      {kind==='space'&&BALLS.map((b,i)=>{
         const pos = ORBIT_POSITIONS[i % ORBIT_POSITIONS.length]
         return (
         <div key={b.id} style={{position:'absolute',
