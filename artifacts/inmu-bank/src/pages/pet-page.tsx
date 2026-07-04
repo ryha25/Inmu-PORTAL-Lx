@@ -668,37 +668,37 @@ function SkillActivationPanel({
           <h2 className="text-sm font-bold text-fuchsia-200">固有スキル発動</h2>
           <span className="rounded bg-cyan-400/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-cyan-200">{activePets.length} / 3</span>
         </div>
-        <div className="flex flex-col gap-2">
-          {[0, 1, 2].map(slotIndex => {
-            const activePet = activePets[slotIndex]
-            if (!activePet) {
+        <div className="grid grid-cols-3 gap-2">
+            {[0, 1, 2].map(slotIndex => {
+              const activePet = activePets[slotIndex]
+              if (!activePet) {
+                return (
+                  <button
+                    key={`empty-${slotIndex}`}
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    className="flex aspect-square w-full items-center justify-center rounded-lg border border-dashed border-cyan-300/30 bg-black/20 text-2xl font-black text-cyan-200/70 transition-colors hover:border-cyan-300/50 hover:text-cyan-200"
+                  >
+                    +
+                  </button>
+                )
+              }
               return (
-                <button
-                  key={`empty-${slotIndex}`}
-                  type="button"
-                  onClick={() => setPickerOpen(true)}
-                  className="flex h-16 w-full items-center justify-center rounded-lg border border-dashed border-cyan-300/30 bg-black/20 text-2xl font-black text-cyan-200/70 transition-colors hover:border-cyan-300/50 hover:text-cyan-200"
-                >
-                  +
-                </button>
+                <div key={activePet.id} className="flex flex-col overflow-hidden rounded-lg border border-cyan-300/25 bg-cyan-300/5">
+                  <div className="relative flex aspect-square w-full items-end justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_65%,rgba(34,211,238,.2),transparent_68%)]">
+                    {activePet.roomTheme === 'festival'
+                      ? <FestivalCharacter image={activePet.image} expression="default" name={activePet.name} className="h-full w-full" />
+                      : <img src={activePet.image} alt="" className="max-h-full max-w-full object-contain" />}
+                  </div>
+                  <div className="flex flex-col gap-1 p-1.5">
+                    <p className="truncate text-[10px] font-bold text-white">{activePet.name}</p>
+                    <Button type="button" size="sm" onClick={() => onUnsetSkillCharacter(activePet.id)} className="h-6 w-full shrink-0 border border-rose-300/35 bg-rose-500/15 px-1 text-[10px] text-rose-100 hover:bg-rose-500/25">外す</Button>
+                  </div>
+                </div>
               )
-            }
-            return (
-              <div key={activePet.id} className="flex items-center gap-3 rounded-lg border border-cyan-300/25 bg-cyan-300/5 p-2.5">
-                <div className="flex size-14 shrink-0 items-end justify-center overflow-hidden rounded-md bg-[radial-gradient(circle_at_50%_65%,rgba(34,211,238,.2),transparent_68%)]">
-                  {activePet.roomTheme === 'festival'
-                    ? <FestivalCharacter image={activePet.image} expression="default" name={activePet.name} className="h-full w-full" />
-                    : <img src={activePet.image} alt="" className="max-h-full max-w-full object-contain" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="break-words text-sm font-bold text-white">{activePet.name}</p>
-                  <p className="mt-0.5 break-words text-[10px] leading-relaxed text-cyan-100/70">{activePet.skill.effect}</p>
-                </div>
-                <Button type="button" size="sm" onClick={() => onUnsetSkillCharacter(activePet.id)} className="shrink-0 border border-rose-300/35 bg-rose-500/15 text-[11px] text-rose-100 hover:bg-rose-500/25">外す</Button>
-              </div>
-            )
-          })}
-        </div>
+            })}
+          </div>
+  
 
         <Dialog open={pickerOpen} onOpenChange={open => { if (!open) closePicker() }}>
           <DialogContent className="max-w-sm">
@@ -775,75 +775,83 @@ function SlotUnlockPanel({ unlockedSlots, busy, onUnlock }: { unlockedSlots: num
 }
 
 function TrainingSlotsV2({
-  activePets,
-  unlockedSlots,
-  petStats,
-  onOpenSlotPicker,
-  onRemove,
-  onView,
-}: {
-  activePets: PetDefinition[]
-  unlockedSlots: number
-  petStats: Record<PetId, PetStats>
-  onOpenSlotPicker: () => void
-  onRemove: (id: PetId) => void
-  onView: (id: PetId) => void
-}) {
-  return (
-    <section className="border-t border-violet-300/15 pt-4">
-      <h2 className="mb-3 text-sm font-bold text-fuchsia-200">レベル報酬スキル発動</h2>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {[1, 2, 3].map(slotNumber => {
-          const locked = slotNumber > unlockedSlots
-          const activePet = activePets[slotNumber - 1]
-          const price = slotNumber === 2 ? '100万INMUで解放' : slotNumber === 3 ? '200万INMUで解放' : ''
-          const stats = activePet ? petStats[activePet.id] : null
-          const rebateLabel = activePet && stats ? getAchievedRebateLabel(activePet, stats.level) : null
+    activePets,
+    unlockedSlots,
+    petStats,
+    displayedPetId,
+    onOpenSlotPicker,
+    onRemove,
+    onView,
+  }: {
+    activePets: PetDefinition[]
+    unlockedSlots: number
+    petStats: Record<PetId, PetStats>
+    displayedPetId: PetId
+    onOpenSlotPicker: () => void
+    onRemove: (id: PetId) => void
+    onView: (id: PetId) => void
+  }) {
+    return (
+      <section className="border-t border-violet-300/15 pt-4">
+        <h2 className="mb-3 text-sm font-bold text-fuchsia-200">レベル報酬スキル発動</h2>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {[1, 2, 3].map(slotNumber => {
+            const locked = slotNumber > unlockedSlots
+            const activePet = activePets[slotNumber - 1]
+            const price = slotNumber === 2 ? '100万INMUで解放' : slotNumber === 3 ? '200万INMUで解放' : ''
+            const stats = activePet ? petStats[activePet.id] : null
+            const rebateLabel = activePet && stats ? getAchievedRebateLabel(activePet, stats.level) : null
+            const isDisplayed = activePet ? activePet.id === displayedPetId : false
 
-          if (locked) {
-            return (
-              <div key={slotNumber} className="flex min-h-16 items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-muted-foreground">
-                <LockKeyhole className="size-4 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em]">Slot {slotNumber}</p>
-                  <p className="break-words text-xs font-bold">{price}</p>
+            if (locked) {
+              return (
+                <div key={slotNumber} className="flex min-h-16 items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-muted-foreground">
+                  <LockKeyhole className="size-4 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em]">Slot {slotNumber}</p>
+                    <p className="break-words text-xs font-bold">{price}</p>
+                  </div>
                 </div>
+              )
+            }
+
+            if (!activePet) {
+              return (
+                <button
+                  key={slotNumber}
+                  type="button"
+                  onClick={onOpenSlotPicker}
+                  className="flex min-h-16 items-center justify-center gap-2 rounded-lg border border-dashed border-fuchsia-300/30 bg-black/20 text-fuchsia-200/60 transition-colors hover:border-fuchsia-300/50 hover:text-fuchsia-200"
+                >
+                  <span className="text-lg font-black leading-none">+</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">Slot {slotNumber}</span>
+                </button>
+              )
+            }
+
+            return (
+              <div key={slotNumber} className="flex flex-col gap-2 rounded-lg border border-fuchsia-400/35 bg-fuchsia-400/10 px-3 py-2 text-fuchsia-100">
+                <div className="flex min-w-0 items-center gap-2">
+                  <PawPrint className="size-4 shrink-0 text-fuchsia-300" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em]">Slot {slotNumber}・Lv.{stats?.level ?? 1}</p>
+                    <p className="break-words text-xs font-bold">{activePet.name}</p>
+                    {rebateLabel && <p className="mt-0.5 break-words text-[9px] font-semibold text-emerald-300">{rebateLabel}</p>}
+                  </div>
+                  <Button type="button" size="sm" onClick={() => onRemove(activePet.id)} className="shrink-0 border border-rose-300/35 bg-rose-500/15 px-2 text-[10px] text-rose-100 hover:bg-rose-500/25">外す</Button>
+                </div>
+                {isDisplayed ? (
+                  <span className="rounded bg-emerald-400/15 px-2 py-1 text-center text-[10px] font-bold text-emerald-200">表示中</span>
+                ) : (
+                  <Button type="button" size="sm" variant="outline" onClick={() => onView(activePet.id)} className="h-7 w-full border-fuchsia-300/30 bg-black/20 text-[10px] text-fuchsia-100 hover:bg-fuchsia-400/15">この子を画面に表示</Button>
+                )}
               </div>
             )
-          }
-
-          if (!activePet) {
-            return (
-              <button
-                key={slotNumber}
-                type="button"
-                onClick={onOpenSlotPicker}
-                className="flex min-h-16 items-center justify-center gap-2 rounded-lg border border-dashed border-fuchsia-300/30 bg-black/20 text-fuchsia-200/60 transition-colors hover:border-fuchsia-300/50 hover:text-fuchsia-200"
-              >
-                <span className="text-lg font-black leading-none">+</span>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">Slot {slotNumber}</span>
-              </button>
-            )
-          }
-
-          return (
-            <div key={slotNumber} className="flex min-h-16 items-center gap-2 rounded-lg border border-fuchsia-400/35 bg-fuchsia-400/10 px-3 py-2 text-fuchsia-100">
-              <button type="button" onClick={() => onView(activePet.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                <PawPrint className="size-4 shrink-0 text-fuchsia-300" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em]">Slot {slotNumber}・Lv.{stats?.level ?? 1}</p>
-                  <p className="break-words text-xs font-bold">{activePet.name}</p>
-                  {rebateLabel && <p className="mt-0.5 break-words text-[9px] font-semibold text-emerald-300">{rebateLabel}</p>}
-                </div>
-              </button>
-              <Button type="button" size="sm" onClick={() => onRemove(activePet.id)} className="shrink-0 border border-rose-300/35 bg-rose-500/15 px-2 text-[10px] text-rose-100 hover:bg-rose-500/25">外す</Button>
-            </div>
-          )
-        })}
-      </div>
-    </section>
-  )
-}
+          })}
+        </div>
+      </section>
+    )
+  }
 
 export function PetPage() {
   const { profile, unread } = useAuth()
@@ -1344,7 +1352,7 @@ export function PetPage() {
               </p>
               {ownershipError && <p className="mt-3 text-xs text-rose-300">所持情報を取得できませんでした。画面を再読み込みしてください。</p>}
             </section>
-            <TrainingSlotsV2 activePets={[]} unlockedSlots={unlockedSlots} petStats={petStats} onOpenSlotPicker={() => setSlotPickerOpen(true)} onRemove={handleRemoveSlot} onView={handleSelect} />
+            <TrainingSlotsV2 activePets={[]} unlockedSlots={unlockedSlots} petStats={petStats} displayedPetId={displayedPetId} onOpenSlotPicker={() => setSlotPickerOpen(true)} onRemove={handleRemoveSlot} onView={handleSelect} />
             <SlotUnlockPanel unlockedSlots={unlockedSlots} busy={slotBusy} onUnlock={unlockNextSlot} />
           </div>
         ) : (
@@ -1376,7 +1384,7 @@ export function PetPage() {
               <div className="lg:hidden"><SkillPanel pet={pet} /></div>
               <div className="lg:hidden"><ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} /></div>
               <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} /></div>
-              <TrainingSlotsV2 activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} onOpenSlotPicker={() => setSlotPickerOpen(true)} onRemove={handleRemoveSlot} onView={handleSelect} />
+              <TrainingSlotsV2 activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} displayedPetId={displayedPetId} onOpenSlotPicker={() => setSlotPickerOpen(true)} onRemove={handleRemoveSlot} onView={handleSelect} />
               <SlotUnlockPanel unlockedSlots={unlockedSlots} busy={slotBusy} onUnlock={unlockNextSlot} />
             </main>
 
