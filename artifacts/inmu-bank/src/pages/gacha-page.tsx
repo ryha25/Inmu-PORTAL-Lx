@@ -106,17 +106,17 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
 }
 
 const BALLS = [
-  { id:'pts300',  label:'300pt',       rate:'38%', color:'rgba(255,88,196,.9)'  },
-  { id:'pts500',  label:'500pt',       rate:'25%', color:'rgba(166,255,58,.9)'  },
-  { id:'pts1000', label:'1,000pt',     rate:'15%', color:'rgba(70,140,255,.9)'  },
-  { id:'pts3000', label:'3,000pt',     rate:'8%', color:'rgba(255,92,58,.9)'   },
-  { id:'pts5000', label:'5,000pt',     rate:'4%', color:'rgba(180,60,255,.9)'  },
-  { id:'inmu10k', label:'10,000 INMU', rate:'0.5%',  color:'rgba(255,215,0,.9)'   },
-  { id:'premium-food', label:'高級ごはん', rate:'5%', color:'rgba(255,184,54,.9)' },
-  { id:'sleep-tea', label:'アイスティー（睡眠薬入り）', rate:'3.6%', color:'rgba(65,210,255,.9)' },
-  { id:'character-nyarushian', label:'ニャルシアン', rate:'0.3%', color:'rgba(255,215,0,.9)' },
-  { id:'character-takuya', label:'拓也', rate:'0.3%', color:'rgba(255,215,0,.9)' },
-  { id:'character-leon', label:'レオン', rate:'0.3%', color:'rgba(255,215,0,.9)' },
+  { id:'pts300',  label:'300pt',       rate:'43.64%', color:'rgba(255,88,196,.9)'  },
+  { id:'pts500',  label:'500pt',       rate:'25.68%', color:'rgba(166,255,58,.9)'  },
+  { id:'pts1000', label:'1,000pt',     rate:'15.41%', color:'rgba(70,140,255,.9)'  },
+  { id:'pts3000', label:'3,000pt',     rate:'3%', color:'rgba(255,92,58,.9)'   },
+  { id:'pts5000', label:'5,000pt',     rate:'2%', color:'rgba(180,60,255,.9)'  },
+  { id:'inmu10k', label:'10,000 INMU', rate:'0.51%',  color:'rgba(255,215,0,.9)'   },
+  { id:'premium-food', label:'高級ごはん', rate:'5.14%', color:'rgba(255,184,54,.9)' },
+  { id:'sleep-tea', label:'アイスティー（睡眠薬入り）', rate:'3.7%', color:'rgba(65,210,255,.9)' },
+  { id:'character-nyarushian', label:'ニャルシアン', rate:'0.31%', color:'rgba(255,215,0,.9)' },
+  { id:'character-takuya', label:'拓也', rate:'0.31%', color:'rgba(255,215,0,.9)' },
+  { id:'character-leon', label:'レオン', rate:'0.30%', color:'rgba(255,215,0,.9)' },
 ]
 const PAID_BALLS = [
   { id:'pts1000', label:'1,000pt', rate:'60%' },
