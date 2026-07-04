@@ -1,2 +1,3 @@
 - [INMU PORTAL project structure](inmu-portal-structure.md) — api-server + inmu-bank artifacts; both require DATABASE_URL and SESSION_SECRET env vars
 - [Gacha feature implementation](gacha-feature.md) — gachaResults table via raw pool.query CREATE TABLE IF NOT EXISTS at route init; prizes 880/80/30/10 per 1000; 5% guaranteed INMU; chain-update now supports new stages (id=0) + per-stage stageStatus + sequential prerequisiteMissionId re-linking
+- [JST daily reset conventions](jst-daily-reset-conventions.md) — login bonus/missions reset at 4:00 JST; skill lock/free-gacha reset at 0:00 JST — two different boundaries by design, don't unify
