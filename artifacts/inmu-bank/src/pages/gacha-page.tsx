@@ -1824,12 +1824,6 @@ export function GachaPage() {
                         textShadow:`0 0 18px ${c.glow}66`}}>
                         {prize.label}
                       </p>
-                      {(result.pointMultiplier??1)>1&&prize.baseAmount!=null&&(
-                        <p style={{margin:'4px 0 0',fontSize:13,fontWeight:800,color:'#ff70ce',
-                          textShadow:'0 0 10px rgba(255,112,206,.6)'}}>
-                          {prize.baseAmount.toLocaleString()}pt {'\u2192'} ニャルシアン効果！×{result.pointMultiplier} {'\u2192'} {(prize.baseAmount*(result.pointMultiplier??1)).toLocaleString()}pt
-                        </p>
-                      )}
                       <p style={{margin:'6px 0 10px',fontSize:12,color:'rgba(255,255,255,.5)'}}>
                         ポイントを即時付与しました
                       </p>
@@ -1903,12 +1897,6 @@ export function GachaPage() {
                   position:'relative',zIndex:2,
                   textShadow:'0 0 22px rgba(255,215,0,.75)'}}>
                   合計 +{result.totalPoints.toLocaleString()} pt 獲得！
-                </p>
-              )}
-              {(result.pointMultiplier??1)>1&&(
-                <p style={{margin:'2px 0 0',fontSize:12,color:'#ff70ce',textAlign:'center',fontWeight:800,
-                  position:'relative',zIndex:2}}>
-                  ニャルシアン効果！ポイント×{result.pointMultiplier} 適用中
                 </p>
               )}
               <div style={{position:'absolute',right:8,bottom:4,zIndex:3,pointerEvents:'none'}}>
