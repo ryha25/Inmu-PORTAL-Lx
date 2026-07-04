@@ -449,6 +449,85 @@ router.put("/admin/gacha/results/:id/mark-sent", requireAdmin, async (req, res):
   }
 });
 
+// ── PUT /api/admin/gacha/results/mark-sent-bulk ──
+// 複数の gachaInmuWins.id を1つの txHash（1件のオンチェーンTX）でまとめて記録する。
+// オンチェーンTXは atomic（全命令が成功 or 全て失敗）なので、DB側も1トランザクションで
+// 全件成功 or 全件失敗にし、一部だけ記録漏れが起きないようにする。
+router.put("/admin/gacha/results/mark-sent-bulk", requireAdmin, async (req, res): Promise<void> => {
+  const adminId = req.adminId ?? req.userId ?? "admin";
+  const { ids, txHash, wallets } = req.body as {
+    ids?: number[];
+    txHash?: string;
+    wallets?: Record<string, string>;
+  };
+
+  if (!txHash) { res.status(400).json({ error: "txHash is required" }); return; }
+  if (!Array.isArray(ids) || ids.length === 0) { res.status(400).json({ error: "ids is required" }); return; }
+
+  const cleanIds = ids.map(Number).filter(n => Number.isFinite(n));
+  if (cleanIds.length === 0) { res.status(400).json({ error: "Invalid ids" }); return; }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows } = await client.query(
+      `SELECT id,"userId","inmuAmount","inmuSentStatus" FROM "gachaInmuWins" WHERE id = ANY($1::int[])`,
+      [cleanIds],
+    );
+    if (rows.length !== cleanIds.length) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ error: "一部の当選IDが見つかりません" });
+      return;
+    }
+    const alreadySent = rows.filter((r: any) => r.inmuSentStatus === "sent");
+    if (alreadySent.length > 0) {
+      await client.query("ROLLBACK");
+      res.status(400).json({ error: `${alreadySent.length}件は既に送金済みです` });
+      return;
+    }
+
+    for (const row of rows as { id: number; userId: string; inmuAmount: number }[]) {
+      const inmuAmount = row.inmuAmount ?? 10000;
+      const solWallet = wallets?.[String(row.id)] ?? null;
+
+      await client.query(
+        `UPDATE "gachaInmuWins"
+         SET "inmuSentStatus"='sent', "inmuSentAt"=NOW(), "inmuSentByAdminId"=$1,
+             "txHash"=$2, "solWallet"=$3, "failureReason"=NULL
+         WHERE id=$4`,
+        [adminId, txHash, solWallet, row.id],
+      );
+
+      await client.query(
+        `INSERT INTO transactions ("userId",type,amount,memo,counterparty,"txHash","createdAt")
+         VALUES ($1,'gacha_reward',$2,$3,'管理者ウォレット',$4,NOW())`,
+        [row.userId, String(inmuAmount), `ガチャ報酬 ${inmuAmount.toLocaleString()} INMU (tx: ${txHash.slice(0, 16)}…)`, txHash],
+      );
+
+      await client.query(
+        `UPDATE profile SET balance = balance + $1, "totalReceived" = "totalReceived" + $1, "updatedAt"=NOW() WHERE "userId"=$2`,
+        [inmuAmount, row.userId],
+      );
+
+      await client.query(
+        `INSERT INTO notifications ("userId",type,title,message,"createdAt")
+         VALUES ($1,'gacha_reward_sent','🎁 ガチャ報酬が届きました！',$2,NOW())`,
+        [row.userId, `${inmuAmount.toLocaleString()} INMU が送金されました。\ntxHash: ${txHash}`],
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ ok: true, count: rows.length });
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[Gacha/Admin] mark-sent-bulk error:", e);
+    res.status(500).json({ error: "Internal error" });
+  } finally {
+    client.release();
+  }
+});
+
 // ── PUT /api/admin/gacha/results/:id/mark-failed ──
 router.put("/admin/gacha/results/:id/mark-failed", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);

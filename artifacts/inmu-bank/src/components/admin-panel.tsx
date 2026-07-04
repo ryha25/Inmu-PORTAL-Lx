@@ -799,35 +799,74 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
       toast.dismiss(toastId)
 
+      // オンチェーンでの確定を待つ（未確定のうちに DB 反映してしまうと、失敗TXでも
+      // 送金済みとして記録してしまうため）
+      toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
+      const confirmation = await connection.confirmTransaction({
+        signature,
+        blockhash: tx.recentBlockhash!,
+        lastValidBlockHeight: (await connection.getLatestBlockhash('processed')).lastValidBlockHeight,
+      }, 'confirmed')
+      toast.dismiss(toastId)
 
-      // 全件を mark-sent（同一 txHash で各 ID を個別に記録）
+      if (confirmation.value.err) {
+        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.value.err)}`)
+      }
+
+      // TX は1つの atomic 命令セット（全員成功 or 全員失敗）なので、DB側も
+      // 1件の一括APIで全件をまとめて記録する（個別APIをループすると一部だけ
+      // 記録漏れが起きるため、DB側は1トランザクションで整合させる）
       const sentAt = new Date().toISOString()
-      let successCount = 0
-      const successfulIds = new Set<number>()
+      const wallets: Record<string, string> = {}
       for (const row of sendable) {
-        const wallet = row.profileSolWallet ?? row.solWallet!
+        wallets[String(row.id)] = row.profileSolWallet ?? row.solWallet!
+      }
+
+      let lastErr: unknown = null
+      let recorded = false
+      for (let attempt = 0; attempt < 5 && !recorded; attempt++) {
         try {
-          await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
-          setGachaResults(p => p.map(r => r.id === row.id
-            ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallet, inmuSentAt: sentAt }
-            : r
-          ))
-          successCount++
-          successfulIds.add(row.id)
-        } catch {
-          // API 失敗は個別に failed 扱い（TX は成功しているので DB だけ再試行可能）
-          setGachaResults(p => p.map(r => r.id === row.id
-            ? { ...r, inmuSentStatus: 'failed', failureReason: 'DB記録失敗（TX成功）' }
-            : r
-          ))
+          if (attempt > 0) {
+            toast.loading(`DBへの記録を再試行しています…（${attempt + 1}回目）`, { id: toastId })
+            await new Promise(r => setTimeout(r, 1500 * attempt))
+          }
+          await api('/admin/gacha/results/mark-sent-bulk', 'PUT', {
+            ids: sendable.map(r => r.id),
+            txHash: signature,
+            wallets,
+          })
+          recorded = true
+        } catch (err) {
+          lastErr = err
         }
       }
+      toast.dismiss(toastId)
+
+      if (!recorded) {
+        // TX はオンチェーンで確定済み（資金は送られている）が、DB記録だけ失敗。
+        // 再試行できるよう pending には戻さず failed にし、手動での再記録を促す。
+        const msg = lastErr instanceof Error ? lastErr.message : '不明なエラー'
+        for (const row of sendable) {
+          await api(`/admin/gacha/results/${row.id}/mark-failed`, 'PUT', { failureReason: `TX成功済みだがDB記録失敗: ${msg}` }).catch(() => {})
+        }
+        setGachaResults(p => p.map(r =>
+          sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'failed', failureReason: 'TX成功済みだがDB記録失敗' } : r
+        ))
+        toast.error(`送金はオンチェーンで完了しましたが、DBへの記録に失敗しました。txHash: ${signature.slice(0, 16)}… を確認し「再試行」してください。`, { duration: 15000 })
+        return
+      }
+
+      const successfulIds = new Set(sendable.map(r => r.id))
+      setGachaResults(p => p.map(r => successfulIds.has(r.id)
+        ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallets[String(r.id)], inmuSentAt: sentAt }
+        : r
+      ))
       setGachaSelectedIds(previous => {
         const remaining = new Set(previous)
         successfulIds.forEach(id => remaining.delete(id))
         return remaining
       })
-      toast.success(`✅ 一括送金完了！ ${successCount}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
+      toast.success(`✅ 一括送金完了！ ${sendable.length}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
 
     } catch (e: unknown) {
       toast.dismiss(toastId)
