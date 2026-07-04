@@ -21,6 +21,12 @@ type PetRebateBonus = { source: "level_reward" | "skill"; label: string; rate: n
 const PET_PURCHASE_BONUS_RULES = [
   { characterId: "inmu-festival", minLevel: 15, source: "level_reward" as const, label: "INMUくん Lv.15報酬", rate: 5, eventOnly: false },
   { characterId: "inmu-festival", minLevel: 1, source: "skill" as const, label: "固有スキル「810祭り‼️」", rate: 5, eventOnly: true },
+  { characterId: "nyarushian", minLevel: 10, source: "level_reward" as const, label: "ニャルシアン Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "nyarushian", minLevel: 30, source: "level_reward" as const, label: "ニャルシアン Lv.30報酬", rate: 5, eventOnly: false },
+  { characterId: "takuya", minLevel: 10, source: "level_reward" as const, label: "拓也 Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "takuya", minLevel: 30, source: "level_reward" as const, label: "拓也 Lv.30報酬", rate: 5, eventOnly: false },
+  { characterId: "leon", minLevel: 10, source: "level_reward" as const, label: "レオン Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "leon", minLevel: 30, source: "level_reward" as const, label: "レオン Lv.30報酬", rate: 5, eventOnly: false },
 ] as const;
 
 async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
@@ -50,7 +56,7 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
         if (!owned.has(rule.characterId) || (rule.eventOnly && !isEventDay)) return false;
         const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
         const skillEnabled = state?.skillState?.[rule.characterId] !== false;
-        return level >= rule.minLevel && (rule.source !== "skill" || (skillEnabled && activePetIds.includes(rule.characterId)));
+        return level >= rule.minLevel && activePetIds.includes(rule.characterId) && (rule.source !== "skill" || skillEnabled);
       }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
       result.set(userId, bonuses);
     });
