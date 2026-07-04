@@ -475,14 +475,16 @@ export function usePetState() {
     const requested = Math.min(3, Math.max(1, Math.floor(amount)))
     const petId = effectiveSave.selectedPetId
     const available = Math.max(0, Math.floor(effectiveSave.items?.sleepTea ?? 0))
-    const used = Math.min(requested, available, Math.max(0, PET_BY_ID[petId].maxLevel - effectiveSave.pets[petId].level))
+    const maxBySleepiness = Math.max(0, Math.floor((100 - effectiveSave.pets[petId].sleepiness) / 33))
+    const used = Math.min(requested, available, Math.max(0, PET_BY_ID[petId].maxLevel - effectiveSave.pets[petId].level), maxBySleepiness)
     if (used <= 0) return 0
     setSave(current => {
       const materialized = materializeSaveAt(current, Date.now())
       const currentPetId = materialized.selectedPetId
       const stats = materialized.pets[currentPetId]
       const currentAvailable = Math.max(0, Math.floor(materialized.items?.sleepTea ?? 0))
-      const applied = Math.min(used, currentAvailable, Math.max(0, PET_BY_ID[currentPetId].maxLevel - stats.level))
+      const currentMaxBySleepiness = Math.max(0, Math.floor((100 - stats.sleepiness) / 33))
+      const applied = Math.min(used, currentAvailable, Math.max(0, PET_BY_ID[currentPetId].maxLevel - stats.level), currentMaxBySleepiness)
       if (applied <= 0) return current
       const nextStats = {
         ...stats,

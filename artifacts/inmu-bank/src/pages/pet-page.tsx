@@ -1120,7 +1120,13 @@ export function PetPage() {
   function handleUseSleepTea(amount: number) {
     const used = useSleepTea(amount)
     if (used <= 0) {
-      setMessage(selectedStats.level >= maxLevel ? 'レベルは既に最大です' : 'アイスティーを所持していません')
+      setMessage(
+        selectedStats.level >= maxLevel
+          ? 'レベルは既に最大です'
+          : selectedStats.sleepiness >= 100 - 32
+            ? '眠気が100を超えるため使用できません'
+            : 'アイスティーを所持していません',
+      )
       return
     }
     setNow(Date.now())
