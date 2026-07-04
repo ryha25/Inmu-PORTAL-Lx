@@ -60,6 +60,11 @@ description: gachaResults + gachaInmuWins tables; free daily gacha; bulk Phantom
 - **Why:** `sendRawTransaction({ skipPreflight: true })` はブロックチェーンが実際にtxを処理する前に signature を返す。それを `connection.confirmTransaction()` で待たずに即DB「sent」記録すると、失効/失敗したtxでも成功扱いになる。
 - **How to apply:** Phantom経由で送金するコードは全て `sendRawTransaction` の後に必ず `getLatestBlockhash` の `lastValidBlockHeight` を保持し `connection.confirmTransaction({signature, blockhash, lastValidBlockHeight}, 'confirmed')` を待ち、`confirmation.value.err` をチェックしてから成功として扱う/DBに記録すること。該当箇所: `user-send-dialog.tsx`(ユーザー間送金), `admin-panel.tsx`のmarkGachaSent/markGachaBulkSent/handlePhantomAirdropSend/購入申請リベート送金, `lib/admin-inmu-transfer.ts`のsendInmuWithPhantom（ペット購入・ガチャ課金・報酬申請で共用）。新しい送金コードを書く際は必ずこのパターンに従うこと。
 
+## 有償ガチャ「送金成功したのに結果が出ない/何もなく終わる」バグ
+- **症状:** Phantomでの送金・サーバー側の確認・抽選（`petGachaHistory` insert）はすべて成功しているのに、画面には結果画面が出ず「処理中…」のままか、リロード後も何も起きない。DBで確認すると txId は `petPaymentAttempts.status='verified'` かつ `petGachaHistory` に正しい results が入っている＝資産的な損失は無い、純粋なUI表示バグ。
+- **Why:** 送金直後は `localStorage`（例: `inmu-pet-paid-gacha-pending`）に txId を保存し、ページ再訪問時に useEffect で復旧・結果取得する設計だった。その復旧処理が誤って `getPhantomProvider()!=null` を前提条件にしていたため、Phantom拡張機能の非同期注入がまだ完了していないタイミングでマウントされると復旧自体が丸ごとスキップされ、結果が二度と表示されなかった。
+- **How to apply:** 「送金/決済のtxIdをlocalStorageに保存して後で結果を取りに行く」系の復旧ロジックは、その取得APIがwalletを必要としない（txIdのみで完結する）なら、ウォレットプロバイダの検出条件と絶対に結合しないこと。ウォレット検出が必要なのは別の目的（例: mobile intentからの自動タブ切り替え）だけであり、それとは別のuseEffect/分岐にする。
+
 ## 二重ガチャシステムの罠（要注意）
 - legacy (`gacha.ts`: `/gacha/spin`, `/gacha/free-spin`) と新 PET系 (`pet-commerce.ts`: `/pet-gacha/points`, `/pet-gacha/paid`, `/pet-gacha/paid-free`) が並存
 - 管理画面「全スピン履歴」(`/admin/gacha/spins`) は `gachaResults` テーブルを無条件・無フィルタで読む

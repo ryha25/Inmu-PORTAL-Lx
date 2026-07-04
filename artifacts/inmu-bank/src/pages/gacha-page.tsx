@@ -1027,18 +1027,40 @@ export function GachaPage() {
   }
 
   useEffect(()=>{
-    if(!getPhantomProvider()||paidBusy)return
-    const intent=localStorage.getItem('inmu-pet-paid-gacha-intent') as 'single'|'eleven'|null
-    if(intent){localStorage.removeItem('inmu-pet-paid-gacha-intent');setGachaMode('paid')}
+    // Phantom拡張機能の注入は非同期のため、マウント直後は getPhantomProvider() が
+    // まだ null を返すことがある。以前はこの判定に引っかかって「送金済みだが
+    // 未確定のガチャ」の復旧処理自体がスキップされてしまい、送金は成功して
+    // サーバー側では抽選済みなのに画面には何も表示されないまま終わる不具合があった。
+    // 復旧処理（completePaidGacha）自体はPhantomを必要としない（txIdのみで完結する）ため、
+    // Phantom検出とは切り離して常に実行する。
+    if(paidBusy)return
     const pendingRaw=localStorage.getItem('inmu-pet-paid-gacha-pending')
-    if(!pendingRaw)return
-    try{
-      const pending=JSON.parse(pendingRaw) as {txId:string;pullType:'single'|'eleven'}
-      setPaidBusy(true)
-      void completePaidGacha(pending.txId,pending.pullType)
-        .catch(error=>toast.error(error instanceof Error?error.message:'送金済みガチャの復旧に失敗しました'))
-        .finally(()=>setPaidBusy(false))
-    }catch{localStorage.removeItem('inmu-pet-paid-gacha-pending')}
+    if(pendingRaw){
+      try{
+        const pending=JSON.parse(pendingRaw) as {txId:string;pullType:'single'|'eleven'}
+        setPaidBusy(true)
+        void completePaidGacha(pending.txId,pending.pullType)
+          .catch(error=>toast.error(error instanceof Error?error.message:'送金済みガチャの復旧に失敗しました。ページを再読み込みすると再度確認されます'))
+          .finally(()=>setPaidBusy(false))
+      }catch{localStorage.removeItem('inmu-pet-paid-gacha-pending')}
+    }
+
+    let cancelled=false
+    let attempts=0
+    const checkIntent=()=>{
+      if(cancelled)return
+      const intent=localStorage.getItem('inmu-pet-paid-gacha-intent') as 'single'|'eleven'|null
+      if(!intent)return
+      if(getPhantomProvider()){
+        localStorage.removeItem('inmu-pet-paid-gacha-intent')
+        setGachaMode('paid')
+        return
+      }
+      attempts+=1
+      if(attempts<20)window.setTimeout(checkIntent,300)
+    }
+    checkIntent()
+    return ()=>{cancelled=true}
   },[])
 
   const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);setNewCharacterRevealIndex(0);loadPts();loadHist();loadFreeStatus();loadPaidFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
