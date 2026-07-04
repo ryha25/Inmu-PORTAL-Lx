@@ -13,12 +13,12 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
     const targetId = normalizeId(characterId);
     const statePetId = Object.keys(state?.pets ?? {}).find(id => normalizeId(id) === targetId) ?? characterId;
     const level = Number(state?.pets?.[statePetId]?.level ?? 1);
-    const activePetIds = Array.isArray(state?.activePetIds)
-      ? state.activePetIds.slice(0, 3).map(normalizeId)
-      : [];
+    const skillActiveCharacterId = normalizeId(state?.skillActiveCharacterId ?? "");
     // Ownership is authoritative. PET saves contain default stats for characters the
     // user does not own, so character-state presence must never unlock a skill.
-    return Boolean(ownership.rowCount) && activePetIds.includes(targetId) && level >= Math.max(1, minLevel);
+    // A unique skill is only active for the single character explicitly set via the
+    // "固有スキル発動" selector, independent of which training slots are occupied.
+    return Boolean(ownership.rowCount) && skillActiveCharacterId === targetId && level >= Math.max(1, minLevel);
   } catch (error) {
     console.error("[PetSkills] lookup failed", { userId, characterId, error });
     return false;

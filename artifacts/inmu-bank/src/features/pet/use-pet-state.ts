@@ -80,6 +80,7 @@ type PetSaveData = {
   premiumFood: PremiumFoodSave
   items: PetItemState
   skillState: Record<PetId, boolean>
+  skillActiveCharacterId: PetId | null
 }
 
 type LegacySaveData = Partial<PetSaveData> & {
@@ -164,6 +165,7 @@ function createDefaultSave(): PetSaveData {
     premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
     items: { sleepTea: 0 },
     skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, true])) as Record<PetId, boolean>,
+    skillActiveCharacterId: null,
   }
 }
 
@@ -206,6 +208,7 @@ function loadSave(source?: unknown): PetSaveData {
       premiumFood: sanitizePremiumFood(parsed.premiumFood),
       items: { sleepTea: Math.max(0, Math.floor(readNumber(parsed.items?.sleepTea, 0))) },
       skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, parsed.skillState?.[pet.id] !== false])) as Record<PetId, boolean>,
+      skillActiveCharacterId: PET_DEFINITIONS.some(pet => pet.id === parsed.skillActiveCharacterId) ? (parsed.skillActiveCharacterId as PetId) : null,
     }
   } catch {
     return fallback
@@ -365,6 +368,10 @@ export function usePetState() {
         activePetIds: activePetIds.filter((id, index, list) => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3),
       }
     })
+  }
+
+  function setSkillActiveCharacterId(id: PetId | null) {
+    setSave(current => ({ ...current, skillActiveCharacterId: id }))
   }
 
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
@@ -528,6 +535,8 @@ export function usePetState() {
     isHydrated,
     syncError,
     skillState: effectiveSave.skillState,
+    skillActiveCharacterId: effectiveSave.skillActiveCharacterId,
+    setSkillActiveCharacterId,
   }
 }
 

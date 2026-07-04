@@ -52,11 +52,15 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
       const state = stateByUser.get(userId) as Record<string, any> | undefined;
       const owned = ownedByUser.get(userId) ?? new Set<string>();
       const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.slice(0, 3).map(String) : [];
+      const skillActiveCharacterId = String(state?.skillActiveCharacterId ?? "");
       const bonuses = PET_PURCHASE_BONUS_RULES.filter(rule => {
         if (!owned.has(rule.characterId) || (rule.eventOnly && !isEventDay)) return false;
         const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
-        const skillEnabled = state?.skillState?.[rule.characterId] !== false;
-        return level >= rule.minLevel && activePetIds.includes(rule.characterId) && (rule.source !== "skill" || skillEnabled);
+        if (level < rule.minLevel) return false;
+        // レベル報酬は育成枠（activePetIds）、固有スキルは「固有スキル発動」で選択された1体のみに紐づく。
+        return rule.source === "skill"
+          ? skillActiveCharacterId === rule.characterId
+          : activePetIds.includes(rule.characterId);
       }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
       result.set(userId, bonuses);
     });
@@ -108,6 +112,15 @@ async function getNormalDailyLimit(): Promise<number> {
     const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, "normal_daily_purchase_limit"));
     return s ? Number(s.value) : 300000;
   } catch { return 300000; }
+}
+
+// ── 購入申請 基本還元率（管理者設定・通常/イベント） ──
+async function getBaseRebateRate(isEventDay: boolean): Promise<number> {
+  const key = isEventDay ? "event_rebate_rate" : "normal_rebate_rate";
+  try {
+    const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, key));
+    return s ? Number(s.value) || 0 : 0;
+  } catch { return 0; }
 }
 
 // ── イベントモード設定を取得 ──
@@ -219,11 +232,13 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
 
     const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
 
-    const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed] = await Promise.all([
+    const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed, baseRebateRate, petBonusesByUser] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
       getMonthlyApplied(userId, monthStart),
       getUserDailyLimit(userId, eventSettings.isEventDay),
       getDailyUsed(userId),
+      getBaseRebateRate(eventSettings.isEventDay),
+      getPetPurchaseBonuses([userId], eventSettings.isEventDay),
     ]);
 
     // 購入済み枚数 = min(実購入, 通常日上限 × 月日数)
@@ -233,6 +248,9 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const effectiveLimit = effectiveTotalBought > 0
       ? Math.min(dailyRemaining, available)
       : dailyRemaining;
+
+    const petRebateBonuses = petBonusesByUser.get(userId) ?? [];
+    const petRebateBonusRate = petRebateBonuses.reduce((total, bonus) => total + bonus.rate, 0);
 
     res.json({
       requests,
@@ -246,6 +264,10 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
       dailyRemaining,
       isEventMode: eventSettings.isEventDay,
       effectiveLimit,
+      baseRebateRate,                          // 管理者設定の基本還元率（通常/イベント）
+      petRebateBonuses,                        // PET由来の還元率内訳（レベル報酬・固有スキル）
+      petRebateBonusRate,
+      totalRebateRate: baseRebateRate + petRebateBonusRate,
     });
   } catch {
     res.status(500).json({ error: "Internal error" });

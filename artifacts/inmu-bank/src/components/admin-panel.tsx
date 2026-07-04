@@ -212,6 +212,8 @@ const PR_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 const SYSTEM_SETTING_PRESETS: Record<string, string[]> = {
   normal_daily_purchase_limit: ['100000', '200000', '300000', '500000'],
   event_daily_purchase_limit:  ['200000', '300000', '500000', '1000000'],
+  normal_rebate_rate: ['0', '3', '5', '10'],
+  event_rebate_rate:  ['0', '5', '10', '15'],
 }
 
 const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
@@ -269,7 +271,7 @@ function formatSettingDisplay(key: string, value: string): string {
   if (SYSTEM_SETTING_TYPE[key] === 'boolean') return value === 'true' ? '✅ 有効' : '❌ 無効'
   if (SYSTEM_SETTING_TYPE[key] === 'date') return value || '未設定'
   const n = Number(value)
-  if (!isNaN(n)) return `${n.toLocaleString()}${key.includes('limit') ? ' INMU' : ''}`
+  if (!isNaN(n)) return `${n.toLocaleString()}${key.includes('limit') ? ' INMU' : key.includes('rebate_rate') ? '%' : ''}`
   return value || '—'
 }
 

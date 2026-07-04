@@ -31,3 +31,15 @@ A route written with `requireAuth` will 401 for an admin-code-only session (no u
 
 ## System settings pattern for admin-editable numeric constants
 `systemSettingsTable` (key/value/description) + the `DEFAULTS` map in `routes/system-settings.ts` is the established way to make a previously-hardcoded numeric constant admin-editable without a schema migration: add a key to `DEFAULTS`, then read it at the call site via `getSystemSettingNumber(key, fallback)` (`services/system-settings-store.ts`, raw `pool.query`, works from both drizzle- and raw-SQL route files). Admin UI reads/writes go through the existing `GET/PUT /admin/system-settings[/:key]` endpoints — reuse rather than inventing new ones.
+
+## CRLF file gotcha (pet-page.tsx)
+`artifacts/inmu-bank/src/pages/pet-page.tsx` is CRLF-encoded (rest of the codebase is LF). The `edit` tool's exact-string match is unreliable against it — sometimes succeeds, sometimes fails on visually-identical text.
+**Why:** raw byte/line-ending mismatch between what `read` displays (LF-normalized) and the tool's internal comparison.
+**How to apply:** for this file, script edits in python: `io.open(path,'r',encoding='utf-8')` (auto-normalizes CRLF→LF) → exact string replace with an assert-count==1 check → write back with `io.open(path,'w',encoding='utf-8',newline='\r\n')` to preserve CRLF. Check a file's line endings before assuming the `edit` tool is safe on it.
+
+## Pet feature: unique-skill vs training-slot mechanics are separate
+`skillActiveCharacterId` (single character, PetSaveData field) drives a standalone "固有スキル発動" unique-skill-activation UI, distinct from `activePetIds` (array, up to `unlockedSlots`) which drives the training-slot/level-reward mechanic. Both can reference the same owned character independently. Purchase-request rebate rate = admin-configured base rate (`normal_rebate_rate`/`event_rebate_rate` system settings) + PET-derived bonuses (level-reward achievements and/or active unique skill), computed server-side and returned as `baseRebateRate`/`petRebateBonuses`/`petRebateBonusRate`/`totalRebateRate` from `GET /api/purchase-requests`.
+
+## Testing gotcha: runTest retries can find state already mutated
+The `runTest` testing subagent sometimes internally retries a full test plan against the same shared dev DB. A retry can see state already mutated by an earlier (successful) pass, producing a spurious failure that looks like a real bug ("expected empty slot, found it already filled") when the feature actually worked.
+**How to apply:** if a test fails with observed state matching the *end* state of the plan rather than the seeded initial state, check the DB directly, reset the seed row(s), and re-run once before concluding there's a real bug.

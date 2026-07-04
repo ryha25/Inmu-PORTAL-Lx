@@ -20,6 +20,8 @@ const DEFAULTS: Record<string, { value: string; description: string }> = {
   gacha_paid_eleven_inmu:      { value: "100000",  description: "ガチャ関連INMU価格（有償11連）" },
   slot_unlock_2_inmu:          { value: "1000000", description: "スロット解放INMU価格（2枠目）" },
   slot_unlock_3_inmu:          { value: "2000000", description: "スロット解放INMU価格（3枠目）" },
+  normal_rebate_rate:          { value: "0",       description: "通常日の購入申請 基本還元率（%）" },
+  event_rebate_rate:           { value: "0",       description: "イベント日の購入申請 基本還元率（%）" },
 };
 
 // DBに残っているが表示・編集しない旧設定キー
