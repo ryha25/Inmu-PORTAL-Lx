@@ -10,7 +10,8 @@ const router = Router();
 const MANAGEMENT_WALLET = "Hatp1W4QCzr7GAVbnQqKTVW2BmX7sRaf7jeHJMvETeU4";
 const INMU_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
-const DUPLICATE_CHARACTER_POINTS = 100_000;
+const DUPLICATE_CHARACTER_POINTS = 50_000;
+const DUPLICATE_CHARACTER_SLEEP_TEA = 3;
 
 const CHARACTERS = [
   { id: "nyarushian", name: "ニャルシアン" },
@@ -282,17 +283,20 @@ async function applyPrizes(client: any, userId: string, rawPrizes: any[]) {
       const isNew = inserted.rowCount === 1;
       if (isNew) await initializeCharacterAtLevelOne(client, userId, raw.characterId);
       const convertedPoints = isNew ? 0 : DUPLICATE_CHARACTER_POINTS * pointMultiplier;
-      if (!isNew) totalPoints += convertedPoints;
+      if (!isNew) {
+        totalPoints += convertedPoints;
+        sleepTea += DUPLICATE_CHARACTER_SLEEP_TEA;
+      }
       results.push({
         prizeId: raw.id,
-        label: isNew ? raw.label : `${raw.label}は既に所持しています。${convertedPoints.toLocaleString()}ポイントに変換されました。`,
+        label: isNew ? raw.label : `${raw.label}は既に所持しています。${convertedPoints.toLocaleString()}ポイント＋アイスティー${DUPLICATE_CHARACTER_SLEEP_TEA}個に変換されました。`,
         type: "character",
         amount: 1,
         characterId: raw.characterId,
         isNewCharacter: isNew,
         isDuplicate: !isNew,
         convertedPoints,
-        ...(!isNew ? { baseAmount: DUPLICATE_CHARACTER_POINTS } : {}),
+        ...(!isNew ? { baseAmount: DUPLICATE_CHARACTER_POINTS, convertedSleepTea: DUPLICATE_CHARACTER_SLEEP_TEA } : {}),
       });
     } else if (raw.type === "premium_food") {
       premiumFood += raw.amount;
