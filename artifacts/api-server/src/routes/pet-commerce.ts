@@ -52,21 +52,21 @@ const PAID_PRIZES = [
 const POINT_GUARANTEED_EFFECT_RATE = 1 / 514;
 
 const POINT_PRIZES = [
-  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 8_550 },
-  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 5_130 },
-  { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 1_491 },
-  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 702 },
-  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 200 },
-  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 51 },
-  { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 514 },
-  { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 370 },
-  ...CHARACTERS.map((character, index) => ({
+  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 85_500 },
+  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 51_300 },
+  { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 8_550 },
+  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 5_130 },
+  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 1_378 },
+  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 513 },
+  { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 9_265 },
+  { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 7_825 },
+  ...CHARACTERS.map(character => ({
     id: `character-${character.id}`,
     label: character.name,
     type: "character" as const,
     amount: 1,
     characterId: character.id,
-    weight: index < 2 ? 31 : 30,
+    weight: 513,
   })),
 ];
 

@@ -108,15 +108,15 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
 const BALLS = [
   { id:'pts100',  label:'100pt',       rate:'50.00%', color:'rgba(255,236,180,.9)'  },
   { id:'pts300',  label:'300pt',       rate:'30.00%', color:'rgba(255,88,196,.9)'  },
-  { id:'pts500',  label:'500pt',       rate:'8.72%', color:'rgba(166,255,58,.9)'  },
-  { id:'pts1000', label:'1,000pt',     rate:'4.11%', color:'rgba(70,140,255,.9)'  },
-  { id:'pts5000', label:'5,000pt',     rate:'1.17%', color:'rgba(180,60,255,.9)'  },
+  { id:'pts500',  label:'500pt',       rate:'5.00%', color:'rgba(166,255,58,.9)'  },
+  { id:'pts1000', label:'1,000pt',     rate:'3.00%', color:'rgba(70,140,255,.9)'  },
+  { id:'pts5000', label:'5,000pt',     rate:'0.81%', color:'rgba(180,60,255,.9)'  },
   { id:'inmu10k', label:'10,000 INMU', rate:'0.30%',  color:'rgba(255,215,0,.9)'   },
-  { id:'premium-food', label:'高級ごはん', rate:'3.01%', color:'rgba(255,184,54,.9)' },
-  { id:'sleep-tea', label:'アイスティー（睡眠薬入り）', rate:'2.16%', color:'rgba(65,210,255,.9)' },
-  { id:'character-nyarushian', label:'ニャルシアン', rate:'0.18%', color:'rgba(255,215,0,.9)' },
-  { id:'character-takuya', label:'拓也', rate:'0.18%', color:'rgba(255,215,0,.9)' },
-  { id:'character-leon', label:'レオン', rate:'0.18%', color:'rgba(255,215,0,.9)' },
+  { id:'premium-food', label:'高級ごはん', rate:'5.42%', color:'rgba(255,184,54,.9)' },
+  { id:'sleep-tea', label:'アイスティー（睡眠薬入り）', rate:'4.58%', color:'rgba(65,210,255,.9)' },
+  { id:'character-nyarushian', label:'ニャルシアン', rate:'0.30%', color:'rgba(255,215,0,.9)' },
+  { id:'character-takuya', label:'拓也', rate:'0.30%', color:'rgba(255,215,0,.9)' },
+  { id:'character-leon', label:'レオン', rate:'0.30%', color:'rgba(255,215,0,.9)' },
 ]
 const PAID_BALLS = [
   { id:'pts1000', label:'1,000pt', rate:'60%' },
