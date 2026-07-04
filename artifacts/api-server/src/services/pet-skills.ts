@@ -110,8 +110,10 @@ export async function getSkillLockStatus(userId: string, characterIds: string[])
       } else if (normalized === "nyarushian") {
         const r = await pool.query(`SELECT "lastLogin" FROM "loginStreaks" WHERE "userId"=$1`, [userId]);
         const lastLogin = r.rows[0]?.lastLogin ? new Date(r.rows[0].lastLogin) : null;
-        const today = new Date().toISOString().slice(0, 10);
-        result[id] = lastLogin ? lastLogin.toISOString().slice(0, 10) === today : false;
+        // JST基準で「本日」を判定する（UTC日付境界だとJST 9:00までリセットされない不具合になるため）
+        const jstOffset = 9 * 3600 * 1000;
+        const today = new Date(Date.now() + jstOffset).toISOString().slice(0, 10);
+        result[id] = lastLogin ? new Date(lastLogin.getTime() + jstOffset).toISOString().slice(0, 10) === today : false;
       } else if (normalized === "leon" || normalized === "inmu-festival") {
         const r = await pool.query(
           `SELECT 1 FROM "purchaseRequests" WHERE "userId"=$1 AND "createdAt">=$2 LIMIT 1`,

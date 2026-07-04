@@ -11,6 +11,14 @@ import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
 
+// ── JST（日本時間）基準の日付文字列（YYYY-MM-DD）を返す ──
+// ログインボーナスの「本日」判定は 0:00 JST でリセットされる必要があるため、
+// UTCの日付境界（JST 9:00相当）ではなくJSTの日付境界で比較すること。
+function jstDateString(date: Date): string {
+  const jstOffset = 9 * 3600 * 1000;
+  return new Date(date.getTime() + jstOffset).toISOString().slice(0, 10);
+}
+
 router.get("/points", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
@@ -39,9 +47,9 @@ router.get("/points", requireAuth, async (req, res): Promise<void> => {
       .orderBy(sql`${profileTable.monthlyPoints} DESC`)
       .limit(20);
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = jstDateString(new Date());
     const alreadyClaimed = streak?.lastLogin
-      ? streak.lastLogin.toISOString().slice(0, 10) === today
+      ? jstDateString(streak.lastLogin) === today
       : false;
 
     res.json({
@@ -67,7 +75,7 @@ router.get("/points", requireAuth, async (req, res): Promise<void> => {
 router.post("/points/claim-daily", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = jstDateString(new Date());
     const streak = await db
       .select()
       .from(loginStreaksTable)
@@ -76,19 +84,17 @@ router.post("/points/claim-daily", requireAuth, async (req, res): Promise<void> 
 
     if (
       streak?.lastLogin &&
-      streak.lastLogin.toISOString().slice(0, 10) === today
+      jstDateString(streak.lastLogin) === today
     ) {
       res.status(400).json({ error: "Already claimed today" });
       return;
     }
 
     const now = new Date();
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    const yesterday = jstDateString(new Date(now.getTime() - 24 * 60 * 60 * 1000));
     const isConsecutive =
       streak?.lastLogin &&
-      streak.lastLogin.toISOString().slice(0, 10) === yesterday;
+      jstDateString(streak.lastLogin) === yesterday;
 
     const newStreak = isConsecutive ? (streak?.streak ?? 0) + 1 : 1;
     const basePoints = 10;
