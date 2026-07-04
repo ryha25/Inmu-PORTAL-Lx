@@ -448,13 +448,13 @@ function PetRoom({
 
 const CARE_CHOICES: Record<PetCareCategory, Array<{ id: PetCareAction; label: string; detail: string }>> = {
   feed: [
-    { id: 'feed-basic', label: '普通ごはん', detail: '満腹度 +20 / 愛情度 +2 / EXP +5 / CT 10分' },
-    { id: 'feed-premium', label: '高級ごはん', detail: '満腹度 +40 / 愛情度 +10 / EXP +15' },
+    { id: 'feed-basic', label: '普通ごはん', detail: '満腹度 +20 / 愛情度 +2 / EXP +10 / CT 10分' },
+    { id: 'feed-premium', label: '高級ごはん', detail: '満腹度 +40 / 愛情度 +10 / EXP +30' },
   ],
   play: [
-    { id: 'play-yarn', label: '毛糸', detail: 'EXP +5 / 愛情度 +3 / 眠気 +5 / CT 10分' },
-    { id: 'play-ball', label: 'ボール', detail: 'EXP +10 / 愛情度 +5 / 眠気 +10 / CT 20分' },
-    { id: 'play-toy', label: 'おもちゃ', detail: 'EXP +15 / 愛情度 +7 / 眠気 +15 / CT 30分' },
+    { id: 'play-yarn', label: '毛糸', detail: 'EXP +10 / 愛情度 +3 / 眠気 +5 / CT 10分' },
+    { id: 'play-ball', label: 'ボール', detail: 'EXP +20 / 愛情度 +5 / 眠気 +10 / CT 20分' },
+    { id: 'play-toy', label: 'おもちゃ', detail: 'EXP +30 / 愛情度 +7 / 眠気 +15 / CT 30分' },
   ],
 }
 
