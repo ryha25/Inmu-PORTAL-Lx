@@ -50,11 +50,11 @@ const PAID_PRIZES = [
 ];
 
 const POINT_PRIZES = [
-  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 3_800 },
+  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 4_250 },
   { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 2_500 },
   { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 1_500 },
-  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 800 },
-  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 400 },
+  { id: "pts3000", label: "3,000ポイント", type: "points" as const, amount: 3_000, weight: 500 },
+  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 250 },
   { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 50 },
   { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 500 },
   { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 360 },
