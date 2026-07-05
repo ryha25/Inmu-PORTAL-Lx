@@ -20,6 +20,11 @@ description: gachaResults + gachaInmuWins tables; free daily gacha; bulk Phantom
 - 880/80/30/10 per 1000（pts100/pts1000/pts5000/inmu10k）
 - GUARANTEED_RATE = 1/114
 
+## 通常ガチャ（ポイント消費）の排出率調整 (2026-07-05)
+- `pet-commerce.ts` の `POINT_PRIZES` の総重みは171,000固定。アイスティー/1万INMUの排出率を下げた際の余剰分は必ずpts100に加算し、総重みを不変に保つ運用。
+- **Why:** ユーザーが「アイスティー2%・1万INMU1%に変更、余りは100ポイントへ」と明示指定。他の景品(pts300/500/1000/5000/premium-food/character)の重みは変更禁止という暗黙の意図。
+- **How to apply:** このテーブルの排出率を再調整する際は、まず現在の総重みを確認し、変更対象以外の重みは一切動かさず、差分だけpts100(または指定された景品)に付け替えること。PAID_PRIZES(有償ガチャ)は別テーブルでinmu type自体が無いため対象外。
+
 ## 無料ガチャ（JST基準日次リセット）
 - `GET /api/gacha/free-status` → `{ used, nextReset }`
 - `POST /api/gacha/free-spin` → 通常と同じレスポンス形状

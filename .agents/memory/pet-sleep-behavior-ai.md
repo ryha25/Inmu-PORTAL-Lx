@@ -15,3 +15,9 @@ Two clarifying questions were asked before implementing (economy-impacting decis
 
 ## Consequence to be aware of
 The requested recovery rate is fast relative to the old fixed 30-minute recovery window, so sleep episodes end quickly relative to how slowly sleepiness accumulates. This was a deliberate, explicit user choice, not an oversight — if asked to "fix" seemingly-too-short naps, confirm with the user before changing the rate again.
+
+## Rate tuning history (2026-07-05, same day, follow-up correction)
+- Initial rate of 5/sec was too fast; user corrected it to **1 point per 10 real seconds**, with displayed sleepiness always rounded to a whole number (no decimals shown anywhere).
+- Also added: a pet does not necessarily sleep all the way down to 0 — at the moment a sleep episode starts (whether from the old hard threshold or an early probabilistic nap), a random "wake threshold" between 0 and the starting sleepiness is chosen once, and the pet wakes when elapsed-time recovery reaches that threshold. This keeps the offline-safe elapsed-time design (no need to keep polling to decide waking) while making some naps shorter than others.
+- **Why:** user explicitly said naps shouldn't always require reaching exactly 0 sleepiness to end.
+- **How to apply:** if recovery rate or "always sleeps to 0" is questioned again, don't assume it's a bug — check `PET_SLEEP_RECOVERY_PER_10_SEC` and `sleepWakeAt`/`rollSleepWakeThreshold` in `use-pet-state.ts` first; these are deliberate, twice-tuned values.

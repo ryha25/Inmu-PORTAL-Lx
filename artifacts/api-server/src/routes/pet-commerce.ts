@@ -52,15 +52,17 @@ const PAID_PRIZES = [
 
 const POINT_GUARANTEED_EFFECT_RATE = 1 / 514;
 
+// 2026-07-05: アイスティーの排出を内部上2%(3,420/171,000)に、10,000 INMUを内部上1%(1,710/171,000)に調整。
+// 減少分の余り(旧比 -2,823 / -428 = 合計3,251)は100ポイントの排出率に加算した(86,878→90,129)。総重み171,000は不変。
 const POINT_PRIZES = [
-  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 86_878 },
+  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 90_129 },
   { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 51_300 },
   { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 8_550 },
   { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 5_130 },
   { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 2_000 },
-  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 2_138 },
+  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 1_710 },
   { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 7_684 },
-  { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 6_243 },
+  { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 3_420 },
   ...CHARACTERS.map(character => ({
     id: `character-${character.id}`,
     label: character.name,
