@@ -815,7 +815,7 @@ function LevelRewardEffectGrid({
 
     return (
       <div>
-        <p className="mb-1.5 text-[9px] leading-tight text-fuchsia-100/60">枠を解放してキャラクターをセットすると、レベル報酬効果（購入申請還元など）が発動します。育成中のキャラクターとは連動しません</p>
+        <p className="mb-1.5 text-[9px] leading-tight text-fuchsia-100/60">枠を解放してキャラクターをセットすると、レベル報酬効果（購入申請還元など）が発動します。</p>
         <div className="grid grid-cols-3 gap-1.5">
           {[0, 1, 2].map(slotIndex => {
             const slotNumber = slotIndex + 1

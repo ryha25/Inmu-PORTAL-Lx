@@ -803,6 +803,73 @@ router.post("/admin/grant-points", requireAdmin, async (req, res): Promise<void>
   }
 });
 
+async function grantSleepTeaToUser(userId: string, amount: number) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
+    const now = Date.now();
+    const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+    const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0 };
+    state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
+    await client.query(`
+      INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
+      ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()
+    `, [userId, JSON.stringify(state), now]);
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+router.post("/admin/grant-sleep-tea", requireAdmin, async (req, res): Promise<void> => {
+  const adminId = req.userId ?? req.adminId ?? "admin";
+  const { targetUserIds, amount, reason } = req.body as {
+    targetUserIds?: string[];
+    amount?: number;
+    reason?: string;
+  };
+  if (!targetUserIds?.length || !amount || amount <= 0) {
+    res.status(400).json({ error: "targetUserIds and amount required" });
+    return;
+  }
+  try {
+    for (const uid of targetUserIds) {
+      await grantSleepTeaToUser(uid, amount);
+      await notify(uid, "pet", `アイスティーが${amount}個付与されました`, reason ?? `${amount}個`);
+    }
+    await logAudit(adminId, "adminGrantSleepTea", undefined, { targetUserIds, amount, reason });
+    res.json({ ok: true, count: targetUserIds.length });
+  } catch (e) {
+    console.error("[Admin] grant-sleep-tea error:", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/admin/grant-sleep-tea-all", requireAdmin, async (req, res): Promise<void> => {
+  const adminId = req.userId ?? req.adminId ?? "admin";
+  const { amount, reason } = req.body as { amount?: number; reason?: string };
+  if (!amount || amount <= 0) {
+    res.status(400).json({ error: "amount required" });
+    return;
+  }
+  try {
+    const allUsers = await db.select({ userId: profileTable.userId }).from(profileTable);
+    for (const u of allUsers) {
+      await grantSleepTeaToUser(u.userId, amount);
+      await notify(u.userId, "pet", `アイスティーが${amount}個付与されました`, reason ?? `${amount}個`);
+    }
+    await logAudit(adminId, "adminGrantSleepTeaAll", undefined, { count: allUsers.length, amount, reason });
+    res.json({ ok: true, count: allUsers.length });
+  } catch (e) {
+    console.error("[Admin] grant-sleep-tea-all error:", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 router.post("/admin/send-notification", requireAdmin, async (req, res): Promise<void> => {
   const adminId = req.userId ?? req.adminId ?? "admin";
   const { targetUserIds, title, message } = req.body as {

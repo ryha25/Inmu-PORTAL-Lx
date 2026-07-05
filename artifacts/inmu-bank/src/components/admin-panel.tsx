@@ -15,7 +15,7 @@ import {
   CheckSquare, Square, Send, Star, Coins,
   WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2, Lock,
   TrendingUp, TrendingDown, RefreshCw, Settings, ShoppingCart,
-  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical,
+  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical, CupSoda,
 } from 'lucide-react'
 import type { UserRow } from '@/pages/admin-page'
 import { Connection, PublicKey, Transaction } from '@solana/web3.js'
@@ -543,11 +543,13 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [notifMsg, setNotifMsg] = useState('')
   const [pointsAmount, setPointsAmount] = useState('')
   const [deductPointsAmount, setDeductPointsAmount] = useState('')
+  const [sleepTeaAmount, setSleepTeaAmount] = useState('')
 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
   const [airdropAllMemo, setAirdropAllMemo] = useState('')
   const [pointsAllAmount, setPointsAllAmount] = useState('')
   const [pointsAllReason, setPointsAllReason] = useState('')
+  const [sleepTeaAllAmount, setSleepTeaAllAmount] = useState('')
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -1558,6 +1560,36 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 className="min-h-10"
               />
             </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <CupSoda className="size-3" /> 全員アイスティー配布
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="配布個数"
+                  value={sleepTeaAllAmount}
+                  onChange={e => setSleepTeaAllAmount(e.target.value)}
+                  className="min-h-10 flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => withConfirm('全員アイスティー配布', () => withLoading(async () => {
+                    const d = await api('/admin/grant-sleep-tea-all', 'POST', {
+                      amount: Number(sleepTeaAllAmount),
+                      reason: 'アイスティー配布',
+                    }) as { count: number }
+                    toast.success(`${d.count}名にアイスティー配布完了`)
+                    setSleepTeaAllAmount('')
+                  }))}
+                  disabled={loading || !sleepTeaAllAmount}
+                  className="min-h-10"
+                >
+                  配布
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* 選択ユーザー操作 */}
@@ -1650,6 +1682,37 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     className="min-h-10"
                   >
                     減算
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <CupSoda className="size-3" /> アイスティー付与（選択ユーザー）
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="付与個数"
+                    value={sleepTeaAmount}
+                    onChange={e => setSleepTeaAmount(e.target.value)}
+                    className="min-h-10 flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => withConfirm('アイスティー付与', () => withLoading(async () => {
+                      await api('/admin/grant-sleep-tea', 'POST', {
+                        targetUserIds: selectedIds,
+                        amount: Number(sleepTeaAmount),
+                        reason: bulkReason || 'アイスティー付与',
+                      })
+                      toast.success(`${selectedIds.length}名にアイスティー付与完了`)
+                      setSleepTeaAmount('')
+                    }))}
+                    disabled={loading || !sleepTeaAmount}
+                    className="min-h-10"
+                  >
+                    付与
                   </Button>
                 </div>
               </div>
