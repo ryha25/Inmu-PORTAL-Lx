@@ -297,6 +297,10 @@ export function usePetState() {
   const [syncError, setSyncError] = useState<string | null>(null)
   const [skillLockStatus, setSkillLockStatus] = useState<Record<string, boolean>>({})
   const initialLocalSave = useRef(save)
+  // ── サーバーに最後に伝えた消費アイテム数の基準値。
+  // 定期autosaveのフルステート上書きでミッション/ガチャ付与分を
+  // 消してしまわないよう、サーバー側の差分マージ計算に使う。
+  const itemsBaselineRef = useRef<{ sleepTea: number; premiumInventory: number } | null>(null)
   const now = Date.now()
   const effectiveSave = materializeSaveAt(save, now)
   const selectedStats = effectiveSave.pets[save.selectedPetId]
@@ -312,7 +316,12 @@ export function usePetState() {
         if (!response.ok) throw new Error(data.error ?? 'INMU PETデータの取得に失敗しました')
         if (cancelled) return
         if (data.hasState && data.state) {
-          setSave(loadSave(data.state))
+          const hydrated = loadSave(data.state)
+          setSave(hydrated)
+          itemsBaselineRef.current = {
+            sleepTea: Number(hydrated.items?.sleepTea ?? 0),
+            premiumInventory: Number(hydrated.premiumFood?.inventory ?? 0),
+          }
           setSkillLockStatus(data.skillLockStatus && typeof data.skillLockStatus === 'object' ? data.skillLockStatus : {})
         } else {
           const migrateResponse = await fetch('/api/pet/state', {
@@ -324,6 +333,10 @@ export function usePetState() {
           if (!migrateResponse.ok) {
             const migrateData = await migrateResponse.json().catch(() => ({}))
             throw new Error(migrateData.error ?? 'INMU PETデータの初期保存に失敗しました')
+          }
+          itemsBaselineRef.current = {
+            sleepTea: Number(initialLocalSave.current.items?.sleepTea ?? 0),
+            premiumInventory: Number(initialLocalSave.current.premiumFood?.inventory ?? 0),
           }
         }
         setSyncError(null)
@@ -345,11 +358,32 @@ export function usePetState() {
       credentials: 'include',
       keepalive: true,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: save, clientUpdatedAt: Date.now() }),
+      body: JSON.stringify({ state: save, clientUpdatedAt: Date.now(), baseline: itemsBaselineRef.current ?? undefined }),
     }).then(async response => {
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
         throw new Error(data.error ?? 'INMU PETデータの保存に失敗しました')
+      }
+      const data = await response.json().catch(() => ({}))
+      if (data?.mergedItems && typeof data.mergedItems === 'object') {
+        const mergedSleepTea = Number(data.mergedItems.sleepTea ?? 0)
+        const mergedPremiumInventory = Number(data.mergedItems.premiumInventory ?? 0)
+        itemsBaselineRef.current = { sleepTea: mergedSleepTea, premiumInventory: mergedPremiumInventory }
+        setSave(current => {
+          if (Number(current.items?.sleepTea ?? 0) === mergedSleepTea && Number(current.premiumFood?.inventory ?? 0) === mergedPremiumInventory) {
+            return current
+          }
+          return {
+            ...current,
+            items: { ...current.items, sleepTea: mergedSleepTea },
+            premiumFood: { ...current.premiumFood, inventory: mergedPremiumInventory },
+          }
+        })
+      } else {
+        itemsBaselineRef.current = {
+          sleepTea: Number(save.items?.sleepTea ?? 0),
+          premiumInventory: Number(save.premiumFood?.inventory ?? 0),
+        }
       }
       setSyncError(null)
     }).catch(error => setSyncError(error instanceof Error ? error.message : 'INMU PETデータの保存に失敗しました'))
