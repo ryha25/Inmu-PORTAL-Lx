@@ -30,10 +30,24 @@ export const PET_ANGER_HOLD_MS = 30 * 1000
 export const PET_SLEEP_THRESHOLD = 99
 export const PET_SLEEP_PETTING_ANGER_CHANCE = 0.25
 export const PET_SLEEP_PETTING_ANGER_COUNT = 3
-export const PET_SLEEP_RECOVERY_MS = 30 * 60 * 1000
+// ── 2026-07-05: 眠気に応じて「眠る」演出の発生確率を変化させる行動AI改修。
+// 眠っている間は経過時間(オフライン含む)ベースで1秒あたり一定量ずつ眠気を回復し、
+// 十分回復したら通常行動に戻る。既存の固定30分回復方式から変更。
+export const PET_SLEEP_RECOVERY_PER_SEC = 5
+export const PET_EARLY_NAP_CHECK_MS = 10 * 1000
+export const PET_EARLY_NAP_MIN_SLEEPINESS = 20
 export const PET_FULLNESS_DECAY_MS = 12 * 60 * 1000
 export const PET_SLEEPINESS_GAIN_MS = 10 * 60 * 1000
 export const PET_PREMIUM_DAILY_FREE = 3
+
+// 眠気の値から「今この瞬間に眠り始める確率」を算出する。
+// 低いうちはほぼ0%、閾値(PET_SLEEP_THRESHOLD)付近では100%に近づく。
+export function getSleepChance(sleepiness: number): number {
+  if (sleepiness >= PET_SLEEP_THRESHOLD) return 1
+  if (sleepiness < PET_EARLY_NAP_MIN_SLEEPINESS) return 0
+  const t = (sleepiness - PET_EARLY_NAP_MIN_SLEEPINESS) / (PET_SLEEP_THRESHOLD - PET_EARLY_NAP_MIN_SLEEPINESS)
+  return Math.min(0.9, Math.pow(t, 2.2) * 0.9)
+}
 
 export type PetLevelCurve = { baseExp: number; perLevelExp: number }
 // Eased progression (2026-07-03): reduced required EXP across all levels to make leveling less grindy.
@@ -67,7 +81,7 @@ type PetProgressState = { fullnessAt: number; sleepinessAt: number }
 type PremiumFoodSave = { dailyDate: string; dailyUsed: number; inventory: number }
 
 type PetSaveData = {
-  version: 5
+  version: 5 | 6
   selectedPetId: PetId
   activePetIds: PetId[]
   pets: Record<PetId, PetStats>
@@ -76,6 +90,8 @@ type PetSaveData = {
   expressions: Record<PetId, PetExpressionState>
   petting: Record<PetId, PettingState>
   sleepStartedAt: Record<PetId, number>
+  // 眠り始めた瞬間の眠気の値。1秒あたりPET_SLEEP_RECOVERY_PER_SECずつの回復計算の起点として使う。
+  sleepStartValue: Record<PetId, number>
   progress: Record<PetId, PetProgressState>
   premiumFood: PremiumFoodSave
   items: PetItemState
@@ -152,7 +168,7 @@ function getPremiumFoodState(value: PremiumFoodSave, now = Date.now()): PremiumF
 function createDefaultSave(): PetSaveData {
   const now = Date.now()
   return {
-    version: 5,
+    version: 6,
     selectedPetId: PET_DEFINITIONS[0].id,
     activePetIds: [],
     pets: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...DEFAULT_STATS }])) as Record<PetId, PetStats>,
@@ -161,6 +177,7 @@ function createDefaultSave(): PetSaveData {
     expressions: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { kind: 'default', until: 0 }])) as Record<PetId, PetExpressionState>,
     petting: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { count: 0, lastAt: 0 }])) as Record<PetId, PettingState>,
     sleepStartedAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, 0])) as Record<PetId, number>,
+    sleepStartValue: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, 0])) as Record<PetId, number>,
     progress: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { fullnessAt: now, sleepinessAt: now }])) as Record<PetId, PetProgressState>,
     premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
     items: { sleepTea: 0 },
@@ -182,7 +199,7 @@ function loadSave(source?: unknown): PetSaveData {
     const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
     const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(parsed.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
     return {
-      version: 5,
+      version: 6,
       selectedPetId: validSelection ? parsed.selectedPetId! : fallback.selectedPetId,
       activePetIds,
       pets,
@@ -201,6 +218,11 @@ function loadSave(source?: unknown): PetSaveData {
         lastAt: Math.max(0, readNumber(parsed.petting?.[pet.id]?.lastAt, 0)),
       }])) as Record<PetId, PettingState>,
       sleepStartedAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, Math.max(0, readNumber(parsed.sleepStartedAt?.[pet.id], pets[pet.id].sleepiness >= PET_SLEEP_THRESHOLD ? Date.now() : 0))])) as Record<PetId, number>,
+      sleepStartValue: Object.fromEntries(PET_DEFINITIONS.map(pet => {
+        const savedAt = Math.max(0, readNumber(parsed.sleepStartedAt?.[pet.id], 0))
+        const fallbackValue = savedAt > 0 ? pets[pet.id].sleepiness : 0
+        return [pet.id, clamp(readNumber(parsed.sleepStartValue?.[pet.id], fallbackValue))]
+      })) as Record<PetId, number>,
       progress: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, {
         fullnessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.fullnessAt, Date.now())),
         sleepinessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.sleepinessAt, Date.now())),
@@ -237,6 +259,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
   const pets = { ...save.pets }
   const progress = { ...save.progress }
   const sleepStartedAt = { ...save.sleepStartedAt }
+  const sleepStartValue = { ...save.sleepStartValue }
 
   PET_DEFINITIONS.forEach(pet => {
     const id = pet.id
@@ -250,22 +273,37 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     let nextStats = { ...stats, fullness: clamp(stats.fullness - fullnessSteps) }
 
     if (save.sleepStartedAt[id] > 0) {
-      const recovery = Math.floor(((now - save.sleepStartedAt[id]) / PET_SLEEP_RECOVERY_MS) * 100)
-      if (recovery >= 100) {
-        const wokeAt = save.sleepStartedAt[id] + PET_SLEEP_RECOVERY_MS
+      // ── 眠っている間は、経過時間(オフラインでの経過分も含む)に応じて
+      // 1秒あたりPET_SLEEP_RECOVERY_PER_SECずつ眠気を回復させる。
+      // 十分に回復(0まで)したら起床し、以降は通常の眠気蓄積に戻る。
+      const startValue = sleepStartValue[id] ?? stats.sleepiness
+      const elapsedSec = Math.max(0, (now - save.sleepStartedAt[id]) / 1000)
+      const recovered = elapsedSec * PET_SLEEP_RECOVERY_PER_SEC
+      if (recovered >= startValue) {
+        const recoveryDurationMs = (startValue / PET_SLEEP_RECOVERY_PER_SEC) * 1000
+        const wokeAt = save.sleepStartedAt[id] + recoveryDurationMs
         const awakeSteps = Math.max(0, Math.floor((now - wokeAt) / PET_SLEEPINESS_GAIN_MS))
         nextStats = { ...nextStats, sleepiness: clamp(awakeSteps) }
         nextProgress.sleepinessAt = wokeAt + awakeSteps * PET_SLEEPINESS_GAIN_MS
-        sleepStartedAt[id] = nextStats.sleepiness >= PET_SLEEP_THRESHOLD ? now : 0
+        if (nextStats.sleepiness >= PET_SLEEP_THRESHOLD) {
+          sleepStartedAt[id] = now
+          sleepStartValue[id] = nextStats.sleepiness
+        } else {
+          sleepStartedAt[id] = 0
+          sleepStartValue[id] = 0
+        }
       } else {
-        nextStats = { ...nextStats, sleepiness: clamp(100 - recovery) }
+        nextStats = { ...nextStats, sleepiness: clamp(startValue - recovered) }
         nextProgress.sleepinessAt = now
       }
     } else {
       const sleepinessSteps = Math.max(0, Math.floor((now - currentProgress.sleepinessAt) / PET_SLEEPINESS_GAIN_MS))
       nextStats = { ...nextStats, sleepiness: clamp(stats.sleepiness + sleepinessSteps) }
       nextProgress.sleepinessAt = currentProgress.sleepinessAt + sleepinessSteps * PET_SLEEPINESS_GAIN_MS
-      if (nextStats.sleepiness >= PET_SLEEP_THRESHOLD) sleepStartedAt[id] = now
+      if (nextStats.sleepiness >= PET_SLEEP_THRESHOLD) {
+        sleepStartedAt[id] = now
+        sleepStartValue[id] = nextStats.sleepiness
+      }
     }
 
     pets[id] = nextStats
@@ -277,6 +315,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     pets,
     progress,
     sleepStartedAt,
+    sleepStartValue,
     premiumFood: sanitizePremiumFood(save.premiumFood, now),
   }
 }
@@ -393,6 +432,36 @@ export function usePetState() {
     const materialize = () => setSave(current => materializeSaveAt(current, Date.now()))
     materialize()
     const interval = window.setInterval(materialize, 60 * 1000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  // ── 行動AI: 眠気の高さに応じて「眠る」演出への突入をランダムに判定する。
+  // 眠気99以上での強制睡眠(materializeSaveAt側)とは別に、それ未満の段階でも
+  // 眠気が高いほど頻繁に(そして眠気100付近ではほぼ常に)眠るようにする。
+  // レベル・経験値・所持アイテム・固有スキルなど他のデータには一切触れない。
+  useEffect(() => {
+    const rollEarlyNap = () => {
+      const rollAt = Date.now()
+      setSave(current => {
+        const materialized = materializeSaveAt(current, rollAt)
+        let changed = false
+        const sleepStartedAt = { ...materialized.sleepStartedAt }
+        const sleepStartValue = { ...materialized.sleepStartValue }
+        PET_DEFINITIONS.forEach(pet => {
+          const id = pet.id
+          if (sleepStartedAt[id] > 0) return
+          const sleepiness = materialized.pets[id].sleepiness
+          const chance = getSleepChance(sleepiness)
+          if (chance > 0 && Math.random() < chance) {
+            sleepStartedAt[id] = rollAt
+            sleepStartValue[id] = sleepiness
+            changed = true
+          }
+        })
+        return changed ? { ...materialized, sleepStartedAt, sleepStartValue } : materialized
+      })
+    }
+    const interval = window.setInterval(rollEarlyNap, PET_EARLY_NAP_CHECK_MS)
     return () => window.clearInterval(interval)
   }, [])
 
@@ -517,6 +586,10 @@ export function usePetState() {
           [currentPetId]: { count: overpetted ? 0 : count, lastAt: actionNow },
         } : materialized.petting,
         sleepStartedAt: { ...materialized.sleepStartedAt, [currentPetId]: startsSleeping ? (materialized.sleepStartedAt[currentPetId] || actionNow) : 0 },
+        sleepStartValue: {
+          ...materialized.sleepStartValue,
+          [currentPetId]: startsSleeping ? (materialized.sleepStartedAt[currentPetId] ? materialized.sleepStartValue[currentPetId] : nextStats.sleepiness) : 0,
+        },
         premiumFood,
       }
     })
@@ -569,6 +642,10 @@ export function usePetState() {
           ...materialized.sleepStartedAt,
           [currentPetId]: nextStats.sleepiness >= PET_SLEEP_THRESHOLD ? (materialized.sleepStartedAt[currentPetId] || actionNow) : 0,
         },
+        sleepStartValue: {
+          ...materialized.sleepStartValue,
+          [currentPetId]: nextStats.sleepiness >= PET_SLEEP_THRESHOLD ? (materialized.sleepStartedAt[currentPetId] ? materialized.sleepStartValue[currentPetId] : nextStats.sleepiness) : 0,
+        },
       }
     })
     return used
@@ -619,6 +696,7 @@ export function initializeAwardedPetAtLevelOne(petId: string) {
       expressions: { ...current.expressions, [id]: { kind: 'default', until: 0 } },
       petting: { ...current.petting, [id]: { count: 0, lastAt: 0 } },
       sleepStartedAt: { ...current.sleepStartedAt, [id]: 0 },
+      sleepStartValue: { ...current.sleepStartValue, [id]: 0 },
       progress: { ...current.progress, [id]: { fullnessAt: now, sleepinessAt: now } },
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
