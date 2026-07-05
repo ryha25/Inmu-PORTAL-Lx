@@ -1126,9 +1126,7 @@ export function GachaPage() {
             </button>
           </div>
           <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'18px 18px 8px',textAlign:'center'}}>
-            <WalletCards style={{width:42,height:42,color:'#ffd65a',filter:'drop-shadow(0 0 14px rgba(255,200,40,.65))'}}/>
-            <h1 style={{margin:'10px 0 0',fontFamily:'Georgia,serif',fontSize:25,color:'#f4c84b',letterSpacing:'.12em'}}>INMU PET PREMIUM</h1>
-            <div style={{width:'min(430px,100%)',marginTop:14}}>
+            <div style={{width:'min(430px,100%)'}}>
               <InmuBalancePanel balance={inmuBalance} loading={inmuBalanceLoading}/>
             </div>
             <div style={{marginTop:18,width:'min(430px,100%)',padding:16,borderRadius:8,border:'1px solid rgba(218,165,32,.48)',background:'rgba(8,4,14,.82)',boxShadow:'0 14px 45px rgba(0,0,0,.42)'}}>
@@ -1138,6 +1136,7 @@ export function GachaPage() {
             </div>
           </div>
           <div style={{padding:'10px 14px'}}>
+            <p style={{textAlign:'center',fontSize:9,color:'rgba(255,255,255,.45)',margin:'0 0 8px'}}>※価格により必要INMU数が変動する場合があります(最大値は1連1万INMU/11連10万INMU)</p>
             {paidStatus&&<p style={{textAlign:'center',fontSize:11,color:'#8ee7ff',margin:'0 0 8px'}}>{paidStatus}</p>}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               <OrnateButton gold enabled={!paidBusy} onClick={()=>spinPaid('single')} label={paidBusy?'処理中…':'1連ガチャ'} price={`${paidSinglePrice.toLocaleString()} INMU`}/>
@@ -1181,6 +1180,7 @@ export function GachaPage() {
                 {!freeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
               </div>
             </button>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               <OrnateButton gold enabled={pts>=1000&&!ptsLoading} onClick={()=>spin('single')} label="1連ガチャ" price="1,000 pt"/>
               <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading} onClick={()=>spin('multi')} label="10連ガチャ" price="10,000 pt"/>
             </div>
@@ -1198,6 +1198,7 @@ export function GachaPage() {
               </div>
             </div>
           </div>
+        </div>
       </PageBg>
       <EmissionRateModal open={rateModalOpen} onClose={()=>setRateModalOpen(false)}/>
     </AppShell>
