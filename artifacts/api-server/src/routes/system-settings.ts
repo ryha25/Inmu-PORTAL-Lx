@@ -54,6 +54,32 @@ router.get("/admin/system-settings", requireAdmin, async (_req, res): Promise<vo
   }
 });
 
+// ── 一般ユーザー: ガチャ・スロット解放の価格のみ公開（認証不要） ──
+const PUBLIC_PRICE_KEYS = [
+  "gacha_paid_single_inmu",
+  "gacha_paid_eleven_inmu",
+  "slot_unlock_2_inmu",
+  "slot_unlock_3_inmu",
+] as const;
+
+router.get("/pet-prices", async (_req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(systemSettingsTable);
+    const map = new Map(rows.map(r => [r.key, r.value]));
+    const prices: Record<string, number> = {};
+    for (const key of PUBLIC_PRICE_KEYS) {
+      const raw = map.get(key) ?? DEFAULTS[key].value;
+      const n = Number(raw);
+      prices[key] = Number.isFinite(n) ? n : Number(DEFAULTS[key].value);
+    }
+    res.json(prices);
+  } catch {
+    const fallback: Record<string, number> = {};
+    for (const key of PUBLIC_PRICE_KEYS) fallback[key] = Number(DEFAULTS[key].value);
+    res.json(fallback);
+  }
+});
+
 // ── 管理者: 設定を更新（upsert） ──
 router.put("/admin/system-settings/:key", requireAdmin, async (req, res): Promise<void> => {
   const { key } = req.params;

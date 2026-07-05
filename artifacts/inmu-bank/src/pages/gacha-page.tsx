@@ -839,7 +839,22 @@ export function GachaPage() {
   const [paidFreeSharedRemaining,setPaidFreeSharedRemaining] = useState(0)
   const [paidFreeNextReset,setPaidFreeNextReset] = useState<string|null>(null)
   const [rateModalOpen,setRateModalOpen] = useState(false)
+  const [paidSinglePrice,setPaidSinglePrice] = useState(10000)
+  const [paidElevenPrice,setPaidElevenPrice] = useState(100000)
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const r=await fetch('/api/pet-prices',{credentials:'include'})
+        if(r.ok){
+          const d=await r.json() as {gacha_paid_single_inmu?:number;gacha_paid_eleven_inmu?:number}
+          if(Number.isFinite(d.gacha_paid_single_inmu))setPaidSinglePrice(Number(d.gacha_paid_single_inmu))
+          if(Number.isFinite(d.gacha_paid_eleven_inmu))setPaidElevenPrice(Number(d.gacha_paid_eleven_inmu))
+        }
+      }catch{/**/}
+    })()
+  },[])
 
   const loadPts = useCallback(async()=>{
     try{
@@ -1009,7 +1024,7 @@ export function GachaPage() {
 
   async function spinPaid(pullType:'single'|'eleven'){
     if(phase!=='idle'||paidBusy)return
-    const amount=pullType==='eleven'?100000:10000
+    const amount=pullType==='eleven'?paidElevenPrice:paidSinglePrice
     if(!getPhantomProvider()){
       if(isMobileBrowser()){
         localStorage.setItem('inmu-pet-paid-gacha-intent',pullType)
@@ -1125,8 +1140,8 @@ export function GachaPage() {
           <div style={{padding:'10px 14px'}}>
             {paidStatus&&<p style={{textAlign:'center',fontSize:11,color:'#8ee7ff',margin:'0 0 8px'}}>{paidStatus}</p>}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <OrnateButton gold enabled={!paidBusy} onClick={()=>spinPaid('single')} label={paidBusy?'処理中…':'1連ガチャ'} price="10,000 INMU"/>
-              <OrnateButton gold={false} enabled={!paidBusy} onClick={()=>spinPaid('eleven')} label={paidBusy?'処理中…':'11連ガチャ'} price="100,000 INMU"/>
+              <OrnateButton gold enabled={!paidBusy} onClick={()=>spinPaid('single')} label={paidBusy?'処理中…':'1連ガチャ'} price={`${paidSinglePrice.toLocaleString()} INMU`}/>
+              <OrnateButton gold={false} enabled={!paidBusy} onClick={()=>spinPaid('eleven')} label={paidBusy?'処理中…':'11連ガチャ'} price={`${paidElevenPrice.toLocaleString()} INMU`}/>
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,marginTop:12,color:'rgba(255,255,255,.38)',fontSize:9}}><LockKeyhole style={{width:12}}/>送金成功をサーバーで確認後に抽選します</div>
             <div style={{marginTop:10,border:'1px solid rgba(184,134,11,.35)',borderRadius:8,overflow:'hidden'}}>

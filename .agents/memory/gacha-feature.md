@@ -25,6 +25,11 @@ description: gachaResults + gachaInmuWins tables; free daily gacha; bulk Phantom
 - **Why:** ユーザーが「アイスティー2%・1万INMU1%に変更、余りは100ポイントへ」と明示指定。他の景品(pts300/500/1000/5000/premium-food/character)の重みは変更禁止という暗黙の意図。
 - **How to apply:** このテーブルの排出率を再調整する際は、まず現在の総重みを確認し、変更対象以外の重みは一切動かさず、差分だけpts100(または指定された景品)に付け替えること。PAID_PRIZES(有償ガチャ)は別テーブルでinmu type自体が無いため対象外。
 
+## 管理画面の価格設定とユーザー側表示の乖離に注意 (2026-07-05)
+- `gacha_paid_single_inmu`/`gacha_paid_eleven_inmu`/`slot_unlock_2_inmu`/`slot_unlock_3_inmu` は `systemSettings` テーブルに保存され、サーバー側の決済検証(`getSystemSettingNumber`)はDB値を正しく読むが、フロントエンド（gacha-page.tsx の1連/11連ボタン価格表示・送金額、pet-page.tsx のスロット解放価格表示・送金額）は長らくハードコードされた値を使っていて、管理画面で価格を変更してもユーザー側の表示・送金額に反映されないバグがあった。
+- **Why:** バックエンドが設定を読む＝フロントも自動的に読む、ではない。フロントは独自にハードコードされていることがあるので、価格系の設定を追加/変更する際は両方確認する。
+- **How to apply:** 修正として `GET /api/pet-prices`（認証不要、公開用）を新設し、DBの現在値（無ければDEFAULTS）を返すようにした。フロント側はマウント時にこれを fetch し、表示価格と実際の送金額（Phantom送金）の両方をこの値で駆動する。今後同様の「管理画面で数値を変えたのに反映されない」系の報告があれば、まずフロント側にハードコード値が残っていないか grep すること。
+
 ## 無料ガチャ（JST基準日次リセット）
 - `GET /api/gacha/free-status` → `{ used, nextReset }`
 - `POST /api/gacha/free-spin` → 通常と同じレスポンス形状

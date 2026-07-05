@@ -793,6 +793,7 @@ function LevelRewardEffectGrid({
     petStats,
     ownedPetIds,
     slotBusy,
+    slotPrices,
     onAdd,
     onRemove,
     onUnlock,
@@ -802,6 +803,7 @@ function LevelRewardEffectGrid({
     petStats: Record<PetId, PetStats>
     ownedPetIds: readonly PetId[]
     slotBusy: boolean
+    slotPrices: { slot2: number; slot3: number }
     onAdd: (id: PetId) => void
     onRemove: (id: PetId) => void
     onUnlock: () => void
@@ -811,7 +813,7 @@ function LevelRewardEffectGrid({
     const owned = ownedPetIds
       .map(id => PET_BY_ID[id])
       .filter((candidate): candidate is PetDefinition => Boolean(candidate) && !activePets.some(active => active.id === candidate.id))
-    const nextUnlockPrice = unlockedSlots === 1 ? 1_000_000 : 2_000_000
+    const nextUnlockPrice = unlockedSlots === 1 ? slotPrices.slot2 : slotPrices.slot3
 
     return (
       <div>
@@ -922,6 +924,7 @@ function LevelRewardEffectButton(props: {
   petStats: Record<PetId, PetStats>
   ownedPetIds: readonly PetId[]
   slotBusy: boolean
+  slotPrices: { slot2: number; slot3: number }
   onAdd: (id: PetId) => void
   onRemove: (id: PetId) => void
   onUnlock: () => void
@@ -1000,6 +1003,7 @@ export function PetPage() {
   const [ownershipError, setOwnershipError] = useState(false)
   const [unlockedSlots, setUnlockedSlots] = useState(1)
   const [slotBusy, setSlotBusy] = useState(false)
+  const [slotPrices, setSlotPrices] = useState({ slot2: 1_000_000, slot3: 2_000_000 })
   const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
   const levelRewardSyncRef = useRef(new Set<string>())
@@ -1038,6 +1042,22 @@ export function PetPage() {
   }
 
   useEffect(() => { void loadRewardRequests() }, [])
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await fetch('/api/pet-prices', { credentials: 'include' })
+        if (!response.ok) return
+        const data = await response.json() as { slot_unlock_2_inmu?: number; slot_unlock_3_inmu?: number }
+        setSlotPrices({
+          slot2: Number.isFinite(data.slot_unlock_2_inmu) ? Number(data.slot_unlock_2_inmu) : 1_000_000,
+          slot3: Number.isFinite(data.slot_unlock_3_inmu) ? Number(data.slot_unlock_3_inmu) : 2_000_000,
+        })
+      } catch {
+        // Keep default prices if they cannot be loaded.
+      }
+    })()
+  }, [])
 
   const loadSlotStatus = async () => {
     try {
@@ -1393,7 +1413,7 @@ export function PetPage() {
 
   async function unlockNextSlot() {
     if (slotBusy || unlockedSlots >= 3) return
-    const price = unlockedSlots === 1 ? 1_000_000 : 2_000_000
+    const price = unlockedSlots === 1 ? slotPrices.slot2 : slotPrices.slot3
     if (!getPhantomProvider()) {
       if (isMobileBrowser()) {
         localStorage.setItem('inmu-pet-slot-unlock-intent', String(unlockedSlots + 1))
@@ -1480,7 +1500,7 @@ export function PetPage() {
               {ownershipError && <p className="mt-3 text-xs text-rose-300">所持情報を取得できませんでした。画面を再読み込みしてください。</p>}
             </section>
             <div className="grid grid-cols-2 gap-2">
-              <LevelRewardEffectButton activePets={[]} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
+              <LevelRewardEffectButton activePets={[]} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
             </div>
           </div>
         ) : (
@@ -1509,7 +1529,7 @@ export function PetPage() {
               <CharacterSelectStrip pets={ownedPets} displayedPetId={displayedPetId} onSelect={handleSelect} />
               <div className="grid grid-cols-2 gap-2">
                 <SkillActivationButton ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} skillLockStatus={skillLockStatus} />
-                <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
+                <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
               </div>
               <SkillPanel pet={pet} />
               <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} />
