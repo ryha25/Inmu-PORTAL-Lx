@@ -806,6 +806,12 @@ export function GachaPage() {
   const [paidFreeUsed,setPaidFreeUsed] = useState(true)
   const [paidFreeRemaining,setPaidFreeRemaining] = useState(0)
   const [paidFreeLoading,setPaidFreeLoading] = useState(false)
+  const [freeBaseRemaining,setFreeBaseRemaining] = useState(0)
+  const [paidFreeBaseRemaining,setPaidFreeBaseRemaining] = useState(0)
+  const [showRatesNormal,setShowRatesNormal] = useState(false)
+  const [showRatesPaid,setShowRatesPaid] = useState(false)
+  const [singlePrice,setSinglePrice] = useState(10000)
+  const [elevenPrice,setElevenPrice] = useState(100000)
   const [gachaMode,setGachaMode] = useState<'points'|'paid'>('points')
   const [paidBusy,setPaidBusy] = useState(false)
   const [paidPity,setPaidPity] = useState(0)
@@ -860,10 +866,30 @@ export function GachaPage() {
   const loadFreeStatus = useCallback(async()=>{
     try{
       const r=await fetch('/api/gacha/free-status',{credentials:'include'})
-      if(r.ok){const d=await r.json() as {used:boolean;remaining?:number;nextReset:string;paidUsed?:boolean;paidRemaining?:number;sharedRemaining?:number};setFreeUsed(d.used);setFreeRemaining(Number(d.remaining??(d.used?0:1)));setFreeNextReset(d.nextReset);setPaidFreeUsed(d.paidUsed??true);setPaidFreeRemaining(Number(d.paidRemaining??0));setFreeSharedRemaining(Number(d.sharedRemaining??0))}
+      if(r.ok){
+        const d=await r.json() as {used:boolean;remaining?:number;nextReset:string;paidUsed?:boolean;
+          paidRemaining?:number;sharedRemaining?:number;canDrawNormal?:boolean;canDrawPaid?:boolean};
+        const canN=d.canDrawNormal??!d.used;
+        const canP=d.canDrawPaid??!d.paidUsed;
+        setFreeUsed(!canN);
+        const base=Number(d.remaining??0);
+        setFreeRemaining(base);setFreeBaseRemaining(base);
+        setFreeNextReset(d.nextReset);
+        setPaidFreeUsed(!canP);
+        const pBase=Number(d.paidRemaining??0);
+        setPaidFreeRemaining(pBase);setPaidFreeBaseRemaining(pBase);
+        setFreeSharedRemaining(Number(d.sharedRemaining??0));
+      }
     }catch{/**/}
   },[])
   useEffect(()=>{loadFreeStatus()},[loadFreeStatus])
+
+  useEffect(()=>{
+    fetch('/api/gacha/prices',{credentials:'include'})
+      .then(r=>r.ok?r.json():null)
+      .then((d:any)=>{if(d){setSinglePrice(Number(d.single)||10000);setElevenPrice(Number(d.eleven)||100000)}})
+      .catch(()=>{})
+  },[])
 
   const loadCommerceStatus = useCallback(async()=>{
     try{
@@ -972,7 +998,7 @@ export function GachaPage() {
 
   async function spinPaid(pullType:'single'|'eleven'){
     if(phase!=='idle'||paidBusy)return
-    const amount=pullType==='eleven'?100000:10000
+    const amount=pullType==='eleven'?elevenPrice:singlePrice
     if(!getPhantomProvider()){
       if(isMobileBrowser()){
         localStorage.setItem('inmu-pet-paid-gacha-intent',pullType)
@@ -1025,6 +1051,36 @@ export function GachaPage() {
   }
 
   /* 笊絶武笊絶武 IDLE SCREEN 笊絶武笊絶武 */
+  {/* ══ 排出率モーダル（通常） ══ */}
+  {showRatesNormal&&(
+    <div style={{position:'fixed',inset:0,zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)'}} onClick={()=>setShowRatesNormal(false)}>
+      <div style={{width:'min(380px,94vw)',maxHeight:'80vh',overflowY:'auto',background:'linear-gradient(145deg,#0a0518,#12082a)',border:'1px solid rgba(218,165,32,.55)',borderRadius:16,padding:20,boxShadow:'0 24px 72px rgba(0,0,0,.7)'}} onClick={e=>e.stopPropagation()}>
+        <h3 style={{margin:'0 0 12px',fontSize:15,fontWeight:900,color:'#ffd700',textAlign:'center'}}>通常ガチャ 排出率</h3>
+        {[['100pt','52.71%'],['300pt','30.00%'],['500pt','5.00%'],['1,000pt','3.00%'],['5,000pt','1.17%'],['10,000 INMU','1.00%'],['高級ごはん','4.49%'],['アイスティー','2.00%'],['ニャルシアン','0.21%'],['拓也','0.21%'],['レオン','0.21%']].map(([n,r])=>(
+          <div key={n} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid rgba(255,255,255,.07)',fontSize:12,color:'rgba(255,255,255,.85)'}}>
+            <span>{n}</span><span style={{color:n.includes('INMU')||n==='ニャルシアン'||n==='拓也'||n==='レオン'?'#ffd700':'rgba(255,255,255,.85)',fontWeight:n.includes('INMU')||n==='ニャルシアン'||n==='拓也'||n==='レオン'?800:400}}>{r}</span>
+          </div>
+        ))}
+        <p style={{margin:'10px 0 0',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※キャラ排出時は50,000pt or アイスティー×3に変換される場合あり</p>
+        <button type='button' onClick={()=>setShowRatesNormal(false)} style={{width:'100%',marginTop:14,padding:'9px',border:'1px solid rgba(218,165,32,.45)',borderRadius:8,background:'rgba(218,165,32,.12)',color:'#e8c65a',fontSize:12,fontWeight:700,cursor:'pointer'}}>閉じる</button>
+      </div>
+    </div>
+  )}
+  {/* ══ 排出率モーダル（有償） ══ */}
+  {showRatesPaid&&(
+    <div style={{position:'fixed',inset:0,zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)'}} onClick={()=>setShowRatesPaid(false)}>
+      <div style={{width:'min(380px,94vw)',maxHeight:'80vh',overflowY:'auto',background:'linear-gradient(145deg,#0a0518,#12082a)',border:'1px solid rgba(218,165,32,.55)',borderRadius:16,padding:20,boxShadow:'0 24px 72px rgba(0,0,0,.7)'}} onClick={e=>e.stopPropagation()}>
+        <h3 style={{margin:'0 0 12px',fontSize:15,fontWeight:900,color:'#ffd700',textAlign:'center'}}>有償ガチャ 排出率</h3>
+        {[['1,000pt','60.00%'],['3,000pt','20.00%'],['5,000pt','7.00%'],['10,000pt','2.00%'],['高級ごはん','4.00%'],['アイスティー','3.40%'],['ニャルシアン','1.20%'],['拓也','1.20%'],['レオン','1.20%']].map(([n,r])=>(
+          <div key={n} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid rgba(255,255,255,.07)',fontSize:12,color:'rgba(255,255,255,.85)'}}>
+            <span>{n}</span><span style={{color:n==='ニャルシアン'||n==='拓也'||n==='レオン'?'#ffd700':'rgba(255,255,255,.85)',fontWeight:n==='ニャルシアン'||n==='拓也'||n==='レオン'?800:400}}>{r}</span>
+          </div>
+        ))}
+        <p style={{margin:'10px 0 0',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※50連以内にキャラ確定。キャラ重複時は50,000pt or アイスティー×3に変換</p>
+        <button type='button' onClick={()=>setShowRatesPaid(false)} style={{width:'100%',marginTop:14,padding:'9px',border:'1px solid rgba(218,165,32,.45)',borderRadius:8,background:'rgba(218,165,32,.12)',color:'#e8c65a',fontSize:12,fontWeight:700,cursor:'pointer'}}>閉じる</button>
+      </div>
+    </div>
+  )}
   if(phase==='idle'&&gachaMode==='paid')return(
     <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
       <style>{CSS}</style>
@@ -1032,30 +1088,31 @@ export function GachaPage() {
         <div style={{display:'flex',flexDirection:'column',minHeight:'100%',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode} disabled={paidBusy}/>
           <div style={{margin:'6px 12px 0'}}><GachaBannerCarousel mode="paid"/></div>
-          <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'18px 18px 8px',textAlign:'center'}}>
-            <div style={{width:'min(430px,100%)',marginTop:14}}>
-              <InmuBalancePanel balance={inmuBalance} loading={inmuBalanceLoading}/>
-            </div>
-            <div style={{marginTop:18,width:'min(430px,100%)',padding:16,borderRadius:8,border:'1px solid rgba(218,165,32,.48)',background:'rgba(8,4,14,.82)',boxShadow:'0 14px 45px rgba(0,0,0,.42)'}}>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#f3d97c'}}><span>50連キャラ確定まで</span><strong>{50-paidPity}回</strong></div>
-              <div style={{height:6,marginTop:8,borderRadius:99,background:'rgba(255,255,255,.08)',overflow:'hidden'}}><div style={{height:'100%',width:`${paidPity/50*100}%`,background:'linear-gradient(90deg,#a855f7,#ffd700)',boxShadow:'0 0 12px #d8a900'}}/></div>
-              <p style={{fontSize:10,color:'rgba(255,255,255,.45)',margin:'9px 0 0'}}>50回以内に対象キャラを獲得するとカウントはリセットされます</p>
-            </div>
-          </div>
           <div style={{padding:'10px 14px'}}>
+            {/* 排出率ボタン */}
+            <button type='button' onClick={()=>setShowRatesPaid(true)} style={{width:'100%',marginBottom:8,padding:'7px 14px',border:'1px solid rgba(218,165,32,.45)',borderRadius:8,background:'rgba(16,10,30,.88)',color:'#e8c65a',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span>排出率を見る</span><span style={{fontSize:16,lineHeight:1}}>›</span>
+            </button>
             {paidStatus&&<p style={{textAlign:'center',fontSize:11,color:'#8ee7ff',margin:'0 0 8px'}}>{paidStatus}</p>}
             <button type="button" disabled={paidFreeUsed||paidFreeLoading||phase!=='idle'} onClick={spinPaidFree} style={{width:'100%',marginBottom:8,padding:'10px 16px',border:`1.5px solid ${paidFreeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:paidFreeUsed||paidFreeLoading?'not-allowed':'pointer',background:paidFreeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:paidFreeUsed?0.6:1,overflow:'hidden',boxShadow:paidFreeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
-                  <p style={{margin:0,fontSize:14,fontWeight:800,color:paidFreeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{paidFreeLoading?'処理中…':paidFreeUsed?'本日の無料有償ガチャは使用済みです':`無料有償ガチャ（残り${paidFreeRemaining}回）`}</p>
+                  <p style={{margin:0,fontSize:14,fontWeight:800,color:paidFreeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{paidFreeLoading?'処理中…': paidFreeUsed?'本日の無料有償ガチャは使用済みです': paidFreeBaseRemaining>0?`無料有償ガチャ（残り1回）${freeSharedRemaining>0?` ／ 拓也ボーナス${freeSharedRemaining}回`:''}`: `拓也ボーナス（残り${freeSharedRemaining}回）`}</p>
                   {!paidFreeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>INMU消費なしで有償ガチャを1回引けます</p>}
                 </div>
                 {!paidFreeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
               </div>
             </button>
+            <div style={{marginBottom:8}}><InmuBalancePanel balance={inmuBalance} loading={inmuBalanceLoading}/></div>
+            <div style={{marginBottom:8,padding:'12px 14px',borderRadius:8,border:'1px solid rgba(218,165,32,.48)',background:'rgba(8,4,14,.82)'}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#f3d97c'}}><span>50連キャラ確定まで</span><strong>{50-paidPity}回</strong></div>
+              <div style={{height:6,marginTop:8,borderRadius:99,background:'rgba(255,255,255,.08)',overflow:'hidden'}}><div style={{height:'100%',width:`${paidPity/50*100}%`,background:'linear-gradient(90deg,#a855f7,#ffd700)',boxShadow:'0 0 12px #d8a900'}}/></div>
+              <p style={{fontSize:10,color:'rgba(255,255,255,.45)',margin:'9px 0 0'}}>50回以内に対象キャラを獲得するとカウントはリセットされます</p>
+            </div>
+            <p style={{margin:'0 0 8px',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※価格は変動する場合があります。最大値は1連{singlePrice.toLocaleString()} INMU / 11連{elevenPrice.toLocaleString()} INMU</p>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <OrnateButton gold enabled={!paidBusy} onClick={()=>spinPaid('single')} label={paidBusy?'処理中…':'1連ガチャ'} price="10,000 INMU"/>
-              <OrnateButton gold={false} enabled={!paidBusy} onClick={()=>spinPaid('eleven')} label={paidBusy?'処理中…':'11連ガチャ'} price="100,000 INMU"/>
+              <OrnateButton gold enabled={!paidBusy} onClick={()=>spinPaid('single')} label={paidBusy?'処理中…':'1連ガチャ'} price={`${singlePrice.toLocaleString()} INMU`}/>
+              <OrnateButton gold={false} enabled={!paidBusy} onClick={()=>spinPaid('eleven')} label={paidBusy?'処理中…':'11連ガチャ'} price={`${elevenPrice.toLocaleString()} INMU`}/>
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,marginTop:12,color:'rgba(255,255,255,.38)',fontSize:9}}><LockKeyhole style={{width:12}}/>送金成功をサーバーで確認後に抽選します</div>
             <div style={{marginTop:10,border:'1px solid rgba(184,134,11,.35)',borderRadius:8,overflow:'hidden'}}>
@@ -1077,10 +1134,14 @@ export function GachaPage() {
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode}/>
           <div style={{margin:'6px 12px 10px'}}><GachaBannerCarousel mode="points"/></div>
           <div style={{flexShrink:0,background:'linear-gradient(to top,rgba(2,1,10,.99) 84%,transparent)',backdropFilter:'blur(16px)',padding:'6px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))'}}>
+            <p style={{margin:'0 0 6px',fontSize:9,color:'rgba(255,255,255,.38)',lineHeight:1.5}}>※レベル報酬で得られる購入申請還元は最大10%までです。（各キャラ所持で上乗せ最大+30%効果あり）</p>
+            <button type='button' onClick={()=>setShowRatesNormal(true)} style={{width:'100%',marginBottom:8,padding:'7px 14px',border:'1px solid rgba(218,165,32,.45)',borderRadius:8,background:'rgba(16,10,30,.88)',color:'#e8c65a',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span>排出率を見る</span><span style={{fontSize:16,lineHeight:1}}>›</span>
+            </button>
             <button type="button" disabled={freeUsed||freeLoading||phase!=='idle'} onClick={spinFree} style={{width:'100%',marginBottom:8,padding:'10px 16px',border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:freeUsed||freeLoading?'not-allowed':'pointer',background:freeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:freeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
-                  <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{freeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${freeRemaining}回）${freeSharedRemaining>0?` ／ 拓也ボーナス${freeSharedRemaining}回`:''}`}</p>
+                  <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{freeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです': freeBaseRemaining>0?`無料ガチャ（残り1回）${freeSharedRemaining>0?` ／ 拓也ボーナス${freeSharedRemaining}回`:''}`: `拓也ボーナス（残り${freeSharedRemaining}回）`}</p>
                   {freeUsed&&freeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(freeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
                   {!freeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで通常ガチャを引けます</p>}
                 </div>

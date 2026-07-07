@@ -3,6 +3,7 @@ import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
 import { ensurePetStateTable, PET_CHARACTER_NAMES } from "../services/pet-state-store";
 import { ensurePetCommerceTables } from "./pet-commerce";
+import { getSkillLockStatus } from "../services/pet-skills";
 
 const router = Router();
 
@@ -52,12 +53,39 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
       VALUES ($1, $2::jsonb, $3)
       ON CONFLICT ("userId") DO UPDATE
         SET state = EXCLUDED.state, "clientUpdatedAt" = EXCLUDED."clientUpdatedAt", "updatedAt" = NOW()
-        WHERE "userPetStates"."clientUpdatedAt" < EXCLUDED."clientUpdatedAt"
     `, [req.userId!, serialized, clientUpdatedAt]);
     res.json({ ok: true });
   } catch (error) {
     console.error("[PetState] save", error);
     res.status(500).json({ error: "INMU PETデータの保存に失敗しました" });
+  }
+});
+
+// ── GET /api/pet/skill-lock-status ──
+// スキル発動中のキャラが本日使用済みかどうかを返す（使用後は0:00まで外せない）
+router.get("/pet/skill-lock-status", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const userId = req.userId!;
+    const { rows } = await pool.query(
+      `SELECT state FROM "userPetStates" WHERE "userId"=$1 LIMIT 1`,
+      [userId],
+    );
+    const state = rows[0]?.state ?? {};
+    const normalize = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/_/g, "-");
+    const skillIds: string[] = Array.isArray(state.skillActiveCharacterIds)
+      ? state.skillActiveCharacterIds.map(normalize)
+      : state.skillActiveCharacterId != null
+        ? [normalize(state.skillActiveCharacterId)]
+        : [];
+    const activeIds: string[] = Array.isArray(state.activePetIds)
+      ? state.activePetIds.map(normalize)
+      : [];
+    const allIds = [...new Set([...skillIds, ...activeIds])];
+    const lockStatus = allIds.length > 0 ? await getSkillLockStatus(userId, allIds) : {};
+    res.json(lockStatus);
+  } catch (error) {
+    console.error("[PetState] skill-lock-status error", error);
+    res.status(500).json({ error: "Internal error" });
   }
 });
 

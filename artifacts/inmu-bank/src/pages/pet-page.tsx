@@ -895,6 +895,7 @@ export function PetPage() {
   const [slotBusy, setSlotBusy] = useState(false)
   const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
+  const [skillLockStatus, setSkillLockStatus] = useState<Record<string, boolean>>({})
   const levelRewardSyncRef = useRef(new Set<string>())
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
 
@@ -944,6 +945,15 @@ export function PetPage() {
   }
 
   useEffect(() => { void loadSlotStatus() }, [])
+
+  const loadSkillLockStatus = async () => {
+    try {
+      const r = await fetch('/api/pet/skill-lock-status', { credentials: 'include' })
+      if (r.ok) setSkillLockStatus(await r.json() as Record<string, boolean>)
+    } catch { /**/ }
+  }
+
+  useEffect(() => { void loadSkillLockStatus() }, [])
 
   const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const motionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1273,6 +1283,11 @@ export function PetPage() {
   }
 
   function handleRemoveRewardEffect(id: PetId) {
+    const normalize = (v: string) => v.trim().toLowerCase().replace(/_/g, '-')
+    if (skillLockStatus[normalize(id)]) {
+      toast.error(`${PET_BY_ID[id].name}の効果は本日すでに使用済みのため、0:00まで外せません`)
+      return
+    }
     setActivePetIds(current => current.filter(currentId => currentId !== id))
     setMessage(`${PET_BY_ID[id].name}のレベル報酬効果を外しました`)
   }
@@ -1284,6 +1299,11 @@ export function PetPage() {
   }
 
   function handleRemoveSkill(id: PetId) {
+    const normalize = (v: string) => v.trim().toLowerCase().replace(/_/g, '-')
+    if (skillLockStatus[normalize(id)]) {
+      toast.error(`${PET_BY_ID[id].name}の固有スキルは本日すでに使用済みのため、0:00まで外せません`)
+      return
+    }
     setSkillActiveCharacterIds(current => current.filter(currentId => currentId !== id))
     setMessage(`${PET_BY_ID[id].name}の固有スキルを外しました`)
   }
