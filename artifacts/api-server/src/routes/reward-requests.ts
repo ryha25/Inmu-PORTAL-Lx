@@ -1,28 +1,17 @@
 import { Router } from "express";
 import { db, pool } from "@workspace/db";
-import { notificationsTable, pointsTable, profileTable, transactionsTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { notificationsTable, transactionsTable } from "@workspace/db/schema";
 import { requireAdmin, requireAuth } from "../middlewares/session";
 import { ensurePetStateTable } from "../services/pet-state-store";
-import { getSystemSettingNumber } from "../services/system-settings-store";
 
 const router = Router();
 
-// amount はデフォルト値。実際の付与額は管理画面の「価格連動 報酬計算機」（settingKey）で上書き可能。
-// 配布キャラ（inmu-festival）は Lv.15、ガチャキャラ（nyarushian/takuya/leon）は Lv.20・Lv.30 で報酬設定が異なる。
-const PET_LEVEL_INMU_REWARDS: Record<string, { characterName: string; level: number; amount: number; settingKey: string }> = {
+const PET_LEVEL_INMU_REWARDS: Record<string, { characterName: string; level: number; amount: number }> = {
   "inmu-festival:15": {
     characterName: "INMUくん（810祭りVer.）",
     level: 15,
     amount: 30_000,
-    settingKey: "reward_level_inmu",
   },
-  "nyarushian:20": { characterName: "ニャルシアン", level: 20, amount: 50_000,  settingKey: "reward_gacha_lv20_inmu" },
-  "nyarushian:30": { characterName: "ニャルシアン", level: 30, amount: 250_000, settingKey: "reward_gacha_lv30_inmu" },
-  "takuya:20":     { characterName: "拓也",          level: 20, amount: 50_000,  settingKey: "reward_gacha_lv20_inmu" },
-  "takuya:30":     { characterName: "拓也",          level: 30, amount: 250_000, settingKey: "reward_gacha_lv30_inmu" },
-  "leon:20":       { characterName: "レオン",         level: 20, amount: 50_000,  settingKey: "reward_gacha_lv20_inmu" },
-  "leon:30":       { characterName: "レオン",         level: 30, amount: 250_000, settingKey: "reward_gacha_lv30_inmu" },
 };
 
 let rewardRequestTablePromise: Promise<void> | null = null;
@@ -133,25 +122,35 @@ router.post("/pet/level-rewards/claim", requireAuth, async (req, res): Promise<v
       res.status(403).json({ error: "このキャラクターを所持していません" });
       return;
     }
-    const { rows } = await pool.query(`
-      INSERT INTO "petLevelRewardClaims" ("userId", "characterId", "rewardLevel", "rewardType", amount)
-      VALUES ($1, $2, 10, 'points', 100000)
-      ON CONFLICT ("userId", "characterId", "rewardLevel", "rewardType") DO NOTHING
-      RETURNING id
-    `, [req.userId!, characterId]);
-    if (rows.length === 0) {
+    const client = await pool.connect();
+    let awarded = false;
+    try {
+      await client.query("BEGIN");
+      const { rows } = await client.query(`
+        INSERT INTO "petLevelRewardClaims" ("userId", "characterId", "rewardLevel", "rewardType", amount)
+        VALUES ($1, $2, 10, 'points', 100000)
+        ON CONFLICT ("userId", "characterId", "rewardLevel", "rewardType") DO NOTHING
+        RETURNING id
+      `, [req.userId!, characterId]);
+      if (rows.length > 0) {
+        const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+        const month = `${jstNow.getUTCFullYear()}-${String(jstNow.getUTCMonth() + 1).padStart(2, "0")}`;
+        await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,'100000','pet_level_reward','INMUくん Lv.10報酬',$2)`, [req.userId!, month]);
+        await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+100000,"updatedAt"=NOW() WHERE "userId"=$1`, [req.userId!]);
+        awarded = true;
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    if (!awarded) {
       res.json({ ok: true, alreadyClaimed: true, points: 100_000 });
       return;
     }
 
-    const now = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    await db.insert(pointsTable).values({
-      userId: req.userId!, amount: "100000", type: "pet_level_reward", source: "INMUくん Lv.10報酬", month,
-    });
-    await db.update(profileTable)
-      .set({ monthlyPoints: sql`${profileTable.monthlyPoints} + 100000`, updatedAt: now })
-      .where(eq(profileTable.userId, req.userId!));
     await db.insert(notificationsTable).values({
       userId: req.userId!, type: "pet_level_reward", title: "INMU PET Lv.10報酬",
       message: "INMUくん（810祭りVer.）のLv.10報酬として100,000ポイントを付与しました。",
@@ -211,14 +210,13 @@ router.post("/pet/reward-requests", requireAuth, async (req, res): Promise<void>
     const sourceKey = `pet:${characterId}:level:${reward.level}`;
     const profile = await pool.query(`SELECT "displayName" FROM profile WHERE "userId" = $1 LIMIT 1`, [req.userId!]);
     const displayName = typeof profile.rows[0]?.displayName === "string" ? profile.rows[0].displayName : null;
-    const inmuAmount = await getSystemSettingNumber(reward.settingKey, reward.amount);
     const { rows } = await pool.query(`
       INSERT INTO "inmuRewardRequests"
         ("userId", "displayName", "rewardType", "sourceKey", "characterId", "characterName", "reachedLevel", "inmuAmount")
       VALUES ($1, $2, 'pet_level', $3, $4, $5, $6, $7)
       ON CONFLICT ("userId", "rewardType", "sourceKey") DO NOTHING
       RETURNING *
-    `, [req.userId!, displayName, sourceKey, characterId, reward.characterName, reward.level, inmuAmount]);
+    `, [req.userId!, displayName, sourceKey, characterId, reward.characterName, reward.level, reward.amount]);
 
     if (rows.length === 0) {
       res.status(409).json({ error: "このレベル報酬は既に申請済みです" });

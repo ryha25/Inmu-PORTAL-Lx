@@ -47,10 +47,9 @@ type PurchaseRequestsData = {
   dailyRemaining: number
   isEventMode: boolean
   effectiveLimit: number
-  baseRebateRate: number
-  petRebateBonuses: { source: 'level_reward' | 'skill'; label: string; rate: number; eventOnly: boolean }[]
-  petRebateBonusRate: number
-  totalRebateRate: number
+  remainingDays: number
+  periodStart: string
+  periodEnd: string
 }
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -118,10 +117,7 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
   const [dailyRemaining,   setDailyRemaining]   = useState<number>(300000)
   const [isEventMode,      setIsEventMode]      = useState<boolean>(false)
   const [effectiveLimit,   setEffectiveLimit]   = useState<number>(300000)
-  const [baseRebateRate,     setBaseRebateRate]     = useState<number>(0)
-  const [petRebateBonuses,   setPetRebateBonuses]   = useState<{ source: 'level_reward' | 'skill'; label: string; rate: number; eventOnly: boolean }[]>([])
-  const [petRebateBonusRate, setPetRebateBonusRate] = useState<number>(0)
-  const [totalRebateRate,    setTotalRebateRate]    = useState<number>(0)
+  const [remainingDays,    setRemainingDays]    = useState<number>(0)
   const [prAmount,  setPrAmount]  = useState('')
   const [prTxHash,  setPrTxHash]  = useState('')
   const [prComment, setPrComment] = useState('')
@@ -142,10 +138,7 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
           setDailyRemaining(d.dailyRemaining ?? 300000)
           setIsEventMode(d.isEventMode ?? false)
           setEffectiveLimit(d.effectiveLimit ?? 0)
-          setBaseRebateRate(d.baseRebateRate ?? 0)
-          setPetRebateBonuses(d.petRebateBonuses ?? [])
-          setPetRebateBonusRate(d.petRebateBonusRate ?? 0)
-          setTotalRebateRate(d.totalRebateRate ?? 0)
+          setRemainingDays(d.remainingDays ?? 0)
         }
       })
       .catch(() => {})
@@ -207,6 +200,7 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
             <div className="flex flex-col gap-1 rounded-lg bg-secondary/30 p-3">
               {/* 今月の購入枚数ブロック */}
               <p className="text-[10px] font-semibold text-muted-foreground mb-1">今月の購入枚数</p>
+              <p className="mb-2 text-[10px] text-primary/80">申請期間: 16日開始・15日締め（残り{remainingDays}日）</p>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
                   <p className="text-[10px] text-muted-foreground">購入済み枚数（反映分）</p>
@@ -249,29 +243,6 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
               <p className="text-[10px] text-muted-foreground mt-0.5">
                 ＝ 本日残り（{dailyRemaining.toLocaleString()}）と今月の申請可能残り（{available.toLocaleString()}）の少ない方
               </p>
-            </div>
-
-            <div className="rounded-lg bg-secondary/30 p-3 flex flex-col gap-1.5">
-              <p className="text-[10px] font-semibold text-muted-foreground">現在適用中の還元率</p>
-              <p className="font-mono text-lg font-bold text-green-500">{totalRebateRate.toFixed(1)}%</p>
-              <div className="flex flex-col gap-0.5 text-[10px] text-muted-foreground">
-                <div className="flex items-center justify-between">
-                  <span>{isEventMode ? 'イベント基本還元率' : '通常基本還元率'}</span>
-                  <span className="font-mono">{baseRebateRate.toFixed(1)}%</span>
-                </div>
-                {petRebateBonuses.map((bonus, idx) => (
-                  <div key={`${bonus.label}-${idx}`} className="flex items-center justify-between">
-                    <span>{bonus.label}</span>
-                    <span className="font-mono text-primary">+{bonus.rate.toFixed(1)}%</span>
-                  </div>
-                ))}
-                {petRebateBonusRate > 0 && (
-                  <div className="flex items-center justify-between font-semibold">
-                    <span>PET還元ボーナス合計</span>
-                    <span className="font-mono text-primary">+{petRebateBonusRate.toFixed(1)}%</span>
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="flex flex-col gap-1.5">

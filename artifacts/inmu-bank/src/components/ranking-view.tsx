@@ -143,7 +143,7 @@ export function RankingView({
         ))}
       </TabsContent>
 
-      {/* ── ポイントランキング ── */}
+      {/* ── 累計獲得ポイントランキング ── */}
       <TabsContent value="points" className="flex flex-col gap-3">
         {/* あなたの順位 */}
         {myPointsRank != null && (
@@ -151,7 +151,7 @@ export function RankingView({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Star className="size-4 text-primary" />
-                <p className="text-sm font-semibold">ポイントランキング順位</p>
+                <p className="text-sm font-semibold">累計獲得ポイント順位</p>
               </div>
               <p className="font-mono font-bold text-lg text-primary">
                 {myPointsRank}

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { profileTable, transactionsTable, missionParticipationsTable } from "@workspace/db/schema";
 import { sql, eq } from "drizzle-orm";
 import { requireAuthOrAdmin } from "../middlewares/session";
@@ -104,14 +104,18 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   }
 });
 
-// ── ポイントランキング ──
+// ── 累計獲得ポイントランキング（使用済みポイントを含む） ──
 router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
-    const rows = await db
-      .select()
-      .from(profileTable)
-      .orderBy(sql`${profileTable.monthlyPoints} DESC`)
-      .limit(100);
+    const { rows } = await pool.query(`
+      SELECT p."userId", p."displayName", p."participationCount",
+             COALESCE(SUM(CASE WHEN CAST(pt.amount AS numeric) > 0 THEN CAST(pt.amount AS numeric) ELSE 0 END), 0) AS "totalEarnedPoints"
+      FROM profile p
+      LEFT JOIN points pt ON pt."userId" = p."userId"
+      GROUP BY p."userId", p."displayName", p."participationCount"
+      ORDER BY "totalEarnedPoints" DESC
+      LIMIT 100
+    `);
 
     res.set("Cache-Control", "no-store");
     res.json(
@@ -119,8 +123,8 @@ router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<voi
         rank: i + 1,
         userId: p.userId,
         displayName: p.displayName,
-        points: Number(p.monthlyPoints),
-        participations: p.participationCount,
+        points: Number(p.totalEarnedPoints ?? 0),
+        participations: Number(p.participationCount ?? 0),
       })),
     );
   } catch {
