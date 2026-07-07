@@ -666,64 +666,122 @@ function CharacterRoster({ candidates, selectedPetId, petStats, onSelect, vertic
   )
 }
 
-function TrainingCharacterSelector({
-  candidates,
-  selectedPetId,
-  activePetIds,
-  petStats,
-  onSelect,
-}: {
-  candidates: readonly PetDefinition[]
-  selectedPetId: PetId
-  activePetIds: readonly PetId[]
-  petStats: Record<PetId, PetStats>
-  onSelect: (id: PetId) => void
-}) {
-  const skillCount = Math.min(3, activePetIds.length)
-  const rewardEffectCount = Math.min(3, activePetIds.filter(id => {
-    const definition = PET_BY_ID[id]
-    const stats = petStats[id]
-    return Boolean(definition && stats && definition.levelRewards.some(reward => stats.level >= reward.level))
-  }).length)
-
+function CharacterSelectStrip({ pets, selectedPetId, onSelect }: { pets: PetDefinition[]; selectedPetId: PetId; onSelect: (id: PetId) => void }) {
   return (
-    <section className="rounded-lg border border-fuchsia-300/20 bg-[#12091c]/90 p-3">
-      <h2 className="mb-3 text-xs font-bold tracking-[0.08em] text-fuchsia-100">育成キャラクター選択</h2>
-      <div className="flex snap-x gap-2 overflow-x-auto pb-2 scrollbar-none">
-        {candidates.map(candidate => {
-          const selected = candidate.id === selectedPetId
-          return (
-            <button
-              key={candidate.id}
-              type="button"
-              aria-label={`${candidate.name}を選択`}
-              aria-pressed={selected}
-              onClick={() => onSelect(candidate.id)}
-              className={cn(
-                'flex size-20 shrink-0 snap-start items-end justify-center overflow-hidden rounded-lg border bg-[#0a0710] p-1 transition-colors',
-                selected
-                  ? 'border-fuchsia-400 shadow-[0_0_16px_rgba(217,70,239,.35)]'
-                  : 'border-violet-300/15 hover:border-violet-300/35',
-              )}
-            >
-              {candidate.roomTheme === 'festival'
-                ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
-                : <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain" />}
-            </button>
+    <section className="rounded-lg border border-violet-300/20 bg-[#0d0916] p-2.5">
+      <p className="mb-2 text-[10px] font-semibold tracking-[0.12em] text-violet-200">育成キャラクター選択</p>
+      <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none">
+        {pets.map(candidate => (
+          <button key={candidate.id} type="button" onClick={() => onSelect(candidate.id)} className={cn(
+            'flex size-16 shrink-0 items-end justify-center overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_50%_65%,rgba(168,85,247,.18),transparent_67%)] transition-colors',
+            candidate.id === selectedPetId ? 'border-fuchsia-300/70 shadow-[0_0_0_2px_rgba(232,121,249,.25)]' : 'border-violet-300/15',
+          )}>
+            {candidate.roomTheme === 'festival'
+              ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
+              : <img src={candidate.image} alt={candidate.name} className="max-h-full max-w-full object-contain" />}
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function CharacterSlotGrid({
+  title,
+  tone,
+  activeIds,
+  availableIds,
+  onAdd,
+  onRemove,
+}: {
+  title: string
+  tone: 'cyan' | 'fuchsia'
+  activeIds: readonly PetId[]
+  availableIds: readonly PetId[]
+  onAdd: (id: PetId) => void
+  onRemove: (id: PetId) => void
+}) {
+  const [choosing, setChoosing] = useState(false)
+  const border = tone === 'cyan' ? 'border-cyan-300/30' : 'border-fuchsia-300/30'
+  const text = tone === 'cyan' ? 'text-cyan-200' : 'text-fuchsia-200'
+  return (
+    <div>
+      <p className="mb-2 text-[10px] text-muted-foreground">最大3体まで設定できます。</p>
+      <div className="grid grid-cols-3 gap-2">
+        {[0, 1, 2].map(index => {
+          const id = activeIds[index]
+          const candidate = id ? PET_BY_ID[id] : null
+          return candidate ? (
+            <div key={id} className={cn('overflow-hidden rounded-lg border bg-black/25', border)}>
+              <div className="flex aspect-square items-end justify-center overflow-hidden p-1">
+                {candidate.roomTheme === 'festival'
+                  ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
+                  : <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain" />}
+              </div>
+              <div className="border-t border-white/5 p-1.5">
+                <p className="truncate text-[10px] font-bold">{candidate.name}</p>
+                <button type="button" onClick={() => onRemove(id)} className="mt-1 w-full rounded border border-rose-300/30 bg-rose-500/10 py-1 text-[9px] text-rose-100">外す</button>
+              </div>
+            </div>
+          ) : (
+            <button key={`empty-${index}`} type="button" onClick={() => setChoosing(true)} className={cn('flex aspect-square items-center justify-center rounded-lg border border-dashed bg-black/20 text-2xl font-black', border, text)}>+</button>
           )
         })}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-lg border border-cyan-300/25 bg-cyan-300/5 px-3 py-3">
-          <p className="text-xs font-bold text-cyan-100">固有スキル発動</p>
-          <p className="mt-1 font-mono text-sm font-black text-cyan-300">{skillCount} / 3</p>
+      {choosing && (
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <p className="mb-2 text-xs font-bold">{title}キャラクターを選択</p>
+          <div className="grid grid-cols-4 gap-2">
+            {availableIds.filter(id => !activeIds.includes(id)).map(id => {
+              const candidate = PET_BY_ID[id]
+              return (
+                <button key={id} type="button" onClick={() => { onAdd(id); setChoosing(false) }} className="flex aspect-square items-end justify-center overflow-hidden rounded-lg border border-violet-300/20 bg-black/25 p-1">
+                  {candidate.roomTheme === 'festival'
+                    ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
+                    : <img src={candidate.image} alt={candidate.name} className="max-h-full max-w-full object-contain" />}
+                </button>
+              )
+            })}
+          </div>
+          <button type="button" onClick={() => setChoosing(false)} className="mt-3 w-full rounded border border-white/15 py-2 text-xs">閉じる</button>
         </div>
-        <div className="rounded-lg border border-fuchsia-300/25 bg-fuchsia-300/5 px-3 py-3">
-          <p className="text-xs font-bold text-fuchsia-100">レベル報酬効果発動</p>
-          <p className="mt-1 font-mono text-sm font-black text-fuchsia-300">{rewardEffectCount} / 3</p>
-        </div>
-      </div>
-    </section>
+      )}
+    </div>
+  )
+}
+
+function ActivationButton({
+  kind,
+  activeIds,
+  ownedIds,
+  onAdd,
+  onRemove,
+}: {
+  kind: 'skill' | 'reward'
+  activeIds: readonly PetId[]
+  ownedIds: readonly PetId[]
+  onAdd: (id: PetId) => void
+  onRemove: (id: PetId) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const skill = kind === 'skill'
+  const title = skill ? '固有スキル発動' : 'レベル報酬効果発動'
+  return (
+    <>
+      <Button type="button" variant="outline" onClick={() => setOpen(true)} className={cn(
+        'h-16 w-full flex-col gap-0.5 rounded-md px-1',
+        skill ? 'border-cyan-300/30 bg-cyan-300/5 text-cyan-100' : 'border-fuchsia-300/30 bg-fuchsia-300/5 text-fuchsia-100',
+      )}>
+        <span className="flex items-center gap-1.5">{skill ? <Sparkles className="size-4" /> : <Gift className="size-4" />}<span className="text-xs font-bold">{title}</span></span>
+        <span className="font-mono text-[10px]">{activeIds.length} / 3</span>
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+          <CharacterSlotGrid title={title} tone={skill ? 'cyan' : 'fuchsia'} activeIds={activeIds} availableIds={ownedIds} onAdd={onAdd} onRemove={onRemove} />
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -822,7 +880,7 @@ function TrainingSlotsV2({ activePets, unlockedSlots }: { activePets: PetDefinit
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, selectPet, setActivePetIds, care, setExpression, useSleepTea, maxLevel, isHydrated, syncError } = usePetState()
+  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, selectPet, setActivePetIds, care, setExpression, useSleepTea, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
@@ -898,7 +956,7 @@ export function PetPage() {
   const walkingRef = useRef(false)
   const interactionRef = useRef(false)
   const sleepingRef = useRef(false)
-  const displayedPetId = activePetIds.includes(selectedPetId) ? selectedPetId : (activePetIds[0] ?? 'inmu-festival')
+  const displayedPetId = (ownedPetIds ?? []).includes(selectedPetId) ? selectedPetId : ((ownedPetIds ?? [])[0] ?? 'inmu-festival')
   const pet = PET_BY_ID[displayedPetId] ?? PET_BY_ID['inmu-festival']
   const selectedStats = petStats[displayedPetId] ?? petStats['inmu-festival'] ?? {
     level: 1,
@@ -908,6 +966,7 @@ export function PetPage() {
     affection: 10,
   }
   const activePets = activePetIds.map(id => PET_BY_ID[id]).filter(Boolean)
+  const ownedPets = (ownedPetIds ?? []).map(id => PET_BY_ID[id]).filter(Boolean)
   const hasOwnedPet = (ownedPetIds?.length ?? 0) > 0
 
   useEffect(() => {
@@ -974,8 +1033,8 @@ export function PetPage() {
   }, [])
 
   useEffect(() => {
-    if (activePetIds.length > 0 && !activePetIds.includes(selectedPetId)) selectPet(activePetIds[0])
-  }, [activePetIds, selectedPetId])
+    if ((ownedPetIds?.length ?? 0) > 0 && !ownedPetIds?.includes(selectedPetId)) selectPet(ownedPetIds![0])
+  }, [ownedPetIds, selectedPetId])
 
   useEffect(() => {
     let cancelled = false
@@ -1207,6 +1266,28 @@ export function PetPage() {
     setMessage(`${PET_BY_ID[id].name}を育成にセットしました`)
   }
 
+  function handleAddRewardEffect(id: PetId) {
+    if (!ownedPetIds?.includes(id) || activePetIds.includes(id) || activePetIds.length >= unlockedSlots) return
+    setActivePetIds(current => [...current, id])
+    setMessage(`${PET_BY_ID[id].name}のレベル報酬効果を発動しました`)
+  }
+
+  function handleRemoveRewardEffect(id: PetId) {
+    setActivePetIds(current => current.filter(currentId => currentId !== id))
+    setMessage(`${PET_BY_ID[id].name}のレベル報酬効果を外しました`)
+  }
+
+  function handleAddSkill(id: PetId) {
+    if (!ownedPetIds?.includes(id) || skillActiveCharacterIds.includes(id) || skillActiveCharacterIds.length >= 3) return
+    setSkillActiveCharacterIds(current => [...current, id])
+    setMessage(`${PET_BY_ID[id].name}の固有スキルを発動しました`)
+  }
+
+  function handleRemoveSkill(id: PetId) {
+    setSkillActiveCharacterIds(current => current.filter(currentId => currentId !== id))
+    setMessage(`${PET_BY_ID[id].name}の固有スキルを外しました`)
+  }
+
   async function unlockNextSlot() {
     if (slotBusy || unlockedSlots >= 3) return
     const price = unlockedSlots === 1 ? 1_000_000 : 2_000_000
@@ -1299,12 +1380,9 @@ export function PetPage() {
             <SlotUnlockPanel unlockedSlots={unlockedSlots} busy={slotBusy} onUnlock={unlockNextSlot} />
           </div>
         ) : (
-          <div className="grid gap-3 lg:grid-cols-[140px_minmax(360px,1fr)_260px] lg:items-start lg:gap-4">
-            <aside className="hidden lg:block"><CharacterRoster candidates={activePets} selectedPetId={displayedPetId} petStats={petStats} onSelect={handleSelect} vertical /></aside>
-
+          <div className="flex flex-col gap-3">
             <main className="flex min-w-0 flex-col gap-3">
-              <div className="lg:hidden"><CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} /></div>
-              <div className="lg:hidden"><CharacterRoster candidates={activePets} selectedPetId={displayedPetId} petStats={petStats} onSelect={handleSelect} /></div>
+              <CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} />
               <PetRoom
                 petId={pet.id}
                 name={pet.name}
@@ -1324,24 +1402,15 @@ export function PetPage() {
                 onAction={openCareMenu}
                 onPet={handlePet}
               />
-              <div className="lg:hidden"><SkillPanel pet={pet} /></div>
-              <div className="lg:hidden"><ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} /></div>
-              <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} /></div>
-              <TrainingCharacterSelector
-                candidates={ownedPetIds.map(id => PET_BY_ID[id]).filter(Boolean)}
-                selectedPetId={displayedPetId}
-                activePetIds={activePetIds}
-                petStats={petStats}
-                onSelect={handleSetActive}
-              />
-            </main>
-
-            <aside className="hidden flex-col gap-3 lg:flex">
-              <CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} />
+              <CharacterSelectStrip pets={ownedPets} selectedPetId={displayedPetId} onSelect={handleSelect} />
+              <div className="grid grid-cols-2 gap-2">
+                <ActivationButton kind="skill" activeIds={skillActiveCharacterIds} ownedIds={ownedPetIds ?? []} onAdd={handleAddSkill} onRemove={handleRemoveSkill} />
+                <ActivationButton kind="reward" activeIds={activePetIds} ownedIds={ownedPetIds ?? []} onAdd={handleAddRewardEffect} onRemove={handleRemoveRewardEffect} />
+              </div>
               <SkillPanel pet={pet} />
               <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} />
               <RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} />
-            </aside>
+            </main>
           </div>
         )}
       </div>

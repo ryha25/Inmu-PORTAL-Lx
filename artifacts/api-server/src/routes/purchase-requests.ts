@@ -48,12 +48,15 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
       const state = stateByUser.get(userId) as Record<string, any> | undefined;
       const owned = ownedByUser.get(userId) ?? new Set<string>();
       const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.slice(0, 3).map(String) : [];
+      const skillActiveCharacterIds = Array.isArray(state?.skillActiveCharacterIds)
+        ? state.skillActiveCharacterIds.slice(0, 3).map(String)
+        : [];
       const bonuses = PET_PURCHASE_BONUS_RULES.filter(rule => {
         // Event-only skills must not count as used or active outside the configured event window.
         if (rule.source === "skill" && rule.eventOnly && !isEventDay) return false;
         if (!owned.has(rule.characterId)) return false;
         const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
-        return level >= rule.minLevel && (rule.source !== "skill" || activePetIds.includes(rule.characterId));
+        return level >= rule.minLevel && (rule.source !== "skill" || skillActiveCharacterIds.includes(rule.characterId));
       }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
       result.set(userId, bonuses);
     });

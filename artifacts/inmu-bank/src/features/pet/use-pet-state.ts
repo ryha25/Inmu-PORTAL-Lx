@@ -80,6 +80,7 @@ type PetSaveData = {
   premiumFood: PremiumFoodSave
   items: PetItemState
   skillState: Record<PetId, boolean>
+  skillActiveCharacterIds: PetId[]
 }
 
 type LegacySaveData = Partial<PetSaveData> & {
@@ -164,6 +165,7 @@ function createDefaultSave(): PetSaveData {
     premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
     items: { sleepTea: 0 },
     skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, true])) as Record<PetId, boolean>,
+    skillActiveCharacterIds: [],
   }
 }
 
@@ -206,6 +208,15 @@ function loadSave(source?: unknown): PetSaveData {
       premiumFood: sanitizePremiumFood(parsed.premiumFood),
       items: { sleepTea: Math.max(0, Math.floor(readNumber(parsed.items?.sleepTea, 0))) },
       skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, parsed.skillState?.[pet.id] !== false])) as Record<PetId, boolean>,
+      skillActiveCharacterIds: (() => {
+        const legacySingle = (parsed as LegacySaveData & { skillActiveCharacterId?: unknown }).skillActiveCharacterId
+        const values = Array.isArray(parsed.skillActiveCharacterIds)
+          ? parsed.skillActiveCharacterIds
+          : legacySingle != null ? [legacySingle] : []
+        return values
+          .filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id as PetId]) && list.indexOf(id) === index)
+          .slice(0, 3)
+      })(),
     }
   } catch {
     return fallback
@@ -375,6 +386,18 @@ export function usePetState() {
     })
   }
 
+  function setSkillActiveCharacterIds(nextIds: PetId[] | ((current: PetId[]) => PetId[])) {
+    setSave(current => {
+      const ids = typeof nextIds === 'function' ? nextIds(current.skillActiveCharacterIds) : nextIds
+      return {
+        ...current,
+        skillActiveCharacterIds: ids
+          .filter((id, index, list) => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index)
+          .slice(0, 3),
+      }
+    })
+  }
+
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
     const petId = save.selectedPetId
     const config = PET_CARE_CONFIG[action]
@@ -534,6 +557,8 @@ export function usePetState() {
     isHydrated,
     syncError,
     skillState: effectiveSave.skillState,
+    skillActiveCharacterIds: effectiveSave.skillActiveCharacterIds,
+    setSkillActiveCharacterIds,
   }
 }
 
