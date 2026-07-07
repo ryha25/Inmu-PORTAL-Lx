@@ -14,6 +14,7 @@ import {
   sendInmuWithPhantom,
 } from '@/lib/admin-inmu-transfer'
 import { PET_BY_ID, type PetId } from '@/features/pet/pet-data'
+import { useI18n } from '@/lib/i18n/context'
 
 import machineImg  from '@assets/generated_images/gacha-machine-v2.png'
 import mascotImg   from '@assets/generated_images/mascot-v2-nobg.png'
@@ -681,20 +682,23 @@ function BalancePanel({ label, value, loading, suffix }:{ label:string; value:nu
 }
 
 function PointsPanel({ pts, loading }:{pts:number;loading:boolean}) {
-  return <BalancePanel label="保有ポイント" value={pts} loading={loading} suffix="pt" />
+  const { locale } = useI18n()
+  return <BalancePanel label={locale === 'ja' ? '保有ポイント' : 'Points Balance'} value={pts} loading={loading} suffix="pt" />
 }
 
 function InmuBalancePanel({ balance, loading }:{balance:number|null;loading:boolean}) {
-  return <BalancePanel label="保有INMU" value={balance} loading={loading} suffix="INMU" />
+  const { locale } = useI18n()
+  return <BalancePanel label={locale === 'ja' ? '保有INMU' : 'INMU Balance'} value={balance} loading={loading} suffix="INMU" />
 }
 
 /* Main GachaPage */
 function GachaModeTabs({ mode, onChange, disabled=false }: { mode:'points'|'paid'; onChange:(mode:'points'|'paid')=>void; disabled?:boolean }) {
+  const { locale } = useI18n()
   return (
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,padding:4,margin:'6px auto 2px',width:'min(360px,92%)',border:'1px solid rgba(218,165,32,.35)',borderRadius:8,background:'rgba(3,2,10,.78)'}}>
       {(['points','paid'] as const).map(value => (
         <button key={value} type="button" disabled={disabled} onClick={()=>onChange(value)} style={{height:38,border:0,borderRadius:6,fontWeight:800,fontSize:12,cursor:disabled?'not-allowed':'pointer',color:mode===value?'#160c00':'rgba(255,255,255,.55)',background:mode===value?'linear-gradient(135deg,#ffe277,#d59a00)':'transparent',boxShadow:mode===value?'0 0 18px rgba(255,190,30,.36)':'none'}}>
-          {value==='points'?'通常ガチャ':'有償ガチャ'}
+          {value==='points'?(locale === 'ja' ? '通常ガチャ' : 'Standard'):(locale === 'ja' ? '有償ガチャ' : 'Premium')}
         </button>
       ))}
     </div>
@@ -732,9 +736,6 @@ function GachaBannerCarousel({ mode }:{mode:'points'|'paid'}) {
         {banners.map((src,index)=><div key={src} style={{position:'relative',minWidth:'100%',scrollSnapAlign:'center'}}>
           <img src={src} alt={`${mode==='points'?'通常':'有償'}ガチャ バナー ${index+1}`} draggable={false} style={{display:'block',width:'100%',height:'auto',aspectRatio:'1280 / 850',objectFit:'contain'}}/>
         </div>)}
-      </div>
-      <div className="ga-floatslow" style={{position:'absolute',left:'1.5%',bottom:'2%',zIndex:5,pointerEvents:'none'}}>
-        <img src={mascotImg} alt="INMUくん" style={{width:'clamp(92px,25vw,138px)',height:'auto',objectFit:'contain',filter:'drop-shadow(0 10px 20px rgba(0,0,0,.9)) drop-shadow(0 0 16px rgba(218,165,32,.4))'}}/>
       </div>
       <button type="button" aria-label="前のバナー" onClick={()=>goTo(active-1)} style={{position:'absolute',left:6,top:'50%',transform:'translateY(-50%)',width:32,height:42,borderRadius:6,border:'1px solid rgba(255,215,100,.42)',background:'rgba(0,0,0,.62)',color:'#ffe58a',fontSize:22,zIndex:7}}>‹</button>
       <button type="button" aria-label="次のバナー" onClick={()=>goTo(active+1)} style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',width:32,height:42,borderRadius:6,border:'1px solid rgba(255,215,100,.42)',background:'rgba(0,0,0,.62)',color:'#ffe58a',fontSize:22,zIndex:7}}>›</button>
@@ -1746,7 +1747,7 @@ export function GachaPage() {
                       </p>
                       {(prize.type==='character'||prize.type==='premium_food'||prize.type==='sleep_tea')
                         ? <div style={{display:'flex',justifyContent:'center'}}><PrizeResultIcon prize={prize} size={82}/></div>
-                        : <img src={mascotImg} style={{width:52,height:'auto',objectFit:'contain',filter:'drop-shadow(0 4px 10px rgba(0,0,0,.7))',animation:'ga-bounce 1.1s ease-in-out infinite'}}/>}
+                        : null}
                     </div>
                   </div>
                 )
@@ -1816,11 +1817,6 @@ export function GachaPage() {
                   合計 +{result.totalPoints.toLocaleString()} pt 獲得！
                 </p>
               )}
-              <div style={{position:'absolute',right:8,bottom:4,zIndex:3,pointerEvents:'none'}}>
-                <img src={mascotImg} style={{width:54,height:'auto',objectFit:'contain',
-                  filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))',
-                  animation:'ga-bounce 1s ease-in-out infinite'}}/>
-              </div>
             </div>
           )}
 

@@ -15,7 +15,7 @@ import {
   CheckSquare, Square, Send, Star, Coins,
   WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2, Lock,
   TrendingUp, TrendingDown, RefreshCw, Settings, ShoppingCart,
-  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical, CupSoda,
+  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical,
 } from 'lucide-react'
 import type { UserRow } from '@/pages/admin-page'
 import { Connection, PublicKey, Transaction } from '@solana/web3.js'
@@ -25,7 +25,6 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
-import { confirmSignaturePolling } from '@/lib/solana-confirm'
 
 interface PhantomProvider {
   isPhantom: boolean
@@ -210,10 +209,8 @@ const PR_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 }
 
 const SYSTEM_SETTING_PRESETS: Record<string, string[]> = {
-  normal_daily_purchase_limit: ['100000', '200000', '300000', '500000'],
+  normal_daily_purchase_limit: ['100000'],
   event_daily_purchase_limit:  ['200000', '300000', '500000', '1000000'],
-  normal_rebate_rate: ['0', '3', '5', '10'],
-  event_rebate_rate:  ['0', '5', '10', '15'],
 }
 
 const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
@@ -221,16 +218,6 @@ const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
   event_start_date:   'date',
   event_end_date:     'date',
 }
-
-const REWARD_CALC_KEYS: Array<{ key: string; label: string }> = [
-  { key: 'reward_level_inmu',      label: '配布キャラ Lv.15 報酬INMU' },
-  { key: 'reward_gacha_lv20_inmu', label: 'ガチャキャラ Lv.20 報酬INMU' },
-  { key: 'reward_gacha_lv30_inmu', label: 'ガチャキャラ Lv.30 報酬INMU' },
-  { key: 'gacha_paid_single_inmu', label: 'ガチャ関連INMU価格（有償単発）' },
-  { key: 'gacha_paid_eleven_inmu', label: 'ガチャ関連INMU価格（有償11連）' },
-  { key: 'slot_unlock_2_inmu',     label: 'スロット解放INMU価格（2枠目）' },
-  { key: 'slot_unlock_3_inmu',     label: 'スロット解放INMU価格（3枠目）' },
-]
 
 type GachaResultRow = {
   id: number              // gachaInmuWins.id（当選個別ID）
@@ -271,7 +258,7 @@ function formatSettingDisplay(key: string, value: string): string {
   if (SYSTEM_SETTING_TYPE[key] === 'boolean') return value === 'true' ? '✅ 有効' : '❌ 無効'
   if (SYSTEM_SETTING_TYPE[key] === 'date') return value || '未設定'
   const n = Number(value)
-  if (!isNaN(n)) return `${n.toLocaleString()}${key.includes('limit') ? ' INMU' : key.includes('rebate_rate') ? '%' : ''}`
+  if (!isNaN(n)) return `${n.toLocaleString()}${key.includes('limit') ? ' INMU' : ''}`
   return value || '—'
 }
 
@@ -543,13 +530,11 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [notifMsg, setNotifMsg] = useState('')
   const [pointsAmount, setPointsAmount] = useState('')
   const [deductPointsAmount, setDeductPointsAmount] = useState('')
-  const [sleepTeaAmount, setSleepTeaAmount] = useState('')
 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
   const [airdropAllMemo, setAirdropAllMemo] = useState('')
   const [pointsAllAmount, setPointsAllAmount] = useState('')
   const [pointsAllReason, setPointsAllReason] = useState('')
-  const [sleepTeaAllAmount, setSleepTeaAllAmount] = useState('')
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -699,7 +684,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         createTransferInstruction(fromATA, toATA, adminPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID),
       )
       tx.feePayer = adminPubkey
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+      const { blockhash } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: toastId })
@@ -710,14 +695,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
       toast.dismiss(toastId)
 
-      // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
-      // 記録してしまうのを防ぐ）
-      toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
-      const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
-      toast.dismiss(toastId)
-      if (confirmation.err) {
-        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
-      }
 
       await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
 
@@ -801,7 +778,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         )
       }
       tx.feePayer = adminPubkey
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+      const { blockhash } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading(`Phantom で署名してください（${sendable.length}件 まとめて送金）…`, { id: toastId })
@@ -812,70 +789,35 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
       toast.dismiss(toastId)
 
-      // オンチェーンでの確定を待つ（未確定のうちに DB 反映してしまうと、失敗TXでも
-      // 送金済みとして記録してしまうため）
-      toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
-      const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
-      toast.dismiss(toastId)
 
-      if (confirmation.err) {
-        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
-      }
-
-      // TX は1つの atomic 命令セット（全員成功 or 全員失敗）なので、DB側も
-      // 1件の一括APIで全件をまとめて記録する（個別APIをループすると一部だけ
-      // 記録漏れが起きるため、DB側は1トランザクションで整合させる）
+      // 全件を mark-sent（同一 txHash で各 ID を個別に記録）
       const sentAt = new Date().toISOString()
-      const wallets: Record<string, string> = {}
+      let successCount = 0
+      const successfulIds = new Set<number>()
       for (const row of sendable) {
-        wallets[String(row.id)] = row.profileSolWallet ?? row.solWallet!
-      }
-
-      let lastErr: unknown = null
-      let recorded = false
-      for (let attempt = 0; attempt < 5 && !recorded; attempt++) {
+        const wallet = row.profileSolWallet ?? row.solWallet!
         try {
-          if (attempt > 0) {
-            toast.loading(`DBへの記録を再試行しています…（${attempt + 1}回目）`, { id: toastId })
-            await new Promise(r => setTimeout(r, 1500 * attempt))
-          }
-          await api('/admin/gacha/results/mark-sent-bulk', 'PUT', {
-            ids: sendable.map(r => r.id),
-            txHash: signature,
-            wallets,
-          })
-          recorded = true
-        } catch (err) {
-          lastErr = err
+          await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
+          setGachaResults(p => p.map(r => r.id === row.id
+            ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallet, inmuSentAt: sentAt }
+            : r
+          ))
+          successCount++
+          successfulIds.add(row.id)
+        } catch {
+          // API 失敗は個別に failed 扱い（TX は成功しているので DB だけ再試行可能）
+          setGachaResults(p => p.map(r => r.id === row.id
+            ? { ...r, inmuSentStatus: 'failed', failureReason: 'DB記録失敗（TX成功）' }
+            : r
+          ))
         }
       }
-      toast.dismiss(toastId)
-
-      if (!recorded) {
-        // TX はオンチェーンで確定済み（資金は送られている）が、DB記録だけ失敗。
-        // 再試行できるよう pending には戻さず failed にし、手動での再記録を促す。
-        const msg = lastErr instanceof Error ? lastErr.message : '不明なエラー'
-        for (const row of sendable) {
-          await api(`/admin/gacha/results/${row.id}/mark-failed`, 'PUT', { failureReason: `TX成功済みだがDB記録失敗: ${msg}` }).catch(() => {})
-        }
-        setGachaResults(p => p.map(r =>
-          sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'failed', failureReason: 'TX成功済みだがDB記録失敗' } : r
-        ))
-        toast.error(`送金はオンチェーンで完了しましたが、DBへの記録に失敗しました。txHash: ${signature.slice(0, 16)}… を確認し「再試行」してください。`, { duration: 15000 })
-        return
-      }
-
-      const successfulIds = new Set(sendable.map(r => r.id))
-      setGachaResults(p => p.map(r => successfulIds.has(r.id)
-        ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallets[String(r.id)], inmuSentAt: sentAt }
-        : r
-      ))
       setGachaSelectedIds(previous => {
         const remaining = new Set(previous)
         successfulIds.forEach(id => remaining.delete(id))
         return remaining
       })
-      toast.success(`✅ 一括送金完了！ ${sendable.length}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
+      toast.success(`✅ 一括送金完了！ ${successCount}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
 
     } catch (e: unknown) {
       toast.dismiss(toastId)
@@ -916,20 +858,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [editingSettingKey, setEditingSettingKey] = useState<string | null>(null)
   const [settingEditValue, setSettingEditValue] = useState('')
   const [settingSaving, setSettingSaving] = useState(false)
-  const [calcInmuPrice, setCalcInmuPrice] = useState<number | null>(null)
-  const [calcPriceLoading, setCalcPriceLoading] = useState(false)
-  const [calcTargetUsd, setCalcTargetUsd] = useState('20')
-  const [calcEditValues, setCalcEditValues] = useState<Record<string, string>>({})
-  const [calcSaving, setCalcSaving] = useState(false)
-
-  useEffect(() => {
-    const map: Record<string, string> = {}
-    for (const { key } of REWARD_CALC_KEYS) {
-      const s = systemSettings.find(x => x.key === key)
-      if (s) map[key] = s.value
-    }
-    if (Object.keys(map).length) setCalcEditValues(map)
-  }, [systemSettings])
 
   const [emergencySearch, setEmergencySearch] = useState('')
   const [emergencyUserId, setEmergencyUserId] = useState<string | null>(null)
@@ -1058,7 +986,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         const tx = new Transaction()
         tx.add(...instrs)
         tx.feePayer = fromPubkey
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+        const { blockhash } = await connection.getLatestBlockhash('processed')
         tx.recentBlockhash = blockhash
 
         toast.loading(`Phantom で署名してください${chunkLabel}…`, { id: 'ph-airdrop-sign' })
@@ -1069,14 +997,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
         toast.dismiss('ph-airdrop-send')
 
-        // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
-        // 記録してしまうのを防ぐ）
-        toast.loading(`オンチェーンでの確定を待っています${chunkLabel}…`, { id: 'ph-airdrop-confirm' })
-        const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
-        toast.dismiss('ph-airdrop-confirm')
-        if (confirmation.err) {
-          throw new Error(`トランザクションがオンチェーンで失敗しました${chunkLabel}: ${JSON.stringify(confirmation.err)}`)
-        }
 
         await api('/admin/record-airdrop-batch', 'POST', {
           users: chunk.map(u => ({ userId: u.userId, wallet: u.solWallet })),
@@ -1260,7 +1180,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           const tx = new Transaction()
           tx.add(...instrs)
           tx.feePayer = fromPubkey
-          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+          const { blockhash } = await connection.getLatestBlockhash('processed')
           tx.recentBlockhash = blockhash
 
           toast.loading('Phantom で署名してください…', { id: 'ph-sign' })
@@ -1270,20 +1190,11 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           toast.loading('Solana へ送信中…', { id: 'ph-send' })
           const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
           toast.dismiss('ph-send')
-
-          // オンチェーンでの確定を待ってから成功として記録する（未確定・失敗TXを
-          // 送金済みとして記録してしまうのを防ぐ）
-          toast.loading('オンチェーンでの確定を待っています…', { id: 'ph-confirm' })
-          const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
-          toast.dismiss('ph-confirm')
-          if (confirmation.err) {
-            throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
-          }
           rebateTxSignature = signature
 
           toast.success(`オンチェーン送金完了: ${numRebate.toLocaleString()} INMU → ${pr.displayName ?? pr.userId}`)
         } catch (e: unknown) {
-          toast.dismiss('ph-admin'); toast.dismiss('ph-sign'); toast.dismiss('ph-send'); toast.dismiss('ph-confirm')
+          toast.dismiss('ph-admin'); toast.dismiss('ph-sign'); toast.dismiss('ph-send')
           const msg = e instanceof Error ? e.message : '不明なエラー'
           if (msg !== 'User rejected the request.') toast.error(`Phantom 送金失敗: ${msg}`)
           setPrSaving(false)
@@ -1330,32 +1241,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     finally { setSettingSaving(false) }
   }
 
-  async function loadRewardCalc() {
-    setCalcPriceLoading(true)
-    try {
-      const price = await api('/solana/inmu-price', 'GET') as { usdPrice?: number }
-      setCalcInmuPrice(typeof price.usdPrice === 'number' ? price.usdPrice : 0)
-    } catch { setCalcInmuPrice(0) }
-    finally { setCalcPriceLoading(false) }
-    await loadSystemSettings()
-  }
-
-  async function saveRewardCalc() {
-    setCalcSaving(true)
-    try {
-      for (const { key } of REWARD_CALC_KEYS) {
-        const val = calcEditValues[key]
-        const current = systemSettings.find(s => s.key === key)?.value
-        if (val !== undefined && val !== '' && val !== current) {
-          await api(`/admin/system-settings/${key}`, 'PUT', { value: val })
-        }
-      }
-      toast.success('報酬設定を保存しました')
-      await loadSystemSettings()
-    } catch (e) { toast.error(e instanceof Error ? e.message : t('error')) }
-    finally { setCalcSaving(false) }
-  }
-
 
   return (
     <div className="flex flex-col gap-4">
@@ -1393,9 +1278,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           </TabsTrigger>
           <TabsTrigger value="settings" className="text-xs py-1.5" onClick={loadSystemSettings}>
             <Settings className="size-3 mr-1" />設定
-          </TabsTrigger>
-          <TabsTrigger value="reward-calc" className="text-xs py-1.5" onClick={loadRewardCalc}>
-            <Coins className="size-3 mr-1" />報酬計算機
           </TabsTrigger>
         </TabsList>
 
@@ -1560,36 +1442,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 className="min-h-10"
               />
             </div>
-
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <CupSoda className="size-3" /> 全員アイスティー配布
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="配布個数"
-                  value={sleepTeaAllAmount}
-                  onChange={e => setSleepTeaAllAmount(e.target.value)}
-                  className="min-h-10 flex-1"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => withConfirm('全員アイスティー配布', () => withLoading(async () => {
-                    const d = await api('/admin/grant-sleep-tea-all', 'POST', {
-                      amount: Number(sleepTeaAllAmount),
-                      reason: 'アイスティー配布',
-                    }) as { count: number }
-                    toast.success(`${d.count}名にアイスティー配布完了`)
-                    setSleepTeaAllAmount('')
-                  }))}
-                  disabled={loading || !sleepTeaAllAmount}
-                  className="min-h-10"
-                >
-                  配布
-                </Button>
-              </div>
-            </div>
           </div>
 
           {/* 選択ユーザー操作 */}
@@ -1682,37 +1534,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     className="min-h-10"
                   >
                     減算
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <CupSoda className="size-3" /> アイスティー付与（選択ユーザー）
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="付与個数"
-                    value={sleepTeaAmount}
-                    onChange={e => setSleepTeaAmount(e.target.value)}
-                    className="min-h-10 flex-1"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() => withConfirm('アイスティー付与', () => withLoading(async () => {
-                      await api('/admin/grant-sleep-tea', 'POST', {
-                        targetUserIds: selectedIds,
-                        amount: Number(sleepTeaAmount),
-                        reason: bulkReason || 'アイスティー付与',
-                      })
-                      toast.success(`${selectedIds.length}名にアイスティー付与完了`)
-                      setSleepTeaAmount('')
-                    }))}
-                    disabled={loading || !sleepTeaAmount}
-                    className="min-h-10"
-                  >
-                    付与
                   </Button>
                 </div>
               </div>
@@ -2237,83 +2058,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
               })}
             </div>
           )}
-        </TabsContent>
-
-        {/* ── 価格連動 報酬計算機 tab ── */}
-        <TabsContent value="reward-calc" className="flex flex-col gap-3 mt-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold flex items-center gap-2">
-              <Coins className="size-4 text-primary" />価格連動 報酬計算機
-            </p>
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={loadRewardCalc} disabled={calcPriceLoading || settingsLoading}>
-              <RefreshCw className={`size-3 mr-1 ${(calcPriceLoading || settingsLoading) ? 'animate-spin' : ''}`} />更新
-            </Button>
-          </div>
-
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-            <p className="text-[11px] text-muted-foreground">
-              ※この計算機は購入申請還元率・購入上限の計算とは別機能です。INMU価格の変動に合わせて、各種報酬・価格をUSD相当額で調整するためのものです。
-            </p>
-          </div>
-
-          <Card className="border-border bg-card p-3 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">現在価格</p>
-              <p className="font-mono font-bold text-sm text-primary">
-                {calcPriceLoading ? '取得中…' : calcInmuPrice != null ? `${calcInmuPrice} USD` : '—'}
-              </p>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">目標USD</Label>
-              <Input
-                type="number"
-                value={calcTargetUsd}
-                onChange={e => setCalcTargetUsd(e.target.value)}
-                placeholder="20"
-                className="min-h-9"
-              />
-            </div>
-            <div className="rounded-md bg-secondary/30 p-3 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{calcTargetUsd || 0}USD相当</span>
-              <span className="font-mono font-bold text-sm text-primary">
-                {calcInmuPrice && calcInmuPrice > 0 && Number(calcTargetUsd) > 0
-                  ? `${Math.round(Number(calcTargetUsd) / calcInmuPrice).toLocaleString()} INMU`
-                  : '—'}
-              </span>
-            </div>
-          </Card>
-
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold text-muted-foreground pt-1">報酬設定への反映</p>
-            {settingsLoading ? (
-              <p className="text-sm text-center text-muted-foreground py-6">読み込み中…</p>
-            ) : (
-              REWARD_CALC_KEYS.map(({ key, label }) => {
-                const val = calcEditValues[key] ?? ''
-                const n = Number(val)
-                const usd = calcInmuPrice && calcInmuPrice > 0 && val !== '' && !isNaN(n) ? n * calcInmuPrice : null
-                return (
-                  <Card key={key} className="border-border bg-card p-3 flex flex-col gap-1.5">
-                    <p className="text-xs font-medium">{label}</p>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={val}
-                        onChange={e => setCalcEditValues(prev => ({ ...prev, [key]: e.target.value }))}
-                        className="min-h-9 flex-1"
-                      />
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                        {usd != null ? `≈ ${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD` : ''}
-                      </span>
-                    </div>
-                  </Card>
-                )
-              })
-            )}
-            <Button className="min-h-9" disabled={calcSaving || settingsLoading} onClick={saveRewardCalc}>
-              {calcSaving ? '保存中…' : 'まとめて保存'}
-            </Button>
-          </div>
         </TabsContent>
 
         {/* ── 売買履歴 tab ── */}

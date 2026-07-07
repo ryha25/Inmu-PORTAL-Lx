@@ -126,8 +126,11 @@ async function getEventSettings(): Promise<{
 
 // ── 1日の申請上限を取得（通常 or イベント） ──
 async function getDailyLimit(isEventDay: boolean): Promise<number> {
-  const key = isEventDay ? "event_daily_purchase_limit" : "normal_daily_purchase_limit";
-  const defaultVal = isEventDay ? 500000 : 300000;
+  // Normal applications are always based on 100,000 INMU per remaining day.
+  // Event limits remain configurable independently.
+  if (!isEventDay) return 100_000;
+  const key = "event_daily_purchase_limit";
+  const defaultVal = 500000;
   try {
     const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, key));
     return s ? Number(s.value) : defaultVal;

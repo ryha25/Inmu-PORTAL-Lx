@@ -92,7 +92,6 @@ export function ProfileView({
           displayName,
           xId: xId || null,
           discordId: discordId || null,
-          solWallet,
           showBalance,
         }),
       })
@@ -375,8 +374,8 @@ export function ProfileView({
         </p>
       </Card>
 
-      {/* ── SOLアドレス & Phantom ── */}
-      <Card className="border-border bg-card p-4">
+      {/* Wallet registration is managed outside the profile screen. */}
+      {false && <Card className="border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <WalletCards className="size-4 text-primary" />
@@ -499,7 +498,7 @@ export function ProfileView({
             )}
           </div>
         )}
-      </Card>
+      </Card>}
 
       {/* ── パスワード変更 ── */}
       <Card className="border-border bg-card p-4 flex flex-col gap-3">

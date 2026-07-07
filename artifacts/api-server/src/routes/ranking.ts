@@ -109,10 +109,15 @@ router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<voi
   try {
     const { rows } = await pool.query(`
       SELECT p."userId", p."displayName", p."participationCount",
-             COALESCE(SUM(CASE WHEN CAST(pt.amount AS numeric) > 0 THEN CAST(pt.amount AS numeric) ELSE 0 END), 0) AS "totalEarnedPoints"
+             GREATEST(
+               CAST(COALESCE(p."monthlyPoints", 0) AS numeric),
+               COALESCE(SUM(CASE WHEN CAST(pt.amount AS numeric) > 0 THEN CAST(pt.amount AS numeric) ELSE 0 END), 0),
+               CAST(COALESCE(p."monthlyPoints", 0) AS numeric)
+                 - COALESCE(SUM(CASE WHEN CAST(pt.amount AS numeric) < 0 THEN CAST(pt.amount AS numeric) ELSE 0 END), 0)
+             ) AS "totalEarnedPoints"
       FROM profile p
       LEFT JOIN points pt ON pt."userId" = p."userId"
-      GROUP BY p."userId", p."displayName", p."participationCount"
+      GROUP BY p."userId", p."displayName", p."participationCount", p."monthlyPoints"
       ORDER BY "totalEarnedPoints" DESC
       LIMIT 100
     `);
