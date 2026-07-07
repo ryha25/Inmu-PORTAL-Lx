@@ -146,6 +146,8 @@ router.get("/gacha/free-status", requireAuth, async (req, res): Promise<void> =>
       sharedRemaining: state.sharedRemaining,
       sharedBonus: state.sharedBonus,
       nextReset,
+      paidUsed: !state.canDrawPaid,
+      paidRemaining: state.paidRemaining,
     });
   } catch (e) {
     console.error("[Gacha] free-status error:", e);

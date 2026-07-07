@@ -25,6 +25,7 @@ function localizeDom(root: ParentNode, locale: Locale) {
 
   const translateValue = (value: string) => {
     const trimmed = value.trim()
+    if (!trimmed) return value
     const translated = translations.get(trimmed)
     return translated ? value.replace(trimmed, translated) : value
   }
