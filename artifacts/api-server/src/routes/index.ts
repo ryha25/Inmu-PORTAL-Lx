@@ -26,8 +26,13 @@ import gachaRouter from "./gacha";
 import rewardRequestsRouter from "./reward-requests";
 import petStateRouter from "./pet-state";
 import petCommerceRouter from "./pet-commerce";
+import { ensureLifetimePointsTracking } from "../services/lifetime-points";
 
 const router: IRouter = Router();
+
+void ensureLifetimePointsTracking().catch(error => {
+  console.error("[LifetimePoints] setup failed", error);
+});
 
 router.use(healthRouter);
 router.use("/auth", authRouter);

@@ -500,6 +500,38 @@ export function ProfileView({
         )}
       </Card>}
 
+      <Card className="border-border bg-card p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <WalletCards className="size-4 text-primary" />
+          <h3 className="text-sm font-semibold">SOLアドレス登録</h3>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={solWallet}
+            onChange={event => setSolWallet(event.target.value)}
+            placeholder="SOLウォレットアドレス"
+            className="min-h-10 flex-1 font-mono text-xs"
+          />
+          <Button
+            size="sm"
+            disabled={loading || !solWallet.trim()}
+            className="min-h-10 shrink-0"
+            onClick={async () => {
+              try {
+                await saveWallet(solWallet.trim())
+                toast.success('SOLアドレスを保存しました')
+                onRefresh()
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : t('error'))
+              }
+            }}
+          >
+            {t('save')}
+          </Button>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">{t('wallet_private')}</p>
+      </Card>
+
       {/* ── パスワード変更 ── */}
       <Card className="border-border bg-card p-4 flex flex-col gap-3">
         <p className="text-sm font-semibold flex items-center gap-2">

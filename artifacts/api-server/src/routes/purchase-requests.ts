@@ -53,8 +53,7 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
         if (rule.source === "skill" && rule.eventOnly && !isEventDay) return false;
         if (!owned.has(rule.characterId)) return false;
         const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
-        const skillEnabled = state?.skillState?.[rule.characterId] !== false;
-        return level >= rule.minLevel && (rule.source !== "skill" || (skillEnabled && activePetIds.includes(rule.characterId)));
+        return level >= rule.minLevel && (rule.source !== "skill" || activePetIds.includes(rule.characterId));
       }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
       result.set(userId, bonuses);
     });
@@ -73,10 +72,12 @@ function getApplicationCycle(now: Date): { start: Date; end: Date; remainingDays
   const startJst = Date.UTC(year, isAfterStart ? month : month - 1, 16);
   const endJst = Date.UTC(year, isAfterStart ? month + 1 : month, 16);
   const end = new Date(endJst - 9 * 60 * 60 * 1000);
+  const currentJstDate = Date.UTC(year, month, jstNow.getUTCDate());
+  const remainingDays = Math.max(0, Math.round((endJst - currentJstDate) / 86_400_000) - 1);
   return {
     start: new Date(startJst - 9 * 60 * 60 * 1000),
     end,
-    remainingDays: Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86_400_000)),
+    remainingDays,
   };
 }
 
@@ -250,7 +251,9 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const monthlyCapacity = dailyLimit * cycle.remainingDays;
 
     const effectiveTotalBought = Math.min(monthlyBought, monthlyCapacity);
-    const available = Math.max(0, monthlyCapacity - monthlyApplied);
+    // During the 16th-start migration, past purchases/applications must not
+    // reduce the capacity calculated only from the days still remaining.
+    const available = monthlyCapacity;
     const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
     const effectiveLimit = Math.min(dailyRemaining, available);
 
@@ -303,7 +306,7 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
     const monthlyCapacity = dailyLimit * cycle.remainingDays;
 
     const effectiveTotalBought = Math.min(monthlyBought, monthlyCapacity);
-    const available = Math.max(0, monthlyCapacity - monthlyApplied);
+    const available = monthlyCapacity;
     const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
 
     // ① 1日の申請上限チェック

@@ -3,6 +3,7 @@ import { db, pool } from "@workspace/db";
 import { profileTable, transactionsTable, missionParticipationsTable } from "@workspace/db/schema";
 import { sql, eq } from "drizzle-orm";
 import { requireAuthOrAdmin } from "../middlewares/session";
+import { ensureLifetimePointsTracking } from "../services/lifetime-points";
 
 const router = Router();
 
@@ -107,17 +108,11 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
 // ── 累計獲得ポイントランキング（使用済みポイントを含む） ──
 router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
+    await ensureLifetimePointsTracking();
     const { rows } = await pool.query(`
       SELECT p."userId", p."displayName", p."participationCount",
-             GREATEST(
-               CAST(COALESCE(p."monthlyPoints", 0) AS numeric),
-               COALESCE(SUM(CASE WHEN CAST(pt.amount AS numeric) > 0 THEN CAST(pt.amount AS numeric) ELSE 0 END), 0),
-               CAST(COALESCE(p."monthlyPoints", 0) AS numeric)
-                 - COALESCE(SUM(CASE WHEN CAST(pt.amount AS numeric) < 0 THEN CAST(pt.amount AS numeric) ELSE 0 END), 0)
-             ) AS "totalEarnedPoints"
+             p."lifetimeEarnedPoints" AS "totalEarnedPoints"
       FROM profile p
-      LEFT JOIN points pt ON pt."userId" = p."userId"
-      GROUP BY p."userId", p."displayName", p."participationCount", p."monthlyPoints"
       ORDER BY "totalEarnedPoints" DESC
       LIMIT 100
     `);
