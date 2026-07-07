@@ -17,8 +17,34 @@ import { AdminLoginPage } from "@/pages/admin-login-page";
 import { AdminProfilePage } from "@/pages/admin-profile-page";
 import { AdminRankingPage } from "@/pages/admin-ranking-page";
 import { DevLoginPage } from "@/pages/dev-login-page";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 
 const queryClient = new QueryClient();
+
+class PetPageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[INMU PET] page error", error, info);
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+        <h1 className="text-xl font-bold">INMU PETを読み込めませんでした</h1>
+        <p className="text-sm text-muted-foreground">一時的な読み込みエラーです。ユーザーデータは変更されていません。</p>
+        <button className="min-h-11 rounded-md bg-primary px-5 font-semibold text-primary-foreground" onClick={() => window.location.reload()}>
+          再読み込み
+        </button>
+      </div>
+    );
+  }
+}
 
 function Router() {
   return (
@@ -37,7 +63,9 @@ function Router() {
       <Route path="/profile" component={ProfilePage} />
       <Route path="/points" component={PointsPage} />
       <Route path="/gacha" component={GachaPage} />
-      <Route path="/pet" component={PetPage} />
+      <Route path="/pet">
+        <PetPageBoundary><PetPage /></PetPageBoundary>
+      </Route>
       <Route path="/inmu1919" component={AdminPage} />
       <Route path="/inmu1919/profile" component={AdminProfilePage} />
       <Route path="/inmu1919/ranking" component={AdminRankingPage} />
