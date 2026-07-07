@@ -46,6 +46,7 @@ type PurchaseRequestsData = {
   dailyUsed: number
   dailyRemaining: number
   isEventMode: boolean
+  hasLeonSkill?: boolean
   effectiveLimit: number
   remainingDays: number
   periodStart: string
@@ -56,6 +57,16 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   pending:  { label: '審査中',   color: 'text-yellow-500' },
   approved: { label: '承認済み', color: 'text-green-500' },
   rejected: { label: '却下',     color: 'text-destructive' },
+}
+
+function getRemainingApplicationDaysJst(now = new Date()): number {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const year = jst.getUTCFullYear()
+  const month = jst.getUTCMonth()
+  const day = jst.getUTCDate()
+  const end = Date.UTC(year, day < 16 ? month : month + 1, 16)
+  const today = Date.UTC(year, month, day)
+  return Math.max(0, Math.round((end - today) / 86_400_000) - 1)
 }
 
 function TradeList({ rows, loading, emptyMsg }: { rows: TradeRow[]; loading: boolean; emptyMsg: string }) {
@@ -128,17 +139,23 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
       .then(r => r.ok ? r.json() : null)
       .then((d: PurchaseRequestsData | null) => {
         if (d) {
+          const normalizedRemainingDays = getRemainingApplicationDaysJst()
+          const normalizedDailyLimit = d.isEventMode
+            ? (d.dailyLimit ?? 0)
+            : 100_000 + (d.hasLeonSkill ? 100_000 : 0)
+          const normalizedCapacity = normalizedDailyLimit * normalizedRemainingDays
+          const normalizedDailyRemaining = Math.max(0, normalizedDailyLimit - (d.dailyUsed ?? 0))
           setPurchaseRequests(d.requests ?? [])
-          setTotalBought(d.totalBought ?? 0)
-          setMonthlyCapacity(d.monthlyCapacity ?? 0)
+          setTotalBought(Math.min(d.totalBought ?? 0, normalizedCapacity))
+          setMonthlyCapacity(normalizedCapacity)
           setTotalApplied(d.totalApplied ?? 0)
-          setAvailable(d.available ?? 0)
-          setDailyLimit(d.dailyLimit ?? 300000)
+          setAvailable(normalizedCapacity)
+          setDailyLimit(normalizedDailyLimit)
           setDailyUsed(d.dailyUsed ?? 0)
-          setDailyRemaining(d.dailyRemaining ?? 300000)
+          setDailyRemaining(normalizedDailyRemaining)
           setIsEventMode(d.isEventMode ?? false)
-          setEffectiveLimit(d.effectiveLimit ?? 0)
-          setRemainingDays(d.remainingDays ?? 0)
+          setEffectiveLimit(Math.min(normalizedDailyRemaining, normalizedCapacity))
+          setRemainingDays(normalizedRemainingDays)
         }
       })
       .catch(() => {})

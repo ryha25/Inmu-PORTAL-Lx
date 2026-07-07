@@ -30,6 +30,23 @@ export function ensureLifetimePointsTracking(): Promise<void> {
       UPDATE profile
       SET "lifetimeEarnedPoints" = GREATEST("lifetimeEarnedPoints", COALESCE("monthlyPoints", 0))
     `);
+    const historyTable = await pool.query(`SELECT to_regclass('"gachaResults"') AS name`);
+    if (historyTable.rows[0]?.name) {
+      await pool.query(`
+        UPDATE profile p
+        SET "lifetimeEarnedPoints" = GREATEST(
+          p."lifetimeEarnedPoints",
+          COALESCE(p."monthlyPoints", 0) + COALESCE(history.spent_points, 0)
+        )
+        FROM (
+          SELECT "userId", SUM(GREATEST(COALESCE("costPoints", 0), 0))::numeric AS spent_points
+          FROM "gachaResults"
+          WHERE COALESCE("isFree", false) = false
+          GROUP BY "userId"
+        ) history
+        WHERE history."userId" = p."userId"
+      `);
+    }
     await pool.query(`
       CREATE OR REPLACE FUNCTION track_lifetime_earned_points()
       RETURNS trigger AS $$

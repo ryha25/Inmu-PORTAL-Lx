@@ -666,6 +666,67 @@ function CharacterRoster({ candidates, selectedPetId, petStats, onSelect, vertic
   )
 }
 
+function TrainingCharacterSelector({
+  candidates,
+  selectedPetId,
+  activePetIds,
+  petStats,
+  onSelect,
+}: {
+  candidates: readonly PetDefinition[]
+  selectedPetId: PetId
+  activePetIds: readonly PetId[]
+  petStats: Record<PetId, PetStats>
+  onSelect: (id: PetId) => void
+}) {
+  const skillCount = Math.min(3, activePetIds.length)
+  const rewardEffectCount = Math.min(3, activePetIds.filter(id => {
+    const definition = PET_BY_ID[id]
+    const stats = petStats[id]
+    return Boolean(definition && stats && definition.levelRewards.some(reward => stats.level >= reward.level))
+  }).length)
+
+  return (
+    <section className="rounded-lg border border-fuchsia-300/20 bg-[#12091c]/90 p-3">
+      <h2 className="mb-3 text-xs font-bold tracking-[0.08em] text-fuchsia-100">育成キャラクター選択</h2>
+      <div className="flex snap-x gap-2 overflow-x-auto pb-2 scrollbar-none">
+        {candidates.map(candidate => {
+          const selected = candidate.id === selectedPetId
+          return (
+            <button
+              key={candidate.id}
+              type="button"
+              aria-label={`${candidate.name}を選択`}
+              aria-pressed={selected}
+              onClick={() => onSelect(candidate.id)}
+              className={cn(
+                'flex size-20 shrink-0 snap-start items-end justify-center overflow-hidden rounded-lg border bg-[#0a0710] p-1 transition-colors',
+                selected
+                  ? 'border-fuchsia-400 shadow-[0_0_16px_rgba(217,70,239,.35)]'
+                  : 'border-violet-300/15 hover:border-violet-300/35',
+              )}
+            >
+              {candidate.roomTheme === 'festival'
+                ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
+                : <img src={candidate.image} alt="" className="max-h-full max-w-full object-contain" />}
+            </button>
+          )
+        })}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-lg border border-cyan-300/25 bg-cyan-300/5 px-3 py-3">
+          <p className="text-xs font-bold text-cyan-100">固有スキル発動</p>
+          <p className="mt-1 font-mono text-sm font-black text-cyan-300">{skillCount} / 3</p>
+        </div>
+        <div className="rounded-lg border border-fuchsia-300/25 bg-fuchsia-300/5 px-3 py-3">
+          <p className="text-xs font-bold text-fuchsia-100">レベル報酬効果発動</p>
+          <p className="mt-1 font-mono text-sm font-black text-fuchsia-300">{rewardEffectCount} / 3</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function OwnedCharacters({ ownedPetIds, activePetIds, onSet }: { ownedPetIds: readonly PetId[]; activePetIds: readonly PetId[]; onSet: (id: PetId) => void }) {
   const owned = ownedPetIds.map(id => PET_BY_ID[id]).filter(candidate => candidate && !activePetIds.includes(candidate.id))
   return (
@@ -1266,9 +1327,13 @@ export function PetPage() {
               <div className="lg:hidden"><SkillPanel pet={pet} /></div>
               <div className="lg:hidden"><ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} /></div>
               <div className="lg:hidden"><RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} /></div>
-              <TrainingSlotsV2 activePets={activePets} unlockedSlots={unlockedSlots} />
-              <SlotUnlockPanel unlockedSlots={unlockedSlots} busy={slotBusy} onUnlock={unlockNextSlot} />
-              <OwnedCharacters ownedPetIds={ownedPetIds} activePetIds={activePetIds} onSet={handleSetActive} />
+              <TrainingCharacterSelector
+                candidates={ownedPetIds.map(id => PET_BY_ID[id]).filter(Boolean)}
+                selectedPetId={displayedPetId}
+                activePetIds={activePetIds}
+                petStats={petStats}
+                onSelect={handleSetActive}
+              />
             </main>
 
             <aside className="hidden flex-col gap-3 lg:flex">

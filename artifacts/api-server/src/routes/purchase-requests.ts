@@ -242,12 +242,14 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
         .limit(50),
     ]);
 
-    const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed] = await Promise.all([
+    const [monthlyBought, monthlyApplied, baseDailyLimit, dailyUsed, hasLeonSkill] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
       getMonthlyApplied(userId, monthStart, monthEnd),
-      getUserDailyLimit(userId, eventSettings.isEventDay),
+      getDailyLimit(eventSettings.isEventDay),
       getDailyUsed(userId),
+      hasActivePetSkill(userId, "leon"),
     ]);
+    const dailyLimit = baseDailyLimit + (hasLeonSkill ? 100_000 : 0);
     const monthlyCapacity = dailyLimit * cycle.remainingDays;
 
     const effectiveTotalBought = Math.min(monthlyBought, monthlyCapacity);
@@ -271,6 +273,7 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
       dailyUsed,
       dailyRemaining,
       isEventMode: eventSettings.isEventDay,
+      hasLeonSkill,
       effectiveLimit,
     });
   } catch {
