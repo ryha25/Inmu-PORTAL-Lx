@@ -692,6 +692,8 @@ function CharacterSlotGrid({
   activeIds,
   availableIds,
   lockStatus,
+  unlockedSlots,
+  slotPrices,
   onAdd,
   onRemove,
 }: {
@@ -700,6 +702,8 @@ function CharacterSlotGrid({
   activeIds: readonly PetId[]
   availableIds: readonly PetId[]
   lockStatus?: Record<string, boolean>
+  unlockedSlots?: number
+  slotPrices?: { slot2: number; slot3: number }
   onAdd: (id: PetId) => void
   onRemove: (id: PetId) => void
 }) {
@@ -727,6 +731,12 @@ function CharacterSlotGrid({
                   ? <button type="button" disabled className="mt-1 w-full rounded border border-amber-300/30 bg-amber-500/10 py-1 text-[9px] text-amber-300 opacity-70 cursor-not-allowed">ロック中</button>
                   : <button type="button" onClick={() => onRemove(id)} className="mt-1 w-full rounded border border-rose-300/30 bg-rose-500/10 py-1 text-[9px] text-rose-100">外す</button>}
               </div>
+            </div>
+          ) : (index + 1 > (unlockedSlots ?? 3)) ? (
+            <div key={`locked-${index}`} className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-black/20">
+              <LockKeyhole className="size-4 text-white/35" />
+              <p className="text-[9px] text-white/40">未解放</p>
+              {slotPrices && <p className="text-[8px] text-amber-300/60">{(index === 1 ? slotPrices.slot2 : slotPrices.slot3).toLocaleString()} INMU</p>}
             </div>
           ) : (
             <button key={`empty-${index}`} type="button" onClick={() => setChoosing(true)} className={cn('flex aspect-square items-center justify-center rounded-lg border border-dashed bg-black/20 text-2xl font-black', border, text)}>+</button>
@@ -760,6 +770,8 @@ function ActivationButton({
   activeIds,
   ownedIds,
   lockStatus,
+  unlockedSlots,
+  slotPrices,
   onAdd,
   onRemove,
   onOpen,
@@ -768,6 +780,8 @@ function ActivationButton({
   activeIds: readonly PetId[]
   ownedIds: readonly PetId[]
   lockStatus?: Record<string, boolean>
+  unlockedSlots?: number
+  slotPrices?: { slot2: number; slot3: number }
   onAdd: (id: PetId) => void
   onRemove: (id: PetId) => void
   onOpen?: () => void
@@ -791,8 +805,9 @@ function ActivationButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+          {!skill && <p className="text-xs text-muted-foreground mb-3">枠を解放してキャラクターをセットすると、レベル報酬効果（購入申請還元など）が発動します。</p>}
           {skill && <p className="text-[10px] text-amber-300/80 bg-amber-300/5 border border-amber-300/20 rounded px-2 py-1.5">スキル効果を本日中に使用すると「外す」がロックされます（毎日0:00にリセット）</p>}
-          <CharacterSlotGrid title={title} tone={skill ? 'cyan' : 'fuchsia'} activeIds={activeIds} availableIds={ownedIds} lockStatus={skill ? lockStatus : undefined} onAdd={onAdd} onRemove={onRemove} />
+          <CharacterSlotGrid title={title} tone={skill ? 'cyan' : 'fuchsia'} activeIds={activeIds} availableIds={ownedIds} lockStatus={skill ? lockStatus : undefined} unlockedSlots={skill ? undefined : unlockedSlots} slotPrices={skill ? undefined : slotPrices} onAdd={onAdd} onRemove={onRemove} />
         </DialogContent>
       </Dialog>
     </>
@@ -1449,7 +1464,7 @@ export function PetPage() {
               <CharacterSelectStrip pets={ownedPets} selectedPetId={displayedPetId} onSelect={handleSelect} />
               <div className="grid grid-cols-2 gap-2">
                 <ActivationButton kind="skill" activeIds={skillActiveCharacterIds} ownedIds={ownedPetIds ?? []} lockStatus={skillLockStatus} onAdd={handleAddSkill} onRemove={handleRemoveSkill} onOpen={loadSkillLockStatus} />
-                <ActivationButton kind="reward" activeIds={activePetIds} ownedIds={ownedPetIds ?? []} onAdd={handleAddRewardEffect} onRemove={handleRemoveRewardEffect} />
+                <ActivationButton kind="reward" activeIds={activePetIds} ownedIds={ownedPetIds ?? []} unlockedSlots={unlockedSlots} slotPrices={slotPrices} onAdd={handleAddRewardEffect} onRemove={handleRemoveRewardEffect} />
               </div>
               <SkillPanel pet={pet} />
               <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} />

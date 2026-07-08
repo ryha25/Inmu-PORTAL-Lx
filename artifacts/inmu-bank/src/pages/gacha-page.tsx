@@ -1051,35 +1051,6 @@ export function GachaPage() {
   }
 
   /* 笊絶武笊絶武 IDLE SCREEN 笊絶武笊絶武 */
-  {/* ══ 排出率モーダル（統合タブ式） ══ */}
-  {showRates&&(
-    <div style={{position:'fixed',inset:0,zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)'}} onClick={()=>setShowRates(false)}>
-      <div style={{width:'min(380px,94vw)',maxHeight:'80vh',overflowY:'auto',background:'linear-gradient(145deg,#0a0518,#12082a)',border:'1px solid rgba(218,165,32,.55)',borderRadius:16,padding:20,boxShadow:'0 24px 72px rgba(0,0,0,.7)',position:'relative'}} onClick={e=>e.stopPropagation()}>
-        <button type='button' onClick={()=>setShowRates(false)} style={{position:'absolute',top:12,right:14,background:'none',border:'none',color:'rgba(255,255,255,.5)',fontSize:20,lineHeight:1,cursor:'pointer',padding:'2px 6px'}}>✕</button>
-        <h3 style={{margin:'0 0 14px',fontSize:15,fontWeight:900,color:'#ffd700',textAlign:'center'}}>排出率一覧</h3>
-        <div style={{display:'flex',marginBottom:14,border:'1px solid rgba(218,165,32,.35)',borderRadius:8,overflow:'hidden'}}>
-          <button type='button' onClick={()=>setRatesTab('normal')} style={{flex:1,padding:'8px 0',fontSize:12,fontWeight:700,cursor:'pointer',border:'none',background:ratesTab==='normal'?'rgba(218,165,32,.3)':'transparent',color:ratesTab==='normal'?'#ffd700':'rgba(255,255,255,.45)'}}>通常ガチャ</button>
-          <button type='button' onClick={()=>setRatesTab('paid')} style={{flex:1,padding:'8px 0',fontSize:12,fontWeight:700,cursor:'pointer',border:'none',borderLeft:'1px solid rgba(218,165,32,.35)',background:ratesTab==='paid'?'rgba(218,165,32,.3)':'transparent',color:ratesTab==='paid'?'#ffd700':'rgba(255,255,255,.45)'}}>有償ガチャ</button>
-        </div>
-        {ratesTab==='normal'&&<>
-          {[['100pt','52.71%'],['300pt','30.00%'],['500pt','5.00%'],['1,000pt','3.00%'],['5,000pt','1.17%'],['10,000 INMU','1.00%'],['高級ごはん','4.49%'],['アイスティー','2.00%'],['ニャルシアン','0.21%'],['拓也','0.21%'],['レオン','0.21%']].map(([n,r])=>(
-            <div key={n} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid rgba(255,255,255,.07)',fontSize:12,color:'rgba(255,255,255,.85)'}}>
-              <span>{n}</span><span style={{color:n.includes('INMU')||n==='ニャルシアン'||n==='拓也'||n==='レオン'?'#ffd700':'rgba(255,255,255,.85)',fontWeight:n.includes('INMU')||n==='ニャルシアン'||n==='拓也'||n==='レオン'?800:400}}>{r}</span>
-            </div>
-          ))}
-          <p style={{margin:'10px 0 0',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※キャラ排出時は50,000pt or アイスティー×3に変換される場合あり</p>
-        </>}
-        {ratesTab==='paid'&&<>
-          {[['1,000pt','60.00%'],['3,000pt','20.00%'],['5,000pt','7.00%'],['10,000pt','2.00%'],['高級ごはん','4.00%'],['アイスティー','3.40%'],['ニャルシアン','1.20%'],['拓也','1.20%'],['レオン','1.20%']].map(([n,r])=>(
-            <div key={n} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid rgba(255,255,255,.07)',fontSize:12,color:'rgba(255,255,255,.85)'}}>
-              <span>{n}</span><span style={{color:n==='ニャルシアン'||n==='拓也'||n==='レオン'?'#ffd700':'rgba(255,255,255,.85)',fontWeight:n==='ニャルシアン'||n==='拓也'||n==='レオン'?800:400}}>{r}</span>
-            </div>
-          ))}
-          <p style={{margin:'10px 0 0',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※50連以内にキャラ確定。キャラ重複時は50,000pt or アイスティー×3に変換</p>
-        </>}
-      </div>
-    </div>
-  )}
   if(phase==='idle'&&gachaMode==='paid')return(
     <AppShell isAdmin={profile?.role==='admin'} displayName={profile?.displayName??''} unread={unread}>
       <style>{CSS}</style>
@@ -1121,6 +1092,35 @@ export function GachaPage() {
             </div>
           </div>
         </div>
+      {/* ══ 排出率モーダル（統合タブ式） ══ */}
+      {showRates&&(
+        <div style={{position:'fixed',inset:0,zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)'}} onClick={()=>setShowRates(false)}>
+          <div style={{width:'min(380px,94vw)',maxHeight:'80vh',overflowY:'auto',background:'linear-gradient(145deg,#0a0518,#12082a)',border:'1px solid rgba(218,165,32,.55)',borderRadius:16,padding:20,boxShadow:'0 24px 72px rgba(0,0,0,.7)',position:'relative'}} onClick={e=>e.stopPropagation()}>
+            <button type='button' onClick={()=>setShowRates(false)} style={{position:'absolute',top:12,right:14,background:'none',border:'none',color:'rgba(255,255,255,.5)',fontSize:20,lineHeight:1,cursor:'pointer',padding:'2px 6px'}}>✕</button>
+            <h3 style={{margin:'0 0 14px',fontSize:15,fontWeight:900,color:'#ffd700',textAlign:'center'}}>排出率一覧</h3>
+            <div style={{display:'flex',marginBottom:14,border:'1px solid rgba(218,165,32,.35)',borderRadius:8,overflow:'hidden'}}>
+              <button type='button' onClick={()=>setRatesTab('normal')} style={{flex:1,padding:'8px 0',fontSize:12,fontWeight:700,cursor:'pointer',border:'none',background:ratesTab==='normal'?'rgba(218,165,32,.3)':'transparent',color:ratesTab==='normal'?'#ffd700':'rgba(255,255,255,.45)'}}>通常ガチャ</button>
+              <button type='button' onClick={()=>setRatesTab('paid')} style={{flex:1,padding:'8px 0',fontSize:12,fontWeight:700,cursor:'pointer',border:'none',borderLeft:'1px solid rgba(218,165,32,.35)',background:ratesTab==='paid'?'rgba(218,165,32,.3)':'transparent',color:ratesTab==='paid'?'#ffd700':'rgba(255,255,255,.45)'}}>有償ガチャ</button>
+            </div>
+            {ratesTab==='normal'&&<>
+              {[['100pt','52.71%'],['300pt','30.00%'],['500pt','5.00%'],['1,000pt','3.00%'],['5,000pt','1.17%'],['10,000 INMU','1.00%'],['高級ごはん','4.49%'],['アイスティー','2.00%'],['ニャルシアン','0.21%'],['拓也','0.21%'],['レオン','0.21%']].map(([n,r])=>(
+                <div key={n} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid rgba(255,255,255,.07)',fontSize:12,color:'rgba(255,255,255,.85)'}}>
+                  <span>{n}</span><span style={{color:n.includes('INMU')||n==='ニャルシアン'||n==='拓也'||n==='レオン'?'#ffd700':'rgba(255,255,255,.85)',fontWeight:n.includes('INMU')||n==='ニャルシアン'||n==='拓也'||n==='レオン'?800:400}}>{r}</span>
+                </div>
+              ))}
+              <p style={{margin:'10px 0 0',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※キャラ排出時は50,000pt or アイスティー×3に変換される場合あり</p>
+            </>}
+            {ratesTab==='paid'&&<>
+              {[['1,000pt','60.00%'],['3,000pt','20.00%'],['5,000pt','7.00%'],['10,000pt','2.00%'],['高級ごはん','4.00%'],['アイスティー','3.40%'],['ニャルシアン','1.20%'],['拓也','1.20%'],['レオン','1.20%']].map(([n,r])=>(
+                <div key={n} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid rgba(255,255,255,.07)',fontSize:12,color:'rgba(255,255,255,.85)'}}>
+                  <span>{n}</span><span style={{color:n==='ニャルシアン'||n==='拓也'||n==='レオン'?'#ffd700':'rgba(255,255,255,.85)',fontWeight:n==='ニャルシアン'||n==='拓也'||n==='レオン'?800:400}}>{r}</span>
+                </div>
+              ))}
+              <p style={{margin:'10px 0 0',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※50連以内にキャラ確定。キャラ重複時は50,000pt or アイスティー×3に変換</p>
+            </>}
+          </div>
+        </div>
+      )}
       </PageBg>
     </AppShell>
   )
@@ -1167,6 +1167,35 @@ export function GachaPage() {
             </div>
           </div>
         </div>
+      {/* ══ 排出率モーダル（統合タブ式） ══ */}
+      {showRates&&(
+        <div style={{position:'fixed',inset:0,zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)'}} onClick={()=>setShowRates(false)}>
+          <div style={{width:'min(380px,94vw)',maxHeight:'80vh',overflowY:'auto',background:'linear-gradient(145deg,#0a0518,#12082a)',border:'1px solid rgba(218,165,32,.55)',borderRadius:16,padding:20,boxShadow:'0 24px 72px rgba(0,0,0,.7)',position:'relative'}} onClick={e=>e.stopPropagation()}>
+            <button type='button' onClick={()=>setShowRates(false)} style={{position:'absolute',top:12,right:14,background:'none',border:'none',color:'rgba(255,255,255,.5)',fontSize:20,lineHeight:1,cursor:'pointer',padding:'2px 6px'}}>✕</button>
+            <h3 style={{margin:'0 0 14px',fontSize:15,fontWeight:900,color:'#ffd700',textAlign:'center'}}>排出率一覧</h3>
+            <div style={{display:'flex',marginBottom:14,border:'1px solid rgba(218,165,32,.35)',borderRadius:8,overflow:'hidden'}}>
+              <button type='button' onClick={()=>setRatesTab('normal')} style={{flex:1,padding:'8px 0',fontSize:12,fontWeight:700,cursor:'pointer',border:'none',background:ratesTab==='normal'?'rgba(218,165,32,.3)':'transparent',color:ratesTab==='normal'?'#ffd700':'rgba(255,255,255,.45)'}}>通常ガチャ</button>
+              <button type='button' onClick={()=>setRatesTab('paid')} style={{flex:1,padding:'8px 0',fontSize:12,fontWeight:700,cursor:'pointer',border:'none',borderLeft:'1px solid rgba(218,165,32,.35)',background:ratesTab==='paid'?'rgba(218,165,32,.3)':'transparent',color:ratesTab==='paid'?'#ffd700':'rgba(255,255,255,.45)'}}>有償ガチャ</button>
+            </div>
+            {ratesTab==='normal'&&<>
+              {[['100pt','52.71%'],['300pt','30.00%'],['500pt','5.00%'],['1,000pt','3.00%'],['5,000pt','1.17%'],['10,000 INMU','1.00%'],['高級ごはん','4.49%'],['アイスティー','2.00%'],['ニャルシアン','0.21%'],['拓也','0.21%'],['レオン','0.21%']].map(([n,r])=>(
+                <div key={n} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid rgba(255,255,255,.07)',fontSize:12,color:'rgba(255,255,255,.85)'}}>
+                  <span>{n}</span><span style={{color:n.includes('INMU')||n==='ニャルシアン'||n==='拓也'||n==='レオン'?'#ffd700':'rgba(255,255,255,.85)',fontWeight:n.includes('INMU')||n==='ニャルシアン'||n==='拓也'||n==='レオン'?800:400}}>{r}</span>
+                </div>
+              ))}
+              <p style={{margin:'10px 0 0',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※キャラ排出時は50,000pt or アイスティー×3に変換される場合あり</p>
+            </>}
+            {ratesTab==='paid'&&<>
+              {[['1,000pt','60.00%'],['3,000pt','20.00%'],['5,000pt','7.00%'],['10,000pt','2.00%'],['高級ごはん','4.00%'],['アイスティー','3.40%'],['ニャルシアン','1.20%'],['拓也','1.20%'],['レオン','1.20%']].map(([n,r])=>(
+                <div key={n} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:'1px solid rgba(255,255,255,.07)',fontSize:12,color:'rgba(255,255,255,.85)'}}>
+                  <span>{n}</span><span style={{color:n==='ニャルシアン'||n==='拓也'||n==='レオン'?'#ffd700':'rgba(255,255,255,.85)',fontWeight:n==='ニャルシアン'||n==='拓也'||n==='レオン'?800:400}}>{r}</span>
+                </div>
+              ))}
+              <p style={{margin:'10px 0 0',fontSize:9,color:'rgba(255,255,255,.38)',textAlign:'center'}}>※50連以内にキャラ確定。キャラ重複時は50,000pt or アイスティー×3に変換</p>
+            </>}
+          </div>
+        </div>
+      )}
       </PageBg>
     </AppShell>
   )
