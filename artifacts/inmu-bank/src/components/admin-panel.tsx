@@ -15,7 +15,7 @@ import {
   CheckSquare, Square, Send, Star, Coins,
   WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2, Lock,
   TrendingUp, TrendingDown, RefreshCw, Settings, ShoppingCart,
-  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical,
+  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical, CupSoda,
 } from 'lucide-react'
 import type { UserRow } from '@/pages/admin-page'
 import { Connection, PublicKey, Transaction } from '@solana/web3.js'
@@ -540,6 +540,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [notifMsg, setNotifMsg] = useState('')
   const [pointsAmount, setPointsAmount] = useState('')
   const [deductPointsAmount, setDeductPointsAmount] = useState('')
+  const [sleepTeaAmount, setSleepTeaAmount] = useState('')
 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
   const [airdropAllMemo, setAirdropAllMemo] = useState('')
@@ -1587,6 +1588,37 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                     className="min-h-10"
                   >
                     減算
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <CupSoda className="size-3 text-sky-400" /> アイスティー送付（選択ユーザー）
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="個数"
+                    value={sleepTeaAmount}
+                    onChange={e => setSleepTeaAmount(e.target.value)}
+                    className="min-h-10 flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => withConfirm('アイスティー送付', () => withLoading(async () => {
+                      await api('/admin/grant-sleep-tea', 'POST', {
+                        targetUserIds: selectedIds,
+                        amount: Number(sleepTeaAmount),
+                        reason: bulkReason || 'アイスティー送付',
+                      })
+                      toast.success(`${selectedIds.length}名にアイスティーを送付しました`)
+                      setSleepTeaAmount('')
+                    }))}
+                    disabled={loading || !sleepTeaAmount}
+                    className="min-h-10"
+                  >
+                    送付
                   </Button>
                 </div>
               </div>

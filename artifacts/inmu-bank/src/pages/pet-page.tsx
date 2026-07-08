@@ -691,6 +691,7 @@ function CharacterSlotGrid({
   tone,
   activeIds,
   availableIds,
+  lockStatus,
   onAdd,
   onRemove,
 }: {
@@ -698,10 +699,12 @@ function CharacterSlotGrid({
   tone: 'cyan' | 'fuchsia'
   activeIds: readonly PetId[]
   availableIds: readonly PetId[]
+  lockStatus?: Record<string, boolean>
   onAdd: (id: PetId) => void
   onRemove: (id: PetId) => void
 }) {
   const [choosing, setChoosing] = useState(false)
+  const normId = (v: string) => v.trim().toLowerCase().replace(/_/g, '-')
   const border = tone === 'cyan' ? 'border-cyan-300/30' : 'border-fuchsia-300/30'
   const text = tone === 'cyan' ? 'text-cyan-200' : 'text-fuchsia-200'
   return (
@@ -720,7 +723,9 @@ function CharacterSlotGrid({
               </div>
               <div className="border-t border-white/5 p-1.5">
                 <p className="truncate text-[10px] font-bold">{candidate.name}</p>
-                <button type="button" onClick={() => onRemove(id)} className="mt-1 w-full rounded border border-rose-300/30 bg-rose-500/10 py-1 text-[9px] text-rose-100">外す</button>
+                {lockStatus?.[normId(id)]
+                  ? <button type="button" disabled className="mt-1 w-full rounded border border-amber-300/30 bg-amber-500/10 py-1 text-[9px] text-amber-300 opacity-70 cursor-not-allowed">ロック中</button>
+                  : <button type="button" onClick={() => onRemove(id)} className="mt-1 w-full rounded border border-rose-300/30 bg-rose-500/10 py-1 text-[9px] text-rose-100">外す</button>}
               </div>
             </div>
           ) : (
@@ -754,21 +759,29 @@ function ActivationButton({
   kind,
   activeIds,
   ownedIds,
+  lockStatus,
   onAdd,
   onRemove,
+  onOpen,
 }: {
   kind: 'skill' | 'reward'
   activeIds: readonly PetId[]
   ownedIds: readonly PetId[]
+  lockStatus?: Record<string, boolean>
   onAdd: (id: PetId) => void
   onRemove: (id: PetId) => void
+  onOpen?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const skill = kind === 'skill'
   const title = skill ? '固有スキル発動' : 'レベル報酬効果発動'
+  function handleOpen() {
+    onOpen?.()
+    setOpen(true)
+  }
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)} className={cn(
+      <Button type="button" variant="outline" onClick={handleOpen} className={cn(
         'h-16 w-full flex-col gap-0.5 rounded-md px-1',
         skill ? 'border-cyan-300/30 bg-cyan-300/5 text-cyan-100' : 'border-fuchsia-300/30 bg-fuchsia-300/5 text-fuchsia-100',
       )}>
@@ -778,7 +791,8 @@ function ActivationButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-          <CharacterSlotGrid title={title} tone={skill ? 'cyan' : 'fuchsia'} activeIds={activeIds} availableIds={ownedIds} onAdd={onAdd} onRemove={onRemove} />
+          {skill && <p className="text-[10px] text-amber-300/80 bg-amber-300/5 border border-amber-300/20 rounded px-2 py-1.5">スキル効果を本日中に使用すると「外す」がロックされます（毎日0:00にリセット）</p>}
+          <CharacterSlotGrid title={title} tone={skill ? 'cyan' : 'fuchsia'} activeIds={activeIds} availableIds={ownedIds} lockStatus={skill ? lockStatus : undefined} onAdd={onAdd} onRemove={onRemove} />
         </DialogContent>
       </Dialog>
     </>
@@ -839,9 +853,9 @@ function TrainingSlots({ activePet }: { activePet: PetDefinition | null }) {
   )
 }
 
-function SlotUnlockPanel({ unlockedSlots, busy, onUnlock }: { unlockedSlots: number; busy: boolean; onUnlock: () => void }) {
+function SlotUnlockPanel({ unlockedSlots, nextSlotPrice, busy, onUnlock }: { unlockedSlots: number; nextSlotPrice: number; busy: boolean; onUnlock: () => void }) {
   if (unlockedSlots >= 3) return <p className="rounded-lg border border-emerald-300/25 bg-emerald-300/5 px-3 py-2 text-center text-xs text-emerald-200">育成枠は3枠すべて解放済みです</p>
-  const price = unlockedSlots === 1 ? 1_000_000 : 2_000_000
+  const price = nextSlotPrice
   return (
     <div className="rounded-lg border border-amber-300/25 bg-amber-300/5 p-3 text-center">
       <p className="text-xs font-bold text-amber-100">Slot {unlockedSlots + 1} を解放</p>
@@ -854,7 +868,7 @@ function SlotUnlockPanel({ unlockedSlots, busy, onUnlock }: { unlockedSlots: num
   )
 }
 
-function TrainingSlotsV2({ activePets, unlockedSlots }: { activePets: PetDefinition[]; unlockedSlots: number }) {
+function TrainingSlotsV2({ activePets, unlockedSlots, slot2Price, slot3Price }: { activePets: PetDefinition[]; unlockedSlots: number; slot2Price: number; slot3Price: number }) {
   return (
     <section className="border-t border-violet-300/15 pt-4">
       <h2 className="mb-3 text-sm font-bold text-fuchsia-200">育成枠</h2>
@@ -862,7 +876,7 @@ function TrainingSlotsV2({ activePets, unlockedSlots }: { activePets: PetDefinit
         {[1, 2, 3].map(slotNumber => {
           const locked = slotNumber > unlockedSlots
           const activePet = activePets[slotNumber - 1]
-          const price = slotNumber === 2 ? 1_000_000 : slotNumber === 3 ? 2_000_000 : 0
+          const price = slotNumber === 2 ? slot2Price : slotNumber === 3 ? slot3Price : 0
           return (
             <div key={slotNumber} className={cn('flex min-h-16 items-center gap-2 rounded-lg border px-3 py-2', locked ? 'border-white/10 bg-black/30 text-muted-foreground' : 'border-fuchsia-400/35 bg-fuchsia-400/10 text-fuchsia-100')}>
               {locked ? <LockKeyhole className="size-4 shrink-0" /> : <PawPrint className="size-4 shrink-0 text-fuchsia-300" />}
@@ -893,6 +907,7 @@ export function PetPage() {
   const [ownershipError, setOwnershipError] = useState(false)
   const [unlockedSlots, setUnlockedSlots] = useState(1)
   const [slotBusy, setSlotBusy] = useState(false)
+  const [slotPrices, setSlotPrices] = useState({ slot2: 1_000_000, slot3: 2_000_000 })
   const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
   const [skillLockStatus, setSkillLockStatus] = useState<Record<string, boolean>>({})
@@ -954,6 +969,15 @@ export function PetPage() {
   }
 
   useEffect(() => { void loadSkillLockStatus() }, [])
+
+  useEffect(() => {
+    fetch('/api/gacha/prices', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { slot2?: number; slot3?: number } | null) => {
+        if (d) setSlotPrices({ slot2: Number(d.slot2 ?? 1_000_000), slot3: Number(d.slot3 ?? 2_000_000) })
+      })
+      .catch(() => {})
+  }, [])
 
   const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const motionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1310,7 +1334,7 @@ export function PetPage() {
 
   async function unlockNextSlot() {
     if (slotBusy || unlockedSlots >= 3) return
-    const price = unlockedSlots === 1 ? 1_000_000 : 2_000_000
+    const price = unlockedSlots === 1 ? slotPrices.slot2 : slotPrices.slot3
     if (!getPhantomProvider()) {
       if (isMobileBrowser()) {
         localStorage.setItem('inmu-pet-slot-unlock-intent', String(unlockedSlots + 1))
@@ -1396,8 +1420,8 @@ export function PetPage() {
               </p>
               {ownershipError && <p className="mt-3 text-xs text-rose-300">所持情報を取得できませんでした。画面を再読み込みしてください。</p>}
             </section>
-            <TrainingSlotsV2 activePets={[]} unlockedSlots={unlockedSlots} />
-            <SlotUnlockPanel unlockedSlots={unlockedSlots} busy={slotBusy} onUnlock={unlockNextSlot} />
+            <TrainingSlotsV2 activePets={[]} unlockedSlots={unlockedSlots} slot2Price={slotPrices.slot2} slot3Price={slotPrices.slot3} />
+            <SlotUnlockPanel unlockedSlots={unlockedSlots} nextSlotPrice={unlockedSlots === 1 ? slotPrices.slot2 : slotPrices.slot3} busy={slotBusy} onUnlock={unlockNextSlot} />
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -1424,7 +1448,7 @@ export function PetPage() {
               />
               <CharacterSelectStrip pets={ownedPets} selectedPetId={displayedPetId} onSelect={handleSelect} />
               <div className="grid grid-cols-2 gap-2">
-                <ActivationButton kind="skill" activeIds={skillActiveCharacterIds} ownedIds={ownedPetIds ?? []} onAdd={handleAddSkill} onRemove={handleRemoveSkill} />
+                <ActivationButton kind="skill" activeIds={skillActiveCharacterIds} ownedIds={ownedPetIds ?? []} lockStatus={skillLockStatus} onAdd={handleAddSkill} onRemove={handleRemoveSkill} onOpen={loadSkillLockStatus} />
                 <ActivationButton kind="reward" activeIds={activePetIds} ownedIds={ownedPetIds ?? []} onAdd={handleAddRewardEffect} onRemove={handleRemoveRewardEffect} />
               </div>
               <SkillPanel pet={pet} />
