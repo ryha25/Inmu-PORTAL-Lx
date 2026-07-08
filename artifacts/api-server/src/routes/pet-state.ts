@@ -80,9 +80,10 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
         return;
       }
     }
-    const slotResult = await pool.query(`SELECT COUNT(*)::int AS count FROM "petSlotUnlocks" WHERE "userId"=$1`, [req.userId!]);
-    const maxSlots = Math.min(3, 1 + Number(slotResult.rows[0]?.count ?? 0));
-    if (Array.isArray(state.activePetIds)) state.activePetIds = state.activePetIds.slice(0, maxSlots);
+    // Level-reward effect slots are independent from paid training-slot unlocks.
+    // Keep up to three selected characters instead of trimming this list to the
+    // number of unlocked training slots on every autosave.
+    if (Array.isArray(state.activePetIds)) state.activePetIds = state.activePetIds.slice(0, 3);
 
     // ── 消費アイテム（睡眠茶・プレミアムフード在庫）はミッション報酬付与や
     // ガチャの重複キャラ変換など、このクライアント以外の経路からもサーバー側で

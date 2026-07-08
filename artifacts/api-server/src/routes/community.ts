@@ -7,13 +7,18 @@ import {
   missionParticipationsTable,
   pointsTable,
 } from "@workspace/db/schema";
-import { eq, sql, ne } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
 
 const router = Router();
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const TEST_ACCOUNT_DISPLAY_NAME = "\u30ac\u30c1\u30e3\u30c6\u30b9\u30c8";
+const excludeTestAccount = sql`
+  position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.displayName}, ''))) = 0
+  and position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.discordUsername}, ''))) = 0
+  and position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.xId}, ''))) = 0
+`;
 
 async function fetchOnChainInmuBalance(wallet: string): Promise<number | null> {
   const rpcUrl = process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
@@ -75,7 +80,7 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
         balance: profileTable.balance,
         solWallet: profileTable.solWallet,
         monthlyPoints: profileTable.monthlyPoints,
-      }).from(profileTable).where(ne(profileTable.displayName, TEST_ACCOUNT_DISPLAY_NAME)),
+      }).from(profileTable).where(excludeTestAccount),
       db.select({
         userId: missionParticipationsTable.userId,
         count: sql<string>`count(*)`,

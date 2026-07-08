@@ -1,13 +1,18 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { profileTable, transactionsTable, missionParticipationsTable, pointsTable } from "@workspace/db/schema";
-import { sql, eq, gt, ne, and } from "drizzle-orm";
+import { sql, eq, gt, and } from "drizzle-orm";
 import { requireAuthOrAdmin } from "../middlewares/session";
 
 const router = Router();
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const TEST_ACCOUNT_DISPLAY_NAME = "\u30ac\u30c1\u30e3\u30c6\u30b9\u30c8";
+const excludeTestAccount = sql`
+  position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.displayName}, ''))) = 0
+  and position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.discordUsername}, ''))) = 0
+  and position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.xId}, ''))) = 0
+`;
 
 // オンチェーンINMU残高をウォレットアドレスから取得（タイムアウト付き）
 async function fetchOnChainInmuBalance(wallet: string): Promise<number | null> {
@@ -61,7 +66,7 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
         participationCount: profileTable.participationCount,
       })
       .from(profileTable)
-      .where(ne(profileTable.displayName, TEST_ACCOUNT_DISPLAY_NAME))
+      .where(excludeTestAccount)
       .limit(200);
 
     const receivedRows = await db
@@ -121,7 +126,7 @@ router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<voi
       .innerJoin(profileTable, eq(pointsTable.userId, profileTable.userId))
       .where(and(
         gt(sql`cast(${pointsTable.amount} as numeric)`, sql`0`),
-        ne(profileTable.displayName, TEST_ACCOUNT_DISPLAY_NAME),
+        excludeTestAccount,
       ))
       .groupBy(pointsTable.userId, profileTable.displayName, profileTable.participationCount)
       .orderBy(sql`sum(cast(${pointsTable.amount} as numeric)) DESC`)
@@ -155,7 +160,7 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
         solWallet: profileTable.solWallet,
         monthlyPoints: profileTable.monthlyPoints,
         participationCount: profileTable.participationCount,
-      }).from(profileTable).where(ne(profileTable.displayName, TEST_ACCOUNT_DISPLAY_NAME)).limit(500),
+      }).from(profileTable).where(excludeTestAccount).limit(500),
       db.select({
         userId: missionParticipationsTable.userId,
         count: sql<string>`count(*)`,

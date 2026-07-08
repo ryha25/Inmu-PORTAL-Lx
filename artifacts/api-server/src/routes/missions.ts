@@ -52,6 +52,7 @@ async function fetchInmuBalance(wallet: string): Promise<number> {
 import { requireAuth, requireAdmin } from "../middlewares/session";
 import { initializePetCharacterState } from "../services/pet-state-store";
 import { hasActivePetSkill } from "../services/pet-skills";
+import { getLifetimeEarnedPoints } from "../services/lifetime-points";
 
 const router = Router();
 
@@ -347,7 +348,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       achievementClearsRow,
       weeklyLoginCountRow,
       weeklyDexVoteCountRow,
-      lifetimeEarnedPointsRow,
+      lifetimeEarnedPoints,
     ] = await Promise.all([
       db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
         .from(missionParticipationsTable)
@@ -407,11 +408,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
         .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "dex_vote"), gte(pointsTable.createdAt, weekStart)))
         .then(r => r[0]),
-      // Same lifetime-earned total used by the cumulative points ranking.
-      db.select({ total: sql<string>`coalesce(sum(cast(${pointsTable.amount} as numeric)), '0')` })
-        .from(pointsTable)
-        .where(and(eq(pointsTable.userId, userId), sql`cast(${pointsTable.amount} as numeric) > 0`))
-        .then(r => r[0]),
+      getLifetimeEarnedPoints(userId),
     ]);
 
     // Optionally fetch real on-chain INMU balance
@@ -499,7 +496,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       } else if (condType === "achievement_clears_total") {
         current = Number(achievementClearsRow?.cnt ?? 0);
       } else if (condType === "monthly_points") {
-        current = Math.max(0, Number(lifetimeEarnedPointsRow?.total ?? 0));
+        current = lifetimeEarnedPoints;
       } else if (condType === "login_weekly") {
         current = Number(weeklyLoginCountRow?.cnt ?? 0);
       } else if (condType === "dex_vote_weekly") {
@@ -545,6 +542,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
     const achievement = filterMissions(sortedActive.filter(m => m.type === "achievement").map(m => mapMission(m, "all-time")));
     const event       = filterMissions(sortedActive.filter(m => m.type === "event").map(m => mapMission(m, "all-time")));
 
+    res.set("Cache-Control", "no-store");
     res.json({ daily, weekly, achievement, event });
   } catch {
     res.status(500).json({ error: "Internal error" });
@@ -714,13 +712,7 @@ async function checkCondition(
     const cur = Number(row?.cnt ?? 0);
     if (cur < condVal) return { met: false, errorMsg: `アチーブメント達成数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "monthly_points") {
-    const [row] = await db.select({
-      total: sql<string>`coalesce(sum(cast(${pointsTable.amount} as numeric)), '0')`,
-    }).from(pointsTable).where(and(
-      eq(pointsTable.userId, userId),
-      sql`cast(${pointsTable.amount} as numeric) > 0`,
-    ));
-    const cur = Math.max(0, Number(row?.total ?? 0));
+    const cur = await getLifetimeEarnedPoints(userId);
     if (cur < condVal) return { met: false, errorMsg: `累計ポイント保有数が不足しています（必要: ${condVal.toLocaleString()}pt、現在: ${cur.toLocaleString()}pt）` };
   } else if (condType === "login_weekly") {
     const ws = getWeekStart();
