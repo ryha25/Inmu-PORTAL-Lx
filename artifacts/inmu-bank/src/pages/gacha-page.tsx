@@ -1944,6 +1944,13 @@ export function GachaPage() {
                   filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))',
                   animation:'ga-bounce 1s ease-in-out infinite'}}/>
               </div>
+              <button onClick={reset} style={{
+                marginTop:8,padding:'8px 32px',borderRadius:8,
+                background:'rgba(255,255,255,.12)',border:'1px solid rgba(218,165,32,.45)',
+                color:'#ffd700',fontSize:14,fontWeight:700,cursor:'pointer',
+                position:'relative',zIndex:4,letterSpacing:'0.06em',
+                backdropFilter:'blur(4px)',
+              }}>もどる</button>
             </div>
           )}
 

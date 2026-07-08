@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { profileTable, transactionsTable, missionParticipationsTable, pointsTable } from "@workspace/db/schema";
-import { sql, eq, gt } from "drizzle-orm";
+import { sql, eq, gt, ne, and } from "drizzle-orm";
 import { requireAuthOrAdmin } from "../middlewares/session";
 
 const router = Router();
@@ -60,6 +60,7 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
         participationCount: profileTable.participationCount,
       })
       .from(profileTable)
+      .where(ne(profileTable.displayName, 'ガチャテスト'))
       .limit(200);
 
     const receivedRows = await db
@@ -117,7 +118,7 @@ router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<voi
       })
       .from(pointsTable)
       .innerJoin(profileTable, eq(pointsTable.userId, profileTable.userId))
-      .where(gt(sql`cast(${pointsTable.amount} as numeric)`, sql`0`))
+      .where(and(gt(sql`cast(${pointsTable.amount} as numeric)`, sql`0`), ne(profileTable.displayName, 'ガチャテスト')))
       .groupBy(pointsTable.userId, profileTable.displayName, profileTable.participationCount)
       .orderBy(sql`sum(cast(${pointsTable.amount} as numeric)) DESC`)
       .limit(100);
@@ -150,7 +151,7 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
         solWallet: profileTable.solWallet,
         monthlyPoints: profileTable.monthlyPoints,
         participationCount: profileTable.participationCount,
-      }).from(profileTable).limit(500),
+      }).from(profileTable).where(ne(profileTable.displayName, 'ガチャテスト')).limit(500),
       db.select({
         userId: missionParticipationsTable.userId,
         count: sql<string>`count(*)`,

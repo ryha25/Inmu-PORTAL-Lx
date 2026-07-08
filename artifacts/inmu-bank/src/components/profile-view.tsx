@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { useLocation } from 'wouter'
 import {
   User, WalletCards,
-  ExternalLink, LogOut as WalletDisconnect, LogOut,
+  ExternalLink, LogOut,
   AtSign, MessageSquare, Lock, KeyRound,
   CalendarDays, Flame, Target, Trophy, Star, Eye,
 } from 'lucide-react'
@@ -394,111 +394,40 @@ export function ProfileView({
           )}
         </div>
 
-        {solWallet ? (
-          <div className="flex flex-col gap-2">
-            {/* 接続状態 */}
-            <div className="flex items-center gap-2">
-              <span className="inline-flex size-2 rounded-full bg-green-500" />
-              <span className="text-xs font-medium text-green-600">接続中</span>
-            </div>
-            {/* SOLアドレス編集 */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-[10px] text-muted-foreground">SOL アドレス（編集可）</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={solWallet}
-                  onChange={e => setSolWallet(e.target.value)}
-                  className="min-h-9 flex-1 font-mono text-[11px]"
-                />
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      await saveWallet(solWallet.trim())
-                      toast.success('アドレスを保存しました')
-                      onRefresh()
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : t('error'))
-                    }
-                  }}
-                  disabled={loading}
-                  className="min-h-9 shrink-0"
-                >
-                  保存
-                </Button>
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">{t('wallet_private')}</p>
+        <div className="flex flex-col gap-2">
+          {/* SOLアドレス入力・編集 */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] text-muted-foreground">
+              {solWallet ? 'SOL アドレス（編集可）' : 'SOLアドレスを入力'}
+            </Label>
             <div className="flex gap-2">
+              <Input
+                value={solWallet}
+                onChange={e => setSolWallet(e.target.value)}
+                placeholder="SOLアドレスを入力"
+                className="min-h-9 flex-1 font-mono text-[11px]"
+              />
               <Button
-                variant="outline"
-                onClick={connectPhantom}
-                disabled={phantomLoading}
-                className="min-h-9 flex-1 text-xs"
+                size="sm"
+                onClick={async () => {
+                  if (!solWallet.trim()) return
+                  try {
+                    await saveWallet(solWallet.trim())
+                    toast.success('アドレスを保存しました')
+                    onRefresh()
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : t('error'))
+                  }
+                }}
+                disabled={loading || !solWallet.trim()}
+                className="min-h-9 shrink-0"
               >
-                {t('connect_phantom')}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={disconnectPhantom}
-                disabled={phantomLoading}
-                className="min-h-9 text-destructive gap-1.5 text-xs"
-              >
-                <WalletDisconnect className="size-3" />
-                切断
+                保存
               </Button>
             </div>
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">SOLアドレスを手入力</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={solWallet}
-                  onChange={e => setSolWallet(e.target.value)}
-                  placeholder="SOLアドレスを入力"
-                  className="min-h-10 flex-1 font-mono text-xs"
-                />
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    if (!solWallet.trim()) return
-                    try {
-                      await saveWallet(solWallet.trim())
-                      toast.success('アドレスを保存しました')
-                      onRefresh()
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : t('error'))
-                    }
-                  }}
-                  disabled={loading || !solWallet.trim()}
-                  className="min-h-10 shrink-0"
-                >
-                  保存
-                </Button>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 border-t border-border" />
-              <span className="text-[11px] text-muted-foreground">または</span>
-              <div className="flex-1 border-t border-border" />
-            </div>
-            <Button
-              onClick={connectPhantom}
-              disabled={phantomLoading}
-              className="min-h-10 w-full gap-2"
-            >
-              <WalletCards className="size-4" />
-              {phantomLoading ? t('loading') : t('connect_phantom')}
-            </Button>
-            {isMobile() && (
-              <p className="text-[11px] text-center text-muted-foreground">
-                iPhoneの場合はPhantomアプリが起動します
-              </p>
-            )}
-          </div>
-        )}
+          <p className="text-[11px] text-muted-foreground">{t('wallet_private')}</p>
+        </div>
       </Card>
 
       {/* ── パスワード変更 ── */}

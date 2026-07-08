@@ -26,10 +26,10 @@ export function CommunityView({ stats }: {
       <Card className="border-border bg-card p-4">
         <p className="text-sm text-muted-foreground">
           {stats.rank <= 10
-            ? '🏆 Top 10! すばらしい成績です！'
+            ? t('rank_top10_msg')
             : stats.rank <= stats.totalUsers * 0.3
-            ? '💪 上位30%に入っています！'
-            : '📊 もっとINMUをアクティブになりましょう！'}
+            ? t('rank_top30_msg')
+            : t('rank_low_msg')}
         </p>
       </Card>
     </div>

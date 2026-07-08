@@ -257,6 +257,10 @@ export const purchaseRequestsTable = pgTable("purchaseRequests", {
   rebateRate: numeric("rebateRate"),
   adminNote: text("adminNote"),
   rebateTxSignature: text("rebateTxSignature"),
+  requestBaseRebateRate: numeric("requestBaseRebateRate"),
+  requestPetRebateBonusRate: numeric("requestPetRebateBonusRate"),
+  requestTotalRebateRate: numeric("requestTotalRebateRate"),
+  requestPetRebateDetails: text("requestPetRebateDetails"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 

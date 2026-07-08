@@ -5,8 +5,9 @@ import {
   loginStreaksTable,
   transactionsTable,
   missionParticipationsTable,
+  pointsTable,
 } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
 
 const router = Router();
@@ -67,13 +68,13 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
 
     // 総合評価ランキング（/ranking/composite と完全同一ロジック）
     // スコア = INMU保有量(40%) + ポイント保有量(40%) + ミッションクリア数(20%)
-    const [allProfiles, clearRows] = await Promise.all([
+    const [allProfiles, clearRows, cumulativeRow] = await Promise.all([
       db.select({
         userId: profileTable.userId,
         balance: profileTable.balance,
         solWallet: profileTable.solWallet,
         monthlyPoints: profileTable.monthlyPoints,
-      }).from(profileTable),
+      }).from(profileTable).where(ne(profileTable.displayName, 'ガチャテスト')),
       db.select({
         userId: missionParticipationsTable.userId,
         count: sql<string>`count(*)`,
@@ -81,7 +82,14 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
         .from(missionParticipationsTable)
         .where(eq(missionParticipationsTable.status, "rewarded"))
         .groupBy(missionParticipationsTable.userId),
+      db.select({
+        total: sql<string>`coalesce(sum(cast(${pointsTable.amount} as numeric)), '0')`,
+      })
+        .from(pointsTable)
+        .where(sql`${pointsTable.userId} = ${userId} AND cast(${pointsTable.amount} as numeric) > 0`)
+        .then((r) => r[0]),
     ]);
+    const cumulativePoints = Math.max(0, Number(cumulativeRow?.total ?? 0));
 
     const totalUsers = allProfiles.length;
     const clearMap = new Map(clearRows.map((c) => [c.userId, Number(c.count)]));
@@ -127,7 +135,7 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
       totalReceivedInmu,
       rank,
       totalUsers,
-      monthlyPoints: Number(profile.monthlyPoints),
+      monthlyPoints: cumulativePoints,
       loginStreak: streak?.streak ?? 0,
     });
   } catch (e) {

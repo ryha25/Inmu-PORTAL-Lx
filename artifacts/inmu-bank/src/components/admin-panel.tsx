@@ -191,6 +191,9 @@ type PurchaseRequestAdminRow = {
   rebateTxSignature: string | null
   petRebateBonusRate: number
   petRebateBonuses: Array<{ source: 'level_reward' | 'skill'; label: string; rate: number; eventOnly: boolean }>
+  storedBaseRebateRate?: number | null
+  storedPetRebateBonusRate?: number | null
+  storedTotalRebateRate?: number | null
   isEventPurchase: boolean
   reviewedAt: string | null
   createdAt: string
@@ -2038,6 +2041,12 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                             ))}
                           </div>
                         )}
+                        {pr.storedTotalRebateRate != null && (
+                          <span className="text-[10px] text-blue-400">
+                            申請時還元率: {pr.storedTotalRebateRate}%
+                            {pr.storedBaseRebateRate != null && pr.storedPetRebateBonusRate != null && pr.storedPetRebateBonusRate > 0 && ` (基本${pr.storedBaseRebateRate}%+PET${pr.storedPetRebateBonusRate}%)`}
+                          </span>
+                        )}
                         {pr.comment && <span className="text-xs text-muted-foreground">"{pr.comment}"</span>}
                         {pr.txHash && (
                           <a href={`https://solscan.io/tx/${pr.txHash}`} target="_blank" rel="noopener noreferrer"
@@ -2069,7 +2078,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                             setPrEditId(pr.id)
                             setPrStatus(pr.status === 'pending' ? 'approved' : pr.status)
                             setPrRebateAmount(pr.rebateAmount ?? '')
-                            setPrRebateRate(pr.rebateRate ?? '')
+                            setPrRebateRate(pr.rebateRate ?? (pr.storedTotalRebateRate != null ? String(pr.storedTotalRebateRate) : ''))
                             setPrAdminNote(pr.adminNote ?? '')
                           }
                         }}>

@@ -71,10 +71,10 @@ export function RankingView({
               </div>
               <p className="font-mono font-bold text-lg gold-text">
                 {myCompositeRank}
-                <span className="ml-1 text-sm font-normal text-muted-foreground">位 / {totalUsers}人</span>
+                <span className="ml-1 text-sm font-normal text-muted-foreground">{t('rank_out_of')} / {totalUsers}{t('rank_out_of_users')}</span>
               </p>
             </div>
-            <p className="mt-1 text-[10px] text-muted-foreground">INMU保有量・ポイント・ミッションクリア数を総合評価</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">{t('composite_rank_desc')}</p>
           </Card>
         )}
 
@@ -85,13 +85,13 @@ export function RankingView({
             <div className="flex items-center gap-3">
               <RankBadge rank={r.rank} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-sm">{r.displayName}{r.userId === currentUserId ? ' (あなた)' : ''}</p>
+                <p className="truncate font-medium text-sm">{r.displayName}{r.userId === currentUserId ? ` (${t('you_label')})` : ''}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  クリア数: {r.clears}件
+                  {t('clears_count')}: {r.clears}
                 </p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-[9px] text-muted-foreground">スコア</p>
+                <p className="text-[9px] text-muted-foreground">{t('score_label')}</p>
                 <p className="font-mono font-bold text-sm tabular-nums text-primary">{r.score.toFixed(1)}</p>
               </div>
             </div>
@@ -107,11 +107,11 @@ export function RankingView({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Trophy className="size-4 text-primary" />
-                <p className="text-sm font-semibold">INMUランキング順位</p>
+                <p className="text-sm font-semibold">{t('ranking_inmu_rank')}</p>
               </div>
               <p className="font-mono font-bold text-lg gold-text">
                 {myInmuRank}
-                <span className="ml-1 text-sm font-normal text-muted-foreground">位 / {totalUsers}人</span>
+                <span className="ml-1 text-sm font-normal text-muted-foreground">{t('rank_out_of')} / {totalUsers}{t('rank_out_of_users')}</span>
               </p>
             </div>
           </Card>
@@ -124,18 +124,18 @@ export function RankingView({
             <div className="flex items-center gap-3">
               <RankBadge rank={r.rank} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-sm">{r.displayName}{r.userId === currentUserId ? ' (あなた)' : ''}</p>
+                <p className="truncate font-medium text-sm">{r.displayName}{r.userId === currentUserId ? ` (${t('you_label')})` : ''}</p>
                 <p className="text-xs text-muted-foreground">{t('participations')}: {r.participations}</p>
               </div>
               <div className="text-right">
                 {r.showBalance ? (
                   <div>
-                    <p className="text-[9px] text-muted-foreground mb-0.5">現在残高</p>
+                    <p className="text-[9px] text-muted-foreground mb-0.5">{t('balance')}</p>
                     <p className="font-mono font-bold tabular-nums gold-text">{formatInmu(r.balance)}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">累計受取: {formatInmu(r.totalReceived)}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{t('cumulative_received')}: {formatInmu(r.totalReceived)}</p>
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground">非公開</p>
+                  <p className="text-xs text-muted-foreground">{t('hide')}</p>
                 )}
               </div>
             </div>
@@ -151,11 +151,11 @@ export function RankingView({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Star className="size-4 text-primary" />
-                <p className="text-sm font-semibold">ポイントランキング順位</p>
+                <p className="text-sm font-semibold">{t('ranking_points_rank')}</p>
               </div>
               <p className="font-mono font-bold text-lg text-primary">
                 {myPointsRank}
-                <span className="ml-1 text-sm font-normal text-muted-foreground">位 / {totalUsers}人</span>
+                <span className="ml-1 text-sm font-normal text-muted-foreground">{t('rank_out_of')} / {totalUsers}{t('rank_out_of_users')}</span>
               </p>
             </div>
           </Card>
@@ -168,7 +168,7 @@ export function RankingView({
             <div className="flex items-center gap-3">
               <RankBadge rank={r.rank} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-sm">{r.displayName}{r.userId === currentUserId ? ' (あなた)' : ''}</p>
+                <p className="truncate font-medium text-sm">{r.displayName}{r.userId === currentUserId ? ` (${t('you_label')})` : ''}</p>
                 <p className="text-xs text-muted-foreground">{t('participations')}: {r.participations}</p>
               </div>
               <div className="text-right">

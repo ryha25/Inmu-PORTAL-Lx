@@ -16,6 +16,15 @@ import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
 
+// 申請時点の還元率を保存するカラムを追加（初回のみ）
+pool.query(`
+  ALTER TABLE "purchaseRequests"
+  ADD COLUMN IF NOT EXISTS "requestBaseRebateRate" NUMERIC,
+  ADD COLUMN IF NOT EXISTS "requestPetRebateBonusRate" NUMERIC,
+  ADD COLUMN IF NOT EXISTS "requestTotalRebateRate" NUMERIC,
+  ADD COLUMN IF NOT EXISTS "requestPetRebateDetails" TEXT
+`).catch((e: unknown) => console.error('[PurchaseRequests] ALTER TABLE error:', e));
+
 type PetRebateBonus = { source: "level_reward" | "skill"; label: string; rate: number; eventOnly: boolean };
 
 const PET_PURCHASE_BONUS_RULES = [
@@ -339,11 +348,24 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
       return;
     }
 
+    // 申請時点の還元率を記録
+    const [requestBaseRebateRate, requestPetBonusesByUser] = await Promise.all([
+      getBaseRebateRate(eventSettings.isEventDay),
+      getPetPurchaseBonuses([userId], eventSettings.isEventDay),
+    ]);
+    const requestPetRebateBonuses = requestPetBonusesByUser.get(userId) ?? [];
+    const requestPetRebateBonusRate = requestPetRebateBonuses.reduce((t, b) => t + b.rate, 0);
+    const requestTotalRebateRate = requestBaseRebateRate + requestPetRebateBonusRate;
+
     const [created] = await db.insert(purchaseRequestsTable).values({
       userId,
       amount: String(numAmount),
       txHash: txHash?.trim() || null,
       comment: comment?.trim() || null,
+      requestBaseRebateRate: String(requestBaseRebateRate),
+      requestPetRebateBonusRate: String(requestPetRebateBonusRate),
+      requestTotalRebateRate: String(requestTotalRebateRate),
+      requestPetRebateDetails: JSON.stringify(requestPetRebateBonuses),
     }).returning();
 
     res.status(201).json(created);
@@ -368,6 +390,10 @@ router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<
       rebateRate: purchaseRequestsTable.rebateRate,
       adminNote: purchaseRequestsTable.adminNote,
       rebateTxSignature: purchaseRequestsTable.rebateTxSignature,
+      requestBaseRebateRate: purchaseRequestsTable.requestBaseRebateRate,
+      requestPetRebateBonusRate: purchaseRequestsTable.requestPetRebateBonusRate,
+      requestTotalRebateRate: purchaseRequestsTable.requestTotalRebateRate,
+      requestPetRebateDetails: purchaseRequestsTable.requestPetRebateDetails,
       createdAt: purchaseRequestsTable.createdAt,
       displayName: profileTable.displayName,
       solWallet: profileTable.solWallet,
@@ -382,11 +408,19 @@ router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<
       eventSettings.isEventDay,
     );
     res.json(requests.map(request => {
-      const petRebateBonuses = bonuses.get(request.userId) ?? [];
+      const storedPetBonuses = request.requestPetRebateDetails
+        ? (() => { try { return JSON.parse(request.requestPetRebateDetails!); } catch { return null; } })()
+        : null;
+      const currentPetBonuses = bonuses.get(request.userId) ?? [];
       return {
         ...request,
-        petRebateBonuses,
-        petRebateBonusRate: petRebateBonuses.reduce((total, bonus) => total + bonus.rate, 0),
+        petRebateBonuses: storedPetBonuses ?? currentPetBonuses,
+        petRebateBonusRate: request.requestPetRebateBonusRate != null
+          ? Number(request.requestPetRebateBonusRate)
+          : currentPetBonuses.reduce((total, bonus) => total + bonus.rate, 0),
+        storedBaseRebateRate: request.requestBaseRebateRate != null ? Number(request.requestBaseRebateRate) : null,
+        storedPetRebateBonusRate: request.requestPetRebateBonusRate != null ? Number(request.requestPetRebateBonusRate) : null,
+        storedTotalRebateRate: request.requestTotalRebateRate != null ? Number(request.requestTotalRebateRate) : null,
         isEventPurchase: eventSettings.isEventDay,
       };
     }));
