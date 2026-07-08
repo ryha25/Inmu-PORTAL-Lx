@@ -7,11 +7,13 @@ import { requireAuthOrAdmin } from "../middlewares/session";
 const router = Router();
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
+const TEST_ACCOUNT_USER_ID = "user-1782061206251-cna0t3gps28";
 const TEST_ACCOUNT_DISPLAY_NAME = "\u30ac\u30c1\u30e3\u30c6\u30b9\u30c8";
 const excludeTestAccount = sql`
-  position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.displayName}, ''))) = 0
-  and position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.discordUsername}, ''))) = 0
-  and position(${TEST_ACCOUNT_DISPLAY_NAME} in trim(coalesce(${profileTable.xId}, ''))) = 0
+  ${profileTable.userId} <> ${TEST_ACCOUNT_USER_ID}
+  and position(${TEST_ACCOUNT_DISPLAY_NAME} in regexp_replace(coalesce(${profileTable.displayName}, ''), '\\s+', '', 'g')) = 0
+  and position(${TEST_ACCOUNT_DISPLAY_NAME} in regexp_replace(coalesce(${profileTable.discordUsername}, ''), '\\s+', '', 'g')) = 0
+  and position(${TEST_ACCOUNT_DISPLAY_NAME} in regexp_replace(coalesce(${profileTable.xId}, ''), '\\s+', '', 'g')) = 0
 `;
 
 // オンチェーンINMU残高をウォレットアドレスから取得（タイムアウト付き）

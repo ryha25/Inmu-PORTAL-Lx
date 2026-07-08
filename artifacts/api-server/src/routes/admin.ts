@@ -167,7 +167,10 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
         ls."lastLogin",
         ls.streak AS "loginStreak",
         COALESCE((
-          SELECT sum(amount) FROM points WHERE "userId" = p."userId"
+          SELECT sum(amount)
+          FROM points
+          WHERE "userId" = p."userId"
+            AND amount > 0
         ), 0)::numeric AS "totalPoints",
         COALESCE((
           SELECT count(*) FROM points WHERE "userId" = p."userId" AND type = 'daily_login'
