@@ -92,6 +92,7 @@ export function ProfileView({
           displayName,
           xId: xId || null,
           discordId: discordId || null,
+          solWallet,
           showBalance,
         }),
       })
@@ -374,8 +375,8 @@ export function ProfileView({
         </p>
       </Card>
 
-      {/* Wallet registration is managed outside the profile screen. */}
-      {false && <Card className="border-border bg-card p-4">
+      {/* ── SOLアドレス & Phantom ── */}
+      <Card className="border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <WalletCards className="size-4 text-primary" />
@@ -498,38 +499,6 @@ export function ProfileView({
             )}
           </div>
         )}
-      </Card>}
-
-      <Card className="border-border bg-card p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <WalletCards className="size-4 text-primary" />
-          <h3 className="text-sm font-semibold">SOLアドレス登録</h3>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            value={solWallet}
-            onChange={event => setSolWallet(event.target.value)}
-            placeholder="SOLウォレットアドレス"
-            className="min-h-10 flex-1 font-mono text-xs"
-          />
-          <Button
-            size="sm"
-            disabled={loading || !solWallet.trim()}
-            className="min-h-10 shrink-0"
-            onClick={async () => {
-              try {
-                await saveWallet(solWallet.trim())
-                toast.success('SOLアドレスを保存しました')
-                onRefresh()
-              } catch (error) {
-                toast.error(error instanceof Error ? error.message : t('error'))
-              }
-            }}
-          >
-            {t('save')}
-          </Button>
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">{t('wallet_private')}</p>
       </Card>
 
       {/* ── パスワード変更 ── */}

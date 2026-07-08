@@ -25,6 +25,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
+import { confirmSignaturePolling } from '@/lib/solana-confirm'
 
 interface PhantomProvider {
   isPhantom: boolean
@@ -209,8 +210,10 @@ const PR_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 }
 
 const SYSTEM_SETTING_PRESETS: Record<string, string[]> = {
-  normal_daily_purchase_limit: ['100000'],
+  normal_daily_purchase_limit: ['100000', '200000', '300000', '500000'],
   event_daily_purchase_limit:  ['200000', '300000', '500000', '1000000'],
+  normal_rebate_rate: ['0', '3', '5', '10'],
+  event_rebate_rate:  ['0', '5', '10', '15'],
 }
 
 const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
@@ -268,7 +271,7 @@ function formatSettingDisplay(key: string, value: string): string {
   if (SYSTEM_SETTING_TYPE[key] === 'boolean') return value === 'true' ? '✅ 有効' : '❌ 無効'
   if (SYSTEM_SETTING_TYPE[key] === 'date') return value || '未設定'
   const n = Number(value)
-  if (!isNaN(n)) return `${n.toLocaleString()}${key.includes('limit') ? ' INMU' : ''}`
+  if (!isNaN(n)) return `${n.toLocaleString()}${key.includes('limit') ? ' INMU' : key.includes('rebate_rate') ? '%' : ''}`
   return value || '—'
 }
 
@@ -546,6 +549,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [airdropAllMemo, setAirdropAllMemo] = useState('')
   const [pointsAllAmount, setPointsAllAmount] = useState('')
   const [pointsAllReason, setPointsAllReason] = useState('')
+  const [sleepTeaAllAmount, setSleepTeaAllAmount] = useState('')
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -695,7 +699,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         createTransferInstruction(fromATA, toATA, adminPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID),
       )
       tx.feePayer = adminPubkey
-      const { blockhash } = await connection.getLatestBlockhash('processed')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: toastId })
@@ -706,6 +710,14 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
       toast.dismiss(toastId)
 
+      // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
+      // 記録してしまうのを防ぐ）
+      toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
+      const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
+      toast.dismiss(toastId)
+      if (confirmation.err) {
+        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
+      }
 
       await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
 
@@ -789,7 +801,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         )
       }
       tx.feePayer = adminPubkey
-      const { blockhash } = await connection.getLatestBlockhash('processed')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
       tx.recentBlockhash = blockhash
 
       toast.loading(`Phantom で署名してください（${sendable.length}件 まとめて送金）…`, { id: toastId })
@@ -800,35 +812,70 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
       toast.dismiss(toastId)
 
+      // オンチェーンでの確定を待つ（未確定のうちに DB 反映してしまうと、失敗TXでも
+      // 送金済みとして記録してしまうため）
+      toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
+      const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
+      toast.dismiss(toastId)
 
-      // 全件を mark-sent（同一 txHash で各 ID を個別に記録）
+      if (confirmation.err) {
+        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
+      }
+
+      // TX は1つの atomic 命令セット（全員成功 or 全員失敗）なので、DB側も
+      // 1件の一括APIで全件をまとめて記録する（個別APIをループすると一部だけ
+      // 記録漏れが起きるため、DB側は1トランザクションで整合させる）
       const sentAt = new Date().toISOString()
-      let successCount = 0
-      const successfulIds = new Set<number>()
+      const wallets: Record<string, string> = {}
       for (const row of sendable) {
-        const wallet = row.profileSolWallet ?? row.solWallet!
+        wallets[String(row.id)] = row.profileSolWallet ?? row.solWallet!
+      }
+
+      let lastErr: unknown = null
+      let recorded = false
+      for (let attempt = 0; attempt < 5 && !recorded; attempt++) {
         try {
-          await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
-          setGachaResults(p => p.map(r => r.id === row.id
-            ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallet, inmuSentAt: sentAt }
-            : r
-          ))
-          successCount++
-          successfulIds.add(row.id)
-        } catch {
-          // API 失敗は個別に failed 扱い（TX は成功しているので DB だけ再試行可能）
-          setGachaResults(p => p.map(r => r.id === row.id
-            ? { ...r, inmuSentStatus: 'failed', failureReason: 'DB記録失敗（TX成功）' }
-            : r
-          ))
+          if (attempt > 0) {
+            toast.loading(`DBへの記録を再試行しています…（${attempt + 1}回目）`, { id: toastId })
+            await new Promise(r => setTimeout(r, 1500 * attempt))
+          }
+          await api('/admin/gacha/results/mark-sent-bulk', 'PUT', {
+            ids: sendable.map(r => r.id),
+            txHash: signature,
+            wallets,
+          })
+          recorded = true
+        } catch (err) {
+          lastErr = err
         }
       }
+      toast.dismiss(toastId)
+
+      if (!recorded) {
+        // TX はオンチェーンで確定済み（資金は送られている）が、DB記録だけ失敗。
+        // 再試行できるよう pending には戻さず failed にし、手動での再記録を促す。
+        const msg = lastErr instanceof Error ? lastErr.message : '不明なエラー'
+        for (const row of sendable) {
+          await api(`/admin/gacha/results/${row.id}/mark-failed`, 'PUT', { failureReason: `TX成功済みだがDB記録失敗: ${msg}` }).catch(() => {})
+        }
+        setGachaResults(p => p.map(r =>
+          sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'failed', failureReason: 'TX成功済みだがDB記録失敗' } : r
+        ))
+        toast.error(`送金はオンチェーンで完了しましたが、DBへの記録に失敗しました。txHash: ${signature.slice(0, 16)}… を確認し「再試行」してください。`, { duration: 15000 })
+        return
+      }
+
+      const successfulIds = new Set(sendable.map(r => r.id))
+      setGachaResults(p => p.map(r => successfulIds.has(r.id)
+        ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallets[String(r.id)], inmuSentAt: sentAt }
+        : r
+      ))
       setGachaSelectedIds(previous => {
         const remaining = new Set(previous)
         successfulIds.forEach(id => remaining.delete(id))
         return remaining
       })
-      toast.success(`✅ 一括送金完了！ ${successCount}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
+      toast.success(`✅ 一括送金完了！ ${sendable.length}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
 
     } catch (e: unknown) {
       toast.dismiss(toastId)
@@ -881,7 +928,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const s = systemSettings.find(x => x.key === key)
       if (s) map[key] = s.value
     }
-    setCalcEditValues(map)
+    if (Object.keys(map).length) setCalcEditValues(map)
   }, [systemSettings])
 
   const [emergencySearch, setEmergencySearch] = useState('')
@@ -1011,7 +1058,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         const tx = new Transaction()
         tx.add(...instrs)
         tx.feePayer = fromPubkey
-        const { blockhash } = await connection.getLatestBlockhash('processed')
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
         tx.recentBlockhash = blockhash
 
         toast.loading(`Phantom で署名してください${chunkLabel}…`, { id: 'ph-airdrop-sign' })
@@ -1022,6 +1069,14 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
         toast.dismiss('ph-airdrop-send')
 
+        // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
+        // 記録してしまうのを防ぐ）
+        toast.loading(`オンチェーンでの確定を待っています${chunkLabel}…`, { id: 'ph-airdrop-confirm' })
+        const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
+        toast.dismiss('ph-airdrop-confirm')
+        if (confirmation.err) {
+          throw new Error(`トランザクションがオンチェーンで失敗しました${chunkLabel}: ${JSON.stringify(confirmation.err)}`)
+        }
 
         await api('/admin/record-airdrop-batch', 'POST', {
           users: chunk.map(u => ({ userId: u.userId, wallet: u.solWallet })),
@@ -1205,7 +1260,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           const tx = new Transaction()
           tx.add(...instrs)
           tx.feePayer = fromPubkey
-          const { blockhash } = await connection.getLatestBlockhash('processed')
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
           tx.recentBlockhash = blockhash
 
           toast.loading('Phantom で署名してください…', { id: 'ph-sign' })
@@ -1215,11 +1270,20 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           toast.loading('Solana へ送信中…', { id: 'ph-send' })
           const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
           toast.dismiss('ph-send')
+
+          // オンチェーンでの確定を待ってから成功として記録する（未確定・失敗TXを
+          // 送金済みとして記録してしまうのを防ぐ）
+          toast.loading('オンチェーンでの確定を待っています…', { id: 'ph-confirm' })
+          const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
+          toast.dismiss('ph-confirm')
+          if (confirmation.err) {
+            throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
+          }
           rebateTxSignature = signature
 
           toast.success(`オンチェーン送金完了: ${numRebate.toLocaleString()} INMU → ${pr.displayName ?? pr.userId}`)
         } catch (e: unknown) {
-          toast.dismiss('ph-admin'); toast.dismiss('ph-sign'); toast.dismiss('ph-send')
+          toast.dismiss('ph-admin'); toast.dismiss('ph-sign'); toast.dismiss('ph-send'); toast.dismiss('ph-confirm')
           const msg = e instanceof Error ? e.message : '不明なエラー'
           if (msg !== 'User rejected the request.') toast.error(`Phantom 送金失敗: ${msg}`)
           setPrSaving(false)
@@ -1254,6 +1318,18 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     finally { setSettingsLoading(false) }
   }
 
+  async function saveSystemSetting(key: string) {
+    setSettingSaving(true)
+    try {
+      await api(`/admin/system-settings/${key}`, 'PUT', { value: settingEditValue })
+      toast.success('設定を保存しました')
+      setEditingSettingKey(null)
+      setSettingEditValue('')
+      await loadSystemSettings()
+    } catch (e) { toast.error(e instanceof Error ? e.message : t('error')) }
+    finally { setSettingSaving(false) }
+  }
+
   async function loadRewardCalc() {
     setCalcPriceLoading(true)
     try {
@@ -1278,18 +1354,6 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       await loadSystemSettings()
     } catch (e) { toast.error(e instanceof Error ? e.message : t('error')) }
     finally { setCalcSaving(false) }
-  }
-
-  async function saveSystemSetting(key: string) {
-    setSettingSaving(true)
-    try {
-      await api(`/admin/system-settings/${key}`, 'PUT', { value: settingEditValue })
-      toast.success('設定を保存しました')
-      setEditingSettingKey(null)
-      setSettingEditValue('')
-      await loadSystemSettings()
-    } catch (e) { toast.error(e instanceof Error ? e.message : t('error')) }
-    finally { setSettingSaving(false) }
   }
 
 
@@ -1496,6 +1560,36 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 className="min-h-10"
               />
             </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <CupSoda className="size-3" /> 全員アイスティー配布
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="配布個数"
+                  value={sleepTeaAllAmount}
+                  onChange={e => setSleepTeaAllAmount(e.target.value)}
+                  className="min-h-10 flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => withConfirm('全員アイスティー配布', () => withLoading(async () => {
+                    const d = await api('/admin/grant-sleep-tea-all', 'POST', {
+                      amount: Number(sleepTeaAllAmount),
+                      reason: 'アイスティー配布',
+                    }) as { count: number }
+                    toast.success(`${d.count}名にアイスティー配布完了`)
+                    setSleepTeaAllAmount('')
+                  }))}
+                  disabled={loading || !sleepTeaAllAmount}
+                  className="min-h-10"
+                >
+                  配布
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* 選択ユーザー操作 */}
@@ -1594,31 +1688,31 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <CupSoda className="size-3 text-sky-400" /> アイスティー送付（選択ユーザー）
+                  <CupSoda className="size-3" /> アイスティー付与（選択ユーザー）
                 </p>
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    placeholder="個数"
+                    placeholder="付与個数"
                     value={sleepTeaAmount}
                     onChange={e => setSleepTeaAmount(e.target.value)}
                     className="min-h-10 flex-1"
                   />
                   <Button
                     variant="outline"
-                    onClick={() => withConfirm('アイスティー送付', () => withLoading(async () => {
+                    onClick={() => withConfirm('アイスティー付与', () => withLoading(async () => {
                       await api('/admin/grant-sleep-tea', 'POST', {
                         targetUserIds: selectedIds,
                         amount: Number(sleepTeaAmount),
-                        reason: bulkReason || 'アイスティー送付',
+                        reason: bulkReason || 'アイスティー付与',
                       })
-                      toast.success(`${selectedIds.length}名にアイスティーを送付しました`)
+                      toast.success(`${selectedIds.length}名にアイスティー付与完了`)
                       setSleepTeaAmount('')
                     }))}
                     disabled={loading || !sleepTeaAmount}
                     className="min-h-10"
                   >
-                    送付
+                    付与
                   </Button>
                 </div>
               </div>

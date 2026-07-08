@@ -13,6 +13,9 @@ export function Logo({ className, size = 36 }: { className?: string; size?: numb
         }}
         aria-hidden="true"
       >
+        <span className="font-mono font-bold text-background" style={{ fontSize: size * 0.5 }}>
+          ¥
+        </span>
       </div>
     </div>
   )

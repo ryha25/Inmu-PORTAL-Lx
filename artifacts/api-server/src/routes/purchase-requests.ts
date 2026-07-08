@@ -15,14 +15,18 @@ import { ensurePetStateTable } from "../services/pet-state-store";
 import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
-const INMU_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
-const INMU_DECIMALS = 6;
 
 type PetRebateBonus = { source: "level_reward" | "skill"; label: string; rate: number; eventOnly: boolean };
 
 const PET_PURCHASE_BONUS_RULES = [
   { characterId: "inmu-festival", minLevel: 15, source: "level_reward" as const, label: "INMUくん Lv.15報酬", rate: 5, eventOnly: false },
   { characterId: "inmu-festival", minLevel: 1, source: "skill" as const, label: "固有スキル「810祭り‼️」", rate: 5, eventOnly: true },
+  { characterId: "nyarushian", minLevel: 10, source: "level_reward" as const, label: "ニャルシアン Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "nyarushian", minLevel: 30, source: "level_reward" as const, label: "ニャルシアン Lv.30報酬", rate: 5, eventOnly: false },
+  { characterId: "takuya", minLevel: 10, source: "level_reward" as const, label: "拓也 Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "takuya", minLevel: 30, source: "level_reward" as const, label: "拓也 Lv.30報酬", rate: 5, eventOnly: false },
+  { characterId: "leon", minLevel: 10, source: "level_reward" as const, label: "レオン Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "leon", minLevel: 30, source: "level_reward" as const, label: "レオン Lv.30報酬", rate: 5, eventOnly: false },
 ] as const;
 
 async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
@@ -48,15 +52,19 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
       const state = stateByUser.get(userId) as Record<string, any> | undefined;
       const owned = ownedByUser.get(userId) ?? new Set<string>();
       const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.slice(0, 3).map(String) : [];
-      const skillActiveCharacterIds = Array.isArray(state?.skillActiveCharacterIds)
-        ? state.skillActiveCharacterIds.slice(0, 3).map(String)
-        : [];
+      const legacySkillSingle = state?.skillActiveCharacterId;
+      const skillActiveCharacterIds: string[] = (Array.isArray(state?.skillActiveCharacterIds)
+        ? state.skillActiveCharacterIds
+        : legacySkillSingle != null ? [legacySkillSingle] : []
+      ).slice(0, 3).map(String);
       const bonuses = PET_PURCHASE_BONUS_RULES.filter(rule => {
-        // Event-only skills must not count as used or active outside the configured event window.
-        if (rule.source === "skill" && rule.eventOnly && !isEventDay) return false;
-        if (!owned.has(rule.characterId)) return false;
+        if (!owned.has(rule.characterId) || (rule.eventOnly && !isEventDay)) return false;
         const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
-        return level >= rule.minLevel && (rule.source !== "skill" || skillActiveCharacterIds.includes(rule.characterId));
+        if (level < rule.minLevel) return false;
+        // レベル報酬は育成枠（activePetIds）、固有スキルは「固有スキル発動」で選択された最大3体に紐づく。
+        return rule.source === "skill"
+          ? skillActiveCharacterIds.includes(rule.characterId)
+          : activePetIds.includes(rule.characterId);
       }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
       result.set(userId, bonuses);
     });
@@ -66,22 +74,32 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
   return result;
 }
 
-// ── JST 16日開始・翌月16日終了の申請期間 ──
-function getApplicationCycle(now: Date): { start: Date; end: Date; remainingDays: number } {
+// ── JSTの購入サイクル開始UTC日時を返す（毎月16日0時始まり〜翌月15日23:59終わり） ──
+function getMonthStartUTC(now: Date): Date {
   const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  const year = jstNow.getUTCFullYear();
-  const month = jstNow.getUTCMonth();
-  const isAfterStart = jstNow.getUTCDate() >= 16;
-  const startJst = Date.UTC(year, isAfterStart ? month : month - 1, 16);
-  const endJst = Date.UTC(year, isAfterStart ? month + 1 : month, 16);
-  const end = new Date(endJst - 9 * 60 * 60 * 1000);
-  const currentJstDate = Date.UTC(year, month, jstNow.getUTCDate());
-  const remainingDays = Math.max(0, Math.round((endJst - currentJstDate) / 86_400_000) - 1);
-  return {
-    start: new Date(startJst - 9 * 60 * 60 * 1000),
-    end,
-    remainingDays,
-  };
+  const y = jstNow.getUTCFullYear();
+  const m = jstNow.getUTCMonth();
+  const d = jstNow.getUTCDate();
+  // 16日以降なら当月16日始まり、16日未満（15日以前）なら前月16日始まり
+  const jstCycleStartMs = d >= 16 ? Date.UTC(y, m, 16) : Date.UTC(y, m - 1, 16);
+  return new Date(jstCycleStartMs - 9 * 60 * 60 * 1000);
+}
+
+// ── JSTの購入サイクル終了UTC日時（次の16日0時＝15日23:59の直後）を返す ──
+function getMonthEndUTC(now: Date): Date {
+  const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const y = jstNow.getUTCFullYear();
+  const m = jstNow.getUTCMonth();
+  const d = jstNow.getUTCDate();
+  const jstCycleEndMs = d >= 16 ? Date.UTC(y, m + 1, 16) : Date.UTC(y, m, 16);
+  return new Date(jstCycleEndMs - 9 * 60 * 60 * 1000);
+}
+
+// ── 現在の購入サイクル（16日〜翌月15日）の日数 ──
+function getDaysInCurrentMonth(now: Date): number {
+  const start = getMonthStartUTC(now);
+  const end = getMonthEndUTC(now);
+  return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 // ── 全体申請上限（管理者設定） ──
@@ -98,6 +116,15 @@ async function getNormalDailyLimit(): Promise<number> {
     const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, "normal_daily_purchase_limit"));
     return s ? Number(s.value) : 300000;
   } catch { return 300000; }
+}
+
+// ── 購入申請 基本還元率（管理者設定・通常/イベント） ──
+async function getBaseRebateRate(isEventDay: boolean): Promise<number> {
+  const key = isEventDay ? "event_rebate_rate" : "normal_rebate_rate";
+  try {
+    const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, key));
+    return s ? Number(s.value) || 0 : 0;
+  } catch { return 0; }
 }
 
 // ── イベントモード設定を取得 ──
@@ -130,11 +157,8 @@ async function getEventSettings(): Promise<{
 
 // ── 1日の申請上限を取得（通常 or イベント） ──
 async function getDailyLimit(isEventDay: boolean): Promise<number> {
-  // Normal applications are always based on 100,000 INMU per remaining day.
-  // Event limits remain configurable independently.
-  if (!isEventDay) return 100_000;
-  const key = "event_daily_purchase_limit";
-  const defaultVal = 500000;
+  const key = isEventDay ? "event_daily_purchase_limit" : "normal_daily_purchase_limit";
+  const defaultVal = isEventDay ? 500000 : 300000;
   try {
     const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, key));
     return s ? Number(s.value) : defaultVal;
@@ -144,42 +168,6 @@ async function getDailyLimit(isEventDay: boolean): Promise<number> {
 async function getUserDailyLimit(userId: string, isEventDay: boolean): Promise<number> {
   const baseLimit = await getDailyLimit(isEventDay);
   return baseLimit + (await hasActivePetSkill(userId, "leon") ? 100_000 : 0);
-}
-
-function wait(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function verifyOutboundInmuTransfer(signature: string, recipientWallet: string, expectedAmount: number) {
-  if (!/^[1-9A-HJ-NP-Za-km-z]{64,100}$/.test(signature)) throw new Error("TXIDの形式が不正です");
-  const rpcUrl = process.env.SOLANA_RPC;
-  if (!rpcUrl) throw new Error("SOLANA_RPCが設定されていません");
-  const deadline = Date.now() + 60_000;
-  while (Date.now() < deadline) {
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 1, method: "getTransaction",
-        params: [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }],
-      }),
-    });
-    const rpc = await response.json() as any;
-    const transaction = rpc?.result;
-    if (transaction) {
-      if (transaction.meta?.err) throw new Error("送金トランザクションが失敗しています");
-      const sumForRecipient = (balances: any[]) => (balances ?? [])
-        .filter(balance => balance?.mint === INMU_MINT && balance?.owner === recipientWallet)
-        .reduce((sum, balance) => sum + BigInt(balance?.uiTokenAmount?.amount ?? "0"), 0n);
-      const before = sumForRecipient(transaction.meta?.preTokenBalances);
-      const after = sumForRecipient(transaction.meta?.postTokenBalances);
-      const expectedRaw = BigInt(Math.round(expectedAmount * 10 ** INMU_DECIMALS));
-      if (after - before !== expectedRaw) throw new Error("送金先または送金額が申請内容と一致しません");
-      return;
-    }
-    await wait(1_500);
-  }
-  throw new Error("送金成功を確認できませんでした。申請状態は変更されていません");
 }
 
 // ── JST当月の購入実績合計（tradeHistoryTable の buy）──
@@ -197,7 +185,7 @@ async function getMonthlyBought(userId: string, monthStart: Date, monthEnd: Date
 }
 
 // ── JST当月の申請済み総額（pending + approved） ──
-async function getMonthlyApplied(userId: string, monthStart: Date, monthEnd: Date): Promise<number> {
+async function getMonthlyApplied(userId: string, monthStart: Date): Promise<number> {
   const [row] = await db
     .select({ total: sql<string>`coalesce(sum(cast(amount as numeric)), 0)` })
     .from(purchaseRequestsTable)
@@ -205,7 +193,6 @@ async function getMonthlyApplied(userId: string, monthStart: Date, monthEnd: Dat
       eq(purchaseRequestsTable.userId, userId),
       or(eq(purchaseRequestsTable.status, "pending"), eq(purchaseRequestsTable.status, "approved")),
       gte(purchaseRequestsTable.createdAt, monthStart),
-      lt(purchaseRequestsTable.createdAt, monthEnd),
     ));
   return Number(row?.total ?? 0);
 }
@@ -233,51 +220,58 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
   const userId = req.userId!;
   try {
     const now = new Date();
-    const cycle = getApplicationCycle(now);
-    const monthStart = cycle.start;
-    const monthEnd = cycle.end;
+    const monthStart = getMonthStartUTC(now);
+    const monthEnd   = getMonthEndUTC(now);
+    const daysInMonth = getDaysInCurrentMonth(now);
 
-    const [eventSettings, requests] = await Promise.all([
+    const [eventSettings, requests, normalDailyLimit, hasLeonSkill] = await Promise.all([
       getEventSettings(),
       db.select().from(purchaseRequestsTable)
         .where(eq(purchaseRequestsTable.userId, userId))
         .orderBy(desc(purchaseRequestsTable.createdAt))
         .limit(50),
-    ]);
-
-    const [monthlyBought, monthlyApplied, baseDailyLimit, dailyUsed, hasLeonSkill] = await Promise.all([
-      getMonthlyBought(userId, monthStart, monthEnd),
-      getMonthlyApplied(userId, monthStart, monthEnd),
-      getDailyLimit(eventSettings.isEventDay),
-      getDailyUsed(userId),
+      getNormalDailyLimit(),
       hasActivePetSkill(userId, "leon"),
     ]);
-    const dailyLimit = baseDailyLimit + (hasLeonSkill ? 100_000 : 0);
-    const monthlyCapacity = dailyLimit * cycle.remainingDays;
 
+    const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
+
+    const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed, baseRebateRate, petBonusesByUser] = await Promise.all([
+      getMonthlyBought(userId, monthStart, monthEnd),
+      getMonthlyApplied(userId, monthStart),
+      getUserDailyLimit(userId, eventSettings.isEventDay),
+      getDailyUsed(userId),
+      getBaseRebateRate(eventSettings.isEventDay),
+      getPetPurchaseBonuses([userId], eventSettings.isEventDay),
+    ]);
+
+    // 購入済み枚数 = min(実購入, 通常日上限 × 月日数)
     const effectiveTotalBought = Math.min(monthlyBought, monthlyCapacity);
-    // During the 16th-start migration, past purchases/applications must not
-    // reduce the capacity calculated only from the days still remaining.
-    const available = monthlyCapacity;
+    const available = Math.max(0, effectiveTotalBought - monthlyApplied);
     const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
-    const effectiveLimit = Math.min(dailyRemaining, available);
+    const effectiveLimit = effectiveTotalBought > 0
+      ? Math.min(dailyRemaining, available)
+      : dailyRemaining;
+
+    const petRebateBonuses = petBonusesByUser.get(userId) ?? [];
+    const petRebateBonusRate = petRebateBonuses.reduce((total, bonus) => total + bonus.rate, 0);
 
     res.json({
       requests,
       totalBought: effectiveTotalBought,      // 購入済み枚数（キャップ適用後）
       monthlyBought,                           // 当月の実購入合計（情報表示用）
       monthlyCapacity,                         // 当月の購入反映上限 = 通常日上限 × 月日数
-      remainingDays: cycle.remainingDays,
-      periodStart: cycle.start.toISOString(),
-      periodEnd: cycle.end.toISOString(),
       totalApplied: monthlyApplied,            // 当月の申請済み
       available,
       dailyLimit,
       dailyUsed,
       dailyRemaining,
       isEventMode: eventSettings.isEventDay,
-      hasLeonSkill,
       effectiveLimit,
+      baseRebateRate,                          // 管理者設定の基本還元率（通常/イベント）
+      petRebateBonuses,                        // PET由来の還元率内訳（レベル報酬・固有スキル）
+      petRebateBonusRate,
+      totalRebateRate: baseRebateRate + petRebateBonusRate,
     });
   } catch {
     res.status(500).json({ error: "Internal error" });
@@ -297,22 +291,27 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
 
   try {
     const now = new Date();
-    const cycle = getApplicationCycle(now);
-    const monthStart = cycle.start;
-    const monthEnd = cycle.end;
+    const monthStart = getMonthStartUTC(now);
+    const monthEnd   = getMonthEndUTC(now);
+    const daysInMonth = getDaysInCurrentMonth(now);
 
-    const eventSettings = await getEventSettings();
+    const [eventSettings, normalDailyLimit, hasLeonSkill] = await Promise.all([
+      getEventSettings(),
+      getNormalDailyLimit(),
+      hasActivePetSkill(userId, "leon"),
+    ]);
+
+    const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
 
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
-      getMonthlyApplied(userId, monthStart, monthEnd),
+      getMonthlyApplied(userId, monthStart),
       getUserDailyLimit(userId, eventSettings.isEventDay),
       getDailyUsed(userId),
     ]);
-    const monthlyCapacity = dailyLimit * cycle.remainingDays;
 
     const effectiveTotalBought = Math.min(monthlyBought, monthlyCapacity);
-    const available = monthlyCapacity;
+    const available = Math.max(0, effectiveTotalBought - monthlyApplied);
     const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
 
     // ① 1日の申請上限チェック
@@ -324,10 +323,10 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
       return;
     }
 
-    // ② 16日開始の申請期間における残り上限チェック
-    if (numAmount > available) {
+    // ② 今月の購入済み枚数残りチェック（購入実績がある場合のみ）
+    if (effectiveTotalBought > 0 && numAmount > available) {
       res.status(400).json({
-        error: `申請可能枚数を超えています（今月の申請可能: ${available.toLocaleString()} INMU / 残り${cycle.remainingDays}日）`,
+        error: `申請可能枚数を超えています（今月の申請可能: ${available.toLocaleString()} INMU = 購入済み ${effectiveTotalBought.toLocaleString()} - 申請済み ${monthlyApplied.toLocaleString()}）`,
         dailyLimit, dailyUsed, dailyRemaining, available, monthlyCapacity,
       });
       return;
@@ -412,20 +411,6 @@ router.put("/admin/purchase-requests/:id", requireAdmin, async (req, res): Promi
     const numRebate = rebateAmount != null && rebateAmount !== "" ? Number(rebateAmount) : null;
     const numRate   = rebateRate   != null && rebateRate   !== "" ? Number(rebateRate)   : null;
 
-    if (status === "approved" && numRebate != null && numRebate > 0 && request.status !== "approved") {
-      const signature = rebateTxSignature?.trim() ?? "";
-      if (!signature) { res.status(400).json({ error: "送金成功後のTXIDが必要です" }); return; }
-      const [recipient] = await db.select({ solWallet: profileTable.solWallet })
-        .from(profileTable).where(eq(profileTable.userId, request.userId));
-      if (!recipient?.solWallet) { res.status(400).json({ error: "送金先ウォレットが未設定です" }); return; }
-      try {
-        await verifyOutboundInmuTransfer(signature, recipient.solWallet, numRebate);
-      } catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : "送金確認に失敗しました" });
-        return;
-      }
-    }
-
     const reviewerId = req.adminId ?? req.userId ?? "admin";
     await db.update(purchaseRequestsTable).set({
       status,
@@ -437,7 +422,7 @@ router.put("/admin/purchase-requests/:id", requireAdmin, async (req, res): Promi
       rebateTxSignature: rebateTxSignature?.trim() || null,
     }).where(eq(purchaseRequestsTable.id, id));
 
-    if (status === "approved" && request.status !== "approved" && numRebate != null && numRebate > 0) {
+    if (status === "approved" && numRebate != null && numRebate > 0) {
       const txSig = rebateTxSignature?.trim() || null;
       await db.insert(transactionsTable).values({
         userId: request.userId,

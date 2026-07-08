@@ -15,62 +15,13 @@ type I18nContextType = {
 
 const I18nContext = createContext<I18nContextType | null>(null)
 
-function localizeDom(root: ParentNode, locale: Locale) {
-  const from = locale === 'en' ? dict.ja : dict.en
-  const to = dict[locale]
-  const translations = new Map<string, string>()
-  ;(Object.keys(to) as TranslationKey[]).forEach(key => {
-    translations.set(from[key], to[key])
-  })
-
-  const translateValue = (value: string) => {
-    const trimmed = value.trim()
-    if (!trimmed) return value
-    const translated = translations.get(trimmed)
-    return translated ? value.replace(trimmed, translated) : value
-  }
-
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  let node: Node | null = walker.nextNode()
-  while (node) {
-    if (node.nodeValue) {
-      const translated = translateValue(node.nodeValue)
-      if (translated !== node.nodeValue) node.nodeValue = translated
-    }
-    node = walker.nextNode()
-  }
-  root.querySelectorAll<HTMLElement>('[placeholder],[title],[aria-label]').forEach(element => {
-    ;['placeholder', 'title', 'aria-label'].forEach(attribute => {
-      const value = element.getAttribute(attribute)
-      if (value) element.setAttribute(attribute, translateValue(value))
-    })
-  })
-}
-
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window === 'undefined') return 'ja'
-    const stored = window.localStorage.getItem('inmu-locale')
-    return stored === 'en' ? 'en' : 'ja'
-  })
+  const [locale, setLocaleState] = useState<Locale>('ja')
 
   useEffect(() => {
-    document.documentElement.lang = locale
-    localizeDom(document.body, locale)
-    const observer = new MutationObserver(mutations => {
-      mutations.forEach(mutation => {
-        if (mutation.type === 'characterData' && mutation.target.parentNode) {
-          localizeDom(mutation.target.parentNode, locale)
-        }
-        mutation.addedNodes.forEach(node => {
-          if (node.nodeType === Node.ELEMENT_NODE) localizeDom(node as Element, locale)
-          if (node.nodeType === Node.TEXT_NODE && node.parentNode) localizeDom(node.parentNode, locale)
-        })
-      })
-    })
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
-    return () => observer.disconnect()
-  }, [locale])
+    const stored = window.localStorage.getItem('inmu-locale') as Locale | null
+    if (stored === 'ja' || stored === 'en') setLocaleState(stored)
+  }, [])
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l)

@@ -1,9 +1,8 @@
 import { Router } from "express";
-import { db, pool } from "@workspace/db";
+import { db } from "@workspace/db";
 import { profileTable, transactionsTable, missionParticipationsTable } from "@workspace/db/schema";
 import { sql, eq } from "drizzle-orm";
 import { requireAuthOrAdmin } from "../middlewares/session";
-import { ensureLifetimePointsTracking } from "../services/lifetime-points";
 
 const router = Router();
 
@@ -105,17 +104,14 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   }
 });
 
-// ── 累計獲得ポイントランキング（使用済みポイントを含む） ──
+// ── ポイントランキング ──
 router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
-    await ensureLifetimePointsTracking();
-    const { rows } = await pool.query(`
-      SELECT p."userId", p."displayName", p."participationCount",
-             p."lifetimeEarnedPoints" AS "totalEarnedPoints"
-      FROM profile p
-      ORDER BY "totalEarnedPoints" DESC
-      LIMIT 100
-    `);
+    const rows = await db
+      .select()
+      .from(profileTable)
+      .orderBy(sql`${profileTable.monthlyPoints} DESC`)
+      .limit(100);
 
     res.set("Cache-Control", "no-store");
     res.json(
@@ -123,8 +119,8 @@ router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<voi
         rank: i + 1,
         userId: p.userId,
         displayName: p.displayName,
-        points: Number(p.totalEarnedPoints ?? 0),
-        participations: Number(p.participationCount ?? 0),
+        points: Number(p.monthlyPoints),
+        participations: p.participationCount,
       })),
     );
   } catch {

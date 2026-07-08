@@ -27,15 +27,12 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
     const rawSkillActiveIds: unknown[] = Array.isArray(state?.skillActiveCharacterIds)
       ? state.skillActiveCharacterIds
       : legacySingle != null ? [legacySingle] : [];
-    const rawActivePetIds: unknown[] = Array.isArray(state?.activePetIds) ? state.activePetIds : [];
     const skillActiveCharacterIds = rawSkillActiveIds.map(normalizeId);
-    const activePetIds = rawActivePetIds.map(normalizeId);
     // Ownership is authoritative. PET saves contain default stats for characters the
     // user does not own, so character-state presence must never unlock a skill.
-    // A unique skill is active when the character is in the explicit skill-activation
-    // slot (skillActiveCharacterIds) OR in the training/育成 slot (activePetIds).
-    const isActive = skillActiveCharacterIds.includes(targetId) || activePetIds.includes(targetId);
-    return Boolean(ownership.rowCount) && isActive && level >= Math.max(1, minLevel);
+    // A unique skill is only active for up to 3 characters explicitly set via the
+    // "固有スキル発動" selector, independent of which training slots are occupied.
+    return Boolean(ownership.rowCount) && skillActiveCharacterIds.includes(targetId) && level >= Math.max(1, minLevel);
   } catch (error) {
     console.error("[PetSkills] lookup failed", { userId, characterId, error });
     return false;
@@ -117,7 +114,7 @@ export async function getSkillLockStatus(userId: string, characterIds: string[])
         const jstOffset = 9 * 3600 * 1000;
         const today = new Date(Date.now() + jstOffset).toISOString().slice(0, 10);
         result[id] = lastLogin ? new Date(lastLogin.getTime() + jstOffset).toISOString().slice(0, 10) === today : false;
-      } else if (normalized === "leon") {
+      } else if (normalized === "leon" || normalized === "inmu-festival") {
         const r = await pool.query(
           `SELECT 1 FROM "purchaseRequests" WHERE "userId"=$1 AND "createdAt">=$2 LIMIT 1`,
           [userId, todayStart.toISOString()],

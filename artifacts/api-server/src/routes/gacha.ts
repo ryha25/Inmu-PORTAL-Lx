@@ -131,23 +131,6 @@ function jstTomorrowStartUtc(): Date {
   return new Date(today.getTime() + 24 * 3600 * 1000);
 }
 
-// ── GET /api/gacha/prices ── 認証ユーザー向け価格取得（管理者不要）
-router.get("/gacha/prices", requireAuth, async (_req, res): Promise<void> => {
-  try {
-    const { getSystemSettingNumber } = await import("../services/system-settings-store");
-    const [single, eleven, slot2, slot3] = await Promise.all([
-      getSystemSettingNumber("gacha_paid_single_inmu", 10_000),
-      getSystemSettingNumber("gacha_paid_eleven_inmu", 100_000),
-      getSystemSettingNumber("slot_unlock_2_inmu", 1_000_000),
-      getSystemSettingNumber("slot_unlock_3_inmu", 2_000_000),
-    ]);
-    res.json({ single, eleven, slot2, slot3 });
-  } catch (e) {
-    console.error("[Gacha] prices error:", e);
-    res.status(500).json({ error: "Internal error" });
-  }
-});
-
 // ── GET /api/gacha/free-status ──
 router.get("/gacha/free-status", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
@@ -158,18 +141,11 @@ router.get("/gacha/free-status", requireAuth, async (req, res): Promise<void> =>
       used: !state.canDrawNormal,
       usedCount: state.normalUsed,
       allowance: 1 + state.sharedBonus,
-      // remaining = ベース残り（1日1回分のみ）
-      remaining: state.normalBaseRemaining,
+      remaining: state.normalRemaining,
       baseRemaining: state.normalBaseRemaining,
       sharedRemaining: state.sharedRemaining,
       sharedBonus: state.sharedBonus,
       nextReset,
-      paidUsed: !state.canDrawPaid,
-      // paidRemaining = ベース残り（1日1回分のみ）
-      paidRemaining: state.paidBaseRemaining,
-      paidBaseRemaining: state.paidBaseRemaining,
-      canDrawNormal: state.canDrawNormal,
-      canDrawPaid: state.canDrawPaid,
     });
   } catch (e) {
     console.error("[Gacha] free-status error:", e);
@@ -307,8 +283,8 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
       ...(p.type === "points" ? { baseAmount: p.amount } : {}),
     }));
     const { rows: spinRows } = await pool.query(
-      `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree","gachaKind")
-       VALUES ($1,'free',$2::jsonb,$3,$4,$5,'pending',$6,0,true,'normal') RETURNING id`,
+      `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
+       VALUES ($1,'free',$2::jsonb,$3,$4,$5,'pending',$6,0,true) RETURNING id`,
       [userId, JSON.stringify(resultsJson), totalPoints, hasInmu, inmuCount, wasGuaranteed],
     );
     const spinId = spinRows[0].id as number;
