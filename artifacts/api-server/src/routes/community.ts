@@ -13,6 +13,7 @@ import { requireAuth } from "../middlewares/session";
 const router = Router();
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
+const TEST_ACCOUNT_DISPLAY_NAME = "\u30ac\u30c1\u30e3\u30c6\u30b9\u30c8";
 
 async function fetchOnChainInmuBalance(wallet: string): Promise<number | null> {
   const rpcUrl = process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
@@ -74,7 +75,7 @@ router.get("/community", requireAuth, async (req, res): Promise<void> => {
         balance: profileTable.balance,
         solWallet: profileTable.solWallet,
         monthlyPoints: profileTable.monthlyPoints,
-      }).from(profileTable).where(ne(profileTable.displayName, 'ガチャテスト')),
+      }).from(profileTable).where(ne(profileTable.displayName, TEST_ACCOUNT_DISPLAY_NAME)),
       db.select({
         userId: missionParticipationsTable.userId,
         count: sql<string>`count(*)`,

@@ -347,6 +347,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       achievementClearsRow,
       weeklyLoginCountRow,
       weeklyDexVoteCountRow,
+      lifetimeEarnedPointsRow,
     ] = await Promise.all([
       db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
         .from(missionParticipationsTable)
@@ -405,6 +406,11 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       // dex votes this week
       db.select({ cnt: sql<number>`count(*)` }).from(pointsTable)
         .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "dex_vote"), gte(pointsTable.createdAt, weekStart)))
+        .then(r => r[0]),
+      // Same lifetime-earned total used by the cumulative points ranking.
+      db.select({ total: sql<string>`coalesce(sum(cast(${pointsTable.amount} as numeric)), '0')` })
+        .from(pointsTable)
+        .where(and(eq(pointsTable.userId, userId), sql`cast(${pointsTable.amount} as numeric) > 0`))
         .then(r => r[0]),
     ]);
 
@@ -493,7 +499,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       } else if (condType === "achievement_clears_total") {
         current = Number(achievementClearsRow?.cnt ?? 0);
       } else if (condType === "monthly_points") {
-        current = Number(profile?.monthlyPoints ?? 0);
+        current = Math.max(0, Number(lifetimeEarnedPointsRow?.total ?? 0));
       } else if (condType === "login_weekly") {
         current = Number(weeklyLoginCountRow?.cnt ?? 0);
       } else if (condType === "dex_vote_weekly") {
@@ -708,7 +714,13 @@ async function checkCondition(
     const cur = Number(row?.cnt ?? 0);
     if (cur < condVal) return { met: false, errorMsg: `アチーブメント達成数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   } else if (condType === "monthly_points") {
-    const cur = Number(profile?.monthlyPoints ?? 0);
+    const [row] = await db.select({
+      total: sql<string>`coalesce(sum(cast(${pointsTable.amount} as numeric)), '0')`,
+    }).from(pointsTable).where(and(
+      eq(pointsTable.userId, userId),
+      sql`cast(${pointsTable.amount} as numeric) > 0`,
+    ));
+    const cur = Math.max(0, Number(row?.total ?? 0));
     if (cur < condVal) return { met: false, errorMsg: `累計ポイント保有数が不足しています（必要: ${condVal.toLocaleString()}pt、現在: ${cur.toLocaleString()}pt）` };
   } else if (condType === "login_weekly") {
     const ws = getWeekStart();
