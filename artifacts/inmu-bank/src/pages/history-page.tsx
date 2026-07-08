@@ -42,6 +42,8 @@ type PurchaseRequestsData = {
   monthlyCapacity: number    // 今月の反映上限 = 通常日上限 × 月日数
   totalApplied: number       // 今月の申請済み
   available: number
+  remainingDays: number      // サイクル残り日数
+  remainingMonthlyCapacity: number  // 今月の申請可能残り上限 = 残り日数 × 1日上限
   dailyLimit: number
   dailyUsed: number
   dailyRemaining: number
@@ -113,6 +115,8 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
   const [monthlyCapacity,  setMonthlyCapacity]  = useState<number>(0)
   const [totalApplied,     setTotalApplied]     = useState<number>(0)
   const [available,        setAvailable]        = useState<number>(0)
+  const [remainingDays,              setRemainingDays]              = useState<number>(0)
+  const [remainingMonthlyCapacity,   setRemainingMonthlyCapacity]   = useState<number>(0)
   const [dailyLimit,       setDailyLimit]       = useState<number>(300000)
   const [dailyUsed,        setDailyUsed]        = useState<number>(0)
   const [dailyRemaining,   setDailyRemaining]   = useState<number>(300000)
@@ -137,6 +141,8 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
           setMonthlyCapacity(d.monthlyCapacity ?? 0)
           setTotalApplied(d.totalApplied ?? 0)
           setAvailable(d.available ?? 0)
+          setRemainingDays(d.remainingDays ?? 0)
+          setRemainingMonthlyCapacity(d.remainingMonthlyCapacity ?? 0)
           setDailyLimit(d.dailyLimit ?? 300000)
           setDailyUsed(d.dailyUsed ?? 0)
           setDailyRemaining(d.dailyRemaining ?? 300000)
@@ -221,8 +227,8 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
                   <p className="font-mono text-sm font-bold text-yellow-500">{totalApplied.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground">今月の申請可能残り</p>
-                  <p className="font-mono text-sm font-bold text-green-500">{available.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground">今月の申請可能残り（残り{remainingDays}日分）</p>
+                  <p className="font-mono text-sm font-bold text-green-500">{remainingMonthlyCapacity.toLocaleString()}</p>
                 </div>
               </div>
               {/* 本日の申請状況ブロック */}
@@ -247,7 +253,7 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
               <p className="text-[10px] text-muted-foreground">今日申請可能な最大枚数</p>
               <p className="font-mono text-lg font-bold text-primary">{effectiveLimit.toLocaleString()} INMU</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                ＝ 本日残り（{dailyRemaining.toLocaleString()}）と今月の申請可能残り（{available.toLocaleString()}）の少ない方
+                ＝ 本日残り（{dailyRemaining.toLocaleString()}）と今月の申請可能残り（{remainingMonthlyCapacity.toLocaleString()}）の少ない方
               </p>
             </div>
 

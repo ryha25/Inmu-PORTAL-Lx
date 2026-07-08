@@ -1112,6 +1112,8 @@ export function PetPage() {
       if (!data.alreadyClaimed) {
         toast.success('Lv.10報酬として100,000ポイントを受け取りました！')
         setBalances(current => ({ ...current, points: current.points + 100_000 }))
+        // サーバー側の最新ポイント値と同期する
+        void refreshBalances(false)
       }
     }).catch(error => {
       levelRewardSyncRef.current.delete(key)

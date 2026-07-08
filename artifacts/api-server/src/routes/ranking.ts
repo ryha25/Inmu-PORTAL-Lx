@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { profileTable, transactionsTable, missionParticipationsTable } from "@workspace/db/schema";
+import { profileTable, transactionsTable, missionParticipationsTable, pointsTable } from "@workspace/db/schema";
 import { sql, eq } from "drizzle-orm";
 import { requireAuthOrAdmin } from "../middlewares/session";
 
@@ -104,23 +104,31 @@ router.get("/ranking", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   }
 });
 
-// ── ポイントランキング ──
+// ── ポイントランキング（累計獲得ポイント） ──
 router.get("/ranking/points", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
-    const rows = await db
-      .select()
-      .from(profileTable)
-      .orderBy(sql`${profileTable.monthlyPoints} DESC`)
+    // points テーブルから累計獲得ポイントを集計し、プロフィールと結合してランキングを生成する
+    const cumulativeRows = await db
+      .select({
+        userId: pointsTable.userId,
+        displayName: profileTable.displayName,
+        participations: profileTable.participationCount,
+        totalEarned: sql<string>`coalesce(sum(cast(${pointsTable.amount} as numeric)), '0')`,
+      })
+      .from(pointsTable)
+      .innerJoin(profileTable, eq(pointsTable.userId, profileTable.userId))
+      .groupBy(pointsTable.userId, profileTable.displayName, profileTable.participationCount)
+      .orderBy(sql`sum(cast(${pointsTable.amount} as numeric)) DESC`)
       .limit(100);
 
     res.set("Cache-Control", "no-store");
     res.json(
-      rows.map((p, i) => ({
+      cumulativeRows.map((p, i) => ({
         rank: i + 1,
         userId: p.userId,
         displayName: p.displayName,
-        points: Number(p.monthlyPoints),
-        participations: p.participationCount,
+        points: Math.max(0, Number(p.totalEarned)),
+        participations: p.participations,
       })),
     );
   } catch {

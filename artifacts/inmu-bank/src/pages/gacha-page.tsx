@@ -822,6 +822,7 @@ export function GachaPage() {
   const [histOpen,setHistOpen]   = useState(true)
   const [openFlash,setOpenFlash] = useState(false)
   const [newCharacterRevealIndex,setNewCharacterRevealIndex] = useState(0)
+  const [jackpotSeen,setJackpotSeen] = useState(false)
   const [freeUsed,setFreeUsed]   = useState(true)
   const [freeRemaining,setFreeRemaining] = useState(0)
   const [freeSharedRemaining,setFreeSharedRemaining] = useState(0)
@@ -1080,7 +1081,7 @@ export function GachaPage() {
     return ()=>{cancelled=true}
   },[])
 
-  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);setNewCharacterRevealIndex(0);loadPts();loadHist();loadFreeStatus();loadPaidFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
+  const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);setNewCharacterRevealIndex(0);setJackpotSeen(false);loadPts();loadHist();loadFreeStatus();loadPaidFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
   const isMulti=(result?.results.length??0)>1
   const animationPrize=result?.results.find(prize=>prize.type==='character')??result?.results[0]
 
@@ -1094,8 +1095,8 @@ export function GachaPage() {
   }
 
   /* 笊絶武笊絶武 JACKPOT SCREEN 笊絶武笊絶武 */
-  if(phase==='done'&&result?.hasInmu){
-    return <JackpotScreen pts={pts} onReset={reset} profile={profile} unread={unread} />
+  if(phase==='done'&&result?.hasInmu&&!jackpotSeen){
+    return <JackpotScreen pts={pts} onReset={isMulti?()=>setJackpotSeen(true):reset} profile={profile} unread={unread} />
   }
 
   /* 笊絶武笊絶武 IDLE SCREEN 笊絶武笊絶武 */

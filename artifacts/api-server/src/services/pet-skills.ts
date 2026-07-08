@@ -114,12 +114,15 @@ export async function getSkillLockStatus(userId: string, characterIds: string[])
         const jstOffset = 9 * 3600 * 1000;
         const today = new Date(Date.now() + jstOffset).toISOString().slice(0, 10);
         result[id] = lastLogin ? new Date(lastLogin.getTime() + jstOffset).toISOString().slice(0, 10) === today : false;
-      } else if (normalized === "leon" || normalized === "inmu-festival") {
+      } else if (normalized === "leon") {
         const r = await pool.query(
           `SELECT 1 FROM "purchaseRequests" WHERE "userId"=$1 AND "createdAt">=$2 LIMIT 1`,
           [userId, todayStart.toISOString()],
         );
         result[id] = (r.rowCount ?? 0) > 0;
+      } else if (normalized === "inmu-festival") {
+        // イベント期間外はロックなし（イベント検知未実装のため常時 false）
+        result[id] = false;
       } else {
         result[id] = false;
       }

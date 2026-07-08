@@ -304,6 +304,38 @@ router.post("/admin/record-sol-transfer", requireAdmin, async (req, res): Promis
     return;
   }
   try {
+    // オンチェーンでトランザクションが確定済みか確認してからDBを更新する
+    const rpcUrl = process.env.SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
+    let txConfirmed = false;
+    try {
+      const rpcRes = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1,
+          method: "getTransaction",
+          params: [txSignature, { encoding: "json", maxSupportedTransactionVersion: 0 }],
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (rpcRes.ok) {
+        const rpcData = await rpcRes.json() as { result?: { meta?: { err: unknown } | null } | null };
+        const txResult = rpcData?.result;
+        if (txResult && txResult.meta !== undefined) {
+          txConfirmed = txResult.meta?.err === null;
+        }
+      }
+    } catch (rpcError) {
+      console.warn("[AdminSolTransfer] RPC verification failed, proceeding with caution:", rpcError);
+      // RPC 接続失敗時は処理を中断して管理者に確認を求める
+      res.status(502).json({ error: "オンチェーン送金の確認に失敗しました。ネットワークを確認して再試行してください。" });
+      return;
+    }
+    if (!txConfirmed) {
+      res.status(400).json({ error: "指定された txSignature はオンチェーンで確定していないか、トランザクションが失敗しています。送金完了後に再度記録してください。" });
+      return;
+    }
+
     // 取引履歴に記録
     await db.insert(transactionsTable).values({
       userId: targetUserId,

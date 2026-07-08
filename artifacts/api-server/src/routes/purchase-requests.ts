@@ -235,6 +235,8 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     ]);
 
     const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
+    // サイクル残り日数（今日〜15日終わりまで）
+    const remainingDays = Math.max(0, Math.ceil((monthEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
 
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed, baseRebateRate, petBonusesByUser] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
@@ -252,6 +254,8 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const effectiveLimit = effectiveTotalBought > 0
       ? Math.min(dailyRemaining, available)
       : dailyRemaining;
+    // 今月の申請可能残り上限 = 残り日数 × 1日上限
+    const remainingMonthlyCapacity = dailyLimit * remainingDays;
 
     const petRebateBonuses = petBonusesByUser.get(userId) ?? [];
     const petRebateBonusRate = petRebateBonuses.reduce((total, bonus) => total + bonus.rate, 0);
@@ -263,6 +267,8 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
       monthlyCapacity,                         // 当月の購入反映上限 = 通常日上限 × 月日数
       totalApplied: monthlyApplied,            // 当月の申請済み
       available,
+      remainingDays,                           // サイクル残り日数
+      remainingMonthlyCapacity,                // 今月の申請可能残り上限 = 残り日数 × 1日上限
       dailyLimit,
       dailyUsed,
       dailyRemaining,
