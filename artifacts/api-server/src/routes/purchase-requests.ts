@@ -236,7 +236,8 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
 
     const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
     // サイクル残り日数（今日〜15日終わりまで）
-    const remainingDays = Math.max(0, Math.ceil((monthEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+    // 当日は除いて翌日以降の残り日数をカウント（例: 7/8なら7/9〜7/15の7日）
+    const remainingDays = Math.max(0, Math.floor((monthEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
 
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed, baseRebateRate, petBonusesByUser] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
