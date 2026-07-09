@@ -365,8 +365,11 @@ export function usePetState() {
   const itemsBaselineRef = useRef<{ sleepTea: number; premiumInventory: number } | null>(null)
   const now = Date.now()
   const effectiveSave = materializeSaveAt(save, now)
-  const selectedStats = effectiveSave.pets[save.selectedPetId]
-  const isSleeping = effectiveSave.sleepStartedAt[save.selectedPetId] > 0
+  const selectedPetId = PET_BY_ID[save.selectedPetId] ? save.selectedPetId : PET_DEFINITIONS[0].id
+  const selectedStats = effectiveSave.pets[selectedPetId] ?? DEFAULT_STATS
+  const isSleeping = (effectiveSave.sleepStartedAt[selectedPetId] ?? 0) > 0
+  const activePetIds = effectiveSave.activePetIds.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3)
+  const skillActiveCharacterIds = effectiveSave.skillActiveCharacterIds.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3)
   const premiumFood = getPremiumFoodState(effectiveSave.premiumFood, now)
 
   useEffect(() => {
@@ -685,14 +688,14 @@ export function usePetState() {
   }
 
   return {
-    selectedPetId: save.selectedPetId,
-    activePetIds: effectiveSave.activePetIds,
+    selectedPetId,
+    activePetIds,
     selectedStats,
     petStats: effectiveSave.pets,
-    cooldownUntil: effectiveSave.cooldownUntil[save.selectedPetId],
-    lastCareAt: effectiveSave.lastCareAt[save.selectedPetId],
-    expressionState: effectiveSave.expressions[save.selectedPetId],
-    pettingState: effectiveSave.petting[save.selectedPetId],
+    cooldownUntil: effectiveSave.cooldownUntil[selectedPetId] ?? EMPTY_COOLDOWNS,
+    lastCareAt: effectiveSave.lastCareAt[selectedPetId] ?? EMPTY_ACTION_TIMES,
+    expressionState: effectiveSave.expressions[selectedPetId] ?? { kind: 'default', until: 0 },
+    pettingState: effectiveSave.petting[selectedPetId] ?? { count: 0, lastAt: 0 },
     premiumFood,
     items: effectiveSave.items,
     isSleeping,
@@ -702,11 +705,11 @@ export function usePetState() {
     setExpression,
     grantPremiumFood,
     useSleepTea,
-    maxLevel: PET_BY_ID[save.selectedPetId].maxLevel,
+    maxLevel: PET_BY_ID[selectedPetId].maxLevel,
     isHydrated,
     syncError,
     skillState: effectiveSave.skillState,
-    skillActiveCharacterIds: effectiveSave.skillActiveCharacterIds,
+    skillActiveCharacterIds,
     setSkillActiveCharacterIds,
     skillLockStatus,
     refreshSkillLockStatus,

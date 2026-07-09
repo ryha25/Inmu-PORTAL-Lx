@@ -567,6 +567,74 @@ type PetRewardRequest = {
   txHash: string | null
 }
 
+type PetLevelReward = PetDefinition['levelRewards'][number]
+
+type PetRewardAmounts = {
+  festivalLv15: number
+  gachaLv20: number
+  gachaLv30: number
+}
+
+const DEFAULT_PET_REWARD_AMOUNTS: PetRewardAmounts = {
+  festivalLv15: 30_000,
+  gachaLv20: 50_000,
+  gachaLv30: 250_000,
+}
+
+const PET_DISPLAY_NAMES: Record<PetId, string> = {
+  nyarushian: 'ニャルシアン',
+  takuya: '拓也',
+  leon: 'レオン',
+  'inmu-festival': 'INMUくん（810祭りVer.）',
+}
+
+function formatRewardInmu(amount: number) {
+  return `${amount.toLocaleString('ja-JP')} INMU`
+}
+
+function getDisplayLevelRewards(pet: PetDefinition, rewardAmounts: PetRewardAmounts): PetLevelReward[] {
+  const petName = PET_DISPLAY_NAMES[pet.id] ?? pet.name
+
+  if (pet.id === 'inmu-festival') {
+    return pet.levelRewards.map(reward => {
+      if (reward.level !== 15) return reward
+      return {
+        ...reward,
+        label: formatRewardInmu(rewardAmounts.festivalLv15),
+        detail: '購入申請還元率 +5%（全対象）',
+        delivery: '申請式（承認後送金）',
+        inmuAmount: rewardAmounts.festivalLv15,
+      }
+    })
+  }
+
+  if (pet.id === 'nyarushian' || pet.id === 'takuya' || pet.id === 'leon') {
+    return pet.levelRewards.map(reward => {
+      if (reward.level === 20) {
+        return {
+          ...reward,
+          label: `${petName} Lv.20報酬 + ${formatRewardInmu(rewardAmounts.gachaLv20)}`,
+          detail: 'INMU報酬は申請式です。管理画面で送金済み後に反映されます。',
+          delivery: '申請式（承認後送金）',
+          inmuAmount: rewardAmounts.gachaLv20,
+        }
+      }
+      if (reward.level === 30) {
+        return {
+          ...reward,
+          label: `${petName} Lv.30報酬 + ${formatRewardInmu(rewardAmounts.gachaLv30)} + 購入申請還元 +5%`,
+          detail: `INMU合計 ${formatRewardInmu(rewardAmounts.gachaLv20 + rewardAmounts.gachaLv30)} / 購入申請還元 +5%`,
+          delivery: '申請式（承認後送金）',
+          inmuAmount: rewardAmounts.gachaLv30,
+        }
+      }
+      return reward
+    })
+  }
+
+  return [...pet.levelRewards]
+}
+
 const PET_REWARD_STATUS_LABEL: Record<PetRewardRequest['status'], string> = {
   pending: '申請中',
   rejected: '却下',
@@ -576,12 +644,14 @@ const PET_REWARD_STATUS_LABEL: Record<PetRewardRequest['status'], string> = {
 function RewardsPanel({
   pet,
   level,
+  rewards,
   requests,
   requestBusy,
   onRequest,
 }: {
   pet: PetDefinition
   level: number
+  rewards: readonly PetLevelReward[]
   requests: readonly PetRewardRequest[]
   requestBusy: string | null
   onRequest: (pet: PetDefinition, level: number) => void
@@ -590,7 +660,7 @@ function RewardsPanel({
     <section className="rounded-lg border border-amber-300/15 bg-[#0d0916] p-4">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-100"><Gift className="size-4 text-amber-300" />レベル報酬</h2>
       <div className="flex flex-col gap-2">
-        {pet.levelRewards.map(reward => {
+        {rewards.map(reward => {
           const unlocked = level >= reward.level
           const sourceKey = `pet:${pet.id}:level:${reward.level}`
           const request = requests.find(candidate => candidate.sourceKey === sourceKey)
@@ -821,7 +891,7 @@ function LevelRewardEffectGrid({
         <div className="grid grid-cols-3 gap-1.5">
           {[0, 1, 2].map(slotIndex => {
             const slotNumber = slotIndex + 1
-            const locked = false
+            const locked = slotNumber > unlockedSlots
             const activePet = activePets[slotIndex]
 
             if (locked) {
@@ -1004,6 +1074,7 @@ export function PetPage() {
   const [unlockedSlots, setUnlockedSlots] = useState(1)
   const [slotBusy, setSlotBusy] = useState(false)
   const [slotPrices, setSlotPrices] = useState({ slot2: 1_000_000, slot3: 2_000_000 })
+  const [petRewardAmounts, setPetRewardAmounts] = useState(DEFAULT_PET_REWARD_AMOUNTS)
   const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
   const levelRewardSyncRef = useRef(new Set<string>())
@@ -1048,10 +1119,21 @@ export function PetPage() {
       try {
         const response = await fetch('/api/pet-prices', { credentials: 'include' })
         if (!response.ok) return
-        const data = await response.json() as { slot_unlock_2_inmu?: number; slot_unlock_3_inmu?: number }
+        const data = await response.json() as {
+          slot_unlock_2_inmu?: number
+          slot_unlock_3_inmu?: number
+          reward_level_inmu?: number
+          reward_gacha_lv20_inmu?: number
+          reward_gacha_lv30_inmu?: number
+        }
         setSlotPrices({
           slot2: Number.isFinite(data.slot_unlock_2_inmu) ? Number(data.slot_unlock_2_inmu) : 1_000_000,
           slot3: Number.isFinite(data.slot_unlock_3_inmu) ? Number(data.slot_unlock_3_inmu) : 2_000_000,
+        })
+        setPetRewardAmounts({
+          festivalLv15: Number.isFinite(data.reward_level_inmu) ? Number(data.reward_level_inmu) : DEFAULT_PET_REWARD_AMOUNTS.festivalLv15,
+          gachaLv20: Number.isFinite(data.reward_gacha_lv20_inmu) ? Number(data.reward_gacha_lv20_inmu) : DEFAULT_PET_REWARD_AMOUNTS.gachaLv20,
+          gachaLv30: Number.isFinite(data.reward_gacha_lv30_inmu) ? Number(data.reward_gacha_lv30_inmu) : DEFAULT_PET_REWARD_AMOUNTS.gachaLv30,
         })
       } catch {
         // Keep default prices if they cannot be loaded.
@@ -1112,8 +1194,6 @@ export function PetPage() {
       if (!data.alreadyClaimed) {
         toast.success('Lv.10報酬として100,000ポイントを受け取りました！')
         setBalances(current => ({ ...current, points: current.points + 100_000 }))
-        // サーバー側の最新ポイント値と同期する
-        void refreshBalances(false)
       }
     }).catch(error => {
       levelRewardSyncRef.current.delete(key)
@@ -1178,7 +1258,7 @@ export function PetPage() {
           .filter((id, index, list) => list.indexOf(id) === index)
         setOwnedPetIds(owned)
         setOwnershipError(false)
-        setActivePetIds(current => current.filter(id => owned.includes(id)).slice(0, 3))
+        setActivePetIds(current => current.filter(id => owned.includes(id)).slice(0, unlockedSlots))
         if (owned.length > 0 && !owned.includes(selectedPetId)) selectPet(owned[0])
       } catch {
         if (!cancelled) {
@@ -1194,7 +1274,7 @@ export function PetPage() {
       cancelled = true
       window.removeEventListener('inmu-pet-ownership-changed', loadOwnership)
     }
-  }, [selectedPetId, selectPet, setActivePetIds])
+  }, [unlockedSlots])
 
   const refreshBalances = useCallback(async (connect = false) => {
     try {
@@ -1390,7 +1470,7 @@ export function PetPage() {
   }
 
   function handleAddRewardSlot(id: PetId) {
-    if (!ownedPetIds?.includes(id) || activePetIds.includes(id) || activePetIds.length >= 3) return
+    if (!ownedPetIds?.includes(id) || activePetIds.includes(id) || activePetIds.length >= unlockedSlots) return
     setActivePetIds(current => [...current, id])
     setMessage(`${PET_BY_ID[id].name}のレベル報酬効果を発動しました`)
   }
@@ -1535,7 +1615,14 @@ export function PetPage() {
               </div>
               <SkillPanel pet={pet} />
               <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} />
-              <RewardsPanel pet={pet} level={selectedStats.level} requests={rewardRequests} requestBusy={rewardRequestBusy} onRequest={requestLevelReward} />
+              <RewardsPanel
+                pet={pet}
+                level={selectedStats.level}
+                rewards={getDisplayLevelRewards(pet, petRewardAmounts)}
+                requests={rewardRequests}
+                requestBusy={rewardRequestBusy}
+                onRequest={requestLevelReward}
+              />
             </main>
           </div>
         )}

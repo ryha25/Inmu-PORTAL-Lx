@@ -1868,6 +1868,18 @@ export function GachaPage() {
                   </div>
                 )
               })}
+              <button type="button" onClick={reset} style={{
+                border:'1px solid rgba(218,165,32,.55)',
+                borderRadius:12,
+                padding:'12px 24px',
+                background:'linear-gradient(135deg,rgba(55,34,9,.92),rgba(16,10,4,.92))',
+                color:'#ffd700',
+                fontWeight:900,
+                letterSpacing:'0.04em',
+                boxShadow:'0 0 22px rgba(218,165,32,.22)'
+              }}>
+                {'\u30ac\u30c1\u30e3\u753b\u9762\u3078\u623b\u308b'}
+              </button>
             </div>
           )}
 
@@ -2032,9 +2044,10 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
               <h1 style={{margin:0,fontSize:'min(10vw,36px)',fontWeight:900,
                 fontFamily:'Georgia,serif',letterSpacing:'0.12em',color:'#ffd700',
                 animation:'ga-jppulse 1.3s ease-in-out infinite, ga-jpzoom .52s ease-out forwards',opacity:0}}>
-                笳・JACKPOT !! 笳・              </h1>
+                {'\u25c6 JACKPOT !! \u25c6'}
+              </h1>
               <div style={{display:'flex',justifyContent:'center',gap:9,marginTop:5}}>
-                {['✦', '✧', '★', '✧', '✦'].map((s,i)=>(
+                {['\u2726', '\u2727', '\u2605', '\u2727', '\u2726'].map((s,i)=>(
                   <span key={i} style={{fontSize:20,color:'#ffd700',
                     animation:`ga-sparkle ${.68+i*.17}s ease-in-out ${i*.13}s infinite`}}>{s}</span>
                 ))}

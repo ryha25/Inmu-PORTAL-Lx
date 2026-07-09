@@ -60,6 +60,9 @@ const PUBLIC_PRICE_KEYS = [
   "gacha_paid_eleven_inmu",
   "slot_unlock_2_inmu",
   "slot_unlock_3_inmu",
+  "reward_level_inmu",
+  "reward_gacha_lv20_inmu",
+  "reward_gacha_lv30_inmu",
 ] as const;
 
 router.get("/pet-prices", async (_req, res): Promise<void> => {
