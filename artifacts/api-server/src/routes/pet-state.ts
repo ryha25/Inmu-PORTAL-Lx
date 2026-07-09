@@ -17,6 +17,13 @@ function extractSkillActiveIds(state: unknown): string[] {
   return [];
 }
 
+function extractActivePetIds(state: unknown): string[] {
+  if (!state || typeof state !== "object" || Array.isArray(state)) return [];
+  const record = state as Record<string, unknown>;
+  if (!Array.isArray(record.activePetIds)) return [];
+  return record.activePetIds.map(String).slice(0, 3);
+}
+
 router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensurePetStateTable();
@@ -72,6 +79,9 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
     const existingState = existing.rows[0]?.state && typeof existing.rows[0].state === "object" ? existing.rows[0].state : null;
     const prevActiveSkillIds = extractSkillActiveIds(existingState);
     const nextActiveSkillIds = extractSkillActiveIds(state);
+    const prevActivePetIds = extractActivePetIds(existingState);
+    const nextActivePetIds = extractActivePetIds(state);
+    const baselineActivePetIds = extractActivePetIds(baseline);
     const removedSkillIds = prevActiveSkillIds.filter(id => !nextActiveSkillIds.includes(id));
     if (removedSkillIds.length > 0) {
       const lockStatus = await getSkillLockStatus(req.userId!, removedSkillIds);
@@ -82,8 +92,16 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
     }
     // Level-reward effect slots are independent from paid training-slot unlocks.
     // Keep up to three selected characters instead of trimming this list to the
-    // number of unlocked training slots on every autosave.
-    if (Array.isArray(state.activePetIds)) state.activePetIds = state.activePetIds.slice(0, 3);
+    // number of unlocked training slots on every autosave. Older clients can
+    // still send a stale one-slot snapshot, so preserve the DB value in that
+    // specific downgrade case instead of accidentally clearing slots 2-3.
+    if (Array.isArray(state.activePetIds)) {
+      const staleOneSlotOverwrite =
+        prevActivePetIds.length > nextActivePetIds.length &&
+        nextActivePetIds.length <= 1 &&
+        baselineActivePetIds.length < prevActivePetIds.length;
+      state.activePetIds = staleOneSlotOverwrite ? prevActivePetIds : nextActivePetIds;
+    }
 
     // ── 消費アイテム（睡眠茶・プレミアムフード在庫）はミッション報酬付与や
     // ガチャの重複キャラ変換など、このクライアント以外の経路からもサーバー側で

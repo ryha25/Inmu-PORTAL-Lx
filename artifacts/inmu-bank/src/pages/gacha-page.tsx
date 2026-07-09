@@ -938,11 +938,11 @@ export function GachaPage() {
   },[phase])
 
   useEffect(()=>{
-    if(phase==='done'&&result&&result.results.length>1&&revIdx<result.results.length){
+    if(phase==='done'&&result&&(!result.hasInmu||jackpotSeen)&&result.results.length>1&&revIdx<result.results.length){
       const t=setTimeout(()=>setRevIdx(i=>i+1),360);return()=>clearTimeout(t)
     }
     return undefined
-  },[phase,result,revIdx])
+  },[phase,result,revIdx,jackpotSeen])
 
   useEffect(()=>{
     if(phase==='opening'){setOpenFlash(true);setTimeout(()=>setOpenFlash(false),680)}
@@ -1083,7 +1083,11 @@ export function GachaPage() {
 
   const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);setNewCharacterRevealIndex(0);setJackpotSeen(false);loadPts();loadHist();loadFreeStatus();loadPaidFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
   const isMulti=(result?.results.length??0)>1
-  const animationPrize=result?.results.find(prize=>prize.type==='character')??result?.results[0]
+  const characterAnimationPrize=result?.results.find(prize=>prize.type==='character')
+  const inmuAnimationPrize=result?.results.find(prize=>prize.prizeId==='inmu10k')
+  const animationPrize=characterAnimationPrize??inmuAnimationPrize??result?.results[0]
+  const animationPrizeId=capsuleIdForPrize(animationPrize,result)
+  const isInmuGuaranteed=animationPrize?.prizeId==='inmu10k'
 
   const newCharacters=result?.results.filter(prize=>prize.type==='character'&&prize.isNewCharacter)??[]
   const newCharacter=newCharacters[newCharacterRevealIndex]
@@ -1220,20 +1224,10 @@ export function GachaPage() {
         <div style={{flex:1,display:'flex',flexDirection:'column',
           alignItems:'stretch',justifyContent:'stretch',padding:0,gap:0,
           position:'relative',minHeight:0,overflow:'hidden'}}>
-          {phase==='done'&&(
-            <button type="button" onClick={reset}
-              style={{position:'absolute',top:12,right:12,zIndex:60,
-                background:'rgba(5,3,12,.72)',backdropFilter:'blur(12px)',
-                border:'1px solid rgba(218,165,32,.48)',borderRadius:12,
-                padding:'9px 14px',color:'#daa520',fontSize:12,cursor:'pointer',fontWeight:800,
-                boxShadow:'0 6px 24px rgba(0,0,0,.55)'}}>
-              ガチャ画面へ戻る
-            </button>
-          )}
           {phase==='lever'&&<GeneratedScene kind="lever" zIndex={70}/>}
-          {phase==='space'&&<GeneratedScene kind="space" prizeId={capsuleIdForPrize(animationPrize,result)} zIndex={70}/>}
-          {phase==='falling'&&<GeneratedScene kind="falling" prizeId={capsuleIdForPrize(animationPrize,result)} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
-          {phase==='opening'&&<GeneratedScene kind="opening" prizeId={capsuleIdForPrize(animationPrize,result)} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
+          {phase==='space'&&<GeneratedScene kind="space" prizeId={animationPrizeId} zIndex={70}/>}
+          {phase==='falling'&&<GeneratedScene kind="falling" prizeId={animationPrizeId} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
+          {phase==='opening'&&<GeneratedScene kind="opening" prizeId={animationPrizeId} guaranteed={result?.wasGuaranteed} zIndex={70}/>}
 
           {/* 笊絶武笊絶武 Phase 1: GUARANTEED 笊絶武笊絶武 */}
           {phase==='guaranteed'&&(
@@ -1249,7 +1243,7 @@ export function GachaPage() {
                     animation:`ga-ring 2s ease-out ${i*.5}s infinite`}}/>
                 ))}
                 <div style={{position:'relative',animation:'ga-popin .42s ease-out both, ga-floatslow 2s ease-in-out .4s infinite'}}>
-                  <PrizeCapsule prizeId="inmu10k" size={190} showLabel={false}/>
+                  <PrizeCapsule prizeId={animationPrizeId} size={190} showLabel={false}/>
                   <div style={{position:'absolute',inset:-28,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,244,150,.58),rgba(255,190,20,.22) 46%,transparent 70%)',filter:'blur(8px)',zIndex:-1}}/>
                 </div>
               </div>
@@ -1257,7 +1251,7 @@ export function GachaPage() {
                 background:'rgba(24,10,0,.92)',border:'2px solid #daa520',
                 borderRadius:22,padding:'14px 38px',textAlign:'center',backdropFilter:'blur(10px)'}}>
                 <p style={{margin:0,fontWeight:900,fontSize:22,color:'#ffd700',letterSpacing:'0.08em',
-                  textShadow:'0 0 28px rgba(255,215,0,.9)'}}>INMU 確定！</p>
+                  textShadow:'0 0 28px rgba(255,215,0,.9)'}}>{isInmuGuaranteed?'INMU確定':'確定'}</p>
                 <div style={{display:'flex',gap:9,justifyContent:'center',marginTop:8}}>
                   {['✦','✧','★','✧','✦'].map((s,i)=>(
                     <span key={i} style={{fontSize:18,color:'#ffd700',
@@ -2175,7 +2169,6 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
-
 
 
 

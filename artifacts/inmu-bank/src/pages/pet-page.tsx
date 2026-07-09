@@ -821,7 +821,7 @@ function LevelRewardEffectGrid({
         <div className="grid grid-cols-3 gap-1.5">
           {[0, 1, 2].map(slotIndex => {
             const slotNumber = slotIndex + 1
-            const locked = slotNumber > unlockedSlots
+            const locked = false
             const activePet = activePets[slotIndex]
 
             if (locked) {
@@ -1178,7 +1178,7 @@ export function PetPage() {
           .filter((id, index, list) => list.indexOf(id) === index)
         setOwnedPetIds(owned)
         setOwnershipError(false)
-        setActivePetIds(current => current.filter(id => owned.includes(id)).slice(0, unlockedSlots))
+        setActivePetIds(current => current.filter(id => owned.includes(id)).slice(0, 3))
         if (owned.length > 0 && !owned.includes(selectedPetId)) selectPet(owned[0])
       } catch {
         if (!cancelled) {
@@ -1194,7 +1194,7 @@ export function PetPage() {
       cancelled = true
       window.removeEventListener('inmu-pet-ownership-changed', loadOwnership)
     }
-  }, [unlockedSlots])
+  }, [selectedPetId, selectPet, setActivePetIds])
 
   const refreshBalances = useCallback(async (connect = false) => {
     try {
@@ -1390,7 +1390,7 @@ export function PetPage() {
   }
 
   function handleAddRewardSlot(id: PetId) {
-    if (!ownedPetIds?.includes(id) || activePetIds.includes(id) || activePetIds.length >= unlockedSlots) return
+    if (!ownedPetIds?.includes(id) || activePetIds.includes(id) || activePetIds.length >= 3) return
     setActivePetIds(current => [...current, id])
     setMessage(`${PET_BY_ID[id].name}のレベル報酬効果を発動しました`)
   }
