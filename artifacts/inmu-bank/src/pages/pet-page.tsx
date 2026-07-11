@@ -1258,12 +1258,17 @@ export function PetPage() {
           .filter((id, index, list) => list.indexOf(id) === index)
         setOwnedPetIds(owned)
         setOwnershipError(false)
-        setActivePetIds(current => current.filter(id => owned.includes(id)).slice(0, unlockedSlots))
+        if (owned.length > 0) {
+          setActivePetIds(current =>
+            current
+              .filter((id, index, list) => owned.includes(id) && list.indexOf(id) === index)
+              .slice(0, 3),
+          )
+        }
         if (owned.length > 0 && !owned.includes(selectedPetId)) selectPet(owned[0])
       } catch {
         if (!cancelled) {
           setOwnedPetIds([])
-          setActivePetIds([])
           setOwnershipError(true)
         }
       }
@@ -1274,7 +1279,7 @@ export function PetPage() {
       cancelled = true
       window.removeEventListener('inmu-pet-ownership-changed', loadOwnership)
     }
-  }, [unlockedSlots])
+  }, [selectedPetId])
 
   const refreshBalances = useCallback(async (connect = false) => {
     try {

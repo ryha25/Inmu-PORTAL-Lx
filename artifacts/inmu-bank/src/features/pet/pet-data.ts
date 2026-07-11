@@ -123,8 +123,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     },
     levelRewards: [
       { level: 10, label: '紫の毛糸 + 購入申請還元 +5%', detail: 'Lv.10到達で還元率+5%が自動適用', rebateBonus: 5 },
-      { level: 20, label: '特製クッション + 5万INMU', detail: '購入申請とは別枠のレベル報酬', delivery: '申請式（承認後送金）', inmuAmount: 50_000 },
-      { level: 30, label: 'ニャル王冠 + 25万INMU + 購入申請還元 +5%', detail: '合計 還元+10%（Lv.10+Lv.30）・INMU合計30万', delivery: '申請式（承認後送金）', inmuAmount: 250_000, rebateBonus: 5 },
+      { level: 20, label: '特製クッション + INMU報酬', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.20 報酬INMU」と連動', delivery: '申請式（承認後送金）', inmuAmount: 50_000 },
+      { level: 30, label: 'ニャル王冠 + INMU報酬 + 購入申請還元 +5%', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.30 報酬INMU」と連動・Lv.10+Lv.30で還元+10%', delivery: '申請式（承認後送金）', inmuAmount: 250_000, rebateBonus: 5 },
     ],
   },
   {
@@ -162,8 +162,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     },
     levelRewards: [
       { level: 10, label: '金のダンベル + 購入申請還元 +5%', detail: 'Lv.10到達で還元率+5%が自動適用', rebateBonus: 5 },
-      { level: 20, label: '特製サングラス + 5万INMU', detail: '購入申請とは別枠のレベル報酬', delivery: '申請式（承認後送金）', inmuAmount: 50_000 },
-      { level: 30, label: '拓也ソファ + 25万INMU + 購入申請還元 +5%', detail: '合計 還元+10%（Lv.10+Lv.30）・INMU合計30万', delivery: '申請式（承認後送金）', inmuAmount: 250_000, rebateBonus: 5 },
+      { level: 20, label: '特製サングラス + INMU報酬', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.20 報酬INMU」と連動', delivery: '申請式（承認後送金）', inmuAmount: 50_000 },
+      { level: 30, label: '拓也ソファ + INMU報酬 + 購入申請還元 +5%', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.30 報酬INMU」と連動・Lv.10+Lv.30で還元+10%', delivery: '申請式（承認後送金）', inmuAmount: 250_000, rebateBonus: 5 },
     ],
   },
   {
@@ -201,8 +201,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     },
     levelRewards: [
       { level: 10, label: '王家の絨毯 + 購入申請還元 +5%', detail: 'Lv.10到達で還元率+5%が自動適用', rebateBonus: 5 },
-      { level: 20, label: '宝石の首飾り + 5万INMU', detail: '購入申請とは別枠のレベル報酬', delivery: '申請式（承認後送金）', inmuAmount: 50_000 },
-      { level: 30, label: '獅子王の玉座 + 25万INMU + 購入申請還元 +5%', detail: '合計 還元+10%（Lv.10+Lv.30）・INMU合計30万', delivery: '申請式（承認後送金）', inmuAmount: 250_000, rebateBonus: 5 },
+      { level: 20, label: '宝石の首飾り + INMU報酬', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.20 報酬INMU」と連動', delivery: '申請式（承認後送金）', inmuAmount: 50_000 },
+      { level: 30, label: '獅子王の玉座 + INMU報酬 + 購入申請還元 +5%', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.30 報酬INMU」と連動・Lv.10+Lv.30で還元+10%', delivery: '申請式（承認後送金）', inmuAmount: 250_000, rebateBonus: 5 },
     ],
   },
   {
