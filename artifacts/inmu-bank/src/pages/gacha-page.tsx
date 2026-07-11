@@ -1811,6 +1811,8 @@ export function GachaPage() {
               alignItems:'center',justifyContent:'center',gap:14,width:'100%',
               padding:'56px 18px 20px',
               overflow:'hidden',
+              zIndex:120,
+              pointerEvents:'auto',
               background:'radial-gradient(circle at 50% 28%,rgba(255,215,0,.24),transparent 32%),radial-gradient(ellipse at 50% 91%,rgba(218,165,32,.28),rgba(68,25,0,.28) 34%,rgba(0,0,8,.96) 74%),#02010a'}}>
               <div style={{position:'absolute',left:'50%',top:'16%',bottom:0,width:46,
                 transform:'translateX(-50%)',
@@ -1868,7 +1870,9 @@ export function GachaPage() {
                   </div>
                 )
               })}
-              <button type="button" onClick={reset} style={{
+              <button type="button" onPointerDown={(event)=>event.stopPropagation()} onClick={(event)=>{event.stopPropagation();reset()}} style={{
+                position:'relative',
+                zIndex:50,
                 border:'1px solid rgba(218,165,32,.55)',
                 borderRadius:12,
                 padding:'12px 24px',
@@ -1876,7 +1880,10 @@ export function GachaPage() {
                 color:'#ffd700',
                 fontWeight:900,
                 letterSpacing:'0.04em',
-                boxShadow:'0 0 22px rgba(218,165,32,.22)'
+                boxShadow:'0 0 22px rgba(218,165,32,.22)',
+                cursor:'pointer',
+                pointerEvents:'auto',
+                WebkitTapHighlightColor:'transparent'
               }}>
                 {'\u30ac\u30c1\u30e3\u753b\u9762\u3078\u623b\u308b'}
               </button>
@@ -2182,6 +2189,5 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
-
 
 

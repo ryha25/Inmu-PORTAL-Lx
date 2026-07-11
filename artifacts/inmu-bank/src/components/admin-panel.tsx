@@ -909,8 +909,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     try {
       await api(`/admin/gacha/results/${id}/reset-pending`, 'PUT')
       setGachaResults(p => p.map(r => r.id === id ? { ...r, inmuSentStatus: 'pending', failureReason: null } : r))
-      toast.success('再送金待ち状態に戻しました')
-    } catch { toast.error('リセットに失敗しました') }
+      setGachaSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
+      toast.success('送金失敗から未送金へ戻しました')
+    } catch { toast.error('未送金への戻しに失敗しました') }
   }
 
   // ── システム設定 ──
@@ -2619,7 +2620,16 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                                   </Button>
                                 )}
                                 {isFailed && (
-                                  <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]" onClick={() => markGachaRetry(row.id)}>待機に戻す</Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-[10px] border-red-500/40 text-red-200 hover:bg-red-500/10"
+                                    disabled={bulkSending || isSending}
+                                    onClick={() => markGachaRetry(row.id)}
+                                  >
+                                    失敗一覧から外す
+                                  </Button>
                                 )}
                                 {isSending && <span className="text-[10px] text-blue-400 animate-pulse px-1">送金中…</span>}
                               </div>
