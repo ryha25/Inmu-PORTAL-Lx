@@ -24,6 +24,26 @@ const router = Router();
 const USER_SESSION_MS = 30 * 60 * 1000;
 const LOGIN_LOCK_MS = 10 * 60 * 1000;
 const LOGIN_MAX_FAILS = 5;
+const DB_RETRY_DELAYS_MS = [0, 200, 600] as const;
+
+const TRANSIENT_DB_ERROR_CODES = new Set([
+  "08000",
+  "08001",
+  "08003",
+  "08004",
+  "08006",
+  "08007",
+  "08P01",
+  "53300",
+  "57P01",
+  "57P02",
+  "57P03",
+  "ECONNRESET",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "EPIPE",
+  "ETIMEDOUT",
+]);
 
 interface FailRecord { count: number; lockedUntil: number }
 const loginFailMap = new Map<string, FailRecord>();
@@ -60,6 +80,113 @@ function makeEmail(name: string): string {
 
 function hashForLog(value: string): string {
   return createHash("sha256").update(value.toLowerCase()).digest("hex").slice(0, 16);
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function isTransientDatabaseError(error: unknown): boolean {
+  const code = getErrorCode(error);
+  if (code && TRANSIENT_DB_ERROR_CODES.has(code)) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /connection terminated|connection timeout|timeout expired|socket hang up/i.test(message);
+}
+
+async function withDatabaseRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < DB_RETRY_DELAYS_MS.length; attempt++) {
+    const delayMs = DB_RETRY_DELAYS_MS[attempt];
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const finalAttempt = attempt === DB_RETRY_DELAYS_MS.length - 1;
+      if (!isTransientDatabaseError(error) || finalAttempt) throw error;
+      logger.warn(
+        { err: error, operationName, attempt: attempt + 1 },
+        "Transient database error; retrying",
+      );
+    }
+  }
+
+  throw lastError;
+}
+
+async function findUserByIdentifier(identifier: string) {
+  const fields = {
+    id: userTable.id,
+    email: userTable.email,
+    name: userTable.name,
+    passwordHash: userTable.passwordHash,
+  };
+  const syntheticEmail = makeEmail(identifier);
+
+  return withDatabaseRetry(async () => {
+    let user = await db
+      .select(fields)
+      .from(userTable)
+      .where(eq(userTable.email, syntheticEmail))
+      .then((rows) => rows[0]);
+
+    if (!user && syntheticEmail !== identifier) {
+      user = await db
+        .select(fields)
+        .from(userTable)
+        .where(eq(userTable.email, identifier))
+        .then((rows) => rows[0]);
+    }
+
+    return user;
+  }, "find-user-for-sign-in");
+}
+
+async function verifyEmergencyPassword(userId: string, password: string): Promise<boolean> {
+  try {
+    const emergency = await withDatabaseRetry(
+      () => db
+        .select({
+          passwordEnabled: emergencyAuthTable.passwordEnabled,
+          emergencyPasswordHash: emergencyAuthTable.emergencyPasswordHash,
+        })
+        .from(emergencyAuthTable)
+        .where(eq(emergencyAuthTable.userId, userId))
+        .then((rows) => rows[0]),
+      "verify-emergency-password",
+    );
+
+    return Boolean(
+      emergency?.passwordEnabled &&
+      emergency.emergencyPasswordHash &&
+      await bcrypt.compare(password, emergency.emergencyPasswordHash),
+    );
+  } catch (error) {
+    logger.warn({ err: error, userId }, "Emergency password lookup failed");
+    return false;
+  }
+}
+
+async function ensureProfileAfterSignIn(userId: string, displayName: string): Promise<void> {
+  try {
+    await withDatabaseRetry(
+      () => ensureProfile(userId, displayName),
+      "ensure-profile-after-sign-in",
+    );
+  } catch (error) {
+    // A valid user must still be able to establish a session when optional
+    // profile backfill is temporarily unavailable.
+    logger.error({ err: error, userId }, "Profile backfill failed after valid sign-in");
+  }
 }
 
 router.get("/session", (req, res): void => {
@@ -101,20 +228,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
   }
 
   try {
-    const syntheticEmail = makeEmail(identifier);
-    let user = await db
-      .select()
-      .from(userTable)
-      .where(eq(userTable.email, syntheticEmail))
-      .then((r) => r[0]);
-
-    if (!user) {
-      user = await db
-        .select()
-        .from(userTable)
-        .where(eq(userTable.email, identifier))
-        .then((r) => r[0]);
-    }
+    const user = await findUserByIdentifier(identifier);
 
     if (!user || !user.passwordHash) {
       recordFail(lockKey, LOGIN_MAX_FAILS, LOGIN_LOCK_MS);
@@ -124,10 +238,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
-      const [emrg] = await db.select().from(emergencyAuthTable).where(eq(emergencyAuthTable.userId, user.id));
-      const emrgValid = emrg?.passwordEnabled && emrg.emergencyPasswordHash
-        ? await bcrypt.compare(password, emrg.emergencyPasswordHash)
-        : false;
+      const emrgValid = await verifyEmergencyPassword(user.id, password);
       if (emrgValid) {
         await db.insert(auditLogTable).values({
           adminId: "SYSTEM",
@@ -137,7 +248,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
           createdAt: new Date(),
         });
         recordSuccess(lockKey);
-        await ensureProfile(user.id, user.name);
+        await ensureProfileAfterSignIn(user.id, user.name);
         res.cookie(SESSION_COOKIE, makeSessionValue(user.id, user.email, user.name ?? ""), {
           httpOnly: true, sameSite: "lax", maxAge: USER_SESSION_MS, path: "/",
         });
@@ -154,7 +265,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
     }
 
     recordSuccess(lockKey);
-    await ensureProfile(user.id, user.name);
+    await ensureProfileAfterSignIn(user.id, user.name);
 
     res.cookie(SESSION_COOKIE, makeSessionValue(user.id, user.email, user.name ?? ""), {
       httpOnly: true,
@@ -164,14 +275,24 @@ router.post("/sign-in", async (req, res): Promise<void> => {
     });
     res.json({ user: { id: user.id, email: user.email, name: user.name } });
   } catch (error) {
+    const transientDatabaseFailure = isTransientDatabaseError(error);
     logger.error(
       {
         err: error,
         identifierHash: hashForLog(identifier),
         identifierKind: email ? "email" : "name",
+        transientDatabaseFailure,
       },
       "Sign-in failed",
     );
+    if (transientDatabaseFailure) {
+      res.setHeader("Retry-After", "2");
+      res.status(503).json({
+        error: "データベースへの接続が一時的に不安定です。数秒後に再度お試しください",
+        retryable: true,
+      });
+      return;
+    }
     res.status(500).json({ error: "ログイン処理に失敗しました" });
   }
 });
@@ -245,13 +366,16 @@ router.post("/sign-out", (_req, res): void => {
 
 async function ensureProfile(userId: string, displayName: string, passcodeHash?: string) {
   const existing = await db
-    .select()
+    .select({ userId: profileTable.userId })
     .from(profileTable)
     .where(eq(profileTable.userId, userId))
     .then((r) => r[0]);
   if (!existing) {
-    await db.insert(profileTable).values({ userId, displayName, passcodeHash });
-  } else if (passcodeHash && !existing.passcodeHash) {
+    await db
+      .insert(profileTable)
+      .values({ userId, displayName, passcodeHash })
+      .onConflictDoNothing();
+  } else if (passcodeHash) {
     await db.update(profileTable).set({ passcodeHash }).where(eq(profileTable.userId, userId));
   }
 }

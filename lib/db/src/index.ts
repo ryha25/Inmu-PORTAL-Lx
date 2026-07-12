@@ -4,14 +4,22 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = process.env.DATABASE_URL?.trim();
+
+if (!databaseUrl) {
   console.error("[db] DATABASE_URL is missing");
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: databaseUrl,
+  max: Number(process.env.DB_POOL_MAX ?? 5),
+  connectionTimeoutMillis: Number(process.env.DB_CONNECT_TIMEOUT_MS ?? 15_000),
+  idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS ?? 30_000),
+  keepAlive: true,
+});
 
 pool.on("error", (error: Error & { code?: string }) => {
   console.error("[db] PostgreSQL pool error", {

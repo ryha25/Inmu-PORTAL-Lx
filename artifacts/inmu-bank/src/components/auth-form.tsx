@@ -36,12 +36,17 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
           throw new Error(d.error ?? '登録に失敗しました')
         }
       } else {
-        const res = await fetch('/api/auth/sign-in', {
+        const requestSignIn = () => fetch('/api/auth/sign-in', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ name, password }),
         })
+        let res = await requestSignIn()
+        if (res.status === 503) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1000))
+          res = await requestSignIn()
+        }
         if (!res.ok) {
           const d = await res.json().catch(() => ({})) as { error?: string }
           throw new Error(d.error ?? 'ログインに失敗しました')
