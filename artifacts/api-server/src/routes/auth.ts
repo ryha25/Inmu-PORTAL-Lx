@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { createHash } from "crypto";
 import { db } from "@workspace/db";
 import {
   userTable,
@@ -16,6 +17,7 @@ import {
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { SESSION_COOKIE, makeSessionValue } from "../middlewares/session";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -56,6 +58,10 @@ function makeEmail(name: string): string {
   return `${name.toLowerCase().replace(/[^a-z0-9]/g, "_")}@inmu.local`;
 }
 
+function hashForLog(value: string): string {
+  return createHash("sha256").update(value.toLowerCase()).digest("hex").slice(0, 16);
+}
+
 router.get("/session", (req, res): void => {
   if (!req.userId) {
     if (req.sessionExpired) {
@@ -82,7 +88,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
   };
   const identifier = (name || email || "").trim();
   if (!identifier || !password) {
-    res.status(400).json({ error: "ユーザー名とパスワードが必要です" });
+    res.status(400).json({ error: "ユーザー名またはメールアドレスとパスワードを入力してください" });
     return;
   }
 
@@ -90,7 +96,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
   const lock = checkLock(lockKey);
   if (lock.locked) {
     const mins = Math.ceil(lock.remainingMs / 60000);
-    res.status(429).json({ error: `ログインがロックされています。${mins}分後に再試行してください。` });
+    res.status(429).json({ error: `ログインがロックされています。${mins}分後に再試行してください` });
     return;
   }
 
@@ -127,7 +133,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
           adminId: "SYSTEM",
           action: "emergency_password_used",
           targetUserId: user.id,
-          details: { identifier, usedAt: new Date().toISOString() } as Record<string, unknown>,
+          details: { identifierHash: hashForLog(identifier), usedAt: new Date().toISOString() } as Record<string, unknown>,
           createdAt: new Date(),
         });
         recordSuccess(lockKey);
@@ -140,7 +146,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
       }
       const locked = recordFail(lockKey, LOGIN_MAX_FAILS, LOGIN_LOCK_MS);
       if (locked) {
-        res.status(429).json({ error: "5回失敗しました。10分間ロックされます。" });
+        res.status(429).json({ error: "5回失敗しました。10分間ロックされます" });
       } else {
         res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません" });
       }
@@ -157,8 +163,16 @@ router.post("/sign-in", async (req, res): Promise<void> => {
       path: "/",
     });
     res.json({ user: { id: user.id, email: user.email, name: user.name } });
-  } catch {
-    res.status(500).json({ error: "Internal error" });
+  } catch (error) {
+    logger.error(
+      {
+        err: error,
+        identifierHash: hashForLog(identifier),
+        identifierKind: email ? "email" : "name",
+      },
+      "Sign-in failed",
+    );
+    res.status(500).json({ error: "ログイン処理に失敗しました" });
   }
 });
 
@@ -215,8 +229,12 @@ router.post("/sign-up", async (req, res): Promise<void> => {
       path: "/",
     });
     res.status(201).json({ user: { id: userId, email, name: trimmedName } });
-  } catch {
-    res.status(500).json({ error: "Internal error" });
+  } catch (error) {
+    logger.error(
+      { err: error, nameHash: name ? hashForLog(name) : undefined },
+      "Sign-up failed",
+    );
+    res.status(500).json({ error: "登録処理に失敗しました" });
   }
 });
 
@@ -264,7 +282,7 @@ export async function deleteInactiveUsers() {
       }
     }
   } catch (err) {
-    console.error("Inactive user cleanup error:", err);
+    logger.error({ err }, "Inactive user cleanup error");
   }
 }
 

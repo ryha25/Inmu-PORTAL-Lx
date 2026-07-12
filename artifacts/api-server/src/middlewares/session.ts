@@ -13,7 +13,7 @@ function getSessionSecret(): string {
     if (process.env.NODE_ENV === "production") {
       throw new Error("SESSION_SECRET environment variable is required in production");
     }
-    console.warn("[WARN] SESSION_SECRET not set — using insecure dev-only default. Set SESSION_SECRET before deploying.");
+    console.warn("[WARN] SESSION_SECRET not set - using insecure dev-only default. Set SESSION_SECRET before deploying.");
     return "inmu-bank-dev-only-insecure-secret-do-not-deploy";
   }
   return secret;
@@ -48,10 +48,11 @@ function makeToken(userId: string, email: string, name: string): string {
 function parseToken(token: string): { userId: string; email: string; name: string } | null {
   const dot = token.lastIndexOf(".");
   if (dot === -1) return null;
+
   const payload = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-
   const expectedSig = sign(payload);
+
   try {
     if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
   } catch {
@@ -60,7 +61,10 @@ function parseToken(token: string): { userId: string; email: string; name: strin
 
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
-      userId?: string; email?: string; name?: string; ts?: number;
+      userId?: string;
+      email?: string;
+      name?: string;
+      ts?: number;
     };
     if (!data.userId) return null;
     if (typeof data.ts === "number" && Date.now() - data.ts > USER_SESSION_MS) return null;
@@ -79,14 +83,17 @@ export function makeAdminSessionValue(adminType: string = "owner"): string {
 function verifyAdminToken(token: string): { adminType: string } | null {
   const dot = token.lastIndexOf(".");
   if (dot === -1) return null;
+
   const payload = token.slice(0, dot);
   const sig = token.slice(dot + 1);
   const expectedSig = sign(payload);
+
   try {
     if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
   } catch {
     return null;
   }
+
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
       admin?: boolean;
@@ -146,7 +153,10 @@ export function requireAuth(
 ): void {
   if (!req.userId) {
     if (req.sessionExpired) {
-      res.status(401).json({ error: "セッションの有効期限が切れました。再度ログインしてください。", expired: true });
+      res.status(401).json({
+        error: "セッションの有効期限が切れました。再度ログインしてください。",
+        expired: true,
+      });
     } else {
       res.status(401).json({ error: "Unauthorized" });
     }
@@ -162,7 +172,10 @@ export function requireAdmin(
 ): void {
   if (!req.isAdminSession) {
     if (req.cookies?.[ADMIN_SESSION_COOKIE]) {
-      res.status(403).json({ error: "管理セッションの有効期限が切れました。再度ログインしてください。", expired: true });
+      res.status(403).json({
+        error: "管理セッションの有効期限が切れました。再度ログインしてください。",
+        expired: true,
+      });
     } else {
       res.status(403).json({ error: "Forbidden" });
     }
@@ -180,8 +193,12 @@ export function requireAuthOrAdmin(
     next();
     return;
   }
+
   if (req.sessionExpired) {
-    res.status(401).json({ error: "セッションの有効期限が切れました。再度ログインしてください。", expired: true });
+    res.status(401).json({
+      error: "セッションの有効期限が切れました。再度ログインしてください。",
+      expired: true,
+    });
   } else {
     res.status(401).json({ error: "Unauthorized" });
   }

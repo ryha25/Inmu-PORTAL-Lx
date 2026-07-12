@@ -8,8 +8,26 @@ import { sessionMiddleware } from "./middlewares/session";
 import { deleteInactiveUsers } from "./routes/auth";
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-deleteInactiveUsers().catch(() => {});
-setInterval(() => deleteInactiveUsers().catch(() => {}), TWENTY_FOUR_HOURS);
+
+function scheduleInactiveUserCleanup() {
+  const runCleanup = () => {
+    deleteInactiveUsers().catch((err) => {
+      logger.error({ err }, "Inactive user cleanup failed");
+    });
+  };
+
+  const initialDelayMs = Number(
+    process.env.INACTIVE_USER_CLEANUP_DELAY_MS ?? 5 * 60 * 1000,
+  );
+
+  const initialTimer = setTimeout(runCleanup, Math.max(0, initialDelayMs));
+  initialTimer.unref?.();
+
+  const interval = setInterval(runCleanup, TWENTY_FOUR_HOURS);
+  interval.unref?.();
+}
+
+scheduleInactiveUserCleanup();
 
 const app: Express = express();
 
