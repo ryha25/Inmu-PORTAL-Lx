@@ -1,4 +1,5 @@
 import { logger } from "./lib/logger";
+import app, { initializeApplication } from "./app";
 
 const REQUIRED_ENV = ["DATABASE_URL", "SESSION_SECRET"] as const;
 const OPTIONAL_ENV = ["JWT_SECRET", "SOLANA_RPC"] as const;
@@ -60,10 +61,18 @@ async function start() {
   logEnvironmentReadiness();
 
   const port = getPort();
-  const { default: app } = await import("./app");
 
   const server = app.listen(port, () => {
     logger.info({ port }, "Server listening");
+
+    initializeApplication()
+      .then(() => {
+        logger.info("API routes initialized");
+      })
+      .catch((err) => {
+        // Keep health checks alive so deployment logs expose the actual cause.
+        logger.error({ err }, "API routes failed to initialize");
+      });
   });
 
   server.on("error", (err) => {

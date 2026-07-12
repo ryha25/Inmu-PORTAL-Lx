@@ -2,14 +2,13 @@ import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
-import router from "./routes";
 import { logger } from "./lib/logger";
-import { sessionMiddleware } from "./middlewares/session";
-import { deleteInactiveUsers } from "./routes/auth";
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
-function scheduleInactiveUserCleanup() {
+function scheduleInactiveUserCleanup(
+  deleteInactiveUsers: () => Promise<unknown>,
+) {
   const runCleanup = () => {
     deleteInactiveUsers().catch((err) => {
       logger.error({ err }, "Inactive user cleanup failed");
@@ -26,8 +25,6 @@ function scheduleInactiveUserCleanup() {
   const interval = setInterval(runCleanup, TWENTY_FOUR_HOURS);
   interval.unref?.();
 }
-
-scheduleInactiveUserCleanup();
 
 const app: Express = express();
 
@@ -80,8 +77,39 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(sessionMiddleware);
 
-app.use("/api", router);
+function healthPayload() {
+  return {
+    status: "ok",
+    service: "api",
+    uptime: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  };
+}
+
+// These handlers must stay independent of the database and external APIs.
+app.get("/api", (_req, res) => res.status(200).json(healthPayload()));
+app.head("/api", (_req, res) => res.sendStatus(200));
+app.get("/api/healthz", (_req, res) =>
+  res.status(200).json(healthPayload()),
+);
+
+let initialized = false;
+
+export async function initializeApplication(): Promise<void> {
+  if (initialized) return;
+
+  const [{ sessionMiddleware }, { default: router }, authModule] =
+    await Promise.all([
+      import("./middlewares/session"),
+      import("./routes"),
+      import("./routes/auth"),
+    ]);
+
+  app.use(sessionMiddleware);
+  app.use("/api", router);
+  scheduleInactiveUserCleanup(authModule.deleteInactiveUsers);
+  initialized = true;
+}
 
 export default app;
