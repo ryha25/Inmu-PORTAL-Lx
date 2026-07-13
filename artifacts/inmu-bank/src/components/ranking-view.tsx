@@ -182,6 +182,7 @@ export function RankingView({
               <div className="text-right">
                 <p className={`max-w-[42vw] whitespace-nowrap font-mono font-bold tabular-nums text-primary ${rankingValueSize(r.points)}`}>
                   {r.points.toLocaleString()}
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">pts</span>
                 </p>
               </div>
             </div>

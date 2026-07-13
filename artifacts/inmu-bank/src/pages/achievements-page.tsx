@@ -22,6 +22,14 @@ type PointsRow    = { rank: number; userId: string; displayName: string; points:
 type CompositeRow = { rank: number; userId: string; displayName: string; balance: number; points: number; clears: number; score: number }
 type CompositeResult = { ranking: CompositeRow[]; myRank: number | null; totalUsers: number }
 
+function summaryValueSize(value: number) {
+  const length = Math.abs(Math.trunc(value)).toLocaleString().length
+  if (length >= 13) return 'text-sm'
+  if (length >= 10) return 'text-base'
+  if (length >= 8) return 'text-lg'
+  return 'text-2xl'
+}
+
 export function AchievementsPage() {
   const { t } = useI18n()
   const { profile, unread } = useAuth()
@@ -93,9 +101,8 @@ export function AchievementsPage() {
                 <Star className="size-4 text-primary" />
                 <p className="text-xs font-medium text-muted-foreground">{t('total_points')}</p>
               </div>
-              <p className="font-mono text-2xl font-bold tabular-nums text-primary">
+              <p className={`min-w-0 whitespace-nowrap font-mono font-bold tabular-nums text-primary ${summaryValueSize(stats.monthlyPoints)}`}>
                 {stats.monthlyPoints.toLocaleString()}
-                <span className="ml-1 text-sm font-normal text-muted-foreground">pts</span>
               </p>
             </Card>
             <Card className="border-border bg-card p-4">
@@ -113,9 +120,8 @@ export function AchievementsPage() {
                 <Coins className="size-4 text-yellow-500" />
                 <p className="text-xs font-medium text-muted-foreground">{t('total_received_inmu')}</p>
               </div>
-              <p className="font-mono text-2xl font-bold tabular-nums gold-text">
+              <p className={`min-w-0 whitespace-nowrap font-mono font-bold tabular-nums gold-text ${summaryValueSize(stats.totalReceivedInmu)}`}>
                 {stats.totalReceivedInmu.toLocaleString()}
-                <span className="ml-1 text-sm font-normal text-muted-foreground">INMU</span>
               </p>
             </Card>
           </div>
