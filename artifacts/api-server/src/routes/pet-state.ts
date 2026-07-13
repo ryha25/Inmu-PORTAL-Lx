@@ -110,7 +110,7 @@ router.post("/pet/affection-gift/point-grant", requireAuth, async (req, res): Pr
   const giftId = String(req.body?.giftId ?? "").trim();
   const amount = Math.floor(Number(req.body?.amount ?? 0));
   if (!/^affection-[a-z0-9-]+/i.test(giftId) || amount < 100 || amount > 5000 || amount % 100 !== 0) {
-    res.status(400).json({ error: "愛情度プレゼントのポイント報酬が不正です" });
+    res.status(400).json({ error: "PET affection gift point reward is invalid" });
     return;
   }
   const client = await pool.connect();
@@ -135,14 +135,14 @@ router.post("/pet/affection-gift/point-grant", requireAuth, async (req, res): Pr
     if (inserted.rowCount) {
       const month = new Date().toISOString().slice(0, 7);
       await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [amount, req.userId!]);
-      await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_affection_gift','INMU PET愛情度プレゼント',$3)`, [req.userId!, amount, month]);
+      await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_affection_gift','INMU PET affection gift',$3)`, [req.userId!, amount, month]);
     }
     await client.query("COMMIT");
     res.json({ ok: true, granted: Boolean(inserted.rowCount) });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetState] affection gift point grant", error);
-    res.status(500).json({ error: "愛情度プレゼントのポイント付与に失敗しました" });
+    res.status(500).json({ error: "Failed to grant PET affection gift points" });
   } finally {
     client.release();
   }
@@ -187,14 +187,8 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
       state.activePetIds = staleOneSlotOverwrite ? prevActivePetIds : nextActivePetIds;
     }
 
-    // ── 消費アイテム（睡眠茶・プレミアムフード在庫）はミッション報酬付与や
-    // ガチャの重複キャラ変換など、このクライアント以外の経路からもサーバー側で
-    // 直接加算されうる。フルステートの単純上書きにしてしまうと、付与前の
-    // 状態を保持したまま開きっぱなしのタブが定期autosave（60秒毎の
-    // materialize等）で古い値を書き戻し、付与されたアイテムが消えてしまう
-    // 不具合があった。そのため、この2項目のみ「クライアントが起こした差分」を
-    // 現在のDB値に加算するマージ方式にする（baseline未送信の旧クライアントは
-    // 従来通りの上書き挙動にフォールバック）。
+    // Merge consumable item deltas against the current DB state so rewards from
+    // missions, gacha, and other server-side paths are not overwritten by autosave.
     let mergedItems: { sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number } | null = null;
     if (existingState && baseline && typeof baseline === "object") {
       const dbSleepTea = Number((existingState as Record<string, any>).items?.sleepTea ?? 0);
