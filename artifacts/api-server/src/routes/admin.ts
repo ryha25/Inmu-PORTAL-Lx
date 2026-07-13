@@ -845,6 +845,13 @@ const PET_GRANT_ITEM_LABELS: Record<PetGrantItemType, string> = {
   cat_headband: "猫のカチューシャ",
 };
 
+function readPetItemCount(items: unknown, camelKey: string, snakeKey: string): number {
+  if (!items || typeof items !== "object" || Array.isArray(items)) return 0;
+  const record = items as Record<string, unknown>;
+  const count = Math.floor(Number(record[camelKey] ?? record[snakeKey] ?? 0));
+  return Number.isFinite(count) ? Math.max(0, count) : 0;
+}
+
 async function grantPetItemToUser(userId: string, itemType: PetGrantItemType, amount: number) {
   const client = await pool.connect();
   try {
@@ -853,9 +860,9 @@ async function grantPetItemToUser(userId: string, itemType: PetGrantItemType, am
     const now = Date.now();
     const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
     const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0, takuyaSunglasses: 0, catHeadband: 0 };
-    if (itemType === "sleep_tea") state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
-    if (itemType === "takuya_sunglasses") state.items = { ...items, takuyaSunglasses: Math.max(0, Number(items.takuyaSunglasses ?? 0)) + amount };
-    if (itemType === "cat_headband") state.items = { ...items, catHeadband: Math.max(0, Number(items.catHeadband ?? 0)) + amount };
+    if (itemType === "sleep_tea") state.items = { ...items, sleepTea: readPetItemCount(items, "sleepTea", "sleep_tea") + amount };
+    if (itemType === "takuya_sunglasses") state.items = { ...items, takuyaSunglasses: readPetItemCount(items, "takuyaSunglasses", "takuya_sunglasses") + amount };
+    if (itemType === "cat_headband") state.items = { ...items, catHeadband: readPetItemCount(items, "catHeadband", "cat_headband") + amount };
     await client.query(`
       INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
       ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()

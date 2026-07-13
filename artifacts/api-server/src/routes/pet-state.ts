@@ -24,6 +24,14 @@ function extractActivePetIds(state: unknown): string[] {
   return record.activePetIds.map(String).slice(0, 3);
 }
 
+function readPetItemCount(items: unknown, camelKey: string, snakeKey: string): number {
+  if (!items || typeof items !== "object" || Array.isArray(items)) return 0;
+  const record = items as Record<string, unknown>;
+  const value = record[camelKey] ?? record[snakeKey];
+  const count = Math.floor(Number(value ?? 0));
+  return Number.isFinite(count) ? Math.max(0, count) : 0;
+}
+
 router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensurePetStateTable();
@@ -191,14 +199,16 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
     // missions, gacha, and other server-side paths are not overwritten by autosave.
     let mergedItems: { sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number } | null = null;
     if (existingState && baseline && typeof baseline === "object") {
-      const dbSleepTea = Number((existingState as Record<string, any>).items?.sleepTea ?? 0);
+      const dbItems = (existingState as Record<string, any>).items;
+      const incomingItems = (state as Record<string, any>).items;
+      const dbSleepTea = readPetItemCount(dbItems, "sleepTea", "sleep_tea");
       const dbPremiumInventory = Number((existingState as Record<string, any>).premiumFood?.inventory ?? 0);
-      const dbTakuyaSunglasses = Number((existingState as Record<string, any>).items?.takuyaSunglasses ?? 0);
-      const dbCatHeadband = Number((existingState as Record<string, any>).items?.catHeadband ?? 0);
-      const incomingSleepTea = Number((state as Record<string, any>).items?.sleepTea ?? 0);
+      const dbTakuyaSunglasses = readPetItemCount(dbItems, "takuyaSunglasses", "takuya_sunglasses");
+      const dbCatHeadband = readPetItemCount(dbItems, "catHeadband", "cat_headband");
+      const incomingSleepTea = readPetItemCount(incomingItems, "sleepTea", "sleep_tea");
       const incomingPremiumInventory = Number((state as Record<string, any>).premiumFood?.inventory ?? 0);
-      const incomingTakuyaSunglasses = Number((state as Record<string, any>).items?.takuyaSunglasses ?? 0);
-      const incomingCatHeadband = Number((state as Record<string, any>).items?.catHeadband ?? 0);
+      const incomingTakuyaSunglasses = readPetItemCount(incomingItems, "takuyaSunglasses", "takuya_sunglasses");
+      const incomingCatHeadband = readPetItemCount(incomingItems, "catHeadband", "cat_headband");
       const baselineSleepTea = Number.isFinite(Number(baseline.sleepTea)) ? Number(baseline.sleepTea) : incomingSleepTea;
       const baselinePremiumInventory = Number.isFinite(Number(baseline.premiumInventory)) ? Number(baseline.premiumInventory) : incomingPremiumInventory;
       const baselineTakuyaSunglasses = Number.isFinite(Number(baseline.takuyaSunglasses)) ? Number(baseline.takuyaSunglasses) : incomingTakuyaSunglasses;

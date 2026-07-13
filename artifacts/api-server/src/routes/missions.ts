@@ -137,6 +137,13 @@ async function saveMissionExtraReward(missionId: number, characterId: string | n
   );
 }
 
+function readMissionPetItemCount(items: unknown, camelKey: string, snakeKey: string): number {
+  if (!items || typeof items !== "object" || Array.isArray(items)) return 0;
+  const record = items as Record<string, unknown>;
+  const count = Math.floor(Number(record[camelKey] ?? record[snakeKey] ?? 0));
+  return Number.isFinite(count) ? Math.max(0, count) : 0;
+}
+
 async function grantMissionRewardItem(userId: string, itemType: MissionRewardItemType, amount: number) {
   if (amount <= 0) return;
   const client = await pool.connect();
@@ -152,9 +159,9 @@ async function grantMissionRewardItem(userId: string, itemType: MissionRewardIte
       state.premiumFood = { ...premiumFood, inventory: Math.max(0, Number(premiumFood.inventory ?? 0)) + amount };
     } else {
       const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0, takuyaSunglasses: 0, catHeadband: 0 };
-      if (itemType === "sleep_tea") state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
-      if (itemType === "takuya_sunglasses") state.items = { ...items, takuyaSunglasses: Math.max(0, Number(items.takuyaSunglasses ?? 0)) + amount };
-      if (itemType === "cat_headband") state.items = { ...items, catHeadband: Math.max(0, Number(items.catHeadband ?? 0)) + amount };
+      if (itemType === "sleep_tea") state.items = { ...items, sleepTea: readMissionPetItemCount(items, "sleepTea", "sleep_tea") + amount };
+      if (itemType === "takuya_sunglasses") state.items = { ...items, takuyaSunglasses: readMissionPetItemCount(items, "takuyaSunglasses", "takuya_sunglasses") + amount };
+      if (itemType === "cat_headband") state.items = { ...items, catHeadband: readMissionPetItemCount(items, "catHeadband", "cat_headband") + amount };
     }
     await client.query(`
       INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt") VALUES ($1,$2::jsonb,$3)

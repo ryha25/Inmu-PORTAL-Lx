@@ -282,11 +282,16 @@ function createDefaultWalkState(now = Date.now()): PetWalkState {
   }
 }
 
-function sanitizeItems(value: Partial<PetItemState> | undefined): PetItemState {
+function readItemNumber(value: Partial<PetItemState> | Record<string, unknown> | undefined, camelKey: keyof PetItemState, snakeKey: string) {
+  const record = value as Record<string, unknown> | undefined
+  return Math.max(0, Math.floor(readNumber(record?.[camelKey] ?? record?.[snakeKey], 0)))
+}
+
+function sanitizeItems(value: Partial<PetItemState> | Record<string, unknown> | undefined): PetItemState {
   return {
-    sleepTea: Math.max(0, Math.floor(readNumber(value?.sleepTea, 0))),
-    takuyaSunglasses: Math.max(0, Math.floor(readNumber(value?.takuyaSunglasses, 0))),
-    catHeadband: Math.max(0, Math.floor(readNumber(value?.catHeadband, 0))),
+    sleepTea: readItemNumber(value, 'sleepTea', 'sleep_tea'),
+    takuyaSunglasses: readItemNumber(value, 'takuyaSunglasses', 'takuya_sunglasses'),
+    catHeadband: readItemNumber(value, 'catHeadband', 'cat_headband'),
   }
 }
 
