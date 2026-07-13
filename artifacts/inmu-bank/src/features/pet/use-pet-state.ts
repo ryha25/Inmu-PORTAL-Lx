@@ -834,7 +834,7 @@ export function usePetState() {
         setSave(current => {
           const materialized = materializeSaveAt(current, Date.now())
           if (Number(materialized.items.sleepTea ?? 0) === mergedSleepTea && Number(materialized.premiumFood.inventory ?? 0) === mergedPremiumInventory && Number(materialized.items.takuyaSunglasses ?? 0) === mergedTakuyaSunglasses && Number(materialized.items.catHeadband ?? 0) === mergedCatHeadband) {
-            return materialized
+            return current
           }
           return {
             ...materialized,
@@ -855,7 +855,10 @@ export function usePetState() {
   }, [isHydrated, save])
 
   useEffect(() => {
-    const materialize = () => setSave(current => materializeSaveAt(current, Date.now()))
+    const materialize = () => setSave(current => {
+      const materialized = materializeSaveAt(current, Date.now())
+      return JSON.stringify(materialized) === JSON.stringify(current) ? current : materialized
+    })
     materialize()
     const interval = window.setInterval(materialize, 60 * 1000)
     return () => window.clearInterval(interval)
