@@ -1187,6 +1187,8 @@ export function PetPage() {
   const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
   const levelRewardSyncRef = useRef(new Set<string>())
+  const walkPointGrantRef = useRef(new Set<string>())
+  const affectionGiftPointGrantRef = useRef(new Set<string>())
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
 
   const loadRewardRequests = async () => {
@@ -1347,12 +1349,14 @@ export function PetPage() {
 
   useEffect(() => {
     const latest = walks.results.find(result => result.petId === displayedPetId && !result.seen)
-    if (latest) setWalkResult(latest)
+    if (latest) setWalkResult(current => current?.id === latest.id ? current : latest)
   }, [displayedPetId, walks.results])
 
   useEffect(() => {
     const pending = walks.results.filter(result => result.rewardType === 'points' && result.pointsGrantStatus !== 'granted')
     pending.forEach(result => {
+      if (walkPointGrantRef.current.has(result.id)) return
+      walkPointGrantRef.current.add(result.id)
       void fetch('/api/pet/walk/point-grant', {
         method: 'POST',
         credentials: 'include',
@@ -1363,13 +1367,17 @@ export function PetPage() {
           markWalkPointsGranted(result.id)
           setBalances(current => ({ ...current, points: current.points + result.rewardAmount }))
         }
-      }).catch(() => undefined)
+      }).catch(() => {
+        walkPointGrantRef.current.delete(result.id)
+      })
     })
   }, [markWalkPointsGranted, walks.results])
 
   useEffect(() => {
     const pending = affectionGifts.filter(gift => gift.rewardType === 'points' && gift.pointsGrantStatus !== 'granted')
     pending.forEach(gift => {
+      if (affectionGiftPointGrantRef.current.has(gift.id)) return
+      affectionGiftPointGrantRef.current.add(gift.id)
       void fetch('/api/pet/affection-gift/point-grant', {
         method: 'POST',
         credentials: 'include',
@@ -1380,7 +1388,9 @@ export function PetPage() {
           markAffectionGiftPointsGranted(gift.id)
           setBalances(current => ({ ...current, points: current.points + gift.rewardAmount }))
         }
-      }).catch(() => undefined)
+      }).catch(() => {
+        affectionGiftPointGrantRef.current.delete(gift.id)
+      })
     })
   }, [affectionGifts, markAffectionGiftPointsGranted])
 
