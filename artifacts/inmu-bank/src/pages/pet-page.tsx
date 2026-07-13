@@ -532,9 +532,9 @@ function SkillPanel({ pet }: { pet: PetDefinition }) {
   )
 }
 
-function ItemPanel({ inventory, level, maxLevel, onUse }: { inventory: number; level: number; maxLevel: number; onUse: (amount: number) => void }) {
+function ItemPanel({ inventory, level, maxLevel, disabled = false, onUse }: { inventory: number; level: number; maxLevel: number; disabled?: boolean; onUse: (amount: number) => void }) {
   const [amount, setAmount] = useState(1)
-  const maxUsable = Math.min(3, inventory, Math.max(0, maxLevel - level))
+  const maxUsable = disabled ? 0 : Math.min(3, inventory, Math.max(0, maxLevel - level))
   useEffect(() => setAmount(current => Math.max(1, Math.min(current, Math.max(1, maxUsable)))), [maxUsable])
   return (
     <section className="rounded-lg border border-sky-300/20 bg-[linear-gradient(145deg,rgba(8,28,42,.82),rgba(12,8,22,.97))] p-4">
@@ -545,6 +545,7 @@ function ItemPanel({ inventory, level, maxLevel, onUse }: { inventory: number; l
       <p className="mt-2 text-xs font-bold text-white">アイスティー（睡眠薬入り）</p>
       <p className="mt-1 text-[10px] leading-relaxed text-sky-100/65">1個につきLv.+1、眠気+33。最大3個まで同時に使用できます。</p>
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+        {disabled && <p className="col-span-2 text-[11px] font-bold text-cyan-300">眠っている間は使用できません</p>}
         <select
           value={Math.min(amount, Math.max(1, maxUsable))}
           onChange={event => setAmount(Number(event.target.value))}
@@ -1449,6 +1450,10 @@ export function PetPage() {
   }
 
   function handleUseSleepTea(amount: number) {
+    if (isSleeping) {
+      setMessage('眠っている間はアイスティーを使用できません')
+      return
+    }
     const used = useSleepTea(amount)
     if (used <= 0) {
       setMessage(
@@ -1619,7 +1624,7 @@ export function PetPage() {
                 <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
               </div>
               <SkillPanel pet={pet} />
-              <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} onUse={handleUseSleepTea} />
+              <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} disabled={isSleeping} onUse={handleUseSleepTea} />
               <RewardsPanel
                 pet={pet}
                 level={selectedStats.level}

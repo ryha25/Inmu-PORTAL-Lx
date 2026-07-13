@@ -12,6 +12,98 @@ function normalizeXId(raw: string): string {
   return raw.trim().toLowerCase().replace(/^@/, "");
 }
 
+const SOL_WALLET_REUSE_DELAY_HOURS = 24;
+
+async function ensureSolWalletReleaseLocksTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "solWalletReleaseLocks" (
+      "walletAddress" text PRIMARY KEY,
+      "formerUserId" text NOT NULL,
+      "releasedAt" timestamptz NOT NULL DEFAULT NOW(),
+      "availableAt" timestamptz NOT NULL
+    )
+  `);
+}
+
+async function updateSolWallet(userId: string, requestedWallet: string | null): Promise<void> {
+  await ensureSolWalletReleaseLocksTable();
+  const client = await pool.connect();
+  const nextWallet = requestedWallet?.trim() || null;
+
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query<{ solWallet: string | null }>(
+      `SELECT "solWallet" FROM profile WHERE "userId" = $1 FOR UPDATE`,
+      [userId],
+    );
+    const currentWallet = currentResult.rows[0]?.solWallet?.trim() || null;
+
+    if (currentWallet === nextWallet) {
+      await client.query("COMMIT");
+      return;
+    }
+
+    const addressesToLock = [...new Set([currentWallet, nextWallet].filter(Boolean) as string[])].sort();
+    for (const address of addressesToLock) {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [address]);
+    }
+
+    if (nextWallet) {
+      const duplicateResult = await client.query(
+        `SELECT 1 FROM profile WHERE "solWallet" = $1 AND "userId" <> $2 LIMIT 1`,
+        [nextWallet, userId],
+      );
+      if (duplicateResult.rowCount) {
+        const error = new Error("このSOLアドレスは既に他のアカウントで使用されています");
+        Object.assign(error, { statusCode: 409 });
+        throw error;
+      }
+
+      const releaseLockResult = await client.query<{ availableAt: Date }>(
+        `SELECT "availableAt"
+         FROM "solWalletReleaseLocks"
+         WHERE "walletAddress" = $1
+           AND "formerUserId" <> $2
+           AND "availableAt" > NOW()
+         LIMIT 1`,
+        [nextWallet, userId],
+      );
+      if (releaseLockResult.rows[0]) {
+        const availableAt = new Date(releaseLockResult.rows[0].availableAt);
+        const error = new Error(
+          `このSOLアドレスは解除後${SOL_WALLET_REUSE_DELAY_HOURS}時間の保護期間中です。${availableAt.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}以降に登録できます`,
+        );
+        Object.assign(error, { statusCode: 409 });
+        throw error;
+      }
+    }
+
+    if (currentWallet) {
+      await client.query(
+        `INSERT INTO "solWalletReleaseLocks"
+           ("walletAddress", "formerUserId", "releasedAt", "availableAt")
+         VALUES ($1, $2, NOW(), NOW() + INTERVAL '${SOL_WALLET_REUSE_DELAY_HOURS} hours')
+         ON CONFLICT ("walletAddress") DO UPDATE SET
+           "formerUserId" = EXCLUDED."formerUserId",
+           "releasedAt" = EXCLUDED."releasedAt",
+           "availableAt" = EXCLUDED."availableAt"`,
+        [currentWallet, userId],
+      );
+    }
+
+    await client.query(
+      `UPDATE profile SET "solWallet" = $1, "updatedAt" = NOW() WHERE "userId" = $2`,
+      [nextWallet, userId],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 router.get("/profile", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
@@ -83,24 +175,11 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
       xId?: string;
       discordId?: string;
       discordUsername?: string;
-      solWallet?: string;
+      solWallet?: string | null;
       showBalance?: boolean;
     };
 
-  // ① SOLウォレット重複チェック
-  if (solWallet !== undefined && solWallet !== null && solWallet.trim() !== "") {
-    const trimmed = solWallet.trim().toLowerCase();
-    const { rows: dupCheck } = await pool.query(
-      `SELECT "userId" FROM profile WHERE lower("solWallet") = $1 AND "userId" != $2 LIMIT 1`,
-      [trimmed, userId],
-    );
-    if (dupCheck.length > 0) {
-      res.status(400).json({ error: "このSOLアドレスは既に他のアカウントで使用されています" });
-      return;
-    }
-  }
-
-  // ② X ID 重複チェック（大文字小文字・@ 無視）
+  // X ID 重複チェック（大文字小文字・@ 無視）
   if (xId !== undefined && xId !== null && xId.trim() !== "") {
     const normalized = normalizeXId(xId);
     const { rows: xDupCheck } = await pool.query(
@@ -115,6 +194,10 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
   }
 
   try {
+    if (solWallet !== undefined) {
+      await updateSolWallet(userId, solWallet);
+    }
+
     // X ID 保存時は @ を除いた小文字に正規化
     const normalizedXId = xId !== undefined
       ? (xId.trim() === "" ? null : normalizeXId(xId))
@@ -127,7 +210,6 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
         ...(normalizedXId !== undefined && { xId: normalizedXId }),
         ...(discordId !== undefined && { discordId }),
         ...(discordUsername !== undefined && { discordUsername }),
-        ...(solWallet !== undefined && { solWallet: solWallet?.trim() ?? null }),
         ...(showBalance !== undefined && { showBalance }),
         updatedAt: new Date(),
       })
@@ -138,8 +220,16 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
       .where(eq(profileTable.userId, userId))
       .then((r) => r[0]);
     res.json(updated);
-  } catch {
-    res.status(500).json({ error: "Internal error" });
+  } catch (error) {
+    const statusCode = typeof error === "object" && error !== null && "statusCode" in error
+      ? Number((error as { statusCode: unknown }).statusCode)
+      : 500;
+    if (statusCode >= 500) {
+      console.error("Profile update failed", error);
+    }
+    res.status(statusCode).json({
+      error: error instanceof Error && statusCode < 500 ? error.message : "Internal error",
+    });
   }
 });
 

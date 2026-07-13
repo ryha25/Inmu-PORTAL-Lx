@@ -21,6 +21,14 @@ function RankBadge({ rank }: { rank: number }) {
   )
 }
 
+function rankingValueSize(value: number) {
+  const length = Math.abs(Math.trunc(value)).toLocaleString().length
+  if (length >= 16) return 'text-[9px]'
+  if (length >= 13) return 'text-[10px]'
+  if (length >= 10) return 'text-xs'
+  return 'text-sm'
+}
+
 export function RankingView({
   inmuRows,
   pointsRows,
@@ -131,8 +139,8 @@ export function RankingView({
                 {r.showBalance ? (
                   <div>
                     <p className="text-[9px] text-muted-foreground mb-0.5">{t('balance')}</p>
-                    <p className="font-mono font-bold tabular-nums gold-text">{formatInmu(r.balance)}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{t('cumulative_received')}: {formatInmu(r.totalReceived)}</p>
+                    <p className={`max-w-[42vw] whitespace-nowrap font-mono font-bold tabular-nums gold-text ${rankingValueSize(r.balance)}`}>{formatInmu(r.balance)}</p>
+                    <p className="max-w-[42vw] whitespace-nowrap text-[9px] text-muted-foreground mt-0.5">{t('cumulative_received')}: {formatInmu(r.totalReceived)}</p>
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">{t('hide')}</p>
@@ -172,9 +180,8 @@ export function RankingView({
                 <p className="text-xs text-muted-foreground">{t('participations')}: {r.participations}</p>
               </div>
               <div className="text-right">
-                <p className="font-mono font-bold tabular-nums text-primary">
+                <p className={`max-w-[42vw] whitespace-nowrap font-mono font-bold tabular-nums text-primary ${rankingValueSize(r.points)}`}>
                   {r.points.toLocaleString()}
-                  <span className="ml-1 text-xs font-normal text-muted-foreground">pts</span>
                 </p>
               </div>
             </div>

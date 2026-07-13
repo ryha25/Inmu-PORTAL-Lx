@@ -234,7 +234,7 @@ export function ProfileView({
       }
       await saveWallet(null)
       setSolWallet('')
-      toast.success('Phantom を切断しました')
+      toast.success('SOLアドレスの登録を解除しました')
       onRefresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('error'))
@@ -425,6 +425,21 @@ export function ProfileView({
                 保存
               </Button>
             </div>
+            {profile.solWallet && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={disconnectPhantom}
+                disabled={loading || phantomLoading}
+                className="min-h-9 self-start border-destructive/50 text-destructive hover:bg-destructive/10"
+              >
+                SOLアドレスの登録を解除
+              </Button>
+            )}
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              不正利用防止のため、解除したアドレスは別アカウントへ登録できるまで24時間かかります。
+            </p>
           </div>
           <p className="text-[11px] text-muted-foreground">{t('wallet_private')}</p>
         </div>

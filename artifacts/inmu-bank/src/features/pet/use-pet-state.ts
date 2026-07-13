@@ -647,6 +647,7 @@ export function usePetState() {
   function useSleepTea(amount: number) {
     const requested = Math.min(3, Math.max(1, Math.floor(amount)))
     const petId = effectiveSave.selectedPetId
+    if ((effectiveSave.sleepStartedAt[petId] ?? 0) > 0) return 0
     const available = Math.max(0, Math.floor(effectiveSave.items?.sleepTea ?? 0))
     const maxBySleepiness = Math.max(0, Math.floor((100 - effectiveSave.pets[petId].sleepiness) / 33))
     const used = Math.min(requested, available, Math.max(0, PET_BY_ID[petId].maxLevel - effectiveSave.pets[petId].level), maxBySleepiness)
@@ -654,6 +655,7 @@ export function usePetState() {
     setSave(current => {
       const materialized = materializeSaveAt(current, Date.now())
       const currentPetId = materialized.selectedPetId
+      if ((materialized.sleepStartedAt[currentPetId] ?? 0) > 0) return current
       const stats = materialized.pets[currentPetId]
       const currentAvailable = Math.max(0, Math.floor(materialized.items?.sleepTea ?? 0))
       const currentMaxBySleepiness = Math.max(0, Math.floor((100 - stats.sleepiness) / 33))
