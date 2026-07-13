@@ -139,6 +139,7 @@ type PetActionTimes = Record<PetCareAction, number>
 type PetCooldownUntil = Record<PetCareCategory, number>
 type PetProgressState = { fullnessAt: number; sleepinessAt: number }
 type PremiumFoodSave = { dailyDate: string; dailyUsed: number; inventory: number }
+type PetInventorySnapshot = { sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number }
 
 type PetSaveData = {
   version: 5 | 6 | 7
@@ -364,6 +365,25 @@ function getPremiumFoodState(value: PremiumFoodSave, now = Date.now()): PremiumF
   const normalized = sanitizePremiumFood(value, now)
   const dailyRemaining = Math.max(0, PET_PREMIUM_DAILY_FREE - normalized.dailyUsed)
   return { dailyRemaining, inventory: normalized.inventory, totalAvailable: dailyRemaining + normalized.inventory }
+}
+
+function getInventorySnapshot(save: PetSaveData): PetInventorySnapshot {
+  const items = sanitizeItems(save.items)
+  const premiumFood = sanitizePremiumFood(save.premiumFood)
+  return {
+    sleepTea: items.sleepTea,
+    premiumInventory: premiumFood.inventory,
+    takuyaSunglasses: items.takuyaSunglasses,
+    catHeadband: items.catHeadband,
+  }
+}
+
+function sameInventorySnapshot(a: PetInventorySnapshot | null | undefined, b: PetInventorySnapshot | null | undefined) {
+  return Boolean(a && b)
+    && a.sleepTea === b.sleepTea
+    && a.premiumInventory === b.premiumInventory
+    && a.takuyaSunglasses === b.takuyaSunglasses
+    && a.catHeadband === b.catHeadband
 }
 
 function createDefaultSave(): PetSaveData {
@@ -750,7 +770,7 @@ export function usePetState() {
   // ── サーバーに最後に伝えた消費アイテム数の基準値。
   // 定期autosaveのフルステート上書きでミッション/ガチャ付与分を
   // 消してしまわないよう、サーバー側の差分マージ計算に使う。
-  const itemsBaselineRef = useRef<{ sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number } | null>(null)
+  const itemsBaselineRef = useRef<PetInventorySnapshot | null>(null)
   const now = Date.now()
   const effectiveSave = materializeSaveAt(save, now)
   const selectedPetId = effectiveSave.selectedPetId
@@ -779,12 +799,7 @@ export function usePetState() {
         if (data.hasState && data.state) {
           const hydrated = loadSave(data.state)
           setSave(hydrated)
-          itemsBaselineRef.current = {
-            sleepTea: Number(hydrated.items?.sleepTea ?? 0),
-            premiumInventory: Number(hydrated.premiumFood?.inventory ?? 0),
-            takuyaSunglasses: Number(hydrated.items?.takuyaSunglasses ?? 0),
-            catHeadband: Number(hydrated.items?.catHeadband ?? 0),
-          }
+          itemsBaselineRef.current = getInventorySnapshot(hydrated)
           setSkillLockStatus(data.skillLockStatus && typeof data.skillLockStatus === 'object' ? data.skillLockStatus : {})
         } else {
           const migrateResponse = await fetch('/api/pet/state', {
@@ -797,12 +812,7 @@ export function usePetState() {
             const migrateData = await migrateResponse.json().catch(() => ({}))
             throw new Error(migrateData.error ?? 'INMU PETデータの初期保存に失敗しました')
           }
-          itemsBaselineRef.current = {
-            sleepTea: Number(initialLocalSave.current.items?.sleepTea ?? 0),
-            premiumInventory: Number(initialLocalSave.current.premiumFood?.inventory ?? 0),
-            takuyaSunglasses: Number(initialLocalSave.current.items?.takuyaSunglasses ?? 0),
-            catHeadband: Number(initialLocalSave.current.items?.catHeadband ?? 0),
-          }
+          itemsBaselineRef.current = getInventorySnapshot(initialLocalSave.current)
         }
         setSyncError(null)
       } catch (error) {
@@ -848,16 +858,48 @@ export function usePetState() {
           }
         })
       } else {
-        itemsBaselineRef.current = {
-          sleepTea: Number(save.items?.sleepTea ?? 0),
-          premiumInventory: Number(save.premiumFood?.inventory ?? 0),
-          takuyaSunglasses: Number(save.items?.takuyaSunglasses ?? 0),
-          catHeadband: Number(save.items?.catHeadband ?? 0),
-        }
+        itemsBaselineRef.current = getInventorySnapshot(save)
       }
       setSyncError(null)
     }).catch(error => setSyncError(error instanceof Error ? error.message : 'INMU PETデータの保存に失敗しました'))
   }, [isHydrated, save])
+
+  useEffect(() => {
+    if (!isHydrated) return
+    let cancelled = false
+    async function refreshServerInventory() {
+      try {
+        const response = await fetch('/api/pet/state', { credentials: 'include' })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || !data.hasState || !data.state || cancelled) return
+        const remoteSave = loadSave(data.state)
+        const remoteSnapshot = getInventorySnapshot(remoteSave)
+        setSave(current => {
+          const materialized = materializeSaveAt(current, Date.now())
+          const currentSnapshot = getInventorySnapshot(materialized)
+          const baseline = itemsBaselineRef.current
+          if (baseline && !sameInventorySnapshot(currentSnapshot, baseline)) return current
+          itemsBaselineRef.current = remoteSnapshot
+          if (sameInventorySnapshot(currentSnapshot, remoteSnapshot)) return current
+          return {
+            ...materialized,
+            items: remoteSave.items,
+            premiumFood: { ...materialized.premiumFood, inventory: remoteSave.premiumFood.inventory },
+          }
+        })
+      } catch {
+        // Server-side item grants are opportunistic; normal autosave still handles local play.
+      }
+    }
+    void refreshServerInventory()
+    const interval = window.setInterval(refreshServerInventory, 15_000)
+    window.addEventListener('focus', refreshServerInventory)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refreshServerInventory)
+    }
+  }, [isHydrated])
 
   useEffect(() => {
     const materialize = () => setSave(current => {
