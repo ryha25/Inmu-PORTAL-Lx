@@ -133,7 +133,8 @@ function formatCooldown(milliseconds: number) {
 }
 
 function formatWalkRemaining(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000))
+  const safeMilliseconds = Number.isFinite(milliseconds) ? milliseconds : 0
+  const totalSeconds = Math.max(0, Math.ceil(safeMilliseconds / 1000))
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`

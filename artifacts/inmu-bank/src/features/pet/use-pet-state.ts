@@ -284,15 +284,35 @@ function sanitizeItems(value: Partial<PetItemState> | undefined): PetItemState {
   }
 }
 
+function sanitizeWalkItem(value: unknown): PetWalkItem {
+  return value === 'takuya_sunglasses' || value === 'cat_headband' ? value : 'none'
+}
+
+function sanitizeWalkSession(petId: PetId, value: unknown, now = Date.now()): PetWalkSession | null {
+  if (!value || typeof value !== 'object') return null
+  const session = value as Partial<PetWalkSession>
+  const startedAt = Math.max(0, readNumber(session.startedAt, now))
+  const fallbackEndsAt = startedAt + PET_WALK_BASE_DURATION_MS
+  const endsAt = Math.max(startedAt, readNumber(session.endsAt, fallbackEndsAt))
+  if (!Number.isFinite(startedAt) || !Number.isFinite(endsAt)) return null
+  return {
+    id: String(session.id ?? `walk-${petId}-${startedAt}`),
+    petId,
+    startedAt,
+    endsAt,
+    item: sanitizeWalkItem(session.item),
+  }
+}
+
 function sanitizeWalks(value: Partial<PetWalkState> | undefined, now = Date.now()): PetWalkState {
   const today = getJstDateKey(now)
   const sameDay = value?.dailyDate === today
   const active = Object.fromEntries(
-    Object.entries(value?.active ?? {}).filter(([id, session]) =>
-      Boolean(PET_BY_ID[id as PetId]) &&
-      session &&
-      typeof session === 'object',
-    ),
+    Object.entries(value?.active ?? {}).flatMap(([id, session]) => {
+      if (!PET_BY_ID[id as PetId]) return []
+      const sanitized = sanitizeWalkSession(id as PetId, session, now)
+      return sanitized ? [[id, sanitized]] : []
+    }),
   ) as Partial<Record<PetId, PetWalkSession>>
   return {
     dailyDate: today,
@@ -702,7 +722,8 @@ export function usePetState() {
   const walks = effectiveSave.walks
   const selectedWalkSession = walks.active[selectedPetId] ?? null
   const isWalking = Boolean(selectedWalkSession)
-  const walkRemaining = selectedWalkSession ? Math.max(0, selectedWalkSession.endsAt - now) : 0
+  const walkRemainingValue = selectedWalkSession ? selectedWalkSession.endsAt - now : 0
+  const walkRemaining = Number.isFinite(walkRemainingValue) ? Math.max(0, walkRemainingValue) : 0
   const depressionUntil = walks.depressionUntil[selectedPetId] ?? 0
   const postDepressionUntil = walks.postDepressionUntil[selectedPetId] ?? 0
   const depressionMessage = (walks.depressionMessageUntil[selectedPetId] ?? 0) > now ? '罵声を浴びせられてうつ状態' : ''
