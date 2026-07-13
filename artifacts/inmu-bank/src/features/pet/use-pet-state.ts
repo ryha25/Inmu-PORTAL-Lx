@@ -543,11 +543,17 @@ function rollAffectionGiftAfterCare(
 }
 
 function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
-  const pets = { ...save.pets }
-  const progress = { ...save.progress }
-  const sleepStartedAt = { ...save.sleepStartedAt }
-  const sleepStartValue = { ...save.sleepStartValue }
-  const sleepWakeAt = { ...save.sleepWakeAt }
+  const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(save.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
+  const progress = Object.fromEntries(PET_DEFINITIONS.map(pet => {
+    const savedProgress = save.progress?.[pet.id]
+    return [pet.id, {
+      fullnessAt: Math.max(0, readNumber(savedProgress?.fullnessAt, now)),
+      sleepinessAt: Math.max(0, readNumber(savedProgress?.sleepinessAt, now)),
+    }]
+  })) as Record<PetId, PetProgressState>
+  const sleepStartedAt = { ...sanitizePetNumberRecord(save.sleepStartedAt, 0) }
+  const sleepStartValue = { ...sanitizePetNumberRecord(save.sleepStartValue, 0) }
+  const sleepWakeAt = { ...sanitizePetNumberRecord(save.sleepWakeAt, 0) }
   const items = { ...sanitizeItems(save.items) }
   const walks = sanitizeWalks(save.walks, now)
   const hungerAffectionPenaltyAt = { ...sanitizePetNumberRecord(save.hungerAffectionPenaltyAt, now) }
@@ -557,8 +563,8 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
 
   PET_DEFINITIONS.forEach(pet => {
     const id = pet.id
-    const stats = save.pets[id]
-    const currentProgress = save.progress[id]
+    const stats = pets[id]
+    const currentProgress = progress[id]
     const fullnessSteps = Math.max(0, Math.floor((now - currentProgress.fullnessAt) / PET_FULLNESS_DECAY_MS))
     const nextProgress: PetProgressState = {
       fullnessAt: currentProgress.fullnessAt + fullnessSteps * PET_FULLNESS_DECAY_MS,
@@ -586,18 +592,18 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
       sleepStartedAt[id] = now
       sleepStartValue[id] = 100
       sleepWakeAt[id] = 0
-    } else if (save.sleepStartedAt[id] > 0) {
+    } else if (sleepStartedAt[id] > 0) {
       // ── 眠っている間は、経過時間(オフラインでの経過分も含む)に応じて
       // 「10秒で1」ずつ眠気を回復させる。入眠時に決めたsleepWakeAt(0〜startValue)まで
       // 回復したら起床する(必ずしも0まで眠るとは限らない)。以降は通常の眠気蓄積に戻る。
       const startValue = sleepStartValue[id] ?? stats.sleepiness
       const wakeThreshold = clamp(sleepWakeAt[id] ?? 0, 0, startValue)
-      const elapsedSec = Math.max(0, (now - save.sleepStartedAt[id]) / 1000)
+      const elapsedSec = Math.max(0, (now - sleepStartedAt[id]) / 1000)
       const recovered = elapsedSec * PET_SLEEP_RECOVERY_PER_SEC
       const currentSleepiness = startValue - recovered
       if (currentSleepiness <= wakeThreshold) {
         const recoveryDurationMs = ((startValue - wakeThreshold) / PET_SLEEP_RECOVERY_PER_SEC) * 1000
-        const wokeAt = save.sleepStartedAt[id] + recoveryDurationMs
+        const wokeAt = sleepStartedAt[id] + recoveryDurationMs
         const awakeSteps = Math.max(0, Math.floor((now - wokeAt) / PET_SLEEPINESS_GAIN_MS))
         nextStats = { ...nextStats, sleepiness: clamp(Math.round(wakeThreshold) + awakeSteps) }
         nextProgress.sleepinessAt = wokeAt + awakeSteps * PET_SLEEPINESS_GAIN_MS
@@ -629,7 +635,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     progress[id] = nextProgress
   })
 
-  for (const [rawPetId, session] of Object.entries(save.walks?.active ?? {})) {
+  for (const [rawPetId, session] of Object.entries(walks.active ?? {})) {
     const petId = rawPetId as PetId
     if (!PET_BY_ID[petId] || !session || session.endsAt > now) continue
     delete walks.active[petId]
