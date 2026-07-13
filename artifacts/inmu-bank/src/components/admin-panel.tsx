@@ -229,23 +229,33 @@ const REWARD_CALC_KEYS: Array<{ key: string; label: string }> = [
   { key: 'reward_level_inmu',      label: '配布キャラ Lv.15 報酬INMU' },
   { key: 'reward_gacha_lv20_inmu', label: 'ガチャキャラ Lv.20 報酬INMU' },
   { key: 'reward_gacha_lv30_inmu', label: 'ガチャキャラ Lv.30 報酬INMU' },
-  { key: 'reward_nyarushian_lv20_inmu', label: 'ニャルシアン Lv.20 報酬INMU' },
-  { key: 'reward_nyarushian_lv30_inmu', label: 'ニャルシアン Lv.30 報酬INMU' },
-  { key: 'reward_takuya_lv20_inmu', label: '拓也 Lv.20 報酬INMU' },
-  { key: 'reward_takuya_lv30_inmu', label: '拓也 Lv.30 報酬INMU' },
-  { key: 'reward_leon_lv20_inmu', label: 'レオン Lv.20 報酬INMU' },
-  { key: 'reward_leon_lv30_inmu', label: 'レオン Lv.30 報酬INMU' },
-  { key: 'reward_chinge_lv20_inmu', label: 'チンゲ Lv.20 報酬INMU' },
-  { key: 'reward_chinge_lv30_inmu', label: 'チンゲ Lv.30 報酬INMU' },
-  { key: 'reward_tdn_lv20_inmu', label: 'TDN Lv.20 報酬INMU' },
-  { key: 'reward_tdn_lv30_inmu', label: 'TDN Lv.30 報酬INMU' },
-  { key: 'reward_whip_lv20_inmu', label: 'ホイップ Lv.20 報酬INMU' },
-  { key: 'reward_whip_lv30_inmu', label: 'ホイップ Lv.30 報酬INMU' },
   { key: 'gacha_paid_single_inmu', label: 'ガチャ関連INMU価格（有償単発）' },
   { key: 'gacha_paid_eleven_inmu', label: 'ガチャ関連INMU価格（有償11連）' },
   { key: 'slot_unlock_2_inmu',     label: 'スロット解放INMU価格（2枠目）' },
   { key: 'slot_unlock_3_inmu',     label: 'スロット解放INMU価格（3枠目）' },
 ]
+
+const PET_REWARD_CHARACTER_OPTIONS = [
+  { id: 'nyarushian', label: '\u30cb\u30e3\u30eb\u30b7\u30a2\u30f3' },
+  { id: 'takuya', label: '\u62d3\u4e5f' },
+  { id: 'leon', label: '\u30ec\u30aa\u30f3' },
+  { id: 'chinge', label: '\u30c1\u30f3\u30b2' },
+  { id: 'tdn', label: 'TDN' },
+  { id: 'whip', label: '\u30db\u30a4\u30c3\u30d7' },
+] as const
+
+type PetRewardCharacterId = typeof PET_REWARD_CHARACTER_OPTIONS[number]['id']
+
+const PET_CHARACTER_REWARD_KEYS = PET_REWARD_CHARACTER_OPTIONS.flatMap(({ id }) => [
+  `reward_${id}_lv20_inmu`,
+  `reward_${id}_lv30_inmu`,
+])
+
+const REWARD_SETTING_KEYS = [
+  ...REWARD_CALC_KEYS.map(({ key }) => key),
+  ...PET_CHARACTER_REWARD_KEYS,
+]
+
 
 type GachaResultRow = {
   id: number              // gachaInmuWins.id（当選個別ID）
@@ -940,11 +950,12 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [calcPriceLoading, setCalcPriceLoading] = useState(false)
   const [calcTargetUsd, setCalcTargetUsd] = useState('20')
   const [calcEditValues, setCalcEditValues] = useState<Record<string, string>>({})
+  const [selectedPetRewardCharacter, setSelectedPetRewardCharacter] = useState<PetRewardCharacterId>('nyarushian')
   const [calcSaving, setCalcSaving] = useState(false)
 
   useEffect(() => {
     const map: Record<string, string> = {}
-    for (const { key } of REWARD_CALC_KEYS) {
+    for (const key of REWARD_SETTING_KEYS) {
       const s = systemSettings.find(x => x.key === key)
       if (s) map[key] = s.value
     }
@@ -1363,7 +1374,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   async function saveRewardCalc() {
     setCalcSaving(true)
     try {
-      for (const { key } of REWARD_CALC_KEYS) {
+      for (const key of REWARD_SETTING_KEYS) {
         const val = calcEditValues[key]
         const current = systemSettings.find(s => s.key === key)?.value
         if (val !== undefined && val !== '' && val !== current) {
@@ -2373,27 +2384,65 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
             {settingsLoading ? (
               <p className="text-sm text-center text-muted-foreground py-6">読み込み中…</p>
             ) : (
-              REWARD_CALC_KEYS.map(({ key, label }) => {
-                const val = calcEditValues[key] ?? ''
-                const n = Number(val)
-                const usd = calcInmuPrice && calcInmuPrice > 0 && val !== '' && !isNaN(n) ? n * calcInmuPrice : null
-                return (
-                  <Card key={key} className="border-border bg-card p-3 flex flex-col gap-1.5">
-                    <p className="text-xs font-medium">{label}</p>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={val}
-                        onChange={e => setCalcEditValues(prev => ({ ...prev, [key]: e.target.value }))}
-                        className="min-h-9 flex-1"
-                      />
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                        {usd != null ? `≈ ${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD` : ''}
-                      </span>
-                    </div>
-                  </Card>
-                )
-              })
+              <>
+                {REWARD_CALC_KEYS.map(({ key, label }) => {
+                  const val = calcEditValues[key] ?? ''
+                  const n = Number(val)
+                  const usd = calcInmuPrice && calcInmuPrice > 0 && val !== '' && !isNaN(n) ? n * calcInmuPrice : null
+                  return (
+                    <Card key={key} className="border-border bg-card p-3 flex flex-col gap-1.5">
+                      <p className="text-xs font-medium">{label}</p>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={val}
+                          onChange={e => setCalcEditValues(prev => ({ ...prev, [key]: e.target.value }))}
+                          className="min-h-9 flex-1"
+                        />
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                          {usd != null ? `~ ${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD` : ''}
+                        </span>
+                      </div>
+                    </Card>
+                  )
+                })}
+                <Card className="border-primary/30 bg-primary/5 p-3 flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">キャラ別レベル報酬</Label>
+                    <select
+                      value={selectedPetRewardCharacter}
+                      onChange={e => setSelectedPetRewardCharacter(e.target.value as PetRewardCharacterId)}
+                      className="flex min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {PET_REWARD_CHARACTER_OPTIONS.map(character => (
+                        <option key={character.id} value={character.id}>{character.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {([20, 30] as const).map(level => {
+                    const key = `reward_${selectedPetRewardCharacter}_lv${level}_inmu`
+                    const val = calcEditValues[key] ?? ''
+                    const n = Number(val)
+                    const usd = calcInmuPrice && calcInmuPrice > 0 && val !== '' && !isNaN(n) ? n * calcInmuPrice : null
+                    return (
+                      <div key={key} className="flex flex-col gap-1">
+                        <Label className="text-xs text-muted-foreground">Lv.{level} 報酬INMU</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={val}
+                            onChange={e => setCalcEditValues(prev => ({ ...prev, [key]: e.target.value }))}
+                            className="min-h-9 flex-1"
+                          />
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                            {usd != null ? `~ ${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </Card>
+              </>
             )}
             <Button className="min-h-9" disabled={calcSaving || settingsLoading} onClick={saveRewardCalc}>
               {calcSaving ? '保存中…' : 'まとめて保存'}

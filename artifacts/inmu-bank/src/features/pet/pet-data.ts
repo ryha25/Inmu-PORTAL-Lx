@@ -31,8 +31,29 @@ import inmuFestivalBlinkImage from '@assets/inmu-pet-festival-810-blink-v1.png'
 import inmuFestivalHungryImage from '@assets/inmu-pet-festival-810-hungry-v1.png'
 import inmuFestivalSleepyImage from '@assets/inmu-pet-festival-810-sleepy-v1.png'
 import chingeImage from '@assets/inmu-pet-chinge-v1.png'
+import chingeAngryImage from '@assets/inmu-pet-chinge-angry-v1.png'
+import chingeAnnoyedImage from '@assets/inmu-pet-chinge-annoyed-v1.png'
+import chingeBlinkImage from '@assets/inmu-pet-chinge-blink-v1.png'
+import chingeHappyImage from '@assets/inmu-pet-chinge-happy-v1.png'
+import chingeHungryImage from '@assets/inmu-pet-chinge-hungry-v1.png'
+import chingePettedImage from '@assets/inmu-pet-chinge-petted-v1.png'
+import chingeSleepyImage from '@assets/inmu-pet-chinge-sleepy-v1.png'
 import tdnImage from '@assets/inmu-pet-tdn-v1.png'
+import tdnAngryImage from '@assets/inmu-pet-tdn-angry-v1.png'
+import tdnAnnoyedImage from '@assets/inmu-pet-tdn-annoyed-v1.png'
+import tdnBlinkImage from '@assets/inmu-pet-tdn-blink-v1.png'
+import tdnHappyImage from '@assets/inmu-pet-tdn-happy-v1.png'
+import tdnHungryImage from '@assets/inmu-pet-tdn-hungry-v1.png'
+import tdnPettedImage from '@assets/inmu-pet-tdn-petted-v1.png'
+import tdnSleepyImage from '@assets/inmu-pet-tdn-sleepy-v1.png'
 import whipImage from '@assets/inmu-pet-whip-v1.png'
+import whipAngryImage from '@assets/inmu-pet-whip-angry-v1.png'
+import whipAnnoyedImage from '@assets/inmu-pet-whip-annoyed-v1.png'
+import whipBlinkImage from '@assets/inmu-pet-whip-blink-v1.png'
+import whipHappyImage from '@assets/inmu-pet-whip-happy-v1.png'
+import whipHungryImage from '@assets/inmu-pet-whip-hungry-v1.png'
+import whipPettedImage from '@assets/inmu-pet-whip-petted-v1.png'
+import whipSleepyImage from '@assets/inmu-pet-whip-sleepy-v1.png'
 import nyarushianRoomImage from '@assets/inmu-pet-room-nyarushian-v1.jpg'
 import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
 import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
@@ -219,14 +240,14 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     image: chingeImage,
     expressions: {
       default: chingeImage,
-      blink: chingeImage,
-      happy: chingeImage,
-      sleepy: chingeImage,
-      hungry: chingeImage,
-      petted: chingeImage,
-      affectionate: chingeImage,
-      annoyed: chingeImage,
-      angry: chingeImage,
+      blink: chingeBlinkImage,
+      happy: chingeHappyImage,
+      sleepy: chingeSleepyImage,
+      hungry: chingeHungryImage,
+      petted: chingePettedImage,
+      affectionate: chingePettedImage,
+      annoyed: chingeAnnoyedImage,
+      angry: chingeAngryImage,
     },
     walk: { enabled: true, frames: [chingeImage, chingeImage], distancePercent: 17, tickMs: 310 },
     messages: { overpetted: '……しつこい。' },
@@ -258,14 +279,14 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     image: tdnImage,
     expressions: {
       default: tdnImage,
-      blink: tdnImage,
-      happy: tdnImage,
-      sleepy: tdnImage,
-      hungry: tdnImage,
-      petted: tdnImage,
-      affectionate: tdnImage,
-      annoyed: tdnImage,
-      angry: tdnImage,
+      blink: tdnBlinkImage,
+      happy: tdnHappyImage,
+      sleepy: tdnSleepyImage,
+      hungry: tdnHungryImage,
+      petted: tdnPettedImage,
+      affectionate: tdnPettedImage,
+      annoyed: tdnAnnoyedImage,
+      angry: tdnAngryImage,
     },
     walk: { enabled: true, frames: [tdnImage, tdnImage], distancePercent: 19, tickMs: 260 },
     messages: { overpetted: '試合前だ、集中させろ。' },
@@ -297,14 +318,14 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     image: whipImage,
     expressions: {
       default: whipImage,
-      blink: whipImage,
-      happy: whipImage,
-      sleepy: whipImage,
-      hungry: whipImage,
-      petted: whipImage,
-      affectionate: whipImage,
-      annoyed: whipImage,
-      angry: whipImage,
+      blink: whipBlinkImage,
+      happy: whipHappyImage,
+      sleepy: whipSleepyImage,
+      hungry: whipHungryImage,
+      petted: whipPettedImage,
+      affectionate: whipPettedImage,
+      annoyed: whipAnnoyedImage,
+      angry: whipAngryImage,
     },
     walk: { enabled: true, frames: [whipImage, whipImage], distancePercent: 18, tickMs: 280 },
     messages: { overpetted: 'ふわふわが乱れちゃうよ。' },
