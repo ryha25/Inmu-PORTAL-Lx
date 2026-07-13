@@ -1165,7 +1165,7 @@ function CharacterSelectStrip({
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, isWalking, walkRemaining, walks, depressionMessage, selectPet, setActivePetIds, care, setExpression, useSleepTea, startWalk, markWalkResultSeen, markWalkPointsGranted, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds, skillLockStatus, refreshSkillLockStatus } = usePetState()
+  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, isWalking, walkRemaining, walks, affectionGifts, depressionMessage, selectPet, setActivePetIds, care, setExpression, useSleepTea, startWalk, markWalkResultSeen, markWalkPointsGranted, markAffectionGiftPointsGranted, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds, skillLockStatus, refreshSkillLockStatus } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
@@ -1279,7 +1279,7 @@ export function PetPage() {
     exp: 0,
     fullness: 50,
     sleepiness: 20,
-    affection: 10,
+    affection: 50,
   }
   const activePets = activePetIds.map(id => PET_BY_ID[id]).filter(Boolean)
   const ownedPets = (ownedPetIds ?? []).map(id => PET_BY_ID[id]).filter(Boolean)
@@ -1325,9 +1325,13 @@ export function PetPage() {
       ? 'hungry'
       : selectedStats.sleepiness >= 80 && statusExpressionWindow
         ? 'sleepy'
-        : selectedStats.affection >= 100 && statusExpressionWindow
-          ? 'affectionate'
-          : isYawning
+        : selectedStats.affection <= 19 && statusExpressionWindow
+          ? (Math.floor(now / 8000) % 2 === 0 ? 'annoyed' : 'angry')
+          : selectedStats.affection >= 100 && statusExpressionWindow
+            ? 'affectionate'
+            : selectedStats.affection >= 50 && statusExpressionWindow
+              ? 'happy'
+              : isYawning
             ? 'sleepy'
           : isBlinking
             ? 'blink'
@@ -1360,6 +1364,23 @@ export function PetPage() {
       }).catch(() => undefined)
     })
   }, [markWalkPointsGranted, walks.results])
+
+  useEffect(() => {
+    const pending = affectionGifts.filter(gift => gift.rewardType === 'points' && gift.pointsGrantStatus !== 'granted')
+    pending.forEach(gift => {
+      void fetch('/api/pet/affection-gift/point-grant', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ giftId: gift.id, amount: gift.rewardAmount }),
+      }).then(response => {
+        if (response.ok) {
+          markAffectionGiftPointsGranted(gift.id)
+          setBalances(current => ({ ...current, points: current.points + gift.rewardAmount }))
+        }
+      }).catch(() => undefined)
+    })
+  }, [affectionGifts, markAffectionGiftPointsGranted])
 
   useEffect(() => {
     const preloadUrls = new Set(PET_DEFINITIONS.flatMap(candidate => [

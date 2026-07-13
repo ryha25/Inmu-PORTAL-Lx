@@ -106,6 +106,48 @@ router.post("/pet/walk/point-grant", requireAuth, async (req, res): Promise<void
   }
 });
 
+router.post("/pet/affection-gift/point-grant", requireAuth, async (req, res): Promise<void> => {
+  const giftId = String(req.body?.giftId ?? "").trim();
+  const amount = Math.floor(Number(req.body?.amount ?? 0));
+  if (!/^affection-[a-z0-9-]+/i.test(giftId) || amount < 100 || amount > 5000 || amount % 100 !== 0) {
+    res.status(400).json({ error: "愛情度プレゼントのポイント報酬が不正です" });
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await ensurePetStateTable();
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "petAffectionPointGrants" (
+        "giftId" TEXT PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query("BEGIN");
+    const inserted = await client.query(
+      `INSERT INTO "petAffectionPointGrants" ("giftId","userId",amount)
+       VALUES ($1,$2,$3)
+       ON CONFLICT ("giftId") DO NOTHING
+       RETURNING "giftId"`,
+      [giftId, req.userId!, amount],
+    );
+    if (inserted.rowCount) {
+      const month = new Date().toISOString().slice(0, 7);
+      await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [amount, req.userId!]);
+      await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_affection_gift','INMU PET愛情度プレゼント',$3)`, [req.userId!, amount, month]);
+    }
+    await client.query("COMMIT");
+    res.json({ ok: true, granted: Boolean(inserted.rowCount) });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[PetState] affection gift point grant", error);
+    res.status(500).json({ error: "愛情度プレゼントのポイント付与に失敗しました" });
+  } finally {
+    client.release();
+  }
+});
+
 router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
   const state = req.body?.state;
   const baseline = req.body?.baseline;

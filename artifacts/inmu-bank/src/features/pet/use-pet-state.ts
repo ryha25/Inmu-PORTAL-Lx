@@ -32,6 +32,16 @@ export type PetWalkResult = {
   pointsGrantStatus?: 'pending' | 'granted'
   seen?: boolean
 }
+export type PetAffectionGift = {
+  id: string
+  petId: PetId
+  createdAt: number
+  rewardType: Exclude<PetWalkRewardType, null>
+  rewardAmount: number
+  rewardLabel: string
+  pointsGrantStatus?: 'pending' | 'granted'
+  seen?: boolean
+}
 export type PetWalkState = {
   dailyDate: string
   dailyCount: number
@@ -85,6 +95,10 @@ export const PET_WALK_SUNGLASSES_ITEM_CHANCE = 0.6
 export const PET_WALK_DEPRESSION_MS = 60 * 60 * 1000
 export const PET_WALK_POST_DEBUFF_MS = 24 * 60 * 60 * 1000
 export const PET_WALK_TAKUYA_CAT_EVENT_CHANCE = 0.3
+export const PET_AFFECTION_GIFT_INTERVAL = 5
+export const PET_AFFECTION_GIFT_CHANCE = 0.35
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
 
 // 眠気の値から「今この瞬間に眠り始める確率」を算出する。
 // 低いうちはほぼ0%、閾値(PET_SLEEP_THRESHOLD)付近では100%に近づく。
@@ -113,11 +127,11 @@ export const PET_CARE_CONFIG: Record<PetCareAction, {
   affection: number
   sleepiness: number
 }> = {
-  'feed-basic': { category: 'feed', cooldownMs: 10 * 60 * 1000, fullness: 20, exp: 10, affection: 2, sleepiness: 0 },
-  'feed-premium': { category: 'feed', cooldownMs: 0, fullness: 40, exp: 30, affection: 10, sleepiness: 0 },
-  'play-yarn': { category: 'play', cooldownMs: 10 * 60 * 1000, fullness: 0, exp: 10, affection: 3, sleepiness: 5 },
-  'play-ball': { category: 'play', cooldownMs: 20 * 60 * 1000, fullness: 0, exp: 20, affection: 5, sleepiness: 10 },
-  'play-toy': { category: 'play', cooldownMs: 30 * 60 * 1000, fullness: 0, exp: 30, affection: 7, sleepiness: 15 },
+  'feed-basic': { category: 'feed', cooldownMs: 10 * 60 * 1000, fullness: 20, exp: 10, affection: 1, sleepiness: 0 },
+  'feed-premium': { category: 'feed', cooldownMs: 0, fullness: 40, exp: 30, affection: 2, sleepiness: 0 },
+  'play-yarn': { category: 'play', cooldownMs: 10 * 60 * 1000, fullness: 0, exp: 10, affection: 1, sleepiness: 5 },
+  'play-ball': { category: 'play', cooldownMs: 20 * 60 * 1000, fullness: 0, exp: 20, affection: 1, sleepiness: 10 },
+  'play-toy': { category: 'play', cooldownMs: 30 * 60 * 1000, fullness: 0, exp: 30, affection: 1, sleepiness: 15 },
   pet: { category: 'pet', cooldownMs: 0, fullness: 0, exp: 2, affection: 1, sleepiness: 0 },
 }
 
@@ -127,7 +141,7 @@ type PetProgressState = { fullnessAt: number; sleepinessAt: number }
 type PremiumFoodSave = { dailyDate: string; dailyUsed: number; inventory: number }
 
 type PetSaveData = {
-  version: 5 | 6
+  version: 5 | 6 | 7
   selectedPetId: PetId
   activePetIds: PetId[]
   pets: Record<PetId, PetStats>
@@ -144,6 +158,9 @@ type PetSaveData = {
   premiumFood: PremiumFoodSave
   items: PetItemState
   walks: PetWalkState
+  hungerAffectionPenaltyAt: Record<PetId, number>
+  affectionGiftProgress: Record<PetId, number>
+  affectionGifts: PetAffectionGift[]
   skillState: Record<PetId, boolean>
   skillActiveCharacterIds: PetId[]
 }
@@ -152,7 +169,7 @@ type LegacySaveData = Partial<PetSaveData> & {
   lastCareAt?: Record<PetId, Record<string, number>>
 }
 
-const DEFAULT_STATS: PetStats = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 10 }
+const DEFAULT_STATS: PetStats = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 50 }
 const EMPTY_ACTION_TIMES: PetActionTimes = { 'feed-basic': 0, 'feed-premium': 0, 'play-yarn': 0, 'play-ball': 0, 'play-toy': 0, pet: 0 }
 const EMPTY_COOLDOWNS: PetCooldownUntil = { feed: 0, play: 0 }
 const VALID_EXPRESSIONS = new Set<PetExpression>(['default', 'blink', 'happy', 'sleepy', 'hungry', 'petted', 'affectionate', 'annoyed', 'angry'])
@@ -196,7 +213,53 @@ function sanitizeActionTimes(value: Record<string, number> | undefined): PetActi
 }
 
 function getJstDateKey(timestamp = Date.now()) {
-  return new Date(timestamp + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  return new Date(timestamp + JST_OFFSET_MS).toISOString().slice(0, 10)
+}
+
+function getJstDayStartMs(timestamp = Date.now()) {
+  const shifted = new Date(timestamp + JST_OFFSET_MS)
+  return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()) - JST_OFFSET_MS
+}
+
+function countJstMidnightsBetween(from: number, to: number) {
+  if (to <= from) return 0
+  const first = getJstDayStartMs(from) + DAY_MS
+  const last = getJstDayStartMs(to)
+  return last >= first ? Math.floor((last - first) / DAY_MS) + 1 : 0
+}
+
+function createPetNumberRecord(value = 0): Record<PetId, number> {
+  return Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, value])) as Record<PetId, number>
+}
+
+function sanitizePetNumberRecord(value: Partial<Record<PetId, number>> | undefined, fallback = 0): Record<PetId, number> {
+  return Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, Math.max(0, readNumber(value?.[pet.id], fallback))])) as Record<PetId, number>
+}
+
+export function getAffectionExpMultiplier(affection: number) {
+  if (affection >= 100) return 1.3
+  if (affection >= 80) return 1.2
+  if (affection >= 50) return 1.1
+  if (affection >= 20) return 1
+  return 0.8
+}
+
+function getAffectionWalkRewardMultiplier(affection: number) {
+  if (affection >= 100) return 1.5
+  if (affection >= 80) return 1.35
+  if (affection >= 50) return 1.15
+  if (affection >= 20) return 1
+  return 0.65
+}
+
+function getModifiedExp(baseExp: number, affection: number, postDebuffActive: boolean) {
+  if (baseExp <= 0) return 0
+  return Math.max(1, Math.floor(baseExp * getAffectionExpMultiplier(affection) * (postDebuffActive ? 0.5 : 1)))
+}
+
+function getModifiedAffection(baseAffection: number, postDebuffActive: boolean) {
+  if (baseAffection <= 0) return baseAffection
+  return Math.max(0, Math.floor(baseAffection * (postDebuffActive ? 0.5 : 1)))
 }
 
 function createDefaultWalkState(now = Date.now()): PetWalkState {
@@ -275,7 +338,7 @@ function getPremiumFoodState(value: PremiumFoodSave, now = Date.now()): PremiumF
 function createDefaultSave(): PetSaveData {
   const now = Date.now()
   return {
-    version: 6,
+    version: 7,
     selectedPetId: PET_DEFINITIONS[0].id,
     activePetIds: [],
     pets: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...DEFAULT_STATS }])) as Record<PetId, PetStats>,
@@ -290,6 +353,9 @@ function createDefaultSave(): PetSaveData {
     premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
     items: { sleepTea: 0, takuyaSunglasses: 0, catHeadband: 0 },
     walks: createDefaultWalkState(now),
+    hungerAffectionPenaltyAt: createPetNumberRecord(now),
+    affectionGiftProgress: createPetNumberRecord(0),
+    affectionGifts: [],
     skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, true])) as Record<PetId, boolean>,
     skillActiveCharacterIds: [],
   }
@@ -308,7 +374,7 @@ function loadSave(source?: unknown): PetSaveData {
     const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
     const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(parsed.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
     return {
-      version: 6,
+      version: 7,
       selectedPetId: validSelection ? parsed.selectedPetId! : fallback.selectedPetId,
       activePetIds,
       pets,
@@ -341,6 +407,20 @@ function loadSave(source?: unknown): PetSaveData {
       premiumFood: sanitizePremiumFood(parsed.premiumFood),
       items: sanitizeItems(parsed.items),
       walks: sanitizeWalks(parsed.walks),
+      hungerAffectionPenaltyAt: sanitizePetNumberRecord(parsed.hungerAffectionPenaltyAt, Date.now()),
+      affectionGiftProgress: sanitizePetNumberRecord(parsed.affectionGiftProgress, 0),
+      affectionGifts: Array.isArray(parsed.affectionGifts)
+        ? parsed.affectionGifts.filter(gift => gift && typeof gift === 'object').slice(-8).map(gift => ({
+            id: String(gift.id ?? `affection-${Date.now()}`),
+            petId: PET_BY_ID[gift.petId as PetId] ? gift.petId as PetId : PET_DEFINITIONS[0].id,
+            createdAt: Math.max(0, readNumber(gift.createdAt, Date.now())),
+            rewardType: gift.rewardType === 'points' || gift.rewardType === 'sleep_tea' || gift.rewardType === 'premium_food' || gift.rewardType === 'takuya_sunglasses' || gift.rewardType === 'cat_headband' ? gift.rewardType : 'premium_food',
+            rewardAmount: Math.max(1, Math.floor(readNumber(gift.rewardAmount, 1))),
+            rewardLabel: String(gift.rewardLabel ?? ''),
+            pointsGrantStatus: gift.pointsGrantStatus === 'granted' ? 'granted' : gift.rewardType === 'points' ? 'pending' : undefined,
+            seen: gift.seen === true,
+          }))
+        : [],
       skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, parsed.skillState?.[pet.id] !== false])) as Record<PetId, boolean>,
       skillActiveCharacterIds: (() => {
         const legacySingle = (parsed as { skillActiveCharacterId?: unknown }).skillActiveCharacterId
@@ -367,9 +447,7 @@ function addExp(stats: PetStats, amount: number, petId: PetId): PetStats {
   return { ...stats, level, exp: level >= maxLevel ? 0 : exp }
 }
 
-function rollWalkReward(item: PetWalkItem): Pick<PetWalkResult, 'rewardType' | 'rewardAmount' | 'rewardLabel'> {
-  const chance = item === 'takuya_sunglasses' ? PET_WALK_SUNGLASSES_ITEM_CHANCE : PET_WALK_ITEM_CHANCE
-  if (Math.random() >= chance) return { rewardType: null, rewardAmount: 0, rewardLabel: null }
+function rollRewardItem(): Pick<PetWalkResult, 'rewardType' | 'rewardAmount' | 'rewardLabel'> {
   const candidates = ['points', 'sleep_tea', 'premium_food', 'takuya_sunglasses', 'cat_headband'] as const
   const rewardType = candidates[Math.floor(Math.random() * candidates.length)]
   if (rewardType === 'points') {
@@ -382,6 +460,68 @@ function rollWalkReward(item: PetWalkItem): Pick<PetWalkResult, 'rewardType' | '
   return { rewardType, rewardAmount: 1, rewardLabel: '猫のカチューシャ' }
 }
 
+function rollWalkReward(item: PetWalkItem, affection: number): Pick<PetWalkResult, 'rewardType' | 'rewardAmount' | 'rewardLabel'> {
+  const baseChance = item === 'takuya_sunglasses' ? PET_WALK_SUNGLASSES_ITEM_CHANCE : PET_WALK_ITEM_CHANCE
+  const chance = Math.min(0.9, baseChance * getAffectionWalkRewardMultiplier(affection))
+  if (Math.random() >= chance) return { rewardType: null, rewardAmount: 0, rewardLabel: null }
+  return rollRewardItem()
+}
+
+function rollAffectionGift(petId: PetId, now: number): PetAffectionGift | null {
+  if (Math.random() >= PET_AFFECTION_GIFT_CHANCE) return null
+  const reward = rollRewardItem()
+  if (!reward.rewardType || !reward.rewardLabel) return null
+  return {
+    id: `affection-${petId}-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    petId,
+    createdAt: now,
+    rewardType: reward.rewardType,
+    rewardAmount: reward.rewardAmount,
+    rewardLabel: reward.rewardLabel,
+    pointsGrantStatus: reward.rewardType === 'points' ? 'pending' : undefined,
+    seen: false,
+  }
+}
+
+function applyRewardToInventory(
+  reward: Pick<PetWalkResult, 'rewardType' | 'rewardAmount'> | PetAffectionGift,
+  items: PetItemState,
+  premiumFood: PremiumFoodSave,
+) {
+  const nextItems = { ...items }
+  let nextPremiumFood = premiumFood
+  if (reward.rewardType === 'sleep_tea') nextItems.sleepTea += reward.rewardAmount
+  if (reward.rewardType === 'premium_food') nextPremiumFood = { ...nextPremiumFood, inventory: nextPremiumFood.inventory + reward.rewardAmount }
+  if (reward.rewardType === 'takuya_sunglasses') nextItems.takuyaSunglasses += reward.rewardAmount
+  if (reward.rewardType === 'cat_headband') nextItems.catHeadband += reward.rewardAmount
+  return { items: nextItems, premiumFood: nextPremiumFood }
+}
+
+function rollAffectionGiftAfterCare(
+  petId: PetId,
+  affection: number,
+  progress: Record<PetId, number>,
+  gifts: PetAffectionGift[],
+  now: number,
+) {
+  const nextProgress = { ...progress }
+  let nextGifts = gifts
+  let gift: PetAffectionGift | null = null
+  if (affection >= 100) {
+    const count = (nextProgress[petId] ?? 0) + 1
+    if (count >= PET_AFFECTION_GIFT_INTERVAL) {
+      nextProgress[petId] = 0
+      gift = rollAffectionGift(petId, now)
+      if (gift) nextGifts = [...nextGifts, gift].slice(-8)
+    } else {
+      nextProgress[petId] = count
+    }
+  } else {
+    nextProgress[petId] = 0
+  }
+  return { progress: nextProgress, gifts: nextGifts, gift }
+}
+
 function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
   const pets = { ...save.pets }
   const progress = { ...save.progress }
@@ -390,6 +530,9 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
   const sleepWakeAt = { ...save.sleepWakeAt }
   const items = { ...sanitizeItems(save.items) }
   const walks = sanitizeWalks(save.walks, now)
+  const hungerAffectionPenaltyAt = { ...sanitizePetNumberRecord(save.hungerAffectionPenaltyAt, now) }
+  let affectionGiftProgress = { ...sanitizePetNumberRecord(save.affectionGiftProgress, 0) }
+  let affectionGifts = Array.isArray(save.affectionGifts) ? save.affectionGifts.slice(-8) : []
   let premiumFood = sanitizePremiumFood(save.premiumFood, now)
 
   PET_DEFINITIONS.forEach(pet => {
@@ -402,6 +545,19 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
       sleepinessAt: currentProgress.sleepinessAt,
     }
     let nextStats = { ...stats, fullness: clamp(stats.fullness - fullnessSteps) }
+    if (nextStats.fullness <= 0) {
+      const zeroReachedAt = stats.fullness <= 0
+        ? currentProgress.fullnessAt
+        : currentProgress.fullnessAt + Math.max(0, stats.fullness) * PET_FULLNESS_DECAY_MS
+      const penaltyBase = Math.max(hungerAffectionPenaltyAt[id] ?? 0, zeroReachedAt)
+      const penaltyDays = countJstMidnightsBetween(penaltyBase, now)
+      if (penaltyDays > 0) {
+        nextStats = { ...nextStats, affection: clamp(nextStats.affection - penaltyDays * 30) }
+        hungerAffectionPenaltyAt[id] = getJstDayStartMs(now)
+      }
+    } else {
+      hungerAffectionPenaltyAt[id] = now
+    }
     const depressionActive = (walks.depressionUntil[id] ?? 0) > now
 
     if (depressionActive) {
@@ -459,12 +615,13 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     delete walks.active[petId]
     if (walks.results.some(result => result.id === session.id)) continue
     const postDebuffActive = (walks.postDepressionUntil[petId] ?? 0) > now && (walks.depressionUntil[petId] ?? 0) <= now
-    const exp = Math.max(1, Math.floor((session.item === 'cat_headband' ? 70 : PET_WALK_BASE_EXP) * (postDebuffActive ? 0.5 : 1)))
+    const exp = getModifiedExp(session.item === 'cat_headband' ? 70 : PET_WALK_BASE_EXP, pets[petId].affection, postDebuffActive)
     const sleepiness = session.item === 'cat_headband' ? 8 : session.item === 'takuya_sunglasses' ? 30 : PET_WALK_BASE_SLEEPINESS
-    const reward = rollWalkReward(session.item)
+    const reward = rollWalkReward(session.item, pets[petId].affection)
     const nextStats = addExp({
       ...pets[petId],
       sleepiness: clamp(pets[petId].sleepiness + sleepiness),
+      affection: clamp(pets[petId].affection + getModifiedAffection(1, postDebuffActive)),
     }, exp, petId)
     pets[petId] = nextStats
     if (nextStats.sleepiness >= PET_SLEEP_THRESHOLD) {
@@ -472,10 +629,17 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
       sleepStartValue[petId] = sleepStartValue[petId] || nextStats.sleepiness
       sleepWakeAt[petId] = sleepWakeAt[petId] || rollSleepWakeThreshold(nextStats.sleepiness)
     }
-    if (reward.rewardType === 'sleep_tea') items.sleepTea += reward.rewardAmount
-    if (reward.rewardType === 'premium_food') premiumFood = { ...premiumFood, inventory: premiumFood.inventory + reward.rewardAmount }
-    if (reward.rewardType === 'takuya_sunglasses') items.takuyaSunglasses += reward.rewardAmount
-    if (reward.rewardType === 'cat_headband') items.catHeadband += reward.rewardAmount
+    const rewardInventory = applyRewardToInventory(reward, items, premiumFood)
+    Object.assign(items, rewardInventory.items)
+    premiumFood = rewardInventory.premiumFood
+    const giftRoll = rollAffectionGiftAfterCare(petId, nextStats.affection, affectionGiftProgress, affectionGifts, now)
+    affectionGiftProgress = giftRoll.progress
+    affectionGifts = giftRoll.gifts
+    if (giftRoll.gift) {
+      const giftInventory = applyRewardToInventory(giftRoll.gift, items, premiumFood)
+      Object.assign(items, giftInventory.items)
+      premiumFood = giftInventory.premiumFood
+    }
     walks.results = [
       ...walks.results,
       {
@@ -500,6 +664,9 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     sleepWakeAt,
     items,
     walks,
+    hungerAffectionPenaltyAt,
+    affectionGiftProgress,
+    affectionGifts,
     premiumFood,
   }
 }
@@ -765,19 +932,32 @@ export function usePetState() {
       const triggeredAnger = action === 'pet' && !stillAngry && (sleepPettingAnger || count >= PET_PETTING_ANGER_COUNT)
       const overpetted = stillAngry || triggeredAnger
       const postDebuffActive = (materialized.walks.postDepressionUntil[currentPetId] ?? 0) > actionNow && (materialized.walks.depressionUntil[currentPetId] ?? 0) <= actionNow
-      const affectionDelta = overpetted ? -3 : Math.floor(currentConfig.affection * (postDebuffActive ? 0.5 : 1))
+      const affectionDelta = overpetted ? -3 : getModifiedAffection(currentConfig.affection, postDebuffActive)
       const nextStats = addExp({
         ...currentStats,
         fullness: clamp(currentStats.fullness + currentConfig.fullness),
         sleepiness: clamp(currentStats.sleepiness + currentConfig.sleepiness),
         affection: clamp(currentStats.affection + affectionDelta),
-      }, overpetted ? 0 : Math.floor(currentConfig.exp * (postDebuffActive ? 0.5 : 1)), currentPetId)
+      }, overpetted ? 0 : getModifiedExp(currentConfig.exp, currentStats.affection, postDebuffActive), currentPetId)
       const startsSleeping = nextStats.sleepiness >= PET_SLEEP_THRESHOLD
       let premiumFood = materialized.premiumFood
       if (action === 'feed-premium') {
         premiumFood = premiumState.dailyRemaining > 0
           ? { ...premiumFood, dailyUsed: premiumFood.dailyUsed + 1 }
           : { ...premiumFood, inventory: Math.max(0, premiumFood.inventory - 1) }
+      }
+      let items = materialized.items
+      let affectionGiftProgress = materialized.affectionGiftProgress
+      let affectionGifts = materialized.affectionGifts
+      if (!overpetted) {
+        const giftRoll = rollAffectionGiftAfterCare(currentPetId, nextStats.affection, materialized.affectionGiftProgress, materialized.affectionGifts, actionNow)
+        affectionGiftProgress = giftRoll.progress
+        affectionGifts = giftRoll.gifts
+        if (giftRoll.gift) {
+          const giftInventory = applyRewardToInventory(giftRoll.gift, items, premiumFood)
+          items = giftInventory.items
+          premiumFood = giftInventory.premiumFood
+        }
       }
 
       return {
@@ -801,6 +981,10 @@ export function usePetState() {
           ...materialized.sleepWakeAt,
           [currentPetId]: startsSleeping ? (materialized.sleepStartedAt[currentPetId] ? materialized.sleepWakeAt[currentPetId] : rollSleepWakeThreshold(nextStats.sleepiness)) : 0,
         },
+        hungerAffectionPenaltyAt: { ...materialized.hungerAffectionPenaltyAt, [currentPetId]: actionNow },
+        affectionGiftProgress,
+        affectionGifts,
+        items,
         premiumFood,
       }
     })
@@ -957,6 +1141,13 @@ export function usePetState() {
     }))
   }
 
+  function markAffectionGiftPointsGranted(giftId: string) {
+    setSave(current => ({
+      ...current,
+      affectionGifts: current.affectionGifts.map(gift => gift.id === giftId ? { ...gift, pointsGrantStatus: 'granted' } : gift),
+    }))
+  }
+
   return {
     selectedPetId,
     activePetIds,
@@ -972,6 +1163,7 @@ export function usePetState() {
     isWalking,
     walkRemaining,
     walks,
+    affectionGifts: effectiveSave.affectionGifts,
     depressionUntil,
     postDepressionUntil,
     depressionMessage,
@@ -984,6 +1176,7 @@ export function usePetState() {
     startWalk,
     markWalkResultSeen,
     markWalkPointsGranted,
+    markAffectionGiftPointsGranted,
     maxLevel: PET_BY_ID[selectedPetId].maxLevel,
     isHydrated,
     syncError,
@@ -1016,6 +1209,9 @@ export function initializeAwardedPetAtLevelOne(petId: string) {
       progress: { ...current.progress, [id]: { fullnessAt: now, sleepinessAt: now } },
       items: sanitizeItems(current.items),
       walks: sanitizeWalks(current.walks, now),
+      hungerAffectionPenaltyAt: { ...sanitizePetNumberRecord(current.hungerAffectionPenaltyAt, now), [id]: now },
+      affectionGiftProgress: { ...sanitizePetNumberRecord(current.affectionGiftProgress, 0), [id]: 0 },
+      affectionGifts: Array.isArray(current.affectionGifts) ? current.affectionGifts.slice(-8) : [],
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   } catch {

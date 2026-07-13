@@ -7,7 +7,7 @@ export const PET_CHARACTER_NAMES: Record<string, string> = {
   "inmu-festival": "INMUくん（810祭りVer.）",
 };
 
-const DEFAULT_STATS = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 10 };
+const DEFAULT_STATS = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 50 };
 const EMPTY_ACTIONS = { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "play-ball": 0, "play-toy": 0, pet: 0 };
 const EMPTY_COOLDOWNS = { feed: 0, play: 0 };
 
@@ -37,6 +37,41 @@ export function ensurePetStateTable(): Promise<void> {
     `),
   ]).then(async () => {
     await pool.query(`ALTER TABLE "userPetStates" ADD COLUMN IF NOT EXISTS "clientUpdatedAt" BIGINT NOT NULL DEFAULT 0`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "petStateMaintenance" (
+        "key" TEXT PRIMARY KEY,
+        "appliedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      WITH inserted AS (
+        INSERT INTO "petStateMaintenance" ("key")
+        VALUES ('affection_baseline_20260713')
+        ON CONFLICT ("key") DO NOTHING
+        RETURNING "key"
+      )
+      UPDATE "userPetStates" AS ups
+      SET state = jsonb_set(
+            ups.state,
+            '{pets}',
+            COALESCE((
+              SELECT jsonb_object_agg(
+                pet_id,
+                jsonb_set(
+                  CASE WHEN jsonb_typeof(pet_value) = 'object' THEN pet_value ELSE '{}'::jsonb END,
+                  '{affection}',
+                  '50'::jsonb,
+                  true
+                )
+              )
+              FROM jsonb_each(ups.state->'pets') AS pet(pet_id, pet_value)
+            ), '{}'::jsonb),
+            true
+          ),
+          "updatedAt" = NOW()
+      WHERE EXISTS (SELECT 1 FROM inserted)
+        AND jsonb_typeof(ups.state->'pets') = 'object'
+    `);
   }).catch(error => {
     tablePromise = null;
     throw error;
@@ -72,7 +107,7 @@ export async function initializePetCharacterState(userId: string, characterId: s
   state.skillState = { ...(state.skillState ?? {}), [characterId]: true };
   state.selectedPetId = characterId;
   state.activePetIds = [characterId];
-  state.version = 5;
+  state.version = 7;
 
   await pool.query(`
     INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt")
