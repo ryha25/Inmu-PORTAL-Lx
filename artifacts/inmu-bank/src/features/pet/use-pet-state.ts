@@ -212,6 +212,12 @@ function sanitizeActionTimes(value: Record<string, number> | undefined): PetActi
   }
 }
 
+function sanitizePetIdList(value: unknown): PetId[] {
+  return Array.isArray(value)
+    ? value.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id as PetId]) && list.indexOf(id) === index).slice(0, 3)
+    : []
+}
+
 function getJstDateKey(timestamp = Date.now()) {
   return new Date(timestamp + JST_OFFSET_MS).toISOString().slice(0, 10)
 }
@@ -388,9 +394,7 @@ function loadSave(source?: unknown): PetSaveData {
       ? source
       : JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '')) as LegacySaveData
     const validSelection = PET_DEFINITIONS.some(pet => pet.id === parsed.selectedPetId)
-    const activePetIds = Array.isArray(parsed.activePetIds)
-      ? parsed.activePetIds.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id as PetId]) && list.indexOf(id) === index).slice(0, 3)
-      : []
+    const activePetIds = sanitizePetIdList(parsed.activePetIds)
     const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
     const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(parsed.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
     return {
@@ -447,7 +451,7 @@ function loadSave(source?: unknown): PetSaveData {
         const rawList = Array.isArray(parsed.skillActiveCharacterIds)
           ? parsed.skillActiveCharacterIds
           : legacySingle != null ? [legacySingle] : []
-        return rawList.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id as PetId]) && list.indexOf(id) === index).slice(0, 3)
+        return sanitizePetIdList(rawList)
       })(),
     }
   } catch {
@@ -543,7 +547,23 @@ function rollAffectionGiftAfterCare(
 }
 
 function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
+  const selectedPetId = PET_BY_ID[save.selectedPetId] ? save.selectedPetId : PET_DEFINITIONS[0].id
+  const activePetIds = sanitizePetIdList(save.activePetIds)
+  const skillActiveCharacterIds = sanitizePetIdList(save.skillActiveCharacterIds)
   const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(save.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
+  const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(save.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
+  const cooldownUntil = Object.fromEntries(PET_DEFINITIONS.map(pet => {
+    const saved = save.cooldownUntil?.[pet.id]
+    return [pet.id, {
+      feed: Math.max(0, readNumber(saved?.feed, 0)),
+      play: Math.max(0, readNumber(saved?.play, 0)),
+    }]
+  })) as Record<PetId, PetCooldownUntil>
+  const expressions = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeExpression(save.expressions?.[pet.id])])) as Record<PetId, PetExpressionState>
+  const petting = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, {
+    count: Math.max(0, readNumber(save.petting?.[pet.id]?.count, 0)),
+    lastAt: Math.max(0, readNumber(save.petting?.[pet.id]?.lastAt, 0)),
+  }])) as Record<PetId, PettingState>
   const progress = Object.fromEntries(PET_DEFINITIONS.map(pet => {
     const savedProgress = save.progress?.[pet.id]
     return [pet.id, {
@@ -560,6 +580,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
   let affectionGiftProgress = { ...sanitizePetNumberRecord(save.affectionGiftProgress, 0) }
   let affectionGifts = Array.isArray(save.affectionGifts) ? save.affectionGifts.slice(-8) : []
   let premiumFood = sanitizePremiumFood(save.premiumFood, now)
+  const skillState = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, save.skillState?.[pet.id] !== false])) as Record<PetId, boolean>
 
   PET_DEFINITIONS.forEach(pet => {
     const id = pet.id
@@ -683,7 +704,13 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
 
   return {
     ...save,
+    selectedPetId,
+    activePetIds,
     pets,
+    lastCareAt,
+    cooldownUntil,
+    expressions,
+    petting,
     progress,
     sleepStartedAt,
     sleepStartValue,
@@ -694,6 +721,8 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     affectionGiftProgress,
     affectionGifts,
     premiumFood,
+    skillState,
+    skillActiveCharacterIds,
   }
 }
 
@@ -719,11 +748,11 @@ export function usePetState() {
   const itemsBaselineRef = useRef<{ sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number } | null>(null)
   const now = Date.now()
   const effectiveSave = materializeSaveAt(save, now)
-  const selectedPetId = PET_BY_ID[save.selectedPetId] ? save.selectedPetId : PET_DEFINITIONS[0].id
+  const selectedPetId = effectiveSave.selectedPetId
   const selectedStats = effectiveSave.pets[selectedPetId] ?? DEFAULT_STATS
   const isSleeping = (effectiveSave.sleepStartedAt[selectedPetId] ?? 0) > 0
-  const activePetIds = effectiveSave.activePetIds.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3)
-  const skillActiveCharacterIds = effectiveSave.skillActiveCharacterIds.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3)
+  const activePetIds = sanitizePetIdList(effectiveSave.activePetIds)
+  const skillActiveCharacterIds = sanitizePetIdList(effectiveSave.skillActiveCharacterIds)
   const premiumFood = getPremiumFoodState(effectiveSave.premiumFood, now)
   const walks = effectiveSave.walks
   const selectedWalkSession = walks.active[selectedPetId] ?? null
@@ -803,13 +832,14 @@ export function usePetState() {
         const mergedCatHeadband = Number(data.mergedItems.catHeadband ?? 0)
         itemsBaselineRef.current = { sleepTea: mergedSleepTea, premiumInventory: mergedPremiumInventory, takuyaSunglasses: mergedTakuyaSunglasses, catHeadband: mergedCatHeadband }
         setSave(current => {
-          if (Number(current.items?.sleepTea ?? 0) === mergedSleepTea && Number(current.premiumFood?.inventory ?? 0) === mergedPremiumInventory && Number(current.items?.takuyaSunglasses ?? 0) === mergedTakuyaSunglasses && Number(current.items?.catHeadband ?? 0) === mergedCatHeadband) {
-            return current
+          const materialized = materializeSaveAt(current, Date.now())
+          if (Number(materialized.items.sleepTea ?? 0) === mergedSleepTea && Number(materialized.premiumFood.inventory ?? 0) === mergedPremiumInventory && Number(materialized.items.takuyaSunglasses ?? 0) === mergedTakuyaSunglasses && Number(materialized.items.catHeadband ?? 0) === mergedCatHeadband) {
+            return materialized
           }
           return {
-            ...current,
-            items: { ...current.items, sleepTea: mergedSleepTea, takuyaSunglasses: mergedTakuyaSunglasses, catHeadband: mergedCatHeadband },
-            premiumFood: { ...current.premiumFood, inventory: mergedPremiumInventory },
+            ...materialized,
+            items: { ...materialized.items, sleepTea: mergedSleepTea, takuyaSunglasses: mergedTakuyaSunglasses, catHeadband: mergedCatHeadband },
+            premiumFood: { ...materialized.premiumFood, inventory: mergedPremiumInventory },
           }
         })
       } else {
@@ -870,11 +900,11 @@ export function usePetState() {
   function setActivePetIds(nextActivePetIds: PetId[] | ((current: PetId[]) => PetId[])) {
     setSave(current => {
       const activePetIds = typeof nextActivePetIds === 'function'
-        ? nextActivePetIds(current.activePetIds)
+        ? nextActivePetIds(sanitizePetIdList(current.activePetIds))
         : nextActivePetIds
       return {
         ...current,
-        activePetIds: activePetIds.filter((id, index, list) => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3),
+        activePetIds: sanitizePetIdList(activePetIds),
       }
     })
   }
@@ -882,11 +912,11 @@ export function usePetState() {
   function setSkillActiveCharacterIds(nextIds: PetId[] | ((current: PetId[]) => PetId[])) {
     setSave(current => {
       const skillActiveCharacterIds = typeof nextIds === 'function'
-        ? nextIds(current.skillActiveCharacterIds)
+        ? nextIds(sanitizePetIdList(current.skillActiveCharacterIds))
         : nextIds
       return {
         ...current,
-        skillActiveCharacterIds: skillActiveCharacterIds.filter((id, index, list) => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3),
+        skillActiveCharacterIds: sanitizePetIdList(skillActiveCharacterIds),
       }
     })
   }
@@ -903,19 +933,19 @@ export function usePetState() {
   }).current
 
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
-    const petId = save.selectedPetId
     const config = PET_CARE_CONFIG[action]
     const currentEffective = materializeSaveAt(save, actionNow)
+    const petId = currentEffective.selectedPetId
     const stats = currentEffective.pets[petId]
     const sleeping = currentEffective.sleepStartedAt[petId] > 0
     if (currentEffective.walks.active[petId]) return null
     if (sleeping && action !== 'pet') return null
     if (config.category === 'feed' && stats.fullness >= 100) return null
     if (config.category === 'feed' && getActionCooldownRemaining(action, currentEffective.lastCareAt[petId], actionNow) > 0) return null
-    if (config.category !== 'pet' && getCareCooldownRemaining(config.category, save.cooldownUntil[petId], actionNow) > 0) return null
+    if (config.category !== 'pet' && getCareCooldownRemaining(config.category, currentEffective.cooldownUntil[petId], actionNow) > 0) return null
     if (action === 'feed-premium' && getPremiumFoodState(currentEffective.premiumFood, actionNow).totalAvailable <= 0) return null
 
-    const previousPetting = save.petting[petId]
+    const previousPetting = currentEffective.petting[petId]
     const currentExpression = currentEffective.expressions[petId]
     const angryActive = action === 'pet' && currentExpression.kind === 'angry' && currentExpression.until > actionNow
     const petCount = action === 'pet'
@@ -1019,19 +1049,28 @@ export function usePetState() {
   }
 
   function setExpression(kind: PetExpression, durationMs = 0, expressionNow = Date.now()) {
-    setSave(current => ({
-      ...current,
-      expressions: { ...current.expressions, [current.selectedPetId]: { kind, until: durationMs > 0 ? expressionNow + durationMs : 0 } },
-    }))
+    setSave(current => {
+      const materialized = materializeSaveAt(current, expressionNow)
+      return {
+        ...materialized,
+        expressions: {
+          ...materialized.expressions,
+          [materialized.selectedPetId]: { kind, until: durationMs > 0 ? expressionNow + durationMs : 0 },
+        },
+      }
+    })
   }
 
   function grantPremiumFood(amount: number) {
     const grant = Math.max(0, Math.floor(amount))
     if (grant <= 0) return
-    setSave(current => ({
-      ...current,
-      premiumFood: { ...sanitizePremiumFood(current.premiumFood), inventory: current.premiumFood.inventory + grant },
-    }))
+    setSave(current => {
+      const materialized = materializeSaveAt(current, Date.now())
+      return {
+        ...materialized,
+        premiumFood: { ...materialized.premiumFood, inventory: materialized.premiumFood.inventory + grant },
+      }
+    })
   }
 
   function useSleepTea(amount: number) {
@@ -1149,30 +1188,39 @@ export function usePetState() {
   }
 
   function markWalkResultSeen(resultId: string) {
-    setSave(current => ({
-      ...current,
-      walks: {
-        ...current.walks,
-        results: current.walks.results.map(result => result.id === resultId ? { ...result, seen: true } : result),
-      },
-    }))
+    setSave(current => {
+      const materialized = materializeSaveAt(current, Date.now())
+      return {
+        ...materialized,
+        walks: {
+          ...materialized.walks,
+          results: materialized.walks.results.map(result => result.id === resultId ? { ...result, seen: true } : result),
+        },
+      }
+    })
   }
 
   function markWalkPointsGranted(resultId: string) {
-    setSave(current => ({
-      ...current,
-      walks: {
-        ...current.walks,
-        results: current.walks.results.map(result => result.id === resultId ? { ...result, pointsGrantStatus: 'granted' } : result),
-      },
-    }))
+    setSave(current => {
+      const materialized = materializeSaveAt(current, Date.now())
+      return {
+        ...materialized,
+        walks: {
+          ...materialized.walks,
+          results: materialized.walks.results.map(result => result.id === resultId ? { ...result, pointsGrantStatus: 'granted' } : result),
+        },
+      }
+    })
   }
 
   function markAffectionGiftPointsGranted(giftId: string) {
-    setSave(current => ({
-      ...current,
-      affectionGifts: current.affectionGifts.map(gift => gift.id === giftId ? { ...gift, pointsGrantStatus: 'granted' } : gift),
-    }))
+    setSave(current => {
+      const materialized = materializeSaveAt(current, Date.now())
+      return {
+        ...materialized,
+        affectionGifts: materialized.affectionGifts.map(gift => gift.id === giftId ? { ...gift, pointsGrantStatus: 'granted' } : gift),
+      }
+    })
   }
 
   return {
@@ -1180,10 +1228,10 @@ export function usePetState() {
     activePetIds,
     selectedStats,
     petStats: effectiveSave.pets,
-    cooldownUntil: effectiveSave.cooldownUntil[selectedPetId] ?? EMPTY_COOLDOWNS,
-    lastCareAt: effectiveSave.lastCareAt[selectedPetId] ?? EMPTY_ACTION_TIMES,
-    expressionState: effectiveSave.expressions[selectedPetId] ?? { kind: 'default', until: 0 },
-    pettingState: effectiveSave.petting[selectedPetId] ?? { count: 0, lastAt: 0 },
+    cooldownUntil: effectiveSave.cooldownUntil?.[selectedPetId] ?? EMPTY_COOLDOWNS,
+    lastCareAt: effectiveSave.lastCareAt?.[selectedPetId] ?? EMPTY_ACTION_TIMES,
+    expressionState: effectiveSave.expressions?.[selectedPetId] ?? { kind: 'default', until: 0 },
+    pettingState: effectiveSave.petting?.[selectedPetId] ?? { count: 0, lastAt: 0 },
     premiumFood,
     items: effectiveSave.items,
     isSleeping,
@@ -1220,7 +1268,7 @@ export function initializeAwardedPetAtLevelOne(petId: string) {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<PetSaveData>
     const fallback = createDefaultSave()
-    const current = parsed.version ? { ...fallback, ...parsed } as PetSaveData : fallback
+    const current = materializeSaveAt(parsed.version ? { ...fallback, ...parsed } as PetSaveData : fallback, Date.now())
     const id = petId as PetId
     const now = Date.now()
     const next: PetSaveData = {
