@@ -28,7 +28,7 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
-const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'inmu-festival'])
+const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'inmu-festival'])
 
 const PET_ROOM_CSS = `
   @keyframes pet-meter-shine {
@@ -676,27 +676,48 @@ type PetRewardRequest = {
 
 type PetLevelReward = PetDefinition['levelRewards'][number]
 
+const GACHA_REWARD_PET_IDS = ['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip'] as const
+type GachaRewardPetId = typeof GACHA_REWARD_PET_IDS[number]
+type CharacterRewardAmount = { lv20: number; lv30: number }
+
 type PetRewardAmounts = {
   festivalLv15: number
   gachaLv20: number
   gachaLv30: number
+  character: Partial<Record<GachaRewardPetId, CharacterRewardAmount>>
 }
 
 const DEFAULT_PET_REWARD_AMOUNTS: PetRewardAmounts = {
   festivalLv15: 30_000,
   gachaLv20: 50_000,
   gachaLv30: 250_000,
+  character: {},
 }
 
 const PET_DISPLAY_NAMES: Record<PetId, string> = {
   nyarushian: 'ニャルシアン',
   takuya: '拓也',
   leon: 'レオン',
+  chinge: 'チンゲ',
+  tdn: 'TDN',
+  whip: 'ホイップ',
   'inmu-festival': 'INMUくん（810祭りVer.）',
 }
 
 function formatRewardInmu(amount: number) {
   return `${amount.toLocaleString('ja-JP')} INMU`
+}
+
+function isGachaRewardPetId(petId: PetId): petId is GachaRewardPetId {
+  return (GACHA_REWARD_PET_IDS as readonly string[]).includes(petId)
+}
+
+function getRewardAmountForPet(rewardAmounts: PetRewardAmounts, petId: PetId, level: 20 | 30) {
+  if (!isGachaRewardPetId(petId)) return level === 20 ? rewardAmounts.gachaLv20 : rewardAmounts.gachaLv30
+  const characterAmount = rewardAmounts.character[petId]
+  return level === 20
+    ? characterAmount?.lv20 ?? rewardAmounts.gachaLv20
+    : characterAmount?.lv30 ?? rewardAmounts.gachaLv30
 }
 
 function getDisplayLevelRewards(pet: PetDefinition, rewardAmounts: PetRewardAmounts): PetLevelReward[] {
@@ -715,24 +736,26 @@ function getDisplayLevelRewards(pet: PetDefinition, rewardAmounts: PetRewardAmou
     })
   }
 
-  if (pet.id === 'nyarushian' || pet.id === 'takuya' || pet.id === 'leon') {
+  if (pet.id === 'nyarushian' || pet.id === 'takuya' || pet.id === 'leon' || pet.id === 'chinge' || pet.id === 'tdn' || pet.id === 'whip') {
+    const lv20Amount = getRewardAmountForPet(rewardAmounts, pet.id, 20)
+    const lv30Amount = getRewardAmountForPet(rewardAmounts, pet.id, 30)
     return pet.levelRewards.map(reward => {
       if (reward.level === 20) {
         return {
           ...reward,
-          label: `${petName} Lv.20報酬 + ${formatRewardInmu(rewardAmounts.gachaLv20)}`,
+          label: `${petName} Lv.20報酬 + ${formatRewardInmu(lv20Amount)}`,
           detail: 'INMU報酬は申請式です。管理画面で送金済み後に反映されます。',
           delivery: '申請式（承認後送金）',
-          inmuAmount: rewardAmounts.gachaLv20,
+          inmuAmount: lv20Amount,
         }
       }
       if (reward.level === 30) {
         return {
           ...reward,
-          label: `${petName} Lv.30報酬 + ${formatRewardInmu(rewardAmounts.gachaLv30)} + 購入申請還元 +5%`,
-          detail: `INMU合計 ${formatRewardInmu(rewardAmounts.gachaLv20 + rewardAmounts.gachaLv30)} / 購入申請還元 +5%`,
+          label: `${petName} Lv.30報酬 + ${formatRewardInmu(lv30Amount)} + 購入申請還元 +5%`,
+          detail: `INMU合計 ${formatRewardInmu(lv20Amount + lv30Amount)} / 購入申請還元 +5%`,
           delivery: '申請式（承認後送金）',
-          inmuAmount: rewardAmounts.gachaLv30,
+          inmuAmount: lv30Amount,
         }
       }
       return reward
@@ -1230,21 +1253,25 @@ export function PetPage() {
       try {
         const response = await fetch('/api/pet-prices', { credentials: 'include' })
         if (!response.ok) return
-        const data = await response.json() as {
-          slot_unlock_2_inmu?: number
-          slot_unlock_3_inmu?: number
-          reward_level_inmu?: number
-          reward_gacha_lv20_inmu?: number
-          reward_gacha_lv30_inmu?: number
-        }
+        const data = await response.json() as Record<string, number | undefined>
+        const readNumber = (key: string, fallback: number) => Number.isFinite(data[key]) ? Number(data[key]) : fallback
+        const gachaLv20 = readNumber('reward_gacha_lv20_inmu', DEFAULT_PET_REWARD_AMOUNTS.gachaLv20)
+        const gachaLv30 = readNumber('reward_gacha_lv30_inmu', DEFAULT_PET_REWARD_AMOUNTS.gachaLv30)
         setSlotPrices({
-          slot2: Number.isFinite(data.slot_unlock_2_inmu) ? Number(data.slot_unlock_2_inmu) : 1_000_000,
-          slot3: Number.isFinite(data.slot_unlock_3_inmu) ? Number(data.slot_unlock_3_inmu) : 2_000_000,
+          slot2: readNumber('slot_unlock_2_inmu', 1_000_000),
+          slot3: readNumber('slot_unlock_3_inmu', 2_000_000),
         })
         setPetRewardAmounts({
-          festivalLv15: Number.isFinite(data.reward_level_inmu) ? Number(data.reward_level_inmu) : DEFAULT_PET_REWARD_AMOUNTS.festivalLv15,
-          gachaLv20: Number.isFinite(data.reward_gacha_lv20_inmu) ? Number(data.reward_gacha_lv20_inmu) : DEFAULT_PET_REWARD_AMOUNTS.gachaLv20,
-          gachaLv30: Number.isFinite(data.reward_gacha_lv30_inmu) ? Number(data.reward_gacha_lv30_inmu) : DEFAULT_PET_REWARD_AMOUNTS.gachaLv30,
+          festivalLv15: readNumber('reward_level_inmu', DEFAULT_PET_REWARD_AMOUNTS.festivalLv15),
+          gachaLv20,
+          gachaLv30,
+          character: Object.fromEntries(GACHA_REWARD_PET_IDS.map(petId => [
+            petId,
+            {
+              lv20: readNumber(`reward_${petId}_lv20_inmu`, gachaLv20),
+              lv30: readNumber(`reward_${petId}_lv30_inmu`, gachaLv30),
+            },
+          ])) as Record<GachaRewardPetId, CharacterRewardAmount>,
         })
       } catch {
         // Keep default prices if they cannot be loaded.

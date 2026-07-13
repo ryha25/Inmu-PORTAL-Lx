@@ -63,6 +63,9 @@ const PET_CHARACTER_NAMES: Record<string, string> = {
   nyarushian: "ニャルシアン",
   takuya: "拓也",
   leon: "レオン",
+  chinge: "チンゲ",
+  tdn: "TDN",
+  whip: "ホイップ",
   "inmu-festival": "INMUくん（810祭りVer.）",
 };
 

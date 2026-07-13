@@ -30,12 +30,18 @@ import inmuFestivalAnnoyedImage from '@assets/inmu-pet-festival-810-annoyed-v1.p
 import inmuFestivalBlinkImage from '@assets/inmu-pet-festival-810-blink-v1.png'
 import inmuFestivalHungryImage from '@assets/inmu-pet-festival-810-hungry-v1.png'
 import inmuFestivalSleepyImage from '@assets/inmu-pet-festival-810-sleepy-v1.png'
+import chingeImage from '@assets/inmu-pet-chinge-v1.png'
+import tdnImage from '@assets/inmu-pet-tdn-v1.png'
+import whipImage from '@assets/inmu-pet-whip-v1.png'
 import nyarushianRoomImage from '@assets/inmu-pet-room-nyarushian-v1.jpg'
 import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
 import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
 import festivalRoomImage from '@assets/inmu-pet-room-festival-v1.jpg'
+import chingeRoomImage from '@assets/inmu-pet-room-chinge-v1.jpg'
+import tdnRoomImage from '@assets/inmu-pet-room-tdn-v1.jpg'
+import whipRoomImage from '@assets/inmu-pet-room-whip-v1.jpg'
 
-export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'inmu-festival'
+export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'chinge' | 'tdn' | 'whip' | 'inmu-festival'
 export type PetExpression = 'default' | 'blink' | 'happy' | 'sleepy' | 'hungry' | 'petted' | 'affectionate' | 'annoyed' | 'angry'
 
 export type PetDefinition = {
@@ -203,6 +209,123 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       { level: 10, label: '王家の絨毯 + 購入申請還元 +5%', detail: 'Lv.10到達で還元率+5%が自動適用', rebateBonus: 5 },
       { level: 20, label: '宝石の首飾り + INMU報酬', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.20 報酬INMU」と連動', delivery: '申請式（承認後送金）', inmuAmount: 50_000 },
       { level: 30, label: '獅子王の玉座 + INMU報酬 + 購入申請還元 +5%', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.30 報酬INMU」と連動・Lv.10+Lv.30で還元+10%', delivery: '申請式（承認後送金）', inmuAmount: 250_000, rebateBonus: 5 },
+    ],
+  },
+  {
+    id: 'chinge',
+    name: 'チンゲ',
+    rarity: 3,
+    maxLevel: 30,
+    image: chingeImage,
+    expressions: {
+      default: chingeImage,
+      blink: chingeImage,
+      happy: chingeImage,
+      sleepy: chingeImage,
+      hungry: chingeImage,
+      petted: chingeImage,
+      affectionate: chingeImage,
+      annoyed: chingeImage,
+      angry: chingeImage,
+    },
+    walk: { enabled: true, frames: [chingeImage, chingeImage], distancePercent: 17, tickMs: 310 },
+    messages: { overpetted: '……しつこい。' },
+    dialogues: {
+      idle: ['夜は静かだ。', '月が出ている。', '無駄口は好まない。'],
+      walking: ['月明かりが導く。', '静かに行こう。', '匂いを追っている。'],
+      care: ['悪くない。', '少しだけなら。', '力が満ちる。'],
+    },
+    reactionDurations: { feed: 4200, play: 4400, pet: 3800, angry: 4600 },
+    roomWidth: 'clamp(205px, 46%, 290px)',
+    roomTheme: 'cat',
+    roomImage: chingeRoomImage,
+    skill: {
+      name: '月影の嗅覚',
+      effect: '散歩完了時のアイテム発見率が少し上昇',
+      notes: ['Lv.1から発動', '散歩結果の抽選に補正'],
+    },
+    levelRewards: [
+      { level: 10, label: '月影の護符 + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },
+      { level: 20, label: '特製クリスタル + INMU報酬', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.20 報酬INMU」と連動', delivery: '申請式（管理者確認後送信）', inmuAmount: 50_000 },
+      { level: 30, label: 'チンゲの月冠 + INMU報酬 + 購入申請還元 +5%', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.30 報酬INMU」と連動。Lv.10+Lv.30で還元+10%', delivery: '申請式（管理者確認後送信）', inmuAmount: 250_000, rebateBonus: 5 },
+    ],
+  },
+  {
+    id: 'tdn',
+    name: 'TDN',
+    rarity: 5,
+    maxLevel: 30,
+    image: tdnImage,
+    expressions: {
+      default: tdnImage,
+      blink: tdnImage,
+      happy: tdnImage,
+      sleepy: tdnImage,
+      hungry: tdnImage,
+      petted: tdnImage,
+      affectionate: tdnImage,
+      annoyed: tdnImage,
+      angry: tdnImage,
+    },
+    walk: { enabled: true, frames: [tdnImage, tdnImage], distancePercent: 19, tickMs: 260 },
+    messages: { overpetted: '試合前だ、集中させろ。' },
+    dialogues: {
+      idle: ['肩はできている。', '全力投球だ。', '勝つ準備はできた。'],
+      walking: ['ブルペンまで走るぞ。', '足腰も大事だ。', '球筋を確かめる。'],
+      care: ['悪くない補給だ。', '気合いが入った。', 'まだ投げられる。'],
+    },
+    reactionDurations: { feed: 4000, play: 4300, pet: 3600, angry: 4500 },
+    roomWidth: 'clamp(200px, 44%, 280px)',
+    roomTheme: 'dog',
+    roomImage: tdnRoomImage,
+    skill: {
+      name: 'ブルブル・ファイヤーボール',
+      effect: '購入申請上限 +100,000 INMU（1日）',
+      notes: ['Lv.1から発動', '1日の購入申請可能枠を10万INMU拡張'],
+    },
+    levelRewards: [
+      { level: 10, label: '炎のミット + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },
+      { level: 20, label: '特製ユニフォーム + INMU報酬', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.20 報酬INMU」と連動', delivery: '申請式（管理者確認後送信）', inmuAmount: 50_000 },
+      { level: 30, label: 'TDNブルペン勲章 + INMU報酬 + 購入申請還元 +5%', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.30 報酬INMU」と連動。Lv.10+Lv.30で還元+10%', delivery: '申請式（管理者確認後送信）', inmuAmount: 250_000, rebateBonus: 5 },
+    ],
+  },
+  {
+    id: 'whip',
+    name: 'ホイップ',
+    rarity: 1,
+    maxLevel: 30,
+    image: whipImage,
+    expressions: {
+      default: whipImage,
+      blink: whipImage,
+      happy: whipImage,
+      sleepy: whipImage,
+      hungry: whipImage,
+      petted: whipImage,
+      affectionate: whipImage,
+      annoyed: whipImage,
+      angry: whipImage,
+    },
+    walk: { enabled: true, frames: [whipImage, whipImage], distancePercent: 18, tickMs: 280 },
+    messages: { overpetted: 'ふわふわが乱れちゃうよ。' },
+    dialogues: {
+      idle: ['ふわふわしてるよ。', '甘いものが好き！', 'そばにいるね。'],
+      walking: ['雲の道を歩こう。', 'ぴょんぴょん行くよ。', 'きらきら見つけた！'],
+      care: ['うれしいな。', 'もっと元気になったよ。', 'ふわっと回復！'],
+    },
+    reactionDurations: { feed: 4000, play: 4400, pet: 3700, angry: 4600 },
+    roomWidth: 'clamp(185px, 41%, 255px)',
+    roomTheme: 'festival',
+    roomImage: whipRoomImage,
+    skill: {
+      name: 'ふわふわヒール',
+      effect: 'お世話時の眠気上昇を少し軽減',
+      notes: ['Lv.1から発動', '育成中のコンディション維持を補助'],
+    },
+    levelRewards: [
+      { level: 10, label: '雲のリボン + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },
+      { level: 20, label: 'ふわふわチャーム + INMU報酬', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.20 報酬INMU」と連動', delivery: '申請式（管理者確認後送信）', inmuAmount: 50_000 },
+      { level: 30, label: 'ホイップクラウン + INMU報酬 + 購入申請還元 +5%', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.30 報酬INMU」と連動。Lv.10+Lv.30で還元+10%', delivery: '申請式（管理者確認後送信）', inmuAmount: 250_000, rebateBonus: 5 },
     ],
   },
   {

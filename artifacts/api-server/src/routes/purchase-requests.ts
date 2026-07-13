@@ -36,6 +36,12 @@ const PET_PURCHASE_BONUS_RULES = [
   { characterId: "takuya", minLevel: 30, source: "level_reward" as const, label: "拓也 Lv.30報酬", rate: 5, eventOnly: false },
   { characterId: "leon", minLevel: 10, source: "level_reward" as const, label: "レオン Lv.10報酬", rate: 5, eventOnly: false },
   { characterId: "leon", minLevel: 30, source: "level_reward" as const, label: "レオン Lv.30報酬", rate: 5, eventOnly: false },
+  { characterId: "chinge", minLevel: 10, source: "level_reward" as const, label: "チンゲ Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "chinge", minLevel: 30, source: "level_reward" as const, label: "チンゲ Lv.30報酬", rate: 5, eventOnly: false },
+  { characterId: "tdn", minLevel: 10, source: "level_reward" as const, label: "TDN Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "tdn", minLevel: 30, source: "level_reward" as const, label: "TDN Lv.30報酬", rate: 5, eventOnly: false },
+  { characterId: "whip", minLevel: 10, source: "level_reward" as const, label: "ホイップ Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "whip", minLevel: 30, source: "level_reward" as const, label: "ホイップ Lv.30報酬", rate: 5, eventOnly: false },
 ] as const;
 
 async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
