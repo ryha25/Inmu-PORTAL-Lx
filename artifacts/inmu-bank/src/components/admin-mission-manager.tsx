@@ -77,6 +77,8 @@ const BLANK_FORM: MissionForm = { title: '', description: '', type: 'daily', poi
 const BLANK_STAGE: StageForm = { title: '', description: '', points: '', conditionValue: '' }
 const PET_REWARD_OPTIONS = PET_DEFINITIONS.map(pet => ({ value: pet.id, label: pet.name }))
 const REWARD_ITEM_OPTIONS = [
+  { value: 'takuya_sunglasses', label: '拓也のサングラス' },
+  { value: 'cat_headband', label: '猫のカチューシャ' },
   { value: 'premium_food', label: '高級ごはん' },
   { value: 'sleep_tea', label: 'アイスティー（睡眠薬入り）' },
 ]

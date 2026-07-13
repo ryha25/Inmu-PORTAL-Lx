@@ -16,7 +16,7 @@ import {
 } from '@/lib/admin-inmu-transfer'
 import { toast } from 'sonner'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
-import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState } from '@/features/pet/use-pet-state'
+import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, PET_WALK_DAILY_LIMIT, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState, type PetWalkItem, type PetWalkResult, type PetWalkState } from '@/features/pet/use-pet-state'
 import {
   BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
   Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
@@ -132,6 +132,13 @@ function formatCooldown(milliseconds: number) {
   return `あと${minutes}分${String(seconds).padStart(2, '0')}秒`
 }
 
+function formatWalkRemaining(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
 type WalkMotion = {
   active: boolean
   moving: boolean
@@ -232,6 +239,8 @@ function PetRoom({
   stats,
   isFull,
   isSleeping,
+  isWalking,
+  walkRemaining,
   message,
   cooldownRemaining,
   walkMotion,
@@ -239,6 +248,7 @@ function PetRoom({
   speechBubble,
   onAction,
   onPet,
+  onWalk,
 }: {
   petId: PetId
   name: string
@@ -250,6 +260,8 @@ function PetRoom({
   stats: PetStats
   isFull: boolean
   isSleeping: boolean
+  isWalking: boolean
+  walkRemaining: number
   message: string
   cooldownRemaining: Record<PetCareCategory, number>
   walkMotion: WalkMotion
@@ -257,6 +269,7 @@ function PetRoom({
   speechBubble: string
   onAction: (action: PetCareCategory) => void
   onPet: () => void
+  onWalk: () => void
 }) {
   return (
     <section className="relative h-[570px] overflow-hidden rounded-lg border border-fuchsia-400/25 bg-[#080611] shadow-[0_0_46px_rgba(168,85,247,.16)] sm:h-[650px]">
@@ -365,7 +378,13 @@ function PetRoom({
             {speechBubble}
           </div>
         )}
-        {isSleeping && !reactionMotion && (
+        {isWalking && (
+          <div className="absolute left-1/2 top-[34%] z-40 flex -translate-x-1/2 flex-col items-center rounded-lg border border-cyan-300/30 bg-black/70 px-6 py-4 text-center shadow-[0_0_28px_rgba(34,211,238,.18)] backdrop-blur">
+            <p className="text-lg font-black text-cyan-100">散歩中</p>
+            <p className="mt-1 font-mono text-sm font-bold text-cyan-200">帰宅まで {formatWalkRemaining(walkRemaining)}</p>
+          </div>
+        )}
+        {isSleeping && !isWalking && !reactionMotion && (
           <div className="absolute left-[64%] top-[22%] z-30 font-black text-cyan-200 drop-shadow-[0_0_8px_rgba(34,211,238,.7)]">
             <span className="pet-zzz block text-lg">Z</span><span className="pet-zzz ml-4 block text-sm [animation-delay:.7s]">z</span>
           </div>
@@ -374,15 +393,16 @@ function PetRoom({
           <button
             type="button"
             onClick={onPet}
+            disabled={isWalking}
             aria-label="なでる"
             title="なでる"
-            className="flex size-11 items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25"
+            className="flex size-11 items-center justify-center rounded-full border border-fuchsia-300/50 bg-black/70 text-fuchsia-200 shadow-[0_0_20px_rgba(232,121,249,.4)] backdrop-blur transition-all active:scale-90 active:bg-fuchsia-400/25 disabled:cursor-not-allowed disabled:opacity-40"
             data-pet-interaction="pet"
           >
             <Hand className="size-6" />
           </button>
         </div>
-        <div
+        {!isWalking && <div
           className={cn(
             'relative z-10 flex max-h-full items-end justify-center',
             !walkMotion.active && !reactionMotion && !isSleeping && 'pet-character-motion',
@@ -414,7 +434,7 @@ function PetRoom({
               data-expression={expression}
             />
           )}
-        </div>
+        </div>}
       </div>
 
       <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-violet-300/25 bg-[#090611]/92 p-2.5 shadow-[0_-10px_30px_rgba(0,0,0,.38)] backdrop-blur-md sm:inset-x-4 sm:p-3">
@@ -432,7 +452,7 @@ function PetRoom({
           {ROOM_ACTIONS.map(action => {
             const Icon = action.icon
             const remaining = cooldownRemaining[action.id]
-            const disabled = isSleeping || (action.id === 'feed' && isFull) || remaining > 0
+            const disabled = isWalking || isSleeping || (action.id === 'feed' && isFull) || remaining > 0
             return (
               <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-14 flex-col gap-0.5 rounded-md bg-black/35 px-1 text-xs transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
                 <span className="flex items-center gap-1.5"><Icon className="size-4" /><span className="font-bold">{action.label}</span></span>
@@ -441,6 +461,11 @@ function PetRoom({
             )
           })}
         </div>
+        <Button type="button" variant="outline" disabled={isWalking || isSleeping} onClick={onWalk} className="mt-2 h-12 w-full gap-1.5 rounded-md border-cyan-300/35 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-40">
+          <PawPrint className="size-4" />
+          <span className="font-bold">{isWalking ? '散歩中' : '散歩'}</span>
+          {isWalking && <span className="font-mono text-[10px]">{formatWalkRemaining(walkRemaining)}</span>}
+        </Button>
       </div>
     </section>
   )
@@ -483,6 +508,85 @@ function CareChoiceDialog({ kind, premiumFood, actionCooldowns, onClose, onChoos
             )
           })}
         </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function WalkChoiceDialog({
+  open,
+  walks,
+  items,
+  petId,
+  onClose,
+  onChoose,
+}: {
+  open: boolean
+  walks: PetWalkState
+  items: { takuyaSunglasses: number; catHeadband: number }
+  petId: PetId
+  onClose: () => void
+  onChoose: (item: PetWalkItem) => void
+}) {
+  if (!open) return null
+  const today = walks.dailyDate
+  const dailyRemaining = Math.max(0, PET_WALK_DAILY_LIMIT - walks.dailyCount)
+  const petUsed = walks.petDaily[petId] === today
+  const choices: Array<{ item: PetWalkItem; label: string; detail: string; disabled?: boolean }> = [
+    { item: 'none', label: '使用アイテムなし', detail: '散歩時間 1時間 / 通常の報酬抽選' },
+    { item: 'takuya_sunglasses', label: '拓也のサングラスを使う', detail: '散歩時間が1時間長くなり、アイテムを拾う確率が上がります。', disabled: items.takuyaSunglasses <= 0 },
+    { item: 'cat_headband', label: '猫のカチューシャを使う', detail: '散歩で獲得できる経験値が増え、眠気の上昇を軽減します。', disabled: items.catHeadband <= 0 },
+  ]
+  return (
+    <Dialog open onOpenChange={next => { if (!next) onClose() }}>
+      <DialogContent className="mx-4 max-w-sm border-cyan-300/25 bg-[#0b0712]">
+        <DialogHeader><DialogTitle>散歩に行く</DialogTitle></DialogHeader>
+        <div className="rounded-lg border border-cyan-300/15 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100/80">
+          <p>本日の残り {dailyRemaining} / {PET_WALK_DAILY_LIMIT}</p>
+          {petUsed && <p className="mt-1 font-bold text-amber-200">このキャラクターは本日散歩済みです</p>}
+        </div>
+        <div className="grid gap-2 pt-2">
+          {choices.map(choice => (
+            <button
+              key={choice.item}
+              type="button"
+              disabled={choice.disabled || dailyRemaining <= 0 || petUsed}
+              onClick={() => onChoose(choice.item)}
+              className="flex items-center gap-3 rounded-lg border border-violet-300/20 bg-violet-400/5 p-3 text-left transition hover:border-cyan-300/45 hover:bg-cyan-400/10 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-cyan-400/10 text-cyan-200">
+                {choice.item === 'takuya_sunglasses' ? <Glasses className="size-5" /> : <PawPrint className="size-5" />}
+              </span>
+              <span className="min-w-0">
+                <span className="block font-bold text-white">{choice.label}</span>
+                <span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{choice.detail}</span>
+                {choice.item === 'takuya_sunglasses' && <span className="mt-1 block text-[9px] text-cyan-200/75">所持数 {items.takuyaSunglasses}個</span>}
+                {choice.item === 'cat_headband' && <span className="mt-1 block text-[9px] text-cyan-200/75">所持数 {items.catHeadband}個</span>}
+              </span>
+            </button>
+          ))}
+          <Button type="button" variant="outline" onClick={onClose} className="min-h-10">キャンセル</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function WalkResultDialog({ result, onClose }: { result: PetWalkResult | null; onClose: () => void }) {
+  if (!result) return null
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="mx-4 max-w-sm border-emerald-300/25 bg-[#0b0712]">
+        <DialogHeader><DialogTitle>散歩結果</DialogTitle></DialogHeader>
+        <div className="grid gap-2 text-sm">
+          <div className="flex items-center justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2"><span>獲得経験値</span><strong>+{result.exp}</strong></div>
+          <div className="flex items-center justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2"><span>上昇した眠気</span><strong>+{result.sleepiness}</strong></div>
+          <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+            <span className="block text-muted-foreground">拾ったアイテム</span>
+            <strong className="mt-1 block text-white">{result.rewardLabel ?? 'アイテムは見つかりませんでした'}</strong>
+          </div>
+        </div>
+        <Button type="button" onClick={onClose} className="min-h-10 w-full">閉じる</Button>
       </DialogContent>
     </Dialog>
   )
@@ -1061,13 +1165,15 @@ function CharacterSelectStrip({
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, selectPet, setActivePetIds, care, setExpression, useSleepTea, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds, skillLockStatus, refreshSkillLockStatus } = usePetState()
+  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, isWalking, walkRemaining, walks, depressionMessage, selectPet, setActivePetIds, care, setExpression, useSleepTea, startWalk, markWalkResultSeen, markWalkPointsGranted, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds, skillLockStatus, refreshSkillLockStatus } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
   const [isYawning, setIsYawning] = useState(false)
   const [walkTick, setWalkTick] = useState(0)
   const [careMenu, setCareMenu] = useState<PetCareCategory | null>(null)
+  const [walkMenuOpen, setWalkMenuOpen] = useState(false)
+  const [walkResult, setWalkResult] = useState<PetWalkResult | null>(null)
   const [reactionMotion, setReactionMotion] = useState<ReactionMotion>(null)
   const [speechBubble, setSpeechBubble] = useState('')
   const [ownedPetIds, setOwnedPetIds] = useState<PetId[] | null>(null)
@@ -1232,6 +1338,28 @@ export function PetPage() {
   interactionRef.current = Boolean(reactionMotion)
   sleepingRef.current = isSleeping
   const displayImage = canShowWalk && walkMotion.moving ? pet.walk.frames[walkMotion.frame] : pet.expressions[expression]
+
+  useEffect(() => {
+    const latest = walks.results.find(result => result.petId === displayedPetId && !result.seen)
+    if (latest) setWalkResult(latest)
+  }, [displayedPetId, walks.results])
+
+  useEffect(() => {
+    const pending = walks.results.filter(result => result.rewardType === 'points' && result.pointsGrantStatus !== 'granted')
+    pending.forEach(result => {
+      void fetch('/api/pet/walk/point-grant', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resultId: result.id, amount: result.rewardAmount }),
+      }).then(response => {
+        if (response.ok) {
+          markWalkPointsGranted(result.id)
+          setBalances(current => ({ ...current, points: current.points + result.rewardAmount }))
+        }
+      }).catch(() => undefined)
+    })
+  }, [markWalkPointsGranted, walks.results])
 
   useEffect(() => {
     const preloadUrls = new Set(PET_DEFINITIONS.flatMap(candidate => [
@@ -1400,6 +1528,7 @@ export function PetPage() {
   }, [selectedPetId, pet.walk.enabled, pet.walk.tickMs])
 
   function openCareMenu(category: PetCareCategory) {
+    if (isWalking) { setMessage('散歩中のためお世話できません'); return }
     if (isSleeping) { setMessage('眠っているので今はできません'); return }
     if (category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return }
     const remaining = getCareCooldownRemaining(category, cooldownUntil, Date.now())
@@ -1411,6 +1540,7 @@ export function PetPage() {
     const actionNow = Date.now()
     const config = PET_CARE_CONFIG[action]
     if (config.category !== 'pet') {
+      if (isWalking) { setMessage('散歩中のためお世話できません'); return false }
       if (isSleeping) { setMessage('眠っているので今はできません'); return false }
       if (config.category === 'feed' && isFull) { setMessage('満腹なのでご飯をあげられません'); return false }
       const actionRemaining = getActionCooldownRemaining(action, lastCareAt, actionNow)
@@ -1446,10 +1576,22 @@ export function PetPage() {
   }
 
   function handlePet() {
+    if (isWalking) {
+      setMessage('散歩中のためお世話できません')
+      return
+    }
     handleCare('pet')
   }
 
   function handleUseSleepTea(amount: number) {
+    if (isWalking) {
+      setMessage('散歩中のためアイスティーを使用できません')
+      return
+    }
+    if (walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate) {
+      setMessage('今日はこのキャラクターにアイスティーを使用できません')
+      return
+    }
     if (isSleeping) {
       setMessage('眠っている間はアイスティーを使用できません')
       return
@@ -1470,11 +1612,35 @@ export function PetPage() {
     setExpression('sleepy', 4200)
   }
 
+  function handleStartWalk(item: PetWalkItem) {
+    const result = startWalk(item)
+    if (!result.ok) {
+      setMessage({
+        sleeping: '眠っているため散歩に行けません',
+        walking: 'すでに散歩中です',
+        daily_limit: '本日の散歩回数は上限です',
+        pet_daily_limit: 'このキャラクターは本日すでに散歩済みです',
+        no_item: '使用するアイテムを所持していません',
+      }[result.reason] ?? '散歩を開始できません')
+      return
+    }
+    setWalkMenuOpen(false)
+    setNow(Date.now())
+    setMessage(result.special ? '罵声を浴びせられてうつ状態' : '散歩に出かけました')
+  }
+
+  function closeWalkResult() {
+    if (walkResult) markWalkResultSeen(walkResult.id)
+    setWalkResult(null)
+    void refreshBalances(false)
+  }
+
   function handleSelect(id: PetId) {
     setIsBlinking(false)
     setReactionMotion(null)
     setSpeechBubble('')
     setCareMenu(null)
+    setWalkMenuOpen(false)
     selectPet(id)
     setMessage('')
   }
@@ -1610,13 +1776,16 @@ export function PetPage() {
                 stats={selectedStats}
                 isFull={isFull}
                 isSleeping={isSleeping}
-                message={message}
+                isWalking={isWalking}
+                walkRemaining={walkRemaining}
+                message={depressionMessage || message}
                 cooldownRemaining={cooldownRemaining}
                 walkMotion={walkMotion}
                 reactionMotion={reactionMotion}
                 speechBubble={speechBubble}
                 onAction={openCareMenu}
                 onPet={handlePet}
+                onWalk={() => setWalkMenuOpen(true)}
               />
               <CharacterSelectStrip pets={ownedPets} displayedPetId={displayedPetId} onSelect={handleSelect} />
               <div className="grid grid-cols-2 gap-2">
@@ -1624,7 +1793,7 @@ export function PetPage() {
                 <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
               </div>
               <SkillPanel pet={pet} />
-              <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} disabled={isSleeping} onUse={handleUseSleepTea} />
+              <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} disabled={isSleeping || isWalking || walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate} onUse={handleUseSleepTea} />
               <RewardsPanel
                 pet={pet}
                 level={selectedStats.level}
@@ -1638,6 +1807,8 @@ export function PetPage() {
         )}
       </div>
       {hasOwnedPet && <CareChoiceDialog kind={careMenu} premiumFood={premiumFood} actionCooldowns={actionCooldowns} onClose={() => setCareMenu(null)} onChoose={handleCare} />}
+      {hasOwnedPet && <WalkChoiceDialog open={walkMenuOpen} walks={walks} items={items} petId={displayedPetId} onClose={() => setWalkMenuOpen(false)} onChoose={handleStartWalk} />}
+      <WalkResultDialog result={walkResult} onClose={closeWalkResult} />
     </AppShell>
   )
 }

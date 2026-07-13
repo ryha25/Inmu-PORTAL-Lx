@@ -838,15 +838,24 @@ router.post("/admin/grant-points", requireAdmin, async (req, res): Promise<void>
   }
 });
 
-async function grantSleepTeaToUser(userId: string, amount: number) {
+type PetGrantItemType = "sleep_tea" | "takuya_sunglasses" | "cat_headband";
+const PET_GRANT_ITEM_LABELS: Record<PetGrantItemType, string> = {
+  sleep_tea: "アイスティー（睡眠薬入り）",
+  takuya_sunglasses: "拓也のサングラス",
+  cat_headband: "猫のカチューシャ",
+};
+
+async function grantPetItemToUser(userId: string, itemType: PetGrantItemType, amount: number) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
     const now = Date.now();
     const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
-    const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0 };
-    state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
+    const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0, takuyaSunglasses: 0, catHeadband: 0 };
+    if (itemType === "sleep_tea") state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
+    if (itemType === "takuya_sunglasses") state.items = { ...items, takuyaSunglasses: Math.max(0, Number(items.takuyaSunglasses ?? 0)) + amount };
+    if (itemType === "cat_headband") state.items = { ...items, catHeadband: Math.max(0, Number(items.catHeadband ?? 0)) + amount };
     await client.query(`
       INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
       ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()
@@ -859,6 +868,56 @@ async function grantSleepTeaToUser(userId: string, amount: number) {
     client.release();
   }
 }
+
+async function grantSleepTeaToUser(userId: string, amount: number) {
+  await grantPetItemToUser(userId, "sleep_tea", amount);
+}
+
+router.post("/admin/grant-pet-item", requireAdmin, async (req, res): Promise<void> => {
+  const adminId = req.userId ?? req.adminId ?? "admin";
+  const { targetUserIds, itemType, amount, reason } = req.body as {
+    targetUserIds?: string[];
+    itemType?: PetGrantItemType;
+    amount?: number;
+    reason?: string;
+  };
+  if (!targetUserIds?.length || !itemType || !(itemType in PET_GRANT_ITEM_LABELS) || !amount || amount <= 0) {
+    res.status(400).json({ error: "targetUserIds, itemType and amount required" });
+    return;
+  }
+  try {
+    for (const uid of targetUserIds) {
+      await grantPetItemToUser(uid, itemType, amount);
+      await notify(uid, "pet", `${PET_GRANT_ITEM_LABELS[itemType]}が${amount}個付与されました`, reason ?? `${amount}個`);
+    }
+    await logAudit(adminId, "adminGrantPetItem", undefined, { targetUserIds, itemType, amount, reason });
+    res.json({ ok: true, count: targetUserIds.length });
+  } catch (e) {
+    console.error("[Admin] grant-pet-item error:", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/admin/grant-pet-item-all", requireAdmin, async (req, res): Promise<void> => {
+  const adminId = req.userId ?? req.adminId ?? "admin";
+  const { itemType, amount, reason } = req.body as { itemType?: PetGrantItemType; amount?: number; reason?: string };
+  if (!itemType || !(itemType in PET_GRANT_ITEM_LABELS) || !amount || amount <= 0) {
+    res.status(400).json({ error: "itemType and amount required" });
+    return;
+  }
+  try {
+    const allUsers = await db.select({ userId: profileTable.userId }).from(profileTable);
+    for (const u of allUsers) {
+      await grantPetItemToUser(u.userId, itemType, amount);
+      await notify(u.userId, "pet", `${PET_GRANT_ITEM_LABELS[itemType]}が${amount}個付与されました`, reason ?? `${amount}個`);
+    }
+    await logAudit(adminId, "adminGrantPetItemAll", undefined, { count: allUsers.length, itemType, amount, reason });
+    res.json({ ok: true, count: allUsers.length });
+  } catch (e) {
+    console.error("[Admin] grant-pet-item-all error:", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
 
 router.post("/admin/grant-sleep-tea", requireAdmin, async (req, res): Promise<void> => {
   const adminId = req.userId ?? req.adminId ?? "admin";

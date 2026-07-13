@@ -16,7 +16,33 @@ export type PetCareCategory = 'feed' | 'play'
 export type PetExpressionState = { kind: PetExpression; until: number }
 export type PettingState = { count: number; lastAt: number }
 export type PremiumFoodState = { dailyRemaining: number; inventory: number; totalAvailable: number }
-export type PetItemState = { sleepTea: number }
+export type PetWalkItem = 'none' | 'takuya_sunglasses' | 'cat_headband'
+export type PetWalkRewardType = 'points' | 'sleep_tea' | 'premium_food' | 'takuya_sunglasses' | 'cat_headband' | null
+export type PetItemState = { sleepTea: number; takuyaSunglasses: number; catHeadband: number }
+export type PetWalkSession = { id: string; petId: PetId; startedAt: number; endsAt: number; item: PetWalkItem }
+export type PetWalkResult = {
+  id: string
+  petId: PetId
+  createdAt: number
+  exp: number
+  sleepiness: number
+  rewardType: PetWalkRewardType
+  rewardAmount: number
+  rewardLabel: string | null
+  pointsGrantStatus?: 'pending' | 'granted'
+  seen?: boolean
+}
+export type PetWalkState = {
+  dailyDate: string
+  dailyCount: number
+  petDaily: Partial<Record<PetId, string>>
+  active: Partial<Record<PetId, PetWalkSession>>
+  results: PetWalkResult[]
+  depressionUntil: Partial<Record<PetId, number>>
+  postDepressionUntil: Partial<Record<PetId, number>>
+  depressionMessageUntil: Partial<Record<PetId, number>>
+  sleepTeaBlockedDate: Partial<Record<PetId, string>>
+}
 export type PetCareResult = {
   expression: 'happy' | 'petted' | 'annoyed' | 'angry'
   motion: 'feed' | 'play' | 'pet' | 'angry'
@@ -50,6 +76,15 @@ export const PET_EARLY_NAP_MIN_SLEEPINESS = 20
 export const PET_FULLNESS_DECAY_MS = 12 * 60 * 1000
 export const PET_SLEEPINESS_GAIN_MS = 10 * 60 * 1000
 export const PET_PREMIUM_DAILY_FREE = 3
+export const PET_WALK_BASE_DURATION_MS = 60 * 60 * 1000
+export const PET_WALK_DAILY_LIMIT = 3
+export const PET_WALK_BASE_EXP = 40
+export const PET_WALK_BASE_SLEEPINESS = 20
+export const PET_WALK_ITEM_CHANCE = 0.35
+export const PET_WALK_SUNGLASSES_ITEM_CHANCE = 0.6
+export const PET_WALK_DEPRESSION_MS = 60 * 60 * 1000
+export const PET_WALK_POST_DEBUFF_MS = 24 * 60 * 60 * 1000
+export const PET_WALK_TAKUYA_CAT_EVENT_CHANCE = 0.3
 
 // 眠気の値から「今この瞬間に眠り始める確率」を算出する。
 // 低いうちはほぼ0%、閾値(PET_SLEEP_THRESHOLD)付近では100%に近づく。
@@ -108,6 +143,7 @@ type PetSaveData = {
   progress: Record<PetId, PetProgressState>
   premiumFood: PremiumFoodSave
   items: PetItemState
+  walks: PetWalkState
   skillState: Record<PetId, boolean>
   skillActiveCharacterIds: PetId[]
 }
@@ -163,6 +199,64 @@ function getJstDateKey(timestamp = Date.now()) {
   return new Date(timestamp + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
+function createDefaultWalkState(now = Date.now()): PetWalkState {
+  return {
+    dailyDate: getJstDateKey(now),
+    dailyCount: 0,
+    petDaily: {},
+    active: {},
+    results: [],
+    depressionUntil: {},
+    postDepressionUntil: {},
+    depressionMessageUntil: {},
+    sleepTeaBlockedDate: {},
+  }
+}
+
+function sanitizeItems(value: Partial<PetItemState> | undefined): PetItemState {
+  return {
+    sleepTea: Math.max(0, Math.floor(readNumber(value?.sleepTea, 0))),
+    takuyaSunglasses: Math.max(0, Math.floor(readNumber(value?.takuyaSunglasses, 0))),
+    catHeadband: Math.max(0, Math.floor(readNumber(value?.catHeadband, 0))),
+  }
+}
+
+function sanitizeWalks(value: Partial<PetWalkState> | undefined, now = Date.now()): PetWalkState {
+  const today = getJstDateKey(now)
+  const sameDay = value?.dailyDate === today
+  const active = Object.fromEntries(
+    Object.entries(value?.active ?? {}).filter(([id, session]) =>
+      Boolean(PET_BY_ID[id as PetId]) &&
+      session &&
+      typeof session === 'object',
+    ),
+  ) as Partial<Record<PetId, PetWalkSession>>
+  return {
+    dailyDate: today,
+    dailyCount: sameDay ? clamp(readNumber(value?.dailyCount, 0), 0, PET_WALK_DAILY_LIMIT) : 0,
+    petDaily: sameDay && value?.petDaily && typeof value.petDaily === 'object' ? { ...value.petDaily } : {},
+    active,
+    results: Array.isArray(value?.results)
+      ? value.results.filter(result => result && typeof result === 'object').slice(-8).map(result => ({
+          id: String(result.id ?? `walk-${now}`),
+          petId: PET_BY_ID[result.petId as PetId] ? result.petId as PetId : PET_DEFINITIONS[0].id,
+          createdAt: Math.max(0, readNumber(result.createdAt, now)),
+          exp: Math.max(0, Math.floor(readNumber(result.exp, 0))),
+          sleepiness: Math.max(0, Math.floor(readNumber(result.sleepiness, 0))),
+          rewardType: result.rewardType === 'points' || result.rewardType === 'sleep_tea' || result.rewardType === 'premium_food' || result.rewardType === 'takuya_sunglasses' || result.rewardType === 'cat_headband' ? result.rewardType : null,
+          rewardAmount: Math.max(0, Math.floor(readNumber(result.rewardAmount, 0))),
+          rewardLabel: result.rewardLabel ? String(result.rewardLabel) : null,
+          pointsGrantStatus: result.pointsGrantStatus === 'granted' ? 'granted' : result.rewardType === 'points' ? 'pending' : undefined,
+          seen: result.seen === true,
+        }))
+      : [],
+    depressionUntil: { ...(value?.depressionUntil ?? {}) },
+    postDepressionUntil: { ...(value?.postDepressionUntil ?? {}) },
+    depressionMessageUntil: { ...(value?.depressionMessageUntil ?? {}) },
+    sleepTeaBlockedDate: { ...(value?.sleepTeaBlockedDate ?? {}) },
+  }
+}
+
 function sanitizePremiumFood(value: Partial<PremiumFoodSave> | undefined, now = Date.now()): PremiumFoodSave {
   const today = getJstDateKey(now)
   return {
@@ -194,7 +288,8 @@ function createDefaultSave(): PetSaveData {
     sleepWakeAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, 0])) as Record<PetId, number>,
     progress: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { fullnessAt: now, sleepinessAt: now }])) as Record<PetId, PetProgressState>,
     premiumFood: { dailyDate: getJstDateKey(now), dailyUsed: 0, inventory: 0 },
-    items: { sleepTea: 0 },
+    items: { sleepTea: 0, takuyaSunglasses: 0, catHeadband: 0 },
+    walks: createDefaultWalkState(now),
     skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, true])) as Record<PetId, boolean>,
     skillActiveCharacterIds: [],
   }
@@ -244,7 +339,8 @@ function loadSave(source?: unknown): PetSaveData {
         sleepinessAt: Math.max(0, readNumber(parsed.progress?.[pet.id]?.sleepinessAt, Date.now())),
       }])) as Record<PetId, PetProgressState>,
       premiumFood: sanitizePremiumFood(parsed.premiumFood),
-      items: { sleepTea: Math.max(0, Math.floor(readNumber(parsed.items?.sleepTea, 0))) },
+      items: sanitizeItems(parsed.items),
+      walks: sanitizeWalks(parsed.walks),
       skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, parsed.skillState?.[pet.id] !== false])) as Record<PetId, boolean>,
       skillActiveCharacterIds: (() => {
         const legacySingle = (parsed as { skillActiveCharacterId?: unknown }).skillActiveCharacterId
@@ -271,12 +367,30 @@ function addExp(stats: PetStats, amount: number, petId: PetId): PetStats {
   return { ...stats, level, exp: level >= maxLevel ? 0 : exp }
 }
 
+function rollWalkReward(item: PetWalkItem): Pick<PetWalkResult, 'rewardType' | 'rewardAmount' | 'rewardLabel'> {
+  const chance = item === 'takuya_sunglasses' ? PET_WALK_SUNGLASSES_ITEM_CHANCE : PET_WALK_ITEM_CHANCE
+  if (Math.random() >= chance) return { rewardType: null, rewardAmount: 0, rewardLabel: null }
+  const candidates = ['points', 'sleep_tea', 'premium_food', 'takuya_sunglasses', 'cat_headband'] as const
+  const rewardType = candidates[Math.floor(Math.random() * candidates.length)]
+  if (rewardType === 'points') {
+    const amount = (Math.floor(Math.random() * 50) + 1) * 100
+    return { rewardType, rewardAmount: amount, rewardLabel: `${amount.toLocaleString('ja-JP')}ポイント` }
+  }
+  if (rewardType === 'sleep_tea') return { rewardType, rewardAmount: 1, rewardLabel: 'アイスティー（睡眠薬入り）' }
+  if (rewardType === 'premium_food') return { rewardType, rewardAmount: 1, rewardLabel: '高級ごはん' }
+  if (rewardType === 'takuya_sunglasses') return { rewardType, rewardAmount: 1, rewardLabel: '拓也のサングラス' }
+  return { rewardType, rewardAmount: 1, rewardLabel: '猫のカチューシャ' }
+}
+
 function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
   const pets = { ...save.pets }
   const progress = { ...save.progress }
   const sleepStartedAt = { ...save.sleepStartedAt }
   const sleepStartValue = { ...save.sleepStartValue }
   const sleepWakeAt = { ...save.sleepWakeAt }
+  const items = { ...sanitizeItems(save.items) }
+  const walks = sanitizeWalks(save.walks, now)
+  let premiumFood = sanitizePremiumFood(save.premiumFood, now)
 
   PET_DEFINITIONS.forEach(pet => {
     const id = pet.id
@@ -288,8 +402,15 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
       sleepinessAt: currentProgress.sleepinessAt,
     }
     let nextStats = { ...stats, fullness: clamp(stats.fullness - fullnessSteps) }
+    const depressionActive = (walks.depressionUntil[id] ?? 0) > now
 
-    if (save.sleepStartedAt[id] > 0) {
+    if (depressionActive) {
+      nextStats = { ...nextStats, sleepiness: 100 }
+      nextProgress.sleepinessAt = now
+      sleepStartedAt[id] = now
+      sleepStartValue[id] = 100
+      sleepWakeAt[id] = 0
+    } else if (save.sleepStartedAt[id] > 0) {
       // ── 眠っている間は、経過時間(オフラインでの経過分も含む)に応じて
       // 「10秒で1」ずつ眠気を回復させる。入眠時に決めたsleepWakeAt(0〜startValue)まで
       // 回復したら起床する(必ずしも0まで眠るとは限らない)。以降は通常の眠気蓄積に戻る。
@@ -332,6 +453,44 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     progress[id] = nextProgress
   })
 
+  for (const [rawPetId, session] of Object.entries(save.walks?.active ?? {})) {
+    const petId = rawPetId as PetId
+    if (!PET_BY_ID[petId] || !session || session.endsAt > now) continue
+    delete walks.active[petId]
+    if (walks.results.some(result => result.id === session.id)) continue
+    const postDebuffActive = (walks.postDepressionUntil[petId] ?? 0) > now && (walks.depressionUntil[petId] ?? 0) <= now
+    const exp = Math.max(1, Math.floor((session.item === 'cat_headband' ? 70 : PET_WALK_BASE_EXP) * (postDebuffActive ? 0.5 : 1)))
+    const sleepiness = session.item === 'cat_headband' ? 8 : session.item === 'takuya_sunglasses' ? 30 : PET_WALK_BASE_SLEEPINESS
+    const reward = rollWalkReward(session.item)
+    const nextStats = addExp({
+      ...pets[petId],
+      sleepiness: clamp(pets[petId].sleepiness + sleepiness),
+    }, exp, petId)
+    pets[petId] = nextStats
+    if (nextStats.sleepiness >= PET_SLEEP_THRESHOLD) {
+      sleepStartedAt[petId] = sleepStartedAt[petId] || now
+      sleepStartValue[petId] = sleepStartValue[petId] || nextStats.sleepiness
+      sleepWakeAt[petId] = sleepWakeAt[petId] || rollSleepWakeThreshold(nextStats.sleepiness)
+    }
+    if (reward.rewardType === 'sleep_tea') items.sleepTea += reward.rewardAmount
+    if (reward.rewardType === 'premium_food') premiumFood = { ...premiumFood, inventory: premiumFood.inventory + reward.rewardAmount }
+    if (reward.rewardType === 'takuya_sunglasses') items.takuyaSunglasses += reward.rewardAmount
+    if (reward.rewardType === 'cat_headband') items.catHeadband += reward.rewardAmount
+    walks.results = [
+      ...walks.results,
+      {
+        id: session.id,
+        petId,
+        createdAt: now,
+        exp,
+        sleepiness,
+        ...reward,
+        pointsGrantStatus: reward.rewardType === 'points' ? 'pending' : undefined,
+        seen: false,
+      },
+    ].slice(-8)
+  }
+
   return {
     ...save,
     pets,
@@ -339,7 +498,9 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     sleepStartedAt,
     sleepStartValue,
     sleepWakeAt,
-    premiumFood: sanitizePremiumFood(save.premiumFood, now),
+    items,
+    walks,
+    premiumFood,
   }
 }
 
@@ -362,7 +523,7 @@ export function usePetState() {
   // ── サーバーに最後に伝えた消費アイテム数の基準値。
   // 定期autosaveのフルステート上書きでミッション/ガチャ付与分を
   // 消してしまわないよう、サーバー側の差分マージ計算に使う。
-  const itemsBaselineRef = useRef<{ sleepTea: number; premiumInventory: number } | null>(null)
+  const itemsBaselineRef = useRef<{ sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number } | null>(null)
   const now = Date.now()
   const effectiveSave = materializeSaveAt(save, now)
   const selectedPetId = PET_BY_ID[save.selectedPetId] ? save.selectedPetId : PET_DEFINITIONS[0].id
@@ -371,6 +532,13 @@ export function usePetState() {
   const activePetIds = effectiveSave.activePetIds.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3)
   const skillActiveCharacterIds = effectiveSave.skillActiveCharacterIds.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id]) && list.indexOf(id) === index).slice(0, 3)
   const premiumFood = getPremiumFoodState(effectiveSave.premiumFood, now)
+  const walks = effectiveSave.walks
+  const selectedWalkSession = walks.active[selectedPetId] ?? null
+  const isWalking = Boolean(selectedWalkSession)
+  const walkRemaining = selectedWalkSession ? Math.max(0, selectedWalkSession.endsAt - now) : 0
+  const depressionUntil = walks.depressionUntil[selectedPetId] ?? 0
+  const postDepressionUntil = walks.postDepressionUntil[selectedPetId] ?? 0
+  const depressionMessage = (walks.depressionMessageUntil[selectedPetId] ?? 0) > now ? '罵声を浴びせられてうつ状態' : ''
 
   useEffect(() => {
     let cancelled = false
@@ -386,6 +554,8 @@ export function usePetState() {
           itemsBaselineRef.current = {
             sleepTea: Number(hydrated.items?.sleepTea ?? 0),
             premiumInventory: Number(hydrated.premiumFood?.inventory ?? 0),
+            takuyaSunglasses: Number(hydrated.items?.takuyaSunglasses ?? 0),
+            catHeadband: Number(hydrated.items?.catHeadband ?? 0),
           }
           setSkillLockStatus(data.skillLockStatus && typeof data.skillLockStatus === 'object' ? data.skillLockStatus : {})
         } else {
@@ -402,6 +572,8 @@ export function usePetState() {
           itemsBaselineRef.current = {
             sleepTea: Number(initialLocalSave.current.items?.sleepTea ?? 0),
             premiumInventory: Number(initialLocalSave.current.premiumFood?.inventory ?? 0),
+            takuyaSunglasses: Number(initialLocalSave.current.items?.takuyaSunglasses ?? 0),
+            catHeadband: Number(initialLocalSave.current.items?.catHeadband ?? 0),
           }
         }
         setSyncError(null)
@@ -433,14 +605,16 @@ export function usePetState() {
       if (data?.mergedItems && typeof data.mergedItems === 'object') {
         const mergedSleepTea = Number(data.mergedItems.sleepTea ?? 0)
         const mergedPremiumInventory = Number(data.mergedItems.premiumInventory ?? 0)
-        itemsBaselineRef.current = { sleepTea: mergedSleepTea, premiumInventory: mergedPremiumInventory }
+        const mergedTakuyaSunglasses = Number(data.mergedItems.takuyaSunglasses ?? 0)
+        const mergedCatHeadband = Number(data.mergedItems.catHeadband ?? 0)
+        itemsBaselineRef.current = { sleepTea: mergedSleepTea, premiumInventory: mergedPremiumInventory, takuyaSunglasses: mergedTakuyaSunglasses, catHeadband: mergedCatHeadband }
         setSave(current => {
-          if (Number(current.items?.sleepTea ?? 0) === mergedSleepTea && Number(current.premiumFood?.inventory ?? 0) === mergedPremiumInventory) {
+          if (Number(current.items?.sleepTea ?? 0) === mergedSleepTea && Number(current.premiumFood?.inventory ?? 0) === mergedPremiumInventory && Number(current.items?.takuyaSunglasses ?? 0) === mergedTakuyaSunglasses && Number(current.items?.catHeadband ?? 0) === mergedCatHeadband) {
             return current
           }
           return {
             ...current,
-            items: { ...current.items, sleepTea: mergedSleepTea },
+            items: { ...current.items, sleepTea: mergedSleepTea, takuyaSunglasses: mergedTakuyaSunglasses, catHeadband: mergedCatHeadband },
             premiumFood: { ...current.premiumFood, inventory: mergedPremiumInventory },
           }
         })
@@ -448,6 +622,8 @@ export function usePetState() {
         itemsBaselineRef.current = {
           sleepTea: Number(save.items?.sleepTea ?? 0),
           premiumInventory: Number(save.premiumFood?.inventory ?? 0),
+          takuyaSunglasses: Number(save.items?.takuyaSunglasses ?? 0),
+          catHeadband: Number(save.items?.catHeadband ?? 0),
         }
       }
       setSyncError(null)
@@ -538,6 +714,7 @@ export function usePetState() {
     const currentEffective = materializeSaveAt(save, actionNow)
     const stats = currentEffective.pets[petId]
     const sleeping = currentEffective.sleepStartedAt[petId] > 0
+    if (currentEffective.walks.active[petId]) return null
     if (sleeping && action !== 'pet') return null
     if (config.category === 'feed' && stats.fullness >= 100) return null
     if (config.category === 'feed' && getActionCooldownRemaining(action, currentEffective.lastCareAt[petId], actionNow) > 0) return null
@@ -573,6 +750,7 @@ export function usePetState() {
       const currentStats = materialized.pets[currentPetId]
       const currentConfig = PET_CARE_CONFIG[action]
       const currentSleeping = materialized.sleepStartedAt[currentPetId] > 0
+      if (materialized.walks.active[currentPetId]) return current
       if (currentSleeping && action !== 'pet') return current
       if (currentConfig.category === 'feed' && currentStats.fullness >= 100) return current
       if (currentConfig.category === 'feed' && getActionCooldownRemaining(action, materialized.lastCareAt[currentPetId], actionNow) > 0) return current
@@ -586,13 +764,14 @@ export function usePetState() {
       const count = action === 'pet' ? (actionNow - previous.lastAt <= PET_PETTING_RESET_MS ? previous.count + 1 : 1) : previous.count
       const triggeredAnger = action === 'pet' && !stillAngry && (sleepPettingAnger || count >= PET_PETTING_ANGER_COUNT)
       const overpetted = stillAngry || triggeredAnger
-      const affectionDelta = overpetted ? -3 : currentConfig.affection
+      const postDebuffActive = (materialized.walks.postDepressionUntil[currentPetId] ?? 0) > actionNow && (materialized.walks.depressionUntil[currentPetId] ?? 0) <= actionNow
+      const affectionDelta = overpetted ? -3 : Math.floor(currentConfig.affection * (postDebuffActive ? 0.5 : 1))
       const nextStats = addExp({
         ...currentStats,
         fullness: clamp(currentStats.fullness + currentConfig.fullness),
         sleepiness: clamp(currentStats.sleepiness + currentConfig.sleepiness),
         affection: clamp(currentStats.affection + affectionDelta),
-      }, overpetted ? 0 : currentConfig.exp, currentPetId)
+      }, overpetted ? 0 : Math.floor(currentConfig.exp * (postDebuffActive ? 0.5 : 1)), currentPetId)
       const startsSleeping = nextStats.sleepiness >= PET_SLEEP_THRESHOLD
       let premiumFood = materialized.premiumFood
       if (action === 'feed-premium') {
@@ -648,6 +827,8 @@ export function usePetState() {
     const requested = Math.min(3, Math.max(1, Math.floor(amount)))
     const petId = effectiveSave.selectedPetId
     if ((effectiveSave.sleepStartedAt[petId] ?? 0) > 0) return 0
+    if (effectiveSave.walks.active[petId]) return 0
+    if (effectiveSave.walks.sleepTeaBlockedDate[petId] === getJstDateKey()) return 0
     const available = Math.max(0, Math.floor(effectiveSave.items?.sleepTea ?? 0))
     const maxBySleepiness = Math.max(0, Math.floor((100 - effectiveSave.pets[petId].sleepiness) / 33))
     const used = Math.min(requested, available, Math.max(0, PET_BY_ID[petId].maxLevel - effectiveSave.pets[petId].level), maxBySleepiness)
@@ -656,6 +837,8 @@ export function usePetState() {
       const materialized = materializeSaveAt(current, Date.now())
       const currentPetId = materialized.selectedPetId
       if ((materialized.sleepStartedAt[currentPetId] ?? 0) > 0) return current
+      if (materialized.walks.active[currentPetId]) return current
+      if (materialized.walks.sleepTeaBlockedDate[currentPetId] === getJstDateKey()) return current
       const stats = materialized.pets[currentPetId]
       const currentAvailable = Math.max(0, Math.floor(materialized.items?.sleepTea ?? 0))
       const currentMaxBySleepiness = Math.max(0, Math.floor((100 - stats.sleepiness) / 33))
@@ -689,6 +872,91 @@ export function usePetState() {
     return used
   }
 
+  function startWalk(item: PetWalkItem = 'none', walkNow = Date.now()): { ok: true; special: boolean } | { ok: false; reason: string } {
+    const currentEffective = materializeSaveAt(save, walkNow)
+    const petId = currentEffective.selectedPetId
+    const currentWalks = sanitizeWalks(currentEffective.walks, walkNow)
+    if (currentEffective.sleepStartedAt[petId] > 0) return { ok: false, reason: 'sleeping' }
+    if (currentWalks.active[petId]) return { ok: false, reason: 'walking' }
+    if (currentWalks.dailyCount >= PET_WALK_DAILY_LIMIT) return { ok: false, reason: 'daily_limit' }
+    if (currentWalks.petDaily[petId] === getJstDateKey(walkNow)) return { ok: false, reason: 'pet_daily_limit' }
+    if (item === 'takuya_sunglasses' && currentEffective.items.takuyaSunglasses <= 0) return { ok: false, reason: 'no_item' }
+    if (item === 'cat_headband' && currentEffective.items.catHeadband <= 0) return { ok: false, reason: 'no_item' }
+    const special = petId === 'takuya' && item === 'cat_headband' && Math.random() < PET_WALK_TAKUYA_CAT_EVENT_CHANCE
+    const sessionId = `walk-${petId}-${walkNow}-${Math.random().toString(36).slice(2, 8)}`
+    setSave(current => {
+      const materialized = materializeSaveAt(current, walkNow)
+      const currentPetId = materialized.selectedPetId
+      const walks = sanitizeWalks(materialized.walks, walkNow)
+      if (materialized.sleepStartedAt[currentPetId] > 0 || walks.active[currentPetId] || walks.dailyCount >= PET_WALK_DAILY_LIMIT || walks.petDaily[currentPetId] === getJstDateKey(walkNow)) return current
+      const items = { ...materialized.items }
+      if (item === 'takuya_sunglasses') {
+        if (items.takuyaSunglasses <= 0) return current
+        items.takuyaSunglasses -= 1
+      }
+      if (item === 'cat_headband') {
+        if (items.catHeadband <= 0) return current
+        items.catHeadband -= 1
+      }
+      const nextWalks: PetWalkState = {
+        ...walks,
+        dailyCount: walks.dailyCount + 1,
+        petDaily: { ...walks.petDaily, [currentPetId]: getJstDateKey(walkNow) },
+        active: { ...walks.active },
+      }
+      const pets = { ...materialized.pets }
+      const sleepStartedAt = { ...materialized.sleepStartedAt }
+      const sleepStartValue = { ...materialized.sleepStartValue }
+      const sleepWakeAt = { ...materialized.sleepWakeAt }
+      if (special) {
+        delete nextWalks.active[currentPetId]
+        nextWalks.depressionUntil = { ...nextWalks.depressionUntil, [currentPetId]: walkNow + PET_WALK_DEPRESSION_MS }
+        nextWalks.postDepressionUntil = { ...nextWalks.postDepressionUntil, [currentPetId]: walkNow + PET_WALK_DEPRESSION_MS + PET_WALK_POST_DEBUFF_MS }
+        nextWalks.depressionMessageUntil = { ...nextWalks.depressionMessageUntil, [currentPetId]: walkNow + PET_WALK_DEPRESSION_MS }
+        nextWalks.sleepTeaBlockedDate = { ...nextWalks.sleepTeaBlockedDate, [currentPetId]: getJstDateKey(walkNow) }
+        pets[currentPetId] = {
+          ...pets[currentPetId],
+          fullness: clamp(pets[currentPetId].fullness - 30),
+          sleepiness: 100,
+          affection: clamp(Math.floor(pets[currentPetId].affection / 2)),
+        }
+        sleepStartedAt[currentPetId] = walkNow
+        sleepStartValue[currentPetId] = 100
+        sleepWakeAt[currentPetId] = 0
+      } else {
+        nextWalks.active[currentPetId] = {
+          id: sessionId,
+          petId: currentPetId,
+          startedAt: walkNow,
+          endsAt: walkNow + PET_WALK_BASE_DURATION_MS + (item === 'takuya_sunglasses' ? PET_WALK_BASE_DURATION_MS : 0),
+          item,
+        }
+      }
+      return { ...materialized, items, walks: nextWalks, pets, sleepStartedAt, sleepStartValue, sleepWakeAt }
+    })
+    return { ok: true, special }
+  }
+
+  function markWalkResultSeen(resultId: string) {
+    setSave(current => ({
+      ...current,
+      walks: {
+        ...current.walks,
+        results: current.walks.results.map(result => result.id === resultId ? { ...result, seen: true } : result),
+      },
+    }))
+  }
+
+  function markWalkPointsGranted(resultId: string) {
+    setSave(current => ({
+      ...current,
+      walks: {
+        ...current.walks,
+        results: current.walks.results.map(result => result.id === resultId ? { ...result, pointsGrantStatus: 'granted' } : result),
+      },
+    }))
+  }
+
   return {
     selectedPetId,
     activePetIds,
@@ -701,12 +969,21 @@ export function usePetState() {
     premiumFood,
     items: effectiveSave.items,
     isSleeping,
+    isWalking,
+    walkRemaining,
+    walks,
+    depressionUntil,
+    postDepressionUntil,
+    depressionMessage,
     selectPet,
     setActivePetIds,
     care,
     setExpression,
     grantPremiumFood,
     useSleepTea,
+    startWalk,
+    markWalkResultSeen,
+    markWalkPointsGranted,
     maxLevel: PET_BY_ID[selectedPetId].maxLevel,
     isHydrated,
     syncError,
@@ -737,6 +1014,8 @@ export function initializeAwardedPetAtLevelOne(petId: string) {
       sleepStartValue: { ...current.sleepStartValue, [id]: 0 },
       sleepWakeAt: { ...current.sleepWakeAt, [id]: 0 },
       progress: { ...current.progress, [id]: { fullnessAt: now, sleepinessAt: now } },
+      items: sanitizeItems(current.items),
+      walks: sanitizeWalks(current.walks, now),
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   } catch {

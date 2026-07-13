@@ -65,9 +65,9 @@ const PET_CHARACTER_NAMES: Record<string, string> = {
   "inmu-festival": "INMUくん（810祭りVer.）",
 };
 
-type MissionRewardItemType = "premium_food" | "sleep_tea";
-const VALID_REWARD_ITEM_TYPES = new Set<MissionRewardItemType>(["premium_food", "sleep_tea"]);
-const REWARD_ITEM_NAMES: Record<MissionRewardItemType, string> = {
+type MissionRewardItemType = "premium_food" | "sleep_tea" | "takuya_sunglasses" | "cat_headband";
+const VALID_REWARD_ITEM_TYPES = new Set<MissionRewardItemType>(["premium_food", "sleep_tea", "takuya_sunglasses", "cat_headband"]);
+const REWARD_ITEM_NAMES: Partial<Record<MissionRewardItemType, string>> = {
   premium_food: "高級ごはん",
   sleep_tea: "アイスティー（睡眠薬入り）",
 };
@@ -151,8 +151,10 @@ async function grantMissionRewardItem(userId: string, itemType: MissionRewardIte
         : { dailyDate: "", dailyUsed: 0, inventory: 0 };
       state.premiumFood = { ...premiumFood, inventory: Math.max(0, Number(premiumFood.inventory ?? 0)) + amount };
     } else {
-      const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0 };
-      state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
+      const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0, takuyaSunglasses: 0, catHeadband: 0 };
+      if (itemType === "sleep_tea") state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + amount };
+      if (itemType === "takuya_sunglasses") state.items = { ...items, takuyaSunglasses: Math.max(0, Number(items.takuyaSunglasses ?? 0)) + amount };
+      if (itemType === "cat_headband") state.items = { ...items, catHeadband: Math.max(0, Number(items.catHeadband ?? 0)) + amount };
     }
     await client.query(`
       INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt") VALUES ($1,$2::jsonb,$3)

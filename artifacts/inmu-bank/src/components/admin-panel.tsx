@@ -15,7 +15,7 @@ import {
   CheckSquare, Square, Send, Star, Coins,
   WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2, Lock,
   TrendingUp, TrendingDown, RefreshCw, Settings, ShoppingCart,
-  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical, CupSoda,
+  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical, CupSoda, Glasses,
 } from 'lucide-react'
 import type { UserRow } from '@/pages/admin-page'
 import { Connection, PublicKey, Transaction } from '@solana/web3.js'
@@ -547,12 +547,16 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [pointsAmount, setPointsAmount] = useState('')
   const [deductPointsAmount, setDeductPointsAmount] = useState('')
   const [sleepTeaAmount, setSleepTeaAmount] = useState('')
+  const [petItemType, setPetItemType] = useState('takuya_sunglasses')
+  const [petItemAmount, setPetItemAmount] = useState('')
 
   const [airdropAllAmount, setAirdropAllAmount] = useState('')
   const [airdropAllMemo, setAirdropAllMemo] = useState('')
   const [pointsAllAmount, setPointsAllAmount] = useState('')
   const [pointsAllReason, setPointsAllReason] = useState('')
   const [sleepTeaAllAmount, setSleepTeaAllAmount] = useState('')
+  const [petItemAllType, setPetItemAllType] = useState('takuya_sunglasses')
+  const [petItemAllAmount, setPetItemAllAmount] = useState('')
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -1597,6 +1601,35 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           </div>
 
           {/* 選択ユーザー操作 */}
+          <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-2">
+            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <Glasses className="size-3" /> 全員PET散歩アイテム配布
+            </p>
+            <div className="grid grid-cols-[1fr_110px_auto] gap-2">
+              <select value={petItemAllType} onChange={e => setPetItemAllType(e.target.value)} className="min-h-10 rounded-md border border-input bg-background px-3 text-sm">
+                <option value="takuya_sunglasses">拓也のサングラス</option>
+                <option value="cat_headband">猫のカチューシャ</option>
+              </select>
+              <Input type="number" placeholder="個数" value={petItemAllAmount} onChange={e => setPetItemAllAmount(e.target.value)} className="min-h-10" />
+              <Button
+                variant="outline"
+                onClick={() => withConfirm('全員PET散歩アイテム配布', () => withLoading(async () => {
+                  const d = await api('/admin/grant-pet-item-all', 'POST', {
+                    itemType: petItemAllType,
+                    amount: Number(petItemAllAmount),
+                    reason: 'PET散歩アイテム配布',
+                  }) as { count: number }
+                  toast.success(`${d.count}名にPET散歩アイテムを配布しました`)
+                  setPetItemAllAmount('')
+                }))}
+                disabled={loading || !petItemAllAmount}
+                className="min-h-10"
+              >
+                配布
+              </Button>
+            </div>
+          </div>
+
           {selected.size > 0 && (
             <div className="rounded-lg border border-border bg-card p-4 flex flex-col gap-4">
               <p className="text-sm font-semibold flex items-center gap-2">
@@ -1714,6 +1747,36 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                       setSleepTeaAmount('')
                     }))}
                     disabled={loading || !sleepTeaAmount}
+                    className="min-h-10"
+                  >
+                    付与
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <Glasses className="size-3" /> PET散歩アイテム付与（選択ユーザー）
+                </p>
+                <div className="grid grid-cols-[1fr_110px_auto] gap-2">
+                  <select value={petItemType} onChange={e => setPetItemType(e.target.value)} className="min-h-10 rounded-md border border-input bg-background px-3 text-sm">
+                    <option value="takuya_sunglasses">拓也のサングラス</option>
+                    <option value="cat_headband">猫のカチューシャ</option>
+                  </select>
+                  <Input type="number" placeholder="個数" value={petItemAmount} onChange={e => setPetItemAmount(e.target.value)} className="min-h-10" />
+                  <Button
+                    variant="outline"
+                    onClick={() => withConfirm('PET散歩アイテム付与', () => withLoading(async () => {
+                      await api('/admin/grant-pet-item', 'POST', {
+                        targetUserIds: selectedIds,
+                        itemType: petItemType,
+                        amount: Number(petItemAmount),
+                        reason: bulkReason || 'PET散歩アイテム付与',
+                      })
+                      toast.success(`${selectedIds.length}名にPET散歩アイテムを付与しました`)
+                      setPetItemAmount('')
+                    }))}
+                    disabled={loading || !petItemAmount}
                     className="min-h-10"
                   >
                     付与

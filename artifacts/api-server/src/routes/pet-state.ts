@@ -64,6 +64,48 @@ router.get("/pet/skill-lock-status", requireAuth, async (req, res): Promise<void
   }
 });
 
+router.post("/pet/walk/point-grant", requireAuth, async (req, res): Promise<void> => {
+  const resultId = String(req.body?.resultId ?? "").trim();
+  const amount = Math.floor(Number(req.body?.amount ?? 0));
+  if (!/^walk-[a-z0-9-]+/i.test(resultId) || amount < 100 || amount > 5000 || amount % 100 !== 0) {
+    res.status(400).json({ error: "散歩ポイント報酬が不正です" });
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await ensurePetStateTable();
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "petWalkPointGrants" (
+        "resultId" TEXT PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query("BEGIN");
+    const inserted = await client.query(
+      `INSERT INTO "petWalkPointGrants" ("resultId","userId",amount)
+       VALUES ($1,$2,$3)
+       ON CONFLICT ("resultId") DO NOTHING
+       RETURNING "resultId"`,
+      [resultId, req.userId!, amount],
+    );
+    if (inserted.rowCount) {
+      const month = new Date().toISOString().slice(0, 7);
+      await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [amount, req.userId!]);
+      await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_walk_reward','INMU PET散歩報酬',$3)`, [req.userId!, amount, month]);
+    }
+    await client.query("COMMIT");
+    res.json({ ok: true, granted: Boolean(inserted.rowCount) });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[PetState] walk point grant", error);
+    res.status(500).json({ error: "散歩ポイント報酬の付与に失敗しました" });
+  } finally {
+    client.release();
+  }
+});
+
 router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
   const state = req.body?.state;
   const baseline = req.body?.baseline;
@@ -111,23 +153,33 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
     // 不具合があった。そのため、この2項目のみ「クライアントが起こした差分」を
     // 現在のDB値に加算するマージ方式にする（baseline未送信の旧クライアントは
     // 従来通りの上書き挙動にフォールバック）。
-    let mergedItems: { sleepTea: number; premiumInventory: number } | null = null;
+    let mergedItems: { sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number } | null = null;
     if (existingState && baseline && typeof baseline === "object") {
       const dbSleepTea = Number((existingState as Record<string, any>).items?.sleepTea ?? 0);
       const dbPremiumInventory = Number((existingState as Record<string, any>).premiumFood?.inventory ?? 0);
+      const dbTakuyaSunglasses = Number((existingState as Record<string, any>).items?.takuyaSunglasses ?? 0);
+      const dbCatHeadband = Number((existingState as Record<string, any>).items?.catHeadband ?? 0);
       const incomingSleepTea = Number((state as Record<string, any>).items?.sleepTea ?? 0);
       const incomingPremiumInventory = Number((state as Record<string, any>).premiumFood?.inventory ?? 0);
+      const incomingTakuyaSunglasses = Number((state as Record<string, any>).items?.takuyaSunglasses ?? 0);
+      const incomingCatHeadband = Number((state as Record<string, any>).items?.catHeadband ?? 0);
       const baselineSleepTea = Number.isFinite(Number(baseline.sleepTea)) ? Number(baseline.sleepTea) : incomingSleepTea;
       const baselinePremiumInventory = Number.isFinite(Number(baseline.premiumInventory)) ? Number(baseline.premiumInventory) : incomingPremiumInventory;
+      const baselineTakuyaSunglasses = Number.isFinite(Number(baseline.takuyaSunglasses)) ? Number(baseline.takuyaSunglasses) : incomingTakuyaSunglasses;
+      const baselineCatHeadband = Number.isFinite(Number(baseline.catHeadband)) ? Number(baseline.catHeadband) : incomingCatHeadband;
 
       const sleepTeaDelta = incomingSleepTea - baselineSleepTea;
       const premiumDelta = incomingPremiumInventory - baselinePremiumInventory;
+      const takuyaSunglassesDelta = incomingTakuyaSunglasses - baselineTakuyaSunglasses;
+      const catHeadbandDelta = incomingCatHeadband - baselineCatHeadband;
 
       const mergedSleepTea = Math.max(0, dbSleepTea + sleepTeaDelta);
       const mergedPremiumInventory = Math.max(0, dbPremiumInventory + premiumDelta);
-      mergedItems = { sleepTea: mergedSleepTea, premiumInventory: mergedPremiumInventory };
+      const mergedTakuyaSunglasses = Math.max(0, dbTakuyaSunglasses + takuyaSunglassesDelta);
+      const mergedCatHeadband = Math.max(0, dbCatHeadband + catHeadbandDelta);
+      mergedItems = { sleepTea: mergedSleepTea, premiumInventory: mergedPremiumInventory, takuyaSunglasses: mergedTakuyaSunglasses, catHeadband: mergedCatHeadband };
 
-      state.items = { ...(state as Record<string, any>).items, sleepTea: mergedSleepTea };
+      state.items = { ...(state as Record<string, any>).items, sleepTea: mergedSleepTea, takuyaSunglasses: mergedTakuyaSunglasses, catHeadband: mergedCatHeadband };
       state.premiumFood = { ...(state as Record<string, any>).premiumFood, inventory: mergedPremiumInventory };
     }
 
