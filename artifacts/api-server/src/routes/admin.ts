@@ -21,6 +21,7 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { requireAdmin } from "../middlewares/session";
 import { resolveAdminCode } from "./admin-auth";
+import { ensurePetStateTable } from "../services/pet-state-store";
 import bcrypt from "bcryptjs";
 
 const router = Router();
@@ -855,10 +856,11 @@ function readPetItemCount(items: unknown, camelKey: string, snakeKey: string): n
 async function grantPetItemToUser(userId: string, itemType: PetGrantItemType, amount: number) {
   const client = await pool.connect();
   try {
+    await ensurePetStateTable();
     await client.query("BEGIN");
     const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
     const now = Date.now();
-    const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+    const state = result.rows[0]?.state && typeof result.rows[0].state === "object" && !Array.isArray(result.rows[0].state) ? result.rows[0].state : { version: 5 };
     const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0, takuyaSunglasses: 0, catHeadband: 0 };
     if (itemType === "sleep_tea") state.items = { ...items, sleepTea: readPetItemCount(items, "sleepTea", "sleep_tea") + amount };
     if (itemType === "takuya_sunglasses") state.items = { ...items, takuyaSunglasses: readPetItemCount(items, "takuyaSunglasses", "takuya_sunglasses") + amount };
@@ -895,7 +897,7 @@ router.post("/admin/grant-pet-item", requireAdmin, async (req, res): Promise<voi
   try {
     for (const uid of targetUserIds) {
       await grantPetItemToUser(uid, itemType, amount);
-      await notify(uid, "pet", `${PET_GRANT_ITEM_LABELS[itemType]}が${amount}個付与されました`, reason ?? `${amount}個`);
+      await notify(uid, "pet", `${PET_GRANT_ITEM_LABELS[itemType]}が${amount}個付与されました`, reason ?? `${amount}個`).catch(error => console.error("[Admin] grant-pet-item notify error:", error));
     }
     await logAudit(adminId, "adminGrantPetItem", undefined, { targetUserIds, itemType, amount, reason });
     res.json({ ok: true, count: targetUserIds.length });
@@ -916,7 +918,7 @@ router.post("/admin/grant-pet-item-all", requireAdmin, async (req, res): Promise
     const allUsers = await db.select({ userId: profileTable.userId }).from(profileTable);
     for (const u of allUsers) {
       await grantPetItemToUser(u.userId, itemType, amount);
-      await notify(u.userId, "pet", `${PET_GRANT_ITEM_LABELS[itemType]}が${amount}個付与されました`, reason ?? `${amount}個`);
+      await notify(u.userId, "pet", `${PET_GRANT_ITEM_LABELS[itemType]}が${amount}個付与されました`, reason ?? `${amount}個`).catch(error => console.error("[Admin] grant-pet-item-all notify error:", error));
     }
     await logAudit(adminId, "adminGrantPetItemAll", undefined, { count: allUsers.length, itemType, amount, reason });
     res.json({ ok: true, count: allUsers.length });
@@ -940,7 +942,7 @@ router.post("/admin/grant-sleep-tea", requireAdmin, async (req, res): Promise<vo
   try {
     for (const uid of targetUserIds) {
       await grantSleepTeaToUser(uid, amount);
-      await notify(uid, "pet", `アイスティーが${amount}個付与されました`, reason ?? `${amount}個`);
+      await notify(uid, "pet", `アイスティーが${amount}個付与されました`, reason ?? `${amount}個`).catch(error => console.error("[Admin] grant-sleep-tea notify error:", error));
     }
     await logAudit(adminId, "adminGrantSleepTea", undefined, { targetUserIds, amount, reason });
     res.json({ ok: true, count: targetUserIds.length });
@@ -961,7 +963,7 @@ router.post("/admin/grant-sleep-tea-all", requireAdmin, async (req, res): Promis
     const allUsers = await db.select({ userId: profileTable.userId }).from(profileTable);
     for (const u of allUsers) {
       await grantSleepTeaToUser(u.userId, amount);
-      await notify(u.userId, "pet", `アイスティーが${amount}個付与されました`, reason ?? `${amount}個`);
+      await notify(u.userId, "pet", `アイスティーが${amount}個付与されました`, reason ?? `${amount}個`).catch(error => console.error("[Admin] grant-sleep-tea-all notify error:", error));
     }
     await logAudit(adminId, "adminGrantSleepTeaAll", undefined, { count: allUsers.length, amount, reason });
     res.json({ ok: true, count: allUsers.length });

@@ -11,6 +11,7 @@ import {
   tradeHistoryTable,
 } from "@workspace/db/schema";
 import { eq, and, sql, gte } from "drizzle-orm";
+import { ensurePetStateTable } from "../services/pet-state-store";
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
@@ -148,10 +149,11 @@ async function grantMissionRewardItem(userId: string, itemType: MissionRewardIte
   if (amount <= 0) return;
   const client = await pool.connect();
   try {
+    await ensurePetStateTable();
     await client.query("BEGIN");
     const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
     const now = Date.now();
-    const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+    const state = result.rows[0]?.state && typeof result.rows[0].state === "object" && !Array.isArray(result.rows[0].state) ? result.rows[0].state : { version: 5 };
     if (itemType === "premium_food") {
       const premiumFood = state.premiumFood && typeof state.premiumFood === "object"
         ? state.premiumFood
