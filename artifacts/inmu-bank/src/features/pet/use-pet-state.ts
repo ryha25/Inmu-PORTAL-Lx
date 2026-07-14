@@ -88,6 +88,7 @@ export const PET_SLEEPINESS_GAIN_MS = 10 * 60 * 1000
 export const PET_PREMIUM_DAILY_FREE = 3
 export const PET_WALK_BASE_DURATION_MS = 60 * 60 * 1000
 export const PET_WALK_DAILY_LIMIT = 3
+export const PET_WALK_WHIP_DAILY_BONUS = 1
 export const PET_WALK_BASE_EXP = 40
 export const PET_WALK_BASE_SLEEPINESS = 20
 export const PET_WALK_ITEM_CHANCE = 0.35
@@ -328,7 +329,7 @@ function sanitizeWalks(value: Partial<PetWalkState> | undefined, now = Date.now(
   ) as Partial<Record<PetId, PetWalkSession>>
   return {
     dailyDate: today,
-    dailyCount: sameDay ? clamp(readNumber(value?.dailyCount, 0), 0, PET_WALK_DAILY_LIMIT) : 0,
+    dailyCount: sameDay ? clamp(readNumber(value?.dailyCount, 0), 0, PET_WALK_DAILY_LIMIT + PET_WALK_WHIP_DAILY_BONUS) : 0,
     petDaily: sameDay && value?.petDaily && typeof value.petDaily === 'object' ? { ...value.petDaily } : {},
     active,
     results: Array.isArray(value?.results)
@@ -509,9 +510,9 @@ function rollRewardItem(): Pick<PetWalkResult, 'rewardType' | 'rewardAmount' | '
   return { rewardType, rewardAmount: 1, rewardLabel: '猫のカチューシャ' }
 }
 
-function rollWalkReward(item: PetWalkItem, affection: number): Pick<PetWalkResult, 'rewardType' | 'rewardAmount' | 'rewardLabel'> {
+function rollWalkReward(item: PetWalkItem, affection: number, hasWhipSkill: boolean): Pick<PetWalkResult, 'rewardType' | 'rewardAmount' | 'rewardLabel'> {
   const baseChance = item === 'takuya_sunglasses' ? PET_WALK_SUNGLASSES_ITEM_CHANCE : PET_WALK_ITEM_CHANCE
-  const chance = Math.min(0.9, baseChance * getAffectionWalkRewardMultiplier(affection))
+  const chance = Math.min(0.9, baseChance * getAffectionWalkRewardMultiplier(affection) * (hasWhipSkill ? 2 : 1))
   if (Math.random() >= chance) return { rewardType: null, rewardAmount: 0, rewardLabel: null }
   return rollRewardItem()
 }
@@ -689,7 +690,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     const postDebuffActive = (walks.postDepressionUntil[petId] ?? 0) > now && (walks.depressionUntil[petId] ?? 0) <= now
     const exp = getModifiedExp(session.item === 'cat_headband' ? 70 : PET_WALK_BASE_EXP, pets[petId].affection, postDebuffActive)
     const sleepiness = session.item === 'cat_headband' ? 8 : session.item === 'takuya_sunglasses' ? 30 : PET_WALK_BASE_SLEEPINESS
-    const reward = rollWalkReward(session.item, pets[petId].affection)
+    const reward = rollWalkReward(session.item, pets[petId].affection, skillActiveCharacterIds.includes('whip'))
     const nextStats = addExp({
       ...pets[petId],
       sleepiness: clamp(pets[petId].sleepiness + sleepiness),
@@ -1176,9 +1177,10 @@ export function usePetState() {
     const currentEffective = materializeSaveAt(save, walkNow)
     const petId = currentEffective.selectedPetId
     const currentWalks = sanitizeWalks(currentEffective.walks, walkNow)
+    const dailyLimit = PET_WALK_DAILY_LIMIT + (currentEffective.skillActiveCharacterIds.includes('whip') ? PET_WALK_WHIP_DAILY_BONUS : 0)
     if (currentEffective.sleepStartedAt[petId] > 0) return { ok: false, reason: 'sleeping' }
     if (currentWalks.active[petId]) return { ok: false, reason: 'walking' }
-    if (currentWalks.dailyCount >= PET_WALK_DAILY_LIMIT) return { ok: false, reason: 'daily_limit' }
+    if (currentWalks.dailyCount >= dailyLimit) return { ok: false, reason: 'daily_limit' }
     if (currentWalks.petDaily[petId] === getJstDateKey(walkNow)) return { ok: false, reason: 'pet_daily_limit' }
     if (item === 'takuya_sunglasses' && currentEffective.items.takuyaSunglasses <= 0) return { ok: false, reason: 'no_item' }
     if (item === 'cat_headband' && currentEffective.items.catHeadband <= 0) return { ok: false, reason: 'no_item' }
@@ -1188,7 +1190,8 @@ export function usePetState() {
       const materialized = materializeSaveAt(current, walkNow)
       const currentPetId = materialized.selectedPetId
       const walks = sanitizeWalks(materialized.walks, walkNow)
-      if (materialized.sleepStartedAt[currentPetId] > 0 || walks.active[currentPetId] || walks.dailyCount >= PET_WALK_DAILY_LIMIT || walks.petDaily[currentPetId] === getJstDateKey(walkNow)) return current
+      const materializedDailyLimit = PET_WALK_DAILY_LIMIT + (materialized.skillActiveCharacterIds.includes('whip') ? PET_WALK_WHIP_DAILY_BONUS : 0)
+      if (materialized.sleepStartedAt[currentPetId] > 0 || walks.active[currentPetId] || walks.dailyCount >= materializedDailyLimit || walks.petDaily[currentPetId] === getJstDateKey(walkNow)) return current
       const items = { ...materialized.items }
       if (item === 'takuya_sunglasses') {
         if (items.takuyaSunglasses <= 0) return current

@@ -16,7 +16,7 @@ import {
 } from '@/lib/admin-inmu-transfer'
 import { toast } from 'sonner'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
-import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, PET_WALK_DAILY_LIMIT, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState, type PetWalkItem, type PetWalkResult, type PetWalkState } from '@/features/pet/use-pet-state'
+import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, PET_WALK_DAILY_LIMIT, PET_WALK_WHIP_DAILY_BONUS, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState, type PetWalkItem, type PetWalkResult, type PetWalkState } from '@/features/pet/use-pet-state'
 import {
   BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
   Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
@@ -191,11 +191,11 @@ function StatusBar({
   const percent = max <= 0 ? 0 : Math.min(100, Math.max(0, (value / max) * 100))
   return (
     <div className="min-w-0 flex-1">
-      <div className="mb-1.5 flex items-center justify-between gap-1 text-[10px] sm:text-xs">
+      <div className="mb-1 flex items-center justify-between gap-1 text-[9px] sm:text-[11px]">
         <span className="flex items-center gap-1 font-semibold text-foreground/85">{icon}{label}</span>
         <span className="font-mono text-muted-foreground">{display ?? value}</span>
       </div>
-      <div className="h-2.5 overflow-hidden rounded-full border border-white/10 bg-black/55 shadow-[inset_0_1px_3px_rgba(0,0,0,.75)]">
+      <div className="h-2 overflow-hidden rounded-full border border-white/10 bg-black/55 shadow-[inset_0_1px_3px_rgba(0,0,0,.75)]">
         <div className="relative h-full overflow-hidden rounded-full shadow-[0_0_10px_currentColor]" style={{ width: String(percent) + '%', background: color }}>
           <span className="pet-meter-shine absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
         </div>
@@ -425,13 +425,14 @@ function PetRoom({
             style={{ transform: 'translateX(-50%) scaleX(' + (walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1) + ')' }}
             data-pet-shadow
           />
-          {roomTheme === 'festival' ? (
+          {petId === 'inmu-festival' ? (
             <FestivalCharacter image={image} expression={expression} name={name} className="relative z-10 w-full drop-shadow-[0_14px_18px_rgba(0,0,0,.55)]" />
           ) : (
             <img
               src={image}
               alt={name}
-              className={cn('relative z-10 max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform,opacity] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
+              decoding="sync"
+              className={cn('relative z-10 max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
               data-pet-character
               data-expression={expression}
             />
@@ -439,31 +440,31 @@ function PetRoom({
         </div>}
       </div>
 
-      <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-violet-300/25 bg-[#090611]/92 p-2.5 shadow-[0_-10px_30px_rgba(0,0,0,.38)] backdrop-blur-md sm:inset-x-4 sm:p-3">
-        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+      <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-violet-300/25 bg-[#090611]/92 p-2 shadow-[0_-10px_30px_rgba(0,0,0,.38)] backdrop-blur-md sm:inset-x-4">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
           <StatusBar label="満腹度" value={stats.fullness} display={`${stats.fullness}`} icon={<Utensils className="size-4 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
           <StatusBar label="眠気" value={stats.sleepiness} display={`${stats.sleepiness}`} icon={<Moon className="size-4 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
           <StatusBar label="愛情度" value={stats.affection} display={`${stats.affection}`} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
         </div>
-        <div className="mt-2 flex min-h-4 items-center justify-end">
+        <div className="mt-1 flex min-h-3 items-center justify-end">
           <p className="break-words text-right text-[9px] text-cyan-200" role="status">
             {isSleeping ? 'すやすや眠っています' : isFull ? '満腹なのでご飯をあげられません' : message}
           </p>
         </div>
-        <div className="mt-1 grid grid-cols-2 gap-2">
+        <div className="mt-1 grid grid-cols-2 gap-1.5">
           {ROOM_ACTIONS.map(action => {
             const Icon = action.icon
             const remaining = cooldownRemaining[action.id]
             const disabled = isWalking || isSleeping || (action.id === 'feed' && isFull) || remaining > 0
             return (
-              <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-14 flex-col gap-0.5 rounded-md bg-black/35 px-1 text-xs transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
+              <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-11 flex-col gap-0.5 rounded-md bg-black/35 px-1 text-[11px] transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
                 <span className="flex items-center gap-1.5"><Icon className="size-4" /><span className="font-bold">{action.label}</span></span>
                 {remaining > 0 && <span className="font-mono text-[8px] leading-none opacity-80">{formatCooldown(remaining)}</span>}
               </Button>
             )
           })}
         </div>
-        <Button type="button" variant="outline" disabled={isWalking || isSleeping} onClick={onWalk} className="mt-2 h-12 w-full gap-1.5 rounded-md border-cyan-300/35 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-40">
+        <Button type="button" variant="outline" disabled={isWalking || isSleeping} onClick={onWalk} className="mt-1.5 h-10 w-full gap-1.5 rounded-md border-cyan-300/35 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-40">
           <PawPrint className="size-4" />
           <span className="font-bold">{isWalking ? '散歩中' : '散歩'}</span>
           {isWalking && <span className="font-mono text-[10px]">{formatWalkRemaining(walkRemaining)}</span>}
@@ -518,6 +519,7 @@ function CareChoiceDialog({ kind, premiumFood, actionCooldowns, onClose, onChoos
 function WalkChoiceDialog({
   open,
   walks,
+  dailyLimit,
   items,
   petId,
   onClose,
@@ -525,6 +527,7 @@ function WalkChoiceDialog({
 }: {
   open: boolean
   walks: PetWalkState
+  dailyLimit: number
   items: { takuyaSunglasses: number; catHeadband: number }
   petId: PetId
   onClose: () => void
@@ -532,7 +535,7 @@ function WalkChoiceDialog({
 }) {
   if (!open) return null
   const today = walks.dailyDate
-  const dailyRemaining = Math.max(0, PET_WALK_DAILY_LIMIT - walks.dailyCount)
+  const dailyRemaining = Math.max(0, dailyLimit - walks.dailyCount)
   const petUsed = walks.petDaily[petId] === today
   const choices: Array<{ item: PetWalkItem; label: string; detail: string; disabled?: boolean }> = [
     { item: 'none', label: '使用アイテムなし', detail: '散歩時間 1時間 / 通常の報酬抽選' },
@@ -544,7 +547,7 @@ function WalkChoiceDialog({
       <DialogContent className="mx-4 max-w-sm border-cyan-300/25 bg-[#0b0712]">
         <DialogHeader><DialogTitle>散歩に行く</DialogTitle></DialogHeader>
         <div className="rounded-lg border border-cyan-300/15 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100/80">
-          <p>本日の残り {dailyRemaining} / {PET_WALK_DAILY_LIMIT}</p>
+          <p>本日の残り {dailyRemaining} / {dailyLimit}</p>
           {petUsed && <p className="mt-1 font-bold text-amber-200">このキャラクターは本日散歩済みです</p>}
         </div>
         <div className="grid gap-2 pt-2">
@@ -1305,6 +1308,7 @@ export function PetPage() {
   const sleepingRef = useRef(false)
   const displayedPetId = (ownedPetIds ?? []).includes(selectedPetId) ? selectedPetId : ((ownedPetIds ?? [])[0] ?? 'inmu-festival')
   const pet = PET_BY_ID[displayedPetId] ?? PET_BY_ID['inmu-festival']
+  const walkDailyLimit = PET_WALK_DAILY_LIMIT + (skillActiveCharacterIds.includes('whip') ? PET_WALK_WHIP_DAILY_BONUS : 0)
   const selectedStats = petStats[displayedPetId] ?? petStats['inmu-festival'] ?? {
     level: 1,
     exp: 0,
@@ -1867,7 +1871,7 @@ export function PetPage() {
         )}
       </div>
       {hasOwnedPet && <CareChoiceDialog kind={careMenu} premiumFood={premiumFood} actionCooldowns={actionCooldowns} onClose={() => setCareMenu(null)} onChoose={handleCare} />}
-      {hasOwnedPet && <WalkChoiceDialog open={walkMenuOpen} walks={walks} items={items} petId={displayedPetId} onClose={() => setWalkMenuOpen(false)} onChoose={handleStartWalk} />}
+      {hasOwnedPet && <WalkChoiceDialog open={walkMenuOpen} walks={walks} dailyLimit={walkDailyLimit} items={items} petId={displayedPetId} onClose={() => setWalkMenuOpen(false)} onChoose={handleStartWalk} />}
       <WalkResultDialog result={walkResult} onClose={closeWalkResult} />
     </AppShell>
   )

@@ -182,7 +182,19 @@ async function getDailyLimit(isEventDay: boolean): Promise<number> {
 
 async function getUserDailyLimit(userId: string, isEventDay: boolean): Promise<number> {
   const baseLimit = await getDailyLimit(isEventDay);
-  return baseLimit + (await hasActivePetSkill(userId, "leon") ? 100_000 : 0);
+  const [hasLeonSkill, hasChingeSkill] = await Promise.all([
+    hasActivePetSkill(userId, "leon"),
+    hasActivePetSkill(userId, "chinge"),
+  ]);
+  return baseLimit + (hasLeonSkill ? 100_000 : 0) + (hasChingeSkill ? 100_000 : 0);
+}
+
+async function getPurchaseLimitSkillBonus(userId: string): Promise<number> {
+  const [hasLeonSkill, hasChingeSkill] = await Promise.all([
+    hasActivePetSkill(userId, "leon"),
+    hasActivePetSkill(userId, "chinge"),
+  ]);
+  return (hasLeonSkill ? 100_000 : 0) + (hasChingeSkill ? 100_000 : 0);
 }
 
 // ── JST当月の購入実績合計（tradeHistoryTable の buy）──
@@ -239,17 +251,17 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const monthEnd   = getMonthEndUTC(now);
     const daysInMonth = getDaysInCurrentMonth(now);
 
-    const [eventSettings, requests, normalDailyLimit, hasLeonSkill] = await Promise.all([
+    const [eventSettings, requests, normalDailyLimit, purchaseLimitSkillBonus] = await Promise.all([
       getEventSettings(),
       db.select().from(purchaseRequestsTable)
         .where(eq(purchaseRequestsTable.userId, userId))
         .orderBy(desc(purchaseRequestsTable.createdAt))
         .limit(50),
       getNormalDailyLimit(),
-      hasActivePetSkill(userId, "leon"),
+      getPurchaseLimitSkillBonus(userId),
     ]);
 
-    const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
+    const monthlyCapacity = (normalDailyLimit + purchaseLimitSkillBonus) * daysInMonth;
     // サイクル残り日数（今日〜15日終わりまで）
     // 当日は除いて翌日以降の残り日数をカウント（例: 7/8なら7/9〜7/15の7日）
     const remainingDays = Math.max(0, Math.floor((monthEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
@@ -317,13 +329,13 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
     const monthEnd   = getMonthEndUTC(now);
     const daysInMonth = getDaysInCurrentMonth(now);
 
-    const [eventSettings, normalDailyLimit, hasLeonSkill] = await Promise.all([
+    const [eventSettings, normalDailyLimit, purchaseLimitSkillBonus] = await Promise.all([
       getEventSettings(),
       getNormalDailyLimit(),
-      hasActivePetSkill(userId, "leon"),
+      getPurchaseLimitSkillBonus(userId),
     ]);
 
-    const monthlyCapacity = (normalDailyLimit + (hasLeonSkill ? 100_000 : 0)) * daysInMonth;
+    const monthlyCapacity = (normalDailyLimit + purchaseLimitSkillBonus) * daysInMonth;
 
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),

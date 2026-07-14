@@ -32,7 +32,8 @@ type Prize = {
   prizeId:string; label:string; type:'points'|'inmu'|'premium_food'|'sleep_tea'|'character'; amount:number
   characterId?:PetId; isNewCharacter?:boolean; isDuplicate?:boolean; convertedPoints?:number; baseAmount?:number
 }
-type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; costInmu?:number; newPoints:number; txId?:string; paidPity?:number|null; pointMultiplier?:number }
+type TdnReroll = { token:string; mode:'points'|'paid'; pullType:'single'|'multi'|'eleven'; expiresAt:string }
+type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; costInmu?:number; newPoints:number; txId?:string; paidPity?:number|null; pointMultiplier?:number; tdnReroll?:TdnReroll|null }
 type HistRow = { id:number; pullType:string; isFree:boolean; results:Prize[]; totalPoints:number; hasInmu:boolean; inmuSentStatus:string; txHash:string|null; wasGuaranteed:boolean; costPoints:number; createdAt:string }
 type CommerceHistRow = { id:number; gachaType:'points'|'paid'; pullType:string; costPoints:number; costInmu:number; txId:string|null; results:Prize[]; createdAt:string }
 
@@ -830,6 +831,7 @@ export function GachaPage() {
   const [freeLoading,setFreeLoading] = useState(false)
   const [gachaMode,setGachaMode] = useState<'points'|'paid'>('points')
   const [paidBusy,setPaidBusy] = useState(false)
+  const [tdnRerollBusy,setTdnRerollBusy] = useState(false)
   const [paidPity,setPaidPity] = useState(0)
   const [paidStatus,setPaidStatus] = useState('')
   const [inmuBalance,setInmuBalance] = useState<number|null>(null)
@@ -1080,6 +1082,33 @@ export function GachaPage() {
     checkIntent()
     return ()=>{cancelled=true}
   },[])
+
+  async function spinTdnReroll(){
+    if(phase!=='done'||!result?.tdnReroll||tdnRerollBusy)return
+    setTdnRerollBusy(true)
+    try{
+      const res=await fetch('/api/pet-gacha/tdn-reroll',{
+        method:'POST',credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({token:result.tdnReroll.token}),
+      })
+      const data=await res.json().catch(()=>({})) as Result&{error?:string}
+      if(!res.ok)throw new Error(data.error??'再抽選に失敗しました')
+      const hasCharacter=data.results.some(prize=>prize.type==='character')
+      const normalized:Result={...data,hasInmu:Boolean(data.hasInmu),wasGuaranteed:Boolean(data.wasGuaranteed||hasCharacter),tdnReroll:null}
+      setResult(normalized)
+      setPts(normalized.newPoints)
+      setPaidPity(Number(normalized.paidPity??paidPity))
+      setRevIdx(0)
+      setNewCharacterRevealIndex(0)
+      setJackpotSeen(false)
+      void loadFreeStatus()
+      void loadPaidFreeStatus()
+      void loadCommerceStatus()
+      setPhase(normalized.wasGuaranteed?'guaranteed':'inserting')
+    }catch(e){toast.error(e instanceof Error?e.message:'再抽選に失敗しました')}
+    finally{setTdnRerollBusy(false)}
+  }
 
   const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);setNewCharacterRevealIndex(0);setJackpotSeen(false);loadPts();loadHist();loadFreeStatus();loadPaidFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
   const isMulti=(result?.results.length??0)>1
@@ -1870,6 +1899,26 @@ export function GachaPage() {
                   </div>
                 )
               })}
+              {result.tdnReroll&&(
+                <button type="button" disabled={tdnRerollBusy} onPointerDown={(event)=>event.stopPropagation()} onClick={(event)=>{event.stopPropagation();void spinTdnReroll()}} style={{
+                  position:'relative',
+                  zIndex:50,
+                  border:'1px solid rgba(80,220,255,.7)',
+                  borderRadius:12,
+                  padding:'12px 24px',
+                  background:'linear-gradient(135deg,rgba(7,64,88,.95),rgba(12,24,46,.95))',
+                  color:'#9eeeff',
+                  fontWeight:900,
+                  letterSpacing:'0.04em',
+                  boxShadow:'0 0 24px rgba(34,211,238,.28)',
+                  cursor:tdnRerollBusy?'wait':'pointer',
+                  pointerEvents:'auto',
+                  WebkitTapHighlightColor:'transparent',
+                  opacity:tdnRerollBusy ? .7 : 1,
+                }}>
+                  {tdnRerollBusy?'処理中…':'もう一度引く'}
+                </button>
+              )}
               <button type="button" onPointerDown={(event)=>event.stopPropagation()} onClick={(event)=>{event.stopPropagation();reset()}} style={{
                 position:'relative',
                 zIndex:50,
@@ -1957,6 +2006,17 @@ export function GachaPage() {
                   filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))',
                   animation:'ga-bounce 1s ease-in-out infinite'}}/>
               </div>
+              {result.tdnReroll&&(
+                <button type="button" disabled={tdnRerollBusy} onClick={()=>void spinTdnReroll()} style={{
+                  marginTop:8,padding:'8px 32px',borderRadius:8,
+                  background:'linear-gradient(135deg,rgba(7,64,88,.95),rgba(12,24,46,.95))',
+                  border:'1px solid rgba(80,220,255,.7)',
+                  color:'#9eeeff',fontSize:14,fontWeight:800,cursor:tdnRerollBusy?'wait':'pointer',
+                  position:'relative',zIndex:4,letterSpacing:'0.06em',
+                  boxShadow:'0 0 20px rgba(34,211,238,.25)',
+                  opacity:tdnRerollBusy ? .7 : 1,
+                }}>{tdnRerollBusy?'処理中…':'もう一度引く'}</button>
+              )}
               <button onClick={reset} style={{
                 marginTop:8,padding:'8px 32px',borderRadius:8,
                 background:'rgba(255,255,255,.12)',border:'1px solid rgba(218,165,32,.45)',
@@ -2189,5 +2249,3 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
     </div>
   )
 }
-
-

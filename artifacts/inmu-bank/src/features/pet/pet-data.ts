@@ -261,9 +261,9 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomTheme: 'cat',
     roomImage: chingeRoomImage,
     skill: {
-      name: '月影の嗅覚',
-      effect: '散歩完了時のアイテム発見率が少し上昇',
-      notes: ['Lv.1から発動', '散歩結果の抽選に補正'],
+      name: '月夜',
+      effect: '購入申請上限 +100,000 INMU / 日',
+      notes: ['Lv.1から発動', 'レオンと同じく1日の購入申請可能枠を拡張'],
     },
     levelRewards: [
       { level: 10, label: '月影の護符 + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },
@@ -300,9 +300,9 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomTheme: 'dog',
     roomImage: tdnRoomImage,
     skill: {
-      name: 'ブルブル・ファイヤーボール',
-      effect: '購入申請上限 +100,000 INMU（1日）',
-      notes: ['Lv.1から発動', '1日の購入申請可能枠を10万INMU拡張'],
+      name: 'オナシャス！センセンシャル',
+      effect: 'ガチャ後に1日1回、ランダムでもう一度同じ回数を引ける',
+      notes: ['Lv.1から発動', '発動時は結果画面に「もう一度引く」が表示されます'],
     },
     levelRewards: [
       { level: 10, label: '炎のミット + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },
@@ -339,9 +339,9 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomTheme: 'festival',
     roomImage: whipRoomImage,
     skill: {
-      name: 'ふわふわヒール',
-      effect: 'お世話時の眠気上昇を少し軽減',
-      notes: ['Lv.1から発動', '育成中のコンディション維持を補助'],
+      name: '幸せの青い鳥',
+      effect: '散歩回数 +1回 / 散歩時のアイテム拾得率2倍',
+      notes: ['Lv.1から発動', '散歩の本日上限とアイテム抽選に補正'],
     },
     levelRewards: [
       { level: 10, label: '雲のリボン + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },

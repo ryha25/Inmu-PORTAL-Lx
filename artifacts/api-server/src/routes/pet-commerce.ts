@@ -1,5 +1,6 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { pool } from "@workspace/db";
+import { randomUUID } from "crypto";
 import { requireAuth } from "../middlewares/session";
 import { fetchInmuBalance } from "./solana";
 import { hasActivePetSkill, getFreeGachaState } from "../services/pet-skills";
@@ -12,6 +13,7 @@ const INMU_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
 const DUPLICATE_CHARACTER_POINTS = 50_000;
 const DUPLICATE_CHARACTER_SLEEP_TEA = 3;
+const TDN_REROLL_CHANCE = 0.3;
 
 const CHARACTERS = [
   { id: "nyarushian", name: "ニャルシアン" },
@@ -21,6 +23,7 @@ const CHARACTERS = [
 
 type PullType = "single" | "multi" | "eleven";
 type GachaMode = "points" | "paid";
+type TdnRerollInfo = { token: string; mode: GachaMode; pullType: PullType; expiresAt: string };
 type PetGachaPrize = {
   prizeId: string;
   label: string;
@@ -95,6 +98,10 @@ export function ensurePetCommerceTables() {
         "txId" TEXT UNIQUE,
         "payerWallet" TEXT,
         results JSONB NOT NULL DEFAULT '[]'::jsonb,
+        "tdnRerollToken" TEXT UNIQUE,
+        "tdnRerollGrantedAt" TIMESTAMPTZ,
+        "tdnRerollUsedAt" TIMESTAMPTZ,
+        "tdnRerollSourceId" INTEGER,
         "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `),
@@ -124,6 +131,10 @@ export function ensurePetCommerceTables() {
       )
     `),
     pool.query(`ALTER TABLE "gachaResults" ADD COLUMN IF NOT EXISTS "gachaKind" TEXT NOT NULL DEFAULT 'normal'`).catch(() => undefined),
+    pool.query(`ALTER TABLE "petGachaHistory" ADD COLUMN IF NOT EXISTS "tdnRerollToken" TEXT UNIQUE`).catch(() => undefined),
+    pool.query(`ALTER TABLE "petGachaHistory" ADD COLUMN IF NOT EXISTS "tdnRerollGrantedAt" TIMESTAMPTZ`).catch(() => undefined),
+    pool.query(`ALTER TABLE "petGachaHistory" ADD COLUMN IF NOT EXISTS "tdnRerollUsedAt" TIMESTAMPTZ`).catch(() => undefined),
+    pool.query(`ALTER TABLE "petGachaHistory" ADD COLUMN IF NOT EXISTS "tdnRerollSourceId" INTEGER`).catch(() => undefined),
   ]).then(() => undefined).catch(error => {
     tablePromise = null;
     throw error;
@@ -344,6 +355,28 @@ function jstTomorrowStartUtc(): Date {
   return new Date(today.getTime() + 24 * 3600 * 1000);
 }
 
+async function shouldGrantTdnReroll(client: any, userId: string): Promise<boolean> {
+  if (!await hasActivePetSkill(userId, "tdn")) return false;
+  const todayStart = jstTodayStartUtc();
+  const existing = await client.query(
+    `SELECT 1 FROM "petGachaHistory"
+     WHERE "userId"=$1 AND ("tdnRerollGrantedAt">=$2 OR "tdnRerollUsedAt">=$2)
+     LIMIT 1`,
+    [userId, todayStart.toISOString()],
+  );
+  return !existing.rowCount && Math.random() < TDN_REROLL_CHANCE;
+}
+
+async function grantTdnReroll(client: any, userId: string, historyId: number, mode: GachaMode, pullType: PullType): Promise<TdnRerollInfo | null> {
+  if (!await shouldGrantTdnReroll(client, userId)) return null;
+  const token = randomUUID();
+  await client.query(
+    `UPDATE "petGachaHistory" SET "tdnRerollToken"=$1,"tdnRerollGrantedAt"=NOW() WHERE id=$2 AND "userId"=$3`,
+    [token, historyId, userId],
+  );
+  return { token, mode, pullType, expiresAt: jstTomorrowStartUtc().toISOString() };
+}
+
 router.get("/pet-commerce/status", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensurePetCommerceTables();
@@ -431,8 +464,9 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
       }
     }
     const newPoints = await getCurrentPoints(client, req.userId!);
+    const tdnReroll = await grantTdnReroll(client, req.userId!, Number(history.rows[0].id), "points", pullType);
     await client.query("COMMIT");
-    res.json({ ...applied, costPoints, costInmu: 0, newPoints, historyId: history.rows[0].id, paidPity: null, wasGuaranteed });
+    res.json({ ...applied, costPoints, costInmu: 0, newPoints, historyId: history.rows[0].id, paidPity: null, wasGuaranteed, tdnReroll });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetCommerce] points gacha", error);
@@ -486,8 +520,9 @@ router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
       VALUES ($1,'paid',$2,$3,$4,$5,$6::jsonb) RETURNING id,"createdAt"
     `, [req.userId!, pullType, costInmu, txId, payment.payerWallet, JSON.stringify(applied.results)]);
     const newPoints = await getCurrentPoints(client, req.userId!);
+    const tdnReroll = await grantTdnReroll(client, req.userId!, Number(history.rows[0].id), "paid", pullType);
     await client.query("COMMIT");
-    res.json({ ...applied, costPoints: 0, costInmu, txId, newPoints, paidPity: pity, historyId: history.rows[0].id });
+    res.json({ ...applied, costPoints: 0, costInmu, txId, newPoints, paidPity: pity, historyId: history.rows[0].id, tdnReroll });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetCommerce] paid gacha", error);
@@ -536,6 +571,81 @@ router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void>
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetCommerce] paid free gacha", error);
     res.status(400).json({ error: error instanceof Error ? error.message : "無料ガチャに失敗しました" });
+  } finally {
+    client.release();
+  }
+});
+
+router.post("/pet-gacha/tdn-reroll", requireAuth, async (req, res): Promise<void> => {
+  const token = String(req.body?.token ?? "").trim();
+  if (!token) {
+    res.status(400).json({ error: "再抽選トークンがありません" });
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await ensurePetCommerceTables();
+    await client.query("BEGIN");
+    const todayStart = jstTodayStartUtc();
+    const source = await client.query(
+      `SELECT id,"gachaType","pullType","tdnRerollUsedAt"
+       FROM "petGachaHistory"
+       WHERE "userId"=$1 AND "tdnRerollToken"=$2 AND "tdnRerollGrantedAt">=$3
+       FOR UPDATE`,
+      [req.userId!, token, todayStart.toISOString()],
+    );
+    if (!source.rowCount) throw new Error("再抽選の有効期限が切れています");
+    if (source.rows[0].tdnRerollUsedAt) throw new Error("この再抽選は使用済みです");
+    if (!await hasActivePetSkill(req.userId!, "tdn")) throw new Error("TDNの固有スキルが有効ではありません");
+
+    const mode = (source.rows[0].gachaType === "paid" ? "paid" : "points") as GachaMode;
+    const pullType = (source.rows[0].pullType === "eleven" ? "eleven" : source.rows[0].pullType === "multi" ? "multi" : "single") as PullType;
+    const count = pullType === "eleven" ? 11 : pullType === "multi" ? 10 : 1;
+    const state = mode === "paid"
+      ? await client.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1 FOR UPDATE`, [req.userId!])
+      : null;
+    let pity = Number(state?.rows[0]?.paidPity ?? 0);
+    const rolled: any[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const prize = mode === "paid"
+        ? (pity >= 49
+          ? (() => { const character = randomCharacter(); return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id }; })()
+          : weightedRoll(PAID_PRIZES))
+        : weightedRoll(POINT_PRIZES);
+      rolled.push(prize);
+      if (mode === "paid") pity = prize.type === "character" ? 0 : pity + 1;
+    }
+    const applied = await applyPrizes(client, req.userId!, rolled);
+    if (mode === "paid") {
+      await client.query(`
+        INSERT INTO "petGachaState" ("userId","paidPity") VALUES ($1,$2)
+        ON CONFLICT ("userId") DO UPDATE SET "paidPity"=EXCLUDED."paidPity","updatedAt"=NOW()
+      `, [req.userId!, pity]);
+    }
+    const history = await client.query(`
+      INSERT INTO "petGachaHistory" ("userId","gachaType","pullType","costPoints","costInmu",results,"tdnRerollSourceId","tdnRerollUsedAt")
+      VALUES ($1,$2,$3,0,0,$4::jsonb,$5,NOW()) RETURNING id
+    `, [req.userId!, mode, pullType, JSON.stringify(applied.results), source.rows[0].id]);
+    await client.query(`UPDATE "petGachaHistory" SET "tdnRerollUsedAt"=NOW() WHERE id=$1`, [source.rows[0].id]);
+    if (mode === "points") {
+      const legacySpin = await client.query(`
+        INSERT INTO "gachaResults" ("userId","pullType",results,"totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree","gachaKind")
+        VALUES ($1,$2,$3::jsonb,$4,$5,$6,'pending',false,0,false,'normal') RETURNING id
+      `, [req.userId!, pullType, JSON.stringify(applied.results), applied.totalPoints, applied.inmuCount > 0, applied.inmuCount]);
+      if (applied.inmuCount > 0) {
+        for (let index = 0; index < applied.inmuCount; index += 1) {
+          await client.query(`INSERT INTO "gachaInmuWins" ("spinId","userId","pullType","inmuAmount","inmuSentStatus") VALUES ($1,$2,$3,10000,'pending')`, [legacySpin.rows[0].id, req.userId!, pullType]);
+        }
+      }
+    }
+    const newPoints = await getCurrentPoints(client, req.userId!);
+    await client.query("COMMIT");
+    const hasCharacter = applied.results.some(prize => prize.type === "character");
+    res.json({ ...applied, costPoints: 0, costInmu: 0, txId: null, newPoints, paidPity: mode === "paid" ? pity : null, historyId: history.rows[0].id, wasGuaranteed: hasCharacter, tdnReroll: null });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("[PetCommerce] tdn reroll", error);
+    res.status(400).json({ error: error instanceof Error ? error.message : "再抽選に失敗しました" });
   } finally {
     client.release();
   }
