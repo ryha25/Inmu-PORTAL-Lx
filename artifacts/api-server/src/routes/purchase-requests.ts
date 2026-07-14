@@ -27,9 +27,19 @@ pool.query(`
 
 type PetRebateBonus = { source: "level_reward" | "skill"; label: string; rate: number; eventOnly: boolean };
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SLOT_REBATE_RULE_START_JST = "2026-07-16";
 
 function normalizePetId(value: unknown): string {
   return String(value ?? "").trim().toLowerCase().replace(/_/g, "-").replace(/^character-/, "");
+}
+
+function getJstDateString(now = new Date()): string {
+  const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return `${jstNow.getUTCFullYear()}-${String(jstNow.getUTCMonth() + 1).padStart(2, "0")}-${String(jstNow.getUTCDate()).padStart(2, "0")}`;
+}
+
+function isSlotRebateRuleActive(now = new Date()): boolean {
+  return getJstDateString(now) >= SLOT_REBATE_RULE_START_JST;
 }
 
 const PET_PURCHASE_BONUS_RULES = [
@@ -48,6 +58,29 @@ const PET_PURCHASE_BONUS_RULES = [
   { characterId: "whip", minLevel: 10, source: "level_reward" as const, label: "ホイップ Lv.10報酬", rate: 5, eventOnly: false },
   { characterId: "whip", minLevel: 30, source: "level_reward" as const, label: "ホイップ Lv.30報酬", rate: 5, eventOnly: false },
 ] as const;
+
+function getSlotBaseRebateRate(unlockedSlots: number): number {
+  return unlockedSlots >= 3 ? 15 : 5;
+}
+
+function getSlotMaxRebateRate(unlockedSlots: number): number {
+  if (unlockedSlots >= 3) return 45;
+  if (unlockedSlots >= 2) return 25;
+  return 15;
+}
+
+async function getUnlockedPetSlots(userId: string): Promise<number> {
+  try {
+    const { rows } = await pool.query(`SELECT COUNT(*)::int AS count FROM "petSlotUnlocks" WHERE "userId"=$1`, [userId]);
+    return Math.min(3, Math.max(1, 1 + Number(rows[0]?.count ?? 0)));
+  } catch {
+    return 1;
+  }
+}
+
+function capPetRebateBonus(baseRebateRate: number, rawPetRebateBonusRate: number, maxRebateRate: number): number {
+  return Math.max(0, Math.min(rawPetRebateBonusRate, maxRebateRate - baseRebateRate));
+}
 
 async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
   const result = new Map<string, PetRebateBonus[]>();
@@ -144,7 +177,8 @@ async function getNormalDailyLimit(): Promise<number> {
 }
 
 // ── 購入申請 基本還元率（管理者設定・通常/イベント） ──
-async function getBaseRebateRate(isEventDay: boolean): Promise<number> {
+async function getBaseRebateRate(isEventDay: boolean, unlockedSlots: number, slotRuleActive = isSlotRebateRuleActive()): Promise<number> {
+  if (!isEventDay && slotRuleActive) return getSlotBaseRebateRate(unlockedSlots);
   const key = isEventDay ? "event_rebate_rate" : "normal_rebate_rate";
   try {
     const [s] = await db.select().from(systemSettingsTable).where(eq(systemSettingsTable.key, key));
@@ -275,12 +309,12 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     // サイクル残り日数（今日〜15日終わりまで）。15日当日も23:59までは1日分として扱う。
     const remainingDays = getRemainingCycleDays(now, monthEnd);
 
-    const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed, baseRebateRate, petBonusesByUser] = await Promise.all([
+    const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed, unlockedSlots, petBonusesByUser] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),
       getMonthlyApplied(userId, monthStart),
       getUserDailyLimit(userId, eventSettings.isEventDay),
       getDailyUsed(userId),
-      getBaseRebateRate(eventSettings.isEventDay),
+      getUnlockedPetSlots(userId),
       getPetPurchaseBonuses([userId], eventSettings.isEventDay),
     ]);
 
@@ -295,7 +329,13 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const remainingMonthlyCapacity = dailyLimit * remainingDays;
 
     const petRebateBonuses = petBonusesByUser.get(userId) ?? [];
-    const petRebateBonusRate = petRebateBonuses.reduce((total, bonus) => total + bonus.rate, 0);
+    const slotRebateRuleActive = isSlotRebateRuleActive(now);
+    const maxRebateRate = getSlotMaxRebateRate(unlockedSlots);
+    const baseRebateRate = await getBaseRebateRate(eventSettings.isEventDay, unlockedSlots, slotRebateRuleActive);
+    const rawPetRebateBonusRate = petRebateBonuses.reduce((total, bonus) => total + bonus.rate, 0);
+    const petRebateBonusRate = slotRebateRuleActive && !eventSettings.isEventDay
+      ? capPetRebateBonus(baseRebateRate, rawPetRebateBonusRate, maxRebateRate)
+      : rawPetRebateBonusRate;
 
     res.json({
       requests,
@@ -311,7 +351,13 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
       dailyRemaining,
       isEventMode: eventSettings.isEventDay,
       effectiveLimit,
+      unlockedSlots,
+      slotRebateRuleActive,
+      slotRebateRuleStartDate: SLOT_REBATE_RULE_START_JST,
+      scheduledSlotBaseRebateRate: getSlotBaseRebateRate(unlockedSlots),
+      scheduledSlotMaxRebateRate: maxRebateRate,
       baseRebateRate,                          // 管理者設定の基本還元率（通常/イベント）
+      maxRebateRate,
       petRebateBonuses,                        // PET由来の還元率内訳（レベル報酬・固有スキル）
       petRebateBonusRate,
       totalRebateRate: baseRebateRate + petRebateBonusRate,
@@ -376,12 +422,18 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
     }
 
     // 申請時点の還元率を記録
-    const [requestBaseRebateRate, requestPetBonusesByUser] = await Promise.all([
-      getBaseRebateRate(eventSettings.isEventDay),
+    const [requestUnlockedSlots, requestPetBonusesByUser] = await Promise.all([
+      getUnlockedPetSlots(userId),
       getPetPurchaseBonuses([userId], eventSettings.isEventDay),
     ]);
+    const requestSlotRebateRuleActive = isSlotRebateRuleActive(now);
+    const requestMaxRebateRate = getSlotMaxRebateRate(requestUnlockedSlots);
+    const requestBaseRebateRate = await getBaseRebateRate(eventSettings.isEventDay, requestUnlockedSlots, requestSlotRebateRuleActive);
     const requestPetRebateBonuses = requestPetBonusesByUser.get(userId) ?? [];
-    const requestPetRebateBonusRate = requestPetRebateBonuses.reduce((t, b) => t + b.rate, 0);
+    const rawRequestPetRebateBonusRate = requestPetRebateBonuses.reduce((t, b) => t + b.rate, 0);
+    const requestPetRebateBonusRate = requestSlotRebateRuleActive && !eventSettings.isEventDay
+      ? capPetRebateBonus(requestBaseRebateRate, rawRequestPetRebateBonusRate, requestMaxRebateRate)
+      : rawRequestPetRebateBonusRate;
     const requestTotalRebateRate = requestBaseRebateRate + requestPetRebateBonusRate;
 
     const [created] = await db.insert(purchaseRequestsTable).values({
@@ -430,27 +482,38 @@ router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<
       .where(eq(purchaseRequestsTable.status, "pending"))
       .orderBy(desc(purchaseRequestsTable.createdAt))
       .limit(500), getEventSettings()]);
-    const bonuses = await getPetPurchaseBonuses(
-      [...new Set(requests.map(request => request.userId))],
-      eventSettings.isEventDay,
-    );
-    res.json(requests.map(request => {
+    const userIds = [...new Set(requests.map(request => request.userId))];
+    const [bonuses, slotEntries] = await Promise.all([
+      getPetPurchaseBonuses(userIds, eventSettings.isEventDay),
+      Promise.all(userIds.map(async userId => [userId, await getUnlockedPetSlots(userId)] as const)),
+    ]);
+    const slotsByUser = new Map(slotEntries);
+    const payload = await Promise.all(requests.map(async request => {
       const storedPetBonuses = request.requestPetRebateDetails
         ? (() => { try { return JSON.parse(request.requestPetRebateDetails!); } catch { return null; } })()
         : null;
       const currentPetBonuses = bonuses.get(request.userId) ?? [];
+      const currentUnlockedSlots = slotsByUser.get(request.userId) ?? 1;
+      const currentSlotRebateRuleActive = isSlotRebateRuleActive();
+      const currentBaseRebateRate = await getBaseRebateRate(eventSettings.isEventDay, currentUnlockedSlots, currentSlotRebateRuleActive);
+      const currentMaxRebateRate = getSlotMaxRebateRate(currentUnlockedSlots);
+      const rawCurrentPetRebateBonusRate = currentPetBonuses.reduce((total, bonus) => total + bonus.rate, 0);
+      const currentPetRebateBonusRate = currentSlotRebateRuleActive && !eventSettings.isEventDay
+        ? capPetRebateBonus(currentBaseRebateRate, rawCurrentPetRebateBonusRate, currentMaxRebateRate)
+        : rawCurrentPetRebateBonusRate;
       return {
         ...request,
         petRebateBonuses: storedPetBonuses ?? currentPetBonuses,
         petRebateBonusRate: request.requestPetRebateBonusRate != null
           ? Number(request.requestPetRebateBonusRate)
-          : currentPetBonuses.reduce((total, bonus) => total + bonus.rate, 0),
+          : currentPetRebateBonusRate,
         storedBaseRebateRate: request.requestBaseRebateRate != null ? Number(request.requestBaseRebateRate) : null,
         storedPetRebateBonusRate: request.requestPetRebateBonusRate != null ? Number(request.requestPetRebateBonusRate) : null,
         storedTotalRebateRate: request.requestTotalRebateRate != null ? Number(request.requestTotalRebateRate) : null,
         isEventPurchase: eventSettings.isEventDay,
       };
     }));
+    res.json(payload);
   } catch {
     res.status(500).json({ error: "Internal error" });
   }

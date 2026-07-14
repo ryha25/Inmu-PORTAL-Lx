@@ -49,7 +49,13 @@ type PurchaseRequestsData = {
   dailyRemaining: number
   isEventMode: boolean
   effectiveLimit: number
+  unlockedSlots: number
+  slotRebateRuleActive: boolean
+  slotRebateRuleStartDate: string
+  scheduledSlotBaseRebateRate: number
+  scheduledSlotMaxRebateRate: number
   baseRebateRate: number
+  maxRebateRate: number
   petRebateBonuses: { source: 'level_reward' | 'skill'; label: string; rate: number; eventOnly: boolean }[]
   petRebateBonusRate: number
   totalRebateRate: number
@@ -122,7 +128,13 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
   const [dailyRemaining,   setDailyRemaining]   = useState<number>(300000)
   const [isEventMode,      setIsEventMode]      = useState<boolean>(false)
   const [effectiveLimit,   setEffectiveLimit]   = useState<number>(300000)
+  const [unlockedSlots,    setUnlockedSlots]    = useState<number>(1)
+  const [slotRebateRuleActive, setSlotRebateRuleActive] = useState<boolean>(false)
+  const [slotRebateRuleStartDate, setSlotRebateRuleStartDate] = useState<string>('2026-07-16')
+  const [scheduledSlotBaseRebateRate, setScheduledSlotBaseRebateRate] = useState<number>(5)
+  const [scheduledSlotMaxRebateRate, setScheduledSlotMaxRebateRate] = useState<number>(15)
   const [baseRebateRate,     setBaseRebateRate]     = useState<number>(0)
+  const [maxRebateRate,      setMaxRebateRate]      = useState<number>(15)
   const [petRebateBonuses,   setPetRebateBonuses]   = useState<{ source: 'level_reward' | 'skill'; label: string; rate: number; eventOnly: boolean }[]>([])
   const [petRebateBonusRate, setPetRebateBonusRate] = useState<number>(0)
   const [totalRebateRate,    setTotalRebateRate]    = useState<number>(0)
@@ -148,7 +160,13 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
           setDailyRemaining(d.dailyRemaining ?? 300000)
           setIsEventMode(d.isEventMode ?? false)
           setEffectiveLimit(d.effectiveLimit ?? 0)
+          setUnlockedSlots(d.unlockedSlots ?? 1)
+          setSlotRebateRuleActive(d.slotRebateRuleActive ?? false)
+          setSlotRebateRuleStartDate(d.slotRebateRuleStartDate ?? '2026-07-16')
+          setScheduledSlotBaseRebateRate(d.scheduledSlotBaseRebateRate ?? 5)
+          setScheduledSlotMaxRebateRate(d.scheduledSlotMaxRebateRate ?? 15)
           setBaseRebateRate(d.baseRebateRate ?? 0)
+          setMaxRebateRate(d.maxRebateRate ?? 15)
           setPetRebateBonuses(d.petRebateBonuses ?? [])
           setPetRebateBonusRate(d.petRebateBonusRate ?? 0)
           setTotalRebateRate(d.totalRebateRate ?? 0)
@@ -258,13 +276,25 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
             </div>
 
             <div className="rounded-lg bg-secondary/30 p-3 flex flex-col gap-1.5">
-              <p className="text-[10px] font-semibold text-muted-foreground">現在適用中の還元率</p>
+              <p className="text-[10px] font-semibold text-muted-foreground">現在の還元率</p>
               <p className="font-mono text-lg font-bold text-green-500">{totalRebateRate.toFixed(1)}%</p>
               <div className="flex flex-col gap-0.5 text-[10px] text-muted-foreground">
                 <div className="flex items-center justify-between">
-                  <span>{isEventMode ? 'イベント基本還元率' : '通常基本還元率'}</span>
-                  <span className="font-mono">{baseRebateRate.toFixed(1)}%</span>
+                  <span>スロット{unlockedSlots}</span>
+                  <span className="font-mono">{baseRebateRate.toFixed(1)}%（{isEventMode ? 'イベント' : '通常'}）</span>
                 </div>
+                <div className="flex items-center justify-between">
+                  <span>キャラクター込み最大</span>
+                  <span className="font-mono">{maxRebateRate.toFixed(1)}%（最大）</span>
+                </div>
+                {!slotRebateRuleActive && !isEventMode && (
+                  <div className="rounded border border-yellow-500/25 bg-yellow-500/10 px-2 py-1 text-[10px] text-yellow-600 dark:text-yellow-300">
+                    <p>{slotRebateRuleStartDate} 00:00から適用予定</p>
+                    <p className="font-mono">
+                      {scheduledSlotBaseRebateRate.toFixed(1)}%（通常） / {scheduledSlotMaxRebateRate.toFixed(1)}%（最大）
+                    </p>
+                  </div>
+                )}
                 {petRebateBonuses.map((bonus, idx) => (
                   <div key={`${bonus.label}-${idx}`} className="flex items-center justify-between">
                     <span>{bonus.label}</span>
