@@ -68,10 +68,11 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
       const owned = ownedByUser.get(userId) ?? new Set<string>();
       const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.slice(0, 3).map(String) : [];
       const legacySkillSingle = state?.skillActiveCharacterId;
-      const skillActiveCharacterIds: string[] = (Array.isArray(state?.skillActiveCharacterIds)
+      const rawSkillActiveCharacterIds: string[] = (Array.isArray(state?.skillActiveCharacterIds)
         ? state.skillActiveCharacterIds
         : legacySkillSingle != null ? [legacySkillSingle] : []
       ).slice(0, 3).map(String);
+      const skillActiveCharacterIds = rawSkillActiveCharacterIds.length > 0 ? rawSkillActiveCharacterIds : activePetIds;
       const bonuses = PET_PURCHASE_BONUS_RULES.filter(rule => {
         if (!owned.has(rule.characterId) || (rule.eventOnly && !isEventDay)) return false;
         const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);

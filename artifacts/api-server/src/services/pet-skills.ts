@@ -27,7 +27,8 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
     const rawSkillActiveIds: unknown[] = Array.isArray(state?.skillActiveCharacterIds)
       ? state.skillActiveCharacterIds
       : legacySingle != null ? [legacySingle] : [];
-    const skillActiveCharacterIds = rawSkillActiveIds.map(normalizeId);
+    const activePetIds: unknown[] = Array.isArray(state?.activePetIds) ? state.activePetIds : [];
+    const skillActiveCharacterIds = (rawSkillActiveIds.length > 0 ? rawSkillActiveIds : activePetIds).map(normalizeId);
     // Ownership is authoritative. PET saves contain default stats for characters the
     // user does not own, so character-state presence must never unlock a skill.
     // A unique skill is only active for up to 3 characters explicitly set via the

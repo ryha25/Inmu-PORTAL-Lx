@@ -262,8 +262,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomImage: chingeRoomImage,
     skill: {
       name: '月夜',
-      effect: '購入申請上限 +100,000 INMU / 日',
-      notes: ['Lv.1から発動', 'レオンと同じく1日の購入申請可能枠を拡張'],
+      effect: '購入申請上限 +100,000 INMU（1日）',
+      notes: ['Lv.1から発動', '1日の購入申請可能枠を10万INMU拡張'],
     },
     levelRewards: [
       { level: 10, label: '月影の護符 + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },
