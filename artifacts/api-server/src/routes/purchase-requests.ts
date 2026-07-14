@@ -26,6 +26,11 @@ pool.query(`
 `).catch((e: unknown) => console.error('[PurchaseRequests] ALTER TABLE error:', e));
 
 type PetRebateBonus = { source: "level_reward" | "skill"; label: string; rate: number; eventOnly: boolean };
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function normalizePetId(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase().replace(/_/g, "-").replace(/^character-/, "");
+}
 
 const PET_PURCHASE_BONUS_RULES = [
   { characterId: "inmu-festival", minLevel: 15, source: "level_reward" as const, label: "INMUくん Lv.15報酬", rate: 5, eventOnly: false },
@@ -59,27 +64,27 @@ async function getPetPurchaseBonuses(userIds: string[], isEventDay: boolean) {
     ownership.rows.forEach(row => {
       const userId = String(row.userId);
       const owned = ownedByUser.get(userId) ?? new Set<string>();
-      owned.add(String(row.characterId));
+      owned.add(normalizePetId(row.characterId));
       ownedByUser.set(userId, owned);
     });
 
     userIds.forEach(userId => {
       const state = stateByUser.get(userId) as Record<string, any> | undefined;
       const owned = ownedByUser.get(userId) ?? new Set<string>();
-      const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.slice(0, 3).map(String) : [];
+      const activePetIds = Array.isArray(state?.activePetIds) ? state.activePetIds.slice(0, 3).map(normalizePetId) : [];
       const legacySkillSingle = state?.skillActiveCharacterId;
       const rawSkillActiveCharacterIds: string[] = (Array.isArray(state?.skillActiveCharacterIds)
         ? state.skillActiveCharacterIds
         : legacySkillSingle != null ? [legacySkillSingle] : []
-      ).slice(0, 3).map(String);
-      const skillActiveCharacterIds = rawSkillActiveCharacterIds.length > 0 ? rawSkillActiveCharacterIds : activePetIds;
+      ).slice(0, 3).map(normalizePetId);
       const bonuses = PET_PURCHASE_BONUS_RULES.filter(rule => {
         if (!owned.has(rule.characterId) || (rule.eventOnly && !isEventDay)) return false;
-        const level = Number(state?.pets?.[rule.characterId]?.level ?? 0);
+        const statePetId = Object.keys(state?.pets ?? {}).find(id => normalizePetId(id) === rule.characterId) ?? rule.characterId;
+        const level = Number(state?.pets?.[statePetId]?.level ?? 0);
         if (level < rule.minLevel) return false;
         // レベル報酬は育成枠（activePetIds）、固有スキルは「固有スキル発動」で選択された最大3体に紐づく。
         return rule.source === "skill"
-          ? skillActiveCharacterIds.includes(rule.characterId)
+          ? rawSkillActiveCharacterIds.includes(rule.characterId)
           : activePetIds.includes(rule.characterId);
       }).map(rule => ({ source: rule.source, label: rule.label, rate: rule.rate, eventOnly: rule.eventOnly }));
       result.set(userId, bonuses);
@@ -115,7 +120,11 @@ function getMonthEndUTC(now: Date): Date {
 function getDaysInCurrentMonth(now: Date): number {
   const start = getMonthStartUTC(now);
   const end = getMonthEndUTC(now);
-  return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+  return Math.round((end.getTime() - start.getTime()) / DAY_MS);
+}
+
+function getRemainingCycleDays(now: Date, monthEnd: Date): number {
+  return Math.max(0, Math.ceil((monthEnd.getTime() - now.getTime()) / DAY_MS));
 }
 
 // ── 全体申請上限（管理者設定） ──
@@ -263,9 +272,8 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     ]);
 
     const monthlyCapacity = (normalDailyLimit + purchaseLimitSkillBonus) * daysInMonth;
-    // サイクル残り日数（今日〜15日終わりまで）
-    // 当日は除いて翌日以降の残り日数をカウント（例: 7/8なら7/9〜7/15の7日）
-    const remainingDays = Math.max(0, Math.floor((monthEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+    // サイクル残り日数（今日〜15日終わりまで）。15日当日も23:59までは1日分として扱う。
+    const remainingDays = getRemainingCycleDays(now, monthEnd);
 
     const [monthlyBought, monthlyApplied, dailyLimit, dailyUsed, baseRebateRate, petBonusesByUser] = await Promise.all([
       getMonthlyBought(userId, monthStart, monthEnd),

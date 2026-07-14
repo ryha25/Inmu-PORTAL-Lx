@@ -1308,8 +1308,7 @@ export function PetPage() {
   const sleepingRef = useRef(false)
   const displayedPetId = (ownedPetIds ?? []).includes(selectedPetId) ? selectedPetId : ((ownedPetIds ?? [])[0] ?? 'inmu-festival')
   const pet = PET_BY_ID[displayedPetId] ?? PET_BY_ID['inmu-festival']
-  const effectiveSkillIds = skillActiveCharacterIds.length > 0 ? skillActiveCharacterIds : activePetIds
-  const walkDailyLimit = PET_WALK_DAILY_LIMIT + (effectiveSkillIds.includes('whip') ? PET_WALK_WHIP_DAILY_BONUS : 0)
+  const walkDailyLimit = PET_WALK_DAILY_LIMIT + (skillActiveCharacterIds.includes('whip') ? PET_WALK_WHIP_DAILY_BONUS : 0)
   const selectedStats = petStats[displayedPetId] ?? petStats['inmu-festival'] ?? {
     level: 1,
     exp: 0,

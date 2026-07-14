@@ -519,8 +519,7 @@ function rollWalkReward(item: PetWalkItem, affection: number, hasWhipSkill: bool
 
 function isPetSkillActive(save: Pick<PetSaveData, 'skillActiveCharacterIds' | 'activePetIds'>, petId: PetId): boolean {
   const skillIds = sanitizePetIdList(save.skillActiveCharacterIds)
-  const fallbackIds = sanitizePetIdList(save.activePetIds)
-  return (skillIds.length > 0 ? skillIds : fallbackIds).includes(petId)
+  return skillIds.includes(petId)
 }
 
 function rollAffectionGift(petId: PetId, now: number): PetAffectionGift | null {
@@ -696,7 +695,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     const postDebuffActive = (walks.postDepressionUntil[petId] ?? 0) > now && (walks.depressionUntil[petId] ?? 0) <= now
     const exp = getModifiedExp(session.item === 'cat_headband' ? 70 : PET_WALK_BASE_EXP, pets[petId].affection, postDebuffActive)
     const sleepiness = session.item === 'cat_headband' ? 8 : session.item === 'takuya_sunglasses' ? 30 : PET_WALK_BASE_SLEEPINESS
-    const reward = rollWalkReward(session.item, pets[petId].affection, (skillActiveCharacterIds.length > 0 ? skillActiveCharacterIds : activePetIds).includes('whip'))
+    const reward = rollWalkReward(session.item, pets[petId].affection, skillActiveCharacterIds.includes('whip'))
     const nextStats = addExp({
       ...pets[petId],
       sleepiness: clamp(pets[petId].sleepiness + sleepiness),

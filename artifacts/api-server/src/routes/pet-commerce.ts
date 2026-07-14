@@ -355,8 +355,9 @@ function jstTomorrowStartUtc(): Date {
   return new Date(today.getTime() + 24 * 3600 * 1000);
 }
 
-async function shouldGrantTdnReroll(client: any, userId: string): Promise<boolean> {
-  if (!await hasActivePetSkill(userId, "tdn")) return false;
+async function grantTdnReroll(client: any, userId: string, historyId: number, mode: GachaMode, pullType: PullType): Promise<TdnRerollInfo | null> {
+  const tdnSkillActive = await hasActivePetSkill(userId, "tdn");
+  if (!tdnSkillActive) return null;
   const todayStart = jstTodayStartUtc();
   const existing = await client.query(
     `SELECT 1 FROM "petGachaHistory"
@@ -364,11 +365,14 @@ async function shouldGrantTdnReroll(client: any, userId: string): Promise<boolea
      LIMIT 1`,
     [userId, todayStart.toISOString()],
   );
-  return !existing.rowCount && Math.random() < TDN_REROLL_CHANCE;
-}
-
-async function grantTdnReroll(client: any, userId: string, historyId: number, mode: GachaMode, pullType: PullType): Promise<TdnRerollInfo | null> {
-  if (!await shouldGrantTdnReroll(client, userId)) return null;
+  if (existing.rowCount) return null;
+  if (Math.random() >= TDN_REROLL_CHANCE) {
+    await client.query(
+      `UPDATE "petGachaHistory" SET "tdnRerollUsedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
+      [historyId, userId],
+    );
+    return null;
+  }
   const token = randomUUID();
   await client.query(
     `UPDATE "petGachaHistory" SET "tdnRerollToken"=$1,"tdnRerollGrantedAt"=NOW() WHERE id=$2 AND "userId"=$3`,
@@ -565,8 +569,9 @@ router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void>
       VALUES ($1,'free',$2::jsonb,$3,false,0,'pending',$4,0,true,'paid')
     `, [req.userId!, JSON.stringify(applied.results), applied.totalPoints, wasGuaranteed]);
     const newPoints = await getCurrentPoints(client, req.userId!);
+    const tdnReroll = await grantTdnReroll(client, req.userId!, Number(history.rows[0].id), "paid", "single");
     await client.query("COMMIT");
-    res.json({ ...applied, costPoints: 0, costInmu: 0, txId: null, newPoints, paidPity: pity, historyId: history.rows[0].id, wasGuaranteed });
+    res.json({ ...applied, costPoints: 0, costInmu: 0, txId: null, newPoints, paidPity: pity, historyId: history.rows[0].id, wasGuaranteed, tdnReroll });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetCommerce] paid free gacha", error);

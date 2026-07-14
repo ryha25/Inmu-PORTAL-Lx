@@ -15,11 +15,11 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
   try {
     await ensurePetStateTable();
     const [ownership, saved] = await Promise.all([
-      pool.query(`SELECT 1 FROM "userPetCharacters" WHERE "userId"=$1 AND "characterId"=$2 LIMIT 1`, [userId, characterId]),
+      pool.query(`SELECT "characterId" FROM "userPetCharacters" WHERE "userId"=$1`, [userId]),
       pool.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 LIMIT 1`, [userId]),
     ]);
     const state = saved.rows[0]?.state ?? {};
-    const normalizeId = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/_/g, "-");
+    const normalizeId = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/_/g, "-").replace(/^character-/, "");
     const targetId = normalizeId(characterId);
     const statePetId = Object.keys(state?.pets ?? {}).find(id => normalizeId(id) === targetId) ?? characterId;
     const level = Number(state?.pets?.[statePetId]?.level ?? 1);
@@ -27,13 +27,13 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
     const rawSkillActiveIds: unknown[] = Array.isArray(state?.skillActiveCharacterIds)
       ? state.skillActiveCharacterIds
       : legacySingle != null ? [legacySingle] : [];
-    const activePetIds: unknown[] = Array.isArray(state?.activePetIds) ? state.activePetIds : [];
-    const skillActiveCharacterIds = (rawSkillActiveIds.length > 0 ? rawSkillActiveIds : activePetIds).map(normalizeId);
+    const ownedCharacterIds = ownership.rows.map(row => normalizeId(row.characterId));
+    const skillActiveCharacterIds = rawSkillActiveIds.slice(0, 3).map(normalizeId);
     // Ownership is authoritative. PET saves contain default stats for characters the
     // user does not own, so character-state presence must never unlock a skill.
     // A unique skill is only active for up to 3 characters explicitly set via the
     // "固有スキル発動" selector, independent of which training slots are occupied.
-    return Boolean(ownership.rowCount) && skillActiveCharacterIds.includes(targetId) && level >= Math.max(1, minLevel);
+    return ownedCharacterIds.includes(targetId) && skillActiveCharacterIds.includes(targetId) && level >= Math.max(1, minLevel);
   } catch (error) {
     console.error("[PetSkills] lookup failed", { userId, characterId, error });
     return false;
