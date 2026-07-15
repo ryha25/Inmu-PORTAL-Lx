@@ -1,21 +1,20 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { systemSettingsTable } from "@workspace/db/schema";
+import { notificationsTable, systemSettingsTable, userTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
-// 管理画面に表示・編集する設定（新仕様のみ）
 const DEFAULTS: Record<string, { value: string; description: string }> = {
   normal_daily_purchase_limit: { value: "300000",  description: "通常日の1日申請上限（INMU）" },
   event_daily_purchase_limit:  { value: "500000",  description: "イベント日の1日申請上限（INMU）" },
   event_mode_enabled:          { value: "false",   description: "イベント申請モード（ON/OFF）" },
   event_start_date:            { value: "",        description: "イベント対象開始日（YYYY-MM-DD）" },
   event_end_date:              { value: "",        description: "イベント対象終了日（YYYY-MM-DD）" },
-  reward_level_inmu:           { value: "30000",   description: "配布キャラ Lv.15 報酬INMU（価格連動 報酬計算機）" },
-  reward_gacha_lv20_inmu:      { value: "50000",   description: "ガチャキャラ Lv.20 報酬INMU（価格連動 報酬計算機）" },
-  reward_gacha_lv30_inmu:      { value: "250000",  description: "ガチャキャラ Lv.30 報酬INMU（価格連動 報酬計算機）" },
+  reward_level_inmu:           { value: "30000",   description: "配布キャラ Lv.15 報酬INMU（価格連動報酬計算機）" },
+  reward_gacha_lv20_inmu:      { value: "50000",   description: "ガチャキャラ Lv.20 報酬INMU（価格連動報酬計算機）" },
+  reward_gacha_lv30_inmu:      { value: "250000",  description: "ガチャキャラ Lv.30 報酬INMU（価格連動報酬計算機）" },
   reward_nyarushian_lv20_inmu: { value: "50000",   description: "ニャルシアン Lv.20 報酬INMU（未保存時は共通設定を使用）" },
   reward_nyarushian_lv30_inmu: { value: "250000",  description: "ニャルシアン Lv.30 報酬INMU（未保存時は共通設定を使用）" },
   reward_takuya_lv20_inmu:     { value: "50000",   description: "拓也 Lv.20 報酬INMU（未保存時は共通設定を使用）" },
@@ -28,45 +27,25 @@ const DEFAULTS: Record<string, { value: string; description: string }> = {
   reward_tdn_lv30_inmu:        { value: "250000",  description: "TDN Lv.30 報酬INMU（未保存時は共通設定を使用）" },
   reward_whip_lv20_inmu:       { value: "50000",   description: "ホイップ Lv.20 報酬INMU（未保存時は共通設定を使用）" },
   reward_whip_lv30_inmu:       { value: "250000",  description: "ホイップ Lv.30 報酬INMU（未保存時は共通設定を使用）" },
-  gacha_paid_single_inmu:      { value: "10000",   description: "ガチャ関連INMU価格（有償単発）" },
-  gacha_paid_eleven_inmu:      { value: "100000",  description: "ガチャ関連INMU価格（有償11連）" },
+  gacha_paid_single_inmu:      { value: "10000",   description: "有償ガチャ1連INMU価格" },
+  gacha_paid_eleven_inmu:      { value: "100000",  description: "有償ガチャ11連INMU価格" },
   slot_unlock_2_inmu:          { value: "1000000", description: "スロット解放INMU価格（2枠目）" },
   slot_unlock_3_inmu:          { value: "2000000", description: "スロット解放INMU価格（3枠目）" },
-  normal_rebate_rate:          { value: "0",       description: "通常日の購入申請 基本還元率（%）" },
-  event_rebate_rate:           { value: "0",       description: "イベント日の購入申請 基本還元率（%）" },
+  normal_rebate_rate:          { value: "0",       description: "通常日の購入申請基本還元率（%）" },
+  event_rebate_rate:           { value: "0",       description: "イベント日の購入申請基本還元率（%）" },
+  pet_gacha_event_name:        { value: "7月17日 新ガチャ", description: "PET gacha event name" },
+  pet_gacha_event_start_at:    { value: "2026-07-17T12:00:00+09:00", description: "PET gacha event start datetime" },
+  pet_gacha_event_end_at:      { value: "", description: "PET gacha event end datetime" },
+  pet_gacha_event_banners:     { value: "{\"points\":[\"asset:20260717-points-main\",\"asset:20260717-chinge\",\"asset:20260717-tdn\",\"asset:20260717-whip\"],\"paid\":[\"asset:20260717-inmu-main\",\"asset:20260717-chinge\",\"asset:20260717-tdn\",\"asset:20260717-whip\"]}", description: "PET gacha banner JSON" },
+  pet_gacha_event_points_prizes: { value: "[{\"id\":\"pts100\",\"label\":\"100pt\",\"type\":\"points\",\"amount\":100,\"weight\":50000},{\"id\":\"pts300\",\"label\":\"300pt\",\"type\":\"points\",\"amount\":300,\"weight\":30000},{\"id\":\"pts500\",\"label\":\"500pt\",\"type\":\"points\",\"amount\":500,\"weight\":5000},{\"id\":\"pts1000\",\"label\":\"1,000pt\",\"type\":\"points\",\"amount\":1000,\"weight\":3000},{\"id\":\"pts5000\",\"label\":\"5,000pt\",\"type\":\"points\",\"amount\":5000,\"weight\":1170},{\"id\":\"inmu10k\",\"label\":\"10,000 INMU\",\"type\":\"inmu\",\"amount\":10000,\"weight\":1790},{\"id\":\"premium-food\",\"label\":\"高級ごはん\",\"type\":\"premium_food\",\"amount\":1,\"weight\":4490},{\"id\":\"sleep-tea\",\"label\":\"アイスティー（睡眠薬入り）\",\"type\":\"sleep_tea\",\"amount\":1,\"weight\":4050}]", description: "Point gacha prize JSON except character pools" },
+  pet_gacha_event_paid_prizes: { value: "[{\"id\":\"pts1000\",\"label\":\"1,000pt\",\"type\":\"points\",\"amount\":1000,\"weight\":60000},{\"id\":\"pts3000\",\"label\":\"3,000pt\",\"type\":\"points\",\"amount\":3000,\"weight\":20000},{\"id\":\"pts5000\",\"label\":\"5,000pt\",\"type\":\"points\",\"amount\":5000,\"weight\":7000},{\"id\":\"pts10000\",\"label\":\"10,000pt\",\"type\":\"points\",\"amount\":10000,\"weight\":2000},{\"id\":\"premium-food\",\"label\":\"高級ごはん\",\"type\":\"premium_food\",\"amount\":1,\"weight\":4000},{\"id\":\"sleep-tea\",\"label\":\"アイスティー（睡眠薬入り）\",\"type\":\"sleep_tea\",\"amount\":1,\"weight\":5300}]", description: "INMU gacha prize JSON except character pools" },
+  pet_gacha_event_points_character_pools: { value: "[{\"id\":\"new-character\",\"label\":\"今回のキャラ（3種）\",\"weight\":300,\"characters\":[\"chinge\",\"tdn\",\"whip\"]},{\"id\":\"legacy-character\",\"label\":\"前回キャラ（その他）\",\"weight\":200,\"characters\":[\"nyarushian\",\"takuya\",\"leon\"]}]", description: "Point gacha new/legacy character pool JSON" },
+  pet_gacha_event_paid_character_pools: { value: "[{\"id\":\"new-character\",\"label\":\"今回のキャラ（3種）\",\"weight\":1200,\"characters\":[\"chinge\",\"tdn\",\"whip\"]},{\"id\":\"legacy-character\",\"label\":\"前回キャラ\",\"weight\":500,\"characters\":[\"nyarushian\",\"takuya\",\"leon\"]}]", description: "INMU gacha new/legacy character pool JSON" },
+  pet_gacha_event_pity_policy: { value: "carry_over", description: "Paid gacha pity policy" },
 };
 
-// DBに残っているが表示・編集しない旧設定キー
 const HIDDEN_KEYS = new Set(["purchase_request_limit"]);
 
-// ── 管理者: 全設定一覧 ──
-router.get("/admin/system-settings", requireAdmin, async (_req, res): Promise<void> => {
-  try {
-    const rows = await db.select().from(systemSettingsTable);
-    const map = new Map(rows.map(r => [r.key, r]));
-
-    // DEFAULTS に無いキーは DEFAULTS の初期値で補完
-    for (const [key, def] of Object.entries(DEFAULTS)) {
-      if (!map.has(key)) {
-        map.set(key, { key, value: def.value, description: def.description, updatedAt: new Date() });
-      }
-    }
-
-    // 定義順で返す（HIDDEN_KEYS は除外）
-    const ordered = Object.keys(DEFAULTS)
-      .filter(k => map.has(k) && !HIDDEN_KEYS.has(k))
-      .map(k => map.get(k)!);
-
-    // DEFAULTS以外の追加設定（HIDDEN_KEYSを除く）
-    const extra = [...map.values()].filter(r => !DEFAULTS[r.key] && !HIDDEN_KEYS.has(r.key));
-
-    res.json([...ordered, ...extra]);
-  } catch {
-    res.status(500).json({ error: "Internal error" });
-  }
-});
-
-// ── 一般ユーザー: ガチャ・スロット解放の価格のみ公開（認証不要） ──
 const PUBLIC_PRICE_KEYS = [
   "gacha_paid_single_inmu",
   "gacha_paid_eleven_inmu",
@@ -89,16 +68,78 @@ const PUBLIC_PRICE_KEYS = [
   "reward_whip_lv30_inmu",
 ] as const;
 
+const PRICE_SETTING_LABELS: Record<(typeof PUBLIC_PRICE_KEYS)[number], string> = {
+  gacha_paid_single_inmu: "有償ガチャ1連価格",
+  gacha_paid_eleven_inmu: "有償ガチャ11連価格",
+  slot_unlock_2_inmu: "PETスロット2枠目解放価格",
+  slot_unlock_3_inmu: "PETスロット3枠目解放価格",
+  reward_level_inmu: "INMUくんLv.15報酬",
+  reward_gacha_lv20_inmu: "ガチャキャラLv.20報酬",
+  reward_gacha_lv30_inmu: "ガチャキャラLv.30報酬",
+  reward_nyarushian_lv20_inmu: "ニャルシアンLv.20報酬",
+  reward_nyarushian_lv30_inmu: "ニャルシアンLv.30報酬",
+  reward_takuya_lv20_inmu: "拓也Lv.20報酬",
+  reward_takuya_lv30_inmu: "拓也Lv.30報酬",
+  reward_leon_lv20_inmu: "レオンLv.20報酬",
+  reward_leon_lv30_inmu: "レオンLv.30報酬",
+  reward_chinge_lv20_inmu: "チンゲLv.20報酬",
+  reward_chinge_lv30_inmu: "チンゲLv.30報酬",
+  reward_tdn_lv20_inmu: "TDNLv.20報酬",
+  reward_tdn_lv30_inmu: "TDNLv.30報酬",
+  reward_whip_lv20_inmu: "ホイップLv.20報酬",
+  reward_whip_lv30_inmu: "ホイップLv.30報酬",
+};
+
+function isPublicPriceKey(key: string): key is (typeof PUBLIC_PRICE_KEYS)[number] {
+  return (PUBLIC_PRICE_KEYS as readonly string[]).includes(key);
+}
+
+async function notifyAllUsers(type: string, title: string, message: string) {
+  const users = await db.select({ id: userTable.id }).from(userTable);
+  if (users.length === 0) return;
+
+  await db.insert(notificationsTable).values(users.map((user) => ({
+    userId: user.id,
+    type,
+    title,
+    message,
+  })));
+}
+
+router.get("/admin/system-settings", requireAdmin, async (_req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(systemSettingsTable);
+    const map = new Map(rows.map((row) => [row.key, row]));
+
+    for (const [key, def] of Object.entries(DEFAULTS)) {
+      if (!map.has(key)) {
+        map.set(key, { key, value: def.value, description: def.description, updatedAt: new Date() });
+      }
+    }
+
+    const ordered = Object.keys(DEFAULTS)
+      .filter((key) => map.has(key) && !HIDDEN_KEYS.has(key))
+      .map((key) => map.get(key)!);
+    const extra = [...map.values()].filter((row) => !DEFAULTS[row.key] && !HIDDEN_KEYS.has(row.key));
+
+    res.json([...ordered, ...extra]);
+  } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 router.get("/pet-prices", async (_req, res): Promise<void> => {
   try {
     const rows = await db.select().from(systemSettingsTable);
-    const map = new Map(rows.map(r => [r.key, r.value]));
+    const map = new Map(rows.map((row) => [row.key, row.value]));
     const prices: Record<string, number> = {};
+
     for (const key of PUBLIC_PRICE_KEYS) {
       const raw = map.get(key) ?? DEFAULTS[key].value;
-      const n = Number(raw);
-      prices[key] = Number.isFinite(n) ? n : Number(DEFAULTS[key].value);
+      const value = Number(raw);
+      prices[key] = Number.isFinite(value) ? value : Number(DEFAULTS[key].value);
     }
+
     res.json(prices);
   } catch {
     const fallback: Record<string, number> = {};
@@ -107,7 +148,6 @@ router.get("/pet-prices", async (_req, res): Promise<void> => {
   }
 });
 
-// ── 管理者: 設定を更新（upsert） ──
 router.put("/admin/system-settings/:key", requireAdmin, async (req, res): Promise<void> => {
   const { key } = req.params;
   const { value, description } = req.body as { value?: string; description?: string };
@@ -116,9 +156,16 @@ router.put("/admin/system-settings/:key", requireAdmin, async (req, res): Promis
     res.status(400).json({ error: "value は必須です" });
     return;
   }
+
   const strVal = String(value).trim();
 
   try {
+    const before = await db
+      .select({ value: systemSettingsTable.value })
+      .from(systemSettingsTable)
+      .where(eq(systemSettingsTable.key, key))
+      .then((rows) => rows[0]?.value ?? DEFAULTS[key]?.value ?? null);
+
     await db
       .insert(systemSettingsTable)
       .values({
@@ -135,6 +182,14 @@ router.put("/admin/system-settings/:key", requireAdmin, async (req, res): Promis
           updatedAt: new Date(),
         },
       });
+
+    if (isPublicPriceKey(key) && before !== strVal) {
+      const title = key.startsWith("gacha_") ? "ガチャ設定が更新されました" : "価格設定が更新されました";
+      const label = PRICE_SETTING_LABELS[key];
+      const amount = Number(strVal);
+      const valueLabel = Number.isFinite(amount) ? `${amount.toLocaleString()} INMU` : strVal;
+      await notifyAllUsers("price_change", title, `${label} が ${valueLabel} に変更されました`);
+    }
 
     res.json({ ok: true, key, value: strVal });
   } catch {

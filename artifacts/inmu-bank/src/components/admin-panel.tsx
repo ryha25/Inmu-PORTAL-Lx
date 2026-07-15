@@ -219,10 +219,19 @@ const SYSTEM_SETTING_PRESETS: Record<string, string[]> = {
   event_rebate_rate:  ['0', '5', '10', '15'],
 }
 
-const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date'> = {
+const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date' | 'text' | 'json'> = {
   event_mode_enabled: 'boolean',
   event_start_date:   'date',
   event_end_date:     'date',
+  pet_gacha_event_name: 'text',
+  pet_gacha_event_start_at: 'text',
+  pet_gacha_event_end_at: 'text',
+  pet_gacha_event_banners: 'json',
+  pet_gacha_event_points_prizes: 'json',
+  pet_gacha_event_paid_prizes: 'json',
+  pet_gacha_event_points_character_pools: 'json',
+  pet_gacha_event_paid_character_pools: 'json',
+  pet_gacha_event_pity_policy: 'text',
 }
 
 const REWARD_CALC_KEYS: Array<{ key: string; label: string }> = [
@@ -2306,12 +2315,23 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                           <Input type="date" value={settingEditValue}
                             onChange={e => setSettingEditValue(e.target.value)}
                             className="min-h-9" />
+                        ) : SYSTEM_SETTING_TYPE[s.key] === 'json' ? (
+                          <textarea
+                            value={settingEditValue}
+                            onChange={e => setSettingEditValue(e.target.value)}
+                            rows={5}
+                            className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        ) : SYSTEM_SETTING_TYPE[s.key] === 'text' ? (
+                          <Input type="text" value={settingEditValue}
+                            onChange={e => setSettingEditValue(e.target.value)}
+                            placeholder="新しい値" className="min-h-9" />
                         ) : (
                           <Input type="number" value={settingEditValue}
                             onChange={e => setSettingEditValue(e.target.value)}
                             placeholder="新しい値" className="min-h-9" />
                         )}
-                        {presets && SYSTEM_SETTING_TYPE[s.key] !== 'boolean' && SYSTEM_SETTING_TYPE[s.key] !== 'date' && (
+                        {presets && SYSTEM_SETTING_TYPE[s.key] !== 'boolean' && SYSTEM_SETTING_TYPE[s.key] !== 'date' && SYSTEM_SETTING_TYPE[s.key] !== 'json' && SYSTEM_SETTING_TYPE[s.key] !== 'text' && (
                           <div className="flex flex-wrap gap-1.5">
                             {presets.map(p => (
                               <button key={p} type="button" onClick={() => setSettingEditValue(p)}

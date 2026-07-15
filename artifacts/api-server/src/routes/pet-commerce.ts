@@ -16,20 +16,44 @@ const DUPLICATE_CHARACTER_SLEEP_TEA = 3;
 const TDN_REROLL_CHANCE = 0.3;
 const TDN_REROLL_GUARANTEE_PULLS = 50;
 const TDN_REROLL_DAILY_LIMIT = 3;
+const PAID_GACHA_PITY_PULLS = 30;
+const EVENT_PITY_NEW_CHARACTER_BOOST = 4;
+const GACHA_EVENT_SETTING_PREFIX = "pet_gacha_event_";
+const DEFAULT_EVENT_START_JST = "2026-07-17T12:00:00+09:00";
 
 const CHARACTERS = [
-  { id: "nyarushian", name: "ニャルシアン" },
-  { id: "takuya", name: "拓也" },
-  { id: "leon", name: "レオン" },
+  { id: "nyarushian", name: "ニャルシアン", release: "legacy" },
+  { id: "takuya", name: "拓也", release: "legacy" },
+  { id: "leon", name: "レオン", release: "legacy" },
+  { id: "chinge", name: "チンゲ", release: "20260717" },
+  { id: "tdn", name: "TDN", release: "20260717" },
+  { id: "whip", name: "ホイップ", release: "20260717" },
 ] as const;
 
 type PullType = "single" | "multi" | "eleven";
 type GachaMode = "points" | "paid";
 type TdnRerollInfo = { token: string; mode: GachaMode; pullType: PullType; expiresAt: string };
+type PrizeType = "points" | "inmu" | "premium_food" | "sleep_tea" | "character";
+type PrizeSpec = { id: string; label: string; type: PrizeType; amount: number; weight: number; characterId?: string };
+type CharacterPoolSpec = { id: "new-character" | "legacy-character"; label: string; weight: number; characters: string[] };
+type GachaPoolConfig = {
+  banners: string[];
+  prizes: PrizeSpec[];
+  characterPools: CharacterPoolSpec[];
+  rates: Array<{ id: string; label: string; rate: string }>;
+};
+type GachaEventConfig = {
+  active: boolean;
+  name: string;
+  startsAt: string;
+  endsAt: string | null;
+  serverTime: string;
+  modes: Record<GachaMode, GachaPoolConfig>;
+};
 type PetGachaPrize = {
   prizeId: string;
   label: string;
-  type: "points" | "inmu" | "premium_food" | "sleep_tea" | "character";
+  type: PrizeType;
   amount: number;
   characterId?: string;
   isNewCharacter?: boolean;
@@ -45,7 +69,7 @@ const PAID_PRIZES = [
   { id: "pts10000", label: "10,000ポイント", type: "points" as const, amount: 10_000, weight: 200 },
   { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 400 },
   { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 340 },
-  ...CHARACTERS.map(character => ({
+  ...CHARACTERS.filter(character => character.release === "legacy").map(character => ({
     id: `character-${character.id}`,
     label: character.name,
     type: "character" as const,
@@ -54,6 +78,50 @@ const PAID_PRIZES = [
     weight: 120,
   })),
 ];
+
+const LEGACY_CHARACTER_IDS = ["nyarushian", "takuya", "leon"];
+const JULY_17_CHARACTER_IDS = ["chinge", "tdn", "whip"];
+const CHARACTER_BY_ID = new Map(CHARACTERS.map(character => [character.id, character]));
+
+const DEFAULT_GACHA_EVENT_CONFIG = {
+  name: "7月17日 新ガチャ",
+  startsAt: DEFAULT_EVENT_START_JST,
+  endsAt: "",
+  banners: {
+    points: ["asset:20260717-points-main", "asset:20260717-chinge", "asset:20260717-tdn", "asset:20260717-whip"],
+    paid: ["asset:20260717-inmu-main", "asset:20260717-chinge", "asset:20260717-tdn", "asset:20260717-whip"],
+  },
+  characterPools: {
+    points: [
+      { id: "new-character", label: "今回のキャラ（3種）", weight: 300, characters: JULY_17_CHARACTER_IDS },
+      { id: "legacy-character", label: "前回キャラ（その他）", weight: 200, characters: LEGACY_CHARACTER_IDS },
+    ],
+    paid: [
+      { id: "new-character", label: "今回のキャラ（3種）", weight: 1200, characters: JULY_17_CHARACTER_IDS },
+      { id: "legacy-character", label: "前回キャラ", weight: 500, characters: LEGACY_CHARACTER_IDS },
+    ],
+  },
+  prizes: {
+    points: [
+      { id: "pts100", label: "100pt", type: "points", amount: 100, weight: 50_000 },
+      { id: "pts300", label: "300pt", type: "points", amount: 300, weight: 30_000 },
+      { id: "pts500", label: "500pt", type: "points", amount: 500, weight: 5_000 },
+      { id: "pts1000", label: "1,000pt", type: "points", amount: 1_000, weight: 3_000 },
+      { id: "pts5000", label: "5,000pt", type: "points", amount: 5_000, weight: 1_170 },
+      { id: "inmu10k", label: "10,000 INMU", type: "inmu", amount: 10_000, weight: 1_790 },
+      { id: "premium-food", label: "高級ごはん", type: "premium_food", amount: 1, weight: 4_490 },
+      { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea", amount: 1, weight: 4_050 },
+    ],
+    paid: [
+      { id: "pts1000", label: "1,000pt", type: "points", amount: 1_000, weight: 60_000 },
+      { id: "pts3000", label: "3,000pt", type: "points", amount: 3_000, weight: 20_000 },
+      { id: "pts5000", label: "5,000pt", type: "points", amount: 5_000, weight: 7_000 },
+      { id: "pts10000", label: "10,000pt", type: "points", amount: 10_000, weight: 2_000 },
+      { id: "premium-food", label: "高級ごはん", type: "premium_food", amount: 1, weight: 4_000 },
+      { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea", amount: 1, weight: 5_300 },
+    ],
+  },
+} as const;
 
 const POINT_GUARANTEED_EFFECT_RATE = 1 / 514;
 
@@ -68,7 +136,7 @@ const POINT_PRIZES = [
   { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 1_710 },
   { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 7_684 },
   { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 3_420 },
-  ...CHARACTERS.map(character => ({
+  ...CHARACTERS.filter(character => character.release === "legacy").map(character => ({
     id: `character-${character.id}`,
     label: character.name,
     type: "character" as const,
@@ -154,8 +222,173 @@ function weightedRoll(table: typeof PAID_PRIZES | typeof POINT_PRIZES) {
   return table[0];
 }
 
+function weightedRollSpecs<T extends { weight: number }>(table: readonly T[]): T {
+  const total = table.reduce((sum, prize) => sum + Math.max(0, Number(prize.weight) || 0), 0);
+  if (total !== 100_000) {
+    throw new Error(`ガチャ排出率の合計が100%ではありません: ${(total / 1000).toFixed(3)}%`);
+  }
+  let cursor = Math.floor(Math.random() * total);
+  for (const prize of table) {
+    const weight = Math.max(0, Number(prize.weight) || 0);
+    if (cursor < weight) return prize;
+    cursor -= weight;
+  }
+  return table[0];
+}
+
+function weightedRollByWeight<T extends { weight: number }>(table: readonly T[]): T {
+  const total = table.reduce((sum, prize) => sum + Math.max(0, Number(prize.weight) || 0), 0);
+  if (total <= 0) return table[0];
+  let cursor = Math.floor(Math.random() * total);
+  for (const prize of table) {
+    const weight = Math.max(0, Number(prize.weight) || 0);
+    if (cursor < weight) return prize;
+    cursor -= weight;
+  }
+  return table[0];
+}
+
+function weightToRate(weight: number): string {
+  const rate = weight / 1000;
+  return `${Number.isInteger(rate) ? rate.toFixed(0) : rate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}%`;
+}
+
+function parseJsonSetting<T>(raw: string | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function getSystemSettingString(key: string, fallback: string): Promise<string> {
+  try {
+    const { rows } = await pool.query(`SELECT value FROM "systemSettings" WHERE key=$1`, [key]);
+    return rows.length ? String(rows[0].value ?? fallback) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizePrizeSpec(prize: any): PrizeSpec | null {
+  const id = String(prize?.id ?? "").trim();
+  const type = String(prize?.type ?? "").trim() as PrizeType;
+  const label = String(prize?.label ?? id).trim();
+  const amount = Math.floor(Number(prize?.amount ?? 0));
+  const weight = Math.floor(Number(prize?.weight ?? 0));
+  if (!id || !["points", "inmu", "premium_food", "sleep_tea"].includes(type) || amount < 0 || weight < 0) return null;
+  return { id, label, type, amount, weight };
+}
+
+function normalizeCharacterPool(pool: any): CharacterPoolSpec | null {
+  const id = pool?.id === "legacy-character" ? "legacy-character" : "new-character";
+  const label = String(pool?.label ?? (id === "new-character" ? "今回のキャラ" : "前回キャラ")).trim();
+  const weight = Math.floor(Number(pool?.weight ?? 0));
+  const characters = Array.isArray(pool?.characters)
+    ? pool.characters.map((value: unknown) => String(value).trim()).filter(id => CHARACTER_BY_ID.has(id))
+    : [];
+  if (weight < 0 || characters.length === 0) return null;
+  return { id, label, weight, characters };
+}
+
+function buildRates(prizes: PrizeSpec[], characterPools: CharacterPoolSpec[]) {
+  return [
+    ...prizes.map(prize => ({ id: prize.id, label: prize.label, rate: weightToRate(prize.weight) })),
+    ...characterPools.map(pool => ({ id: pool.id, label: pool.label, rate: weightToRate(pool.weight) })),
+  ];
+}
+
+function buildPool(prizes: PrizeSpec[], characterPools: CharacterPoolSpec[]): GachaPoolConfig {
+  const total = [...prizes, ...characterPools].reduce((sum, item) => sum + item.weight, 0);
+  if (total !== 100_000) {
+    throw new Error(`ガチャ排出率の合計が100%ではありません: ${(total / 1000).toFixed(3)}%`);
+  }
+  return { banners: [], prizes, characterPools, rates: buildRates(prizes, characterPools) };
+}
+
+async function getGachaEventConfig(now = new Date()): Promise<GachaEventConfig> {
+  const [name, startsAtRaw, endsAtRaw, bannersRaw, pointPrizesRaw, paidPrizesRaw, pointPoolsRaw, paidPoolsRaw] = await Promise.all([
+    getSystemSettingString(`${GACHA_EVENT_SETTING_PREFIX}name`, DEFAULT_GACHA_EVENT_CONFIG.name),
+    getSystemSettingString(`${GACHA_EVENT_SETTING_PREFIX}start_at`, DEFAULT_GACHA_EVENT_CONFIG.startsAt),
+    getSystemSettingString(`${GACHA_EVENT_SETTING_PREFIX}end_at`, DEFAULT_GACHA_EVENT_CONFIG.endsAt),
+    getSystemSettingString(`${GACHA_EVENT_SETTING_PREFIX}banners`, JSON.stringify(DEFAULT_GACHA_EVENT_CONFIG.banners)),
+    getSystemSettingString(`${GACHA_EVENT_SETTING_PREFIX}points_prizes`, JSON.stringify(DEFAULT_GACHA_EVENT_CONFIG.prizes.points)),
+    getSystemSettingString(`${GACHA_EVENT_SETTING_PREFIX}paid_prizes`, JSON.stringify(DEFAULT_GACHA_EVENT_CONFIG.prizes.paid)),
+    getSystemSettingString(`${GACHA_EVENT_SETTING_PREFIX}points_character_pools`, JSON.stringify(DEFAULT_GACHA_EVENT_CONFIG.characterPools.points)),
+    getSystemSettingString(`${GACHA_EVENT_SETTING_PREFIX}paid_character_pools`, JSON.stringify(DEFAULT_GACHA_EVENT_CONFIG.characterPools.paid)),
+  ]);
+  const startsAt = new Date(startsAtRaw);
+  const endsAt = endsAtRaw ? new Date(endsAtRaw) : null;
+  const active = Number.isFinite(startsAt.getTime()) && now >= startsAt && (!endsAt || !Number.isFinite(endsAt.getTime()) || now < endsAt);
+  if (!active) {
+    const points = buildPool([...DEFAULT_GACHA_EVENT_CONFIG.prizes.points], [...DEFAULT_GACHA_EVENT_CONFIG.characterPools.points]);
+    const paid = buildPool([...DEFAULT_GACHA_EVENT_CONFIG.prizes.paid], [...DEFAULT_GACHA_EVENT_CONFIG.characterPools.paid]);
+    points.banners = [...DEFAULT_GACHA_EVENT_CONFIG.banners.points];
+    paid.banners = [...DEFAULT_GACHA_EVENT_CONFIG.banners.paid];
+    return {
+      active: false,
+      name,
+      startsAt: Number.isFinite(startsAt.getTime()) ? startsAt.toISOString() : new Date(DEFAULT_EVENT_START_JST).toISOString(),
+      endsAt: endsAt && Number.isFinite(endsAt.getTime()) ? endsAt.toISOString() : null,
+      serverTime: now.toISOString(),
+      modes: { points, paid },
+    };
+  }
+  const banners = parseJsonSetting(bannersRaw, DEFAULT_GACHA_EVENT_CONFIG.banners);
+  const pointPrizes = parseJsonSetting<any[]>(pointPrizesRaw, [...DEFAULT_GACHA_EVENT_CONFIG.prizes.points]).map(normalizePrizeSpec).filter(Boolean) as PrizeSpec[];
+  const paidPrizes = parseJsonSetting<any[]>(paidPrizesRaw, [...DEFAULT_GACHA_EVENT_CONFIG.prizes.paid]).map(normalizePrizeSpec).filter(Boolean) as PrizeSpec[];
+  const pointPools = parseJsonSetting<any[]>(pointPoolsRaw, [...DEFAULT_GACHA_EVENT_CONFIG.characterPools.points]).map(normalizeCharacterPool).filter(Boolean) as CharacterPoolSpec[];
+  const paidPools = parseJsonSetting<any[]>(paidPoolsRaw, [...DEFAULT_GACHA_EVENT_CONFIG.characterPools.paid]).map(normalizeCharacterPool).filter(Boolean) as CharacterPoolSpec[];
+  const points = buildPool(pointPrizes, pointPools);
+  const paid = buildPool(paidPrizes, paidPools);
+  points.banners = Array.isArray((banners as any).points) ? (banners as any).points.map(String) : [...DEFAULT_GACHA_EVENT_CONFIG.banners.points];
+  paid.banners = Array.isArray((banners as any).paid) ? (banners as any).paid.map(String) : [...DEFAULT_GACHA_EVENT_CONFIG.banners.paid];
+  return {
+    active,
+    name,
+    startsAt: Number.isFinite(startsAt.getTime()) ? startsAt.toISOString() : new Date(DEFAULT_EVENT_START_JST).toISOString(),
+    endsAt: endsAt && Number.isFinite(endsAt.getTime()) ? endsAt.toISOString() : null,
+    serverTime: now.toISOString(),
+    modes: { points, paid },
+  };
+}
+
+function resolveConfiguredPrize(prize: PrizeSpec | CharacterPoolSpec): PrizeSpec {
+  if ("characters" in prize) {
+    const characterId = prize.characters[Math.floor(Math.random() * prize.characters.length)];
+    const character = CHARACTER_BY_ID.get(characterId);
+    if (!character) throw new Error("ガチャキャラクター設定が不正です");
+    return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id, weight: prize.weight };
+  }
+  return prize;
+}
+
 function randomCharacter() {
-  return CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+  const legacyCharacters = CHARACTERS.filter(character => character.release === "legacy");
+  return legacyCharacters[Math.floor(Math.random() * legacyCharacters.length)];
+}
+
+async function rollPetGachaPrize(mode: GachaMode, guaranteedCharacter = false) {
+  const config = await getGachaEventConfig();
+  if (config.active) {
+    const pool = config.modes[mode];
+    if (guaranteedCharacter) {
+      const pityPools = pool.characterPools.map(characterPool => ({
+        ...characterPool,
+        weight: characterPool.id === "new-character" ? characterPool.weight * EVENT_PITY_NEW_CHARACTER_BOOST : characterPool.weight,
+      }));
+      const selectedPool = weightedRollByWeight(pityPools);
+      return resolveConfiguredPrize(selectedPool);
+    }
+    return resolveConfiguredPrize(weightedRollSpecs([...pool.prizes, ...pool.characterPools]));
+  }
+  if (guaranteedCharacter) {
+    const character = randomCharacter();
+    return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id };
+  }
+  return mode === "paid" ? weightedRoll(PAID_PRIZES) : weightedRoll(POINT_PRIZES);
 }
 
 function wait(ms: number) {
@@ -441,6 +674,16 @@ router.get("/pet-commerce/status", requireAuth, async (req, res): Promise<void> 
   }
 });
 
+router.get("/pet-gacha/config", requireAuth, async (_req, res): Promise<void> => {
+  try {
+    const config = await getGachaEventConfig();
+    res.json(config);
+  } catch (error) {
+    console.error("[PetCommerce] gacha config", error);
+    res.status(500).json({ error: error instanceof Error ? error.message : "ガチャ設定の取得に失敗しました" });
+  }
+});
+
 router.get("/pet-gacha/free-status", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
@@ -495,8 +738,9 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
     const currentPoints = await getCurrentPoints(client, req.userId!);
     if (currentPoints < costPoints) throw new Error("ポイントが不足しています");
     await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"-$1,"updatedAt"=NOW() WHERE "userId"=$2`, [costPoints, req.userId!]);
-    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PET通常ガチャ', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
-    const rolled = Array.from({ length: count }, () => weightedRoll(POINT_PRIZES));
+    await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PETポイントガチャ', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
+    const rolled = [];
+    for (let index = 0; index < count; index += 1) rolled.push(await rollPetGachaPrize("points"));
     const applied = await applyPrizes(client, req.userId!, rolled);
     const history = await client.query(`
       INSERT INTO "petGachaHistory" ("userId","gachaType","pullType","costPoints",results)
@@ -554,9 +798,7 @@ router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
     let pity = Number(state.rows[0]?.paidPity ?? 0);
     const rolled: any[] = [];
     for (let index = 0; index < count; index += 1) {
-      const prize = pity >= 49
-        ? (() => { const character = randomCharacter(); return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id }; })()
-        : weightedRoll(PAID_PRIZES);
+      const prize = await rollPetGachaPrize("paid", pity >= PAID_GACHA_PITY_PULLS - 1);
       rolled.push(prize);
       pity = prize.type === "character" ? 0 : pity + 1;
     }
@@ -576,7 +818,7 @@ router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetCommerce] paid gacha", error);
-    res.status(400).json({ error: error instanceof Error ? error.message : "有償ガチャに失敗しました" });
+    res.status(400).json({ error: error instanceof Error ? error.message : "INMUガチャに失敗しました" });
   } finally {
     client.release();
   }
@@ -596,9 +838,7 @@ router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void>
     if (!recheckState.canDrawPaid) throw new Error("本日の無料ガチャは使用済みです");
     const state = await client.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1 FOR UPDATE`, [req.userId!]);
     let pity = Number(state.rows[0]?.paidPity ?? 0);
-    const prize = pity >= 49
-      ? (() => { const character = randomCharacter(); return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id }; })()
-      : weightedRoll(PAID_PRIZES);
+    const prize = await rollPetGachaPrize("paid", pity >= PAID_GACHA_PITY_PULLS - 1);
     pity = prize.type === "character" ? 0 : pity + 1;
     const applied = await applyPrizes(client, req.userId!, [prize]);
     await client.query(`
@@ -658,11 +898,7 @@ router.post("/pet-gacha/tdn-reroll", requireAuth, async (req, res): Promise<void
     let pity = Number(state?.rows[0]?.paidPity ?? 0);
     const rolled: any[] = [];
     for (let index = 0; index < count; index += 1) {
-      const prize = mode === "paid"
-        ? (pity >= 49
-          ? (() => { const character = randomCharacter(); return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id }; })()
-          : weightedRoll(PAID_PRIZES))
-        : weightedRoll(POINT_PRIZES);
+      const prize = await rollPetGachaPrize(mode, mode === "paid" && pity >= PAID_GACHA_PITY_PULLS - 1);
       rolled.push(prize);
       if (mode === "paid") pity = prize.type === "character" ? 0 : pity + 1;
     }
@@ -737,4 +973,3 @@ router.post("/pet-slots/unlock", requireAuth, async (req, res): Promise<void> =>
 });
 
 export default router;
-

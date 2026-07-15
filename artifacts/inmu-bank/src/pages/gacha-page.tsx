@@ -25,6 +25,11 @@ import takuyaBannerImg from '@assets/gacha-banners/takuya.jpg'
 import nyarushianBannerImg from '@assets/gacha-banners/nyarushian.jpg'
 import leonBannerImg from '@assets/gacha-banners/leon.jpg'
 import paidBannerImg from '@assets/gacha-banners/paid-main.jpg'
+import eventPointsBannerImg from '@assets/gacha-banners/20260717-points-main.jpg'
+import eventInmuBannerImg from '@assets/gacha-banners/20260717-inmu-main.jpg'
+import eventChingeBannerImg from '@assets/gacha-banners/20260717-chinge.jpg'
+import eventTdnBannerImg from '@assets/gacha-banners/20260717-tdn.jpg'
+import eventWhipBannerImg from '@assets/gacha-banners/20260717-whip.jpg'
 
 /* ─── types ─── */
 type Phase = 'idle'|'guaranteed'|'inserting'|'lever'|'space'|'falling'|'opening'|'done'
@@ -36,6 +41,15 @@ type TdnReroll = { token:string; mode:'points'|'paid'; pullType:'single'|'multi'
 type Result = { results:Prize[]; totalPoints:number; hasInmu:boolean; wasGuaranteed:boolean; costPoints:number; costInmu?:number; newPoints:number; txId?:string; paidPity?:number|null; pointMultiplier?:number; tdnReroll?:TdnReroll|null }
 type HistRow = { id:number; pullType:string; isFree:boolean; results:Prize[]; totalPoints:number; hasInmu:boolean; inmuSentStatus:string; txHash:string|null; wasGuaranteed:boolean; costPoints:number; createdAt:string }
 type CommerceHistRow = { id:number; gachaType:'points'|'paid'; pullType:string; costPoints:number; costInmu:number; txId:string|null; results:Prize[]; createdAt:string }
+type GachaRateRow = { id:string; label:string; rate:string }
+type GachaRuntimeConfig = {
+  active:boolean
+  name:string
+  startsAt:string
+  endsAt:string|null
+  serverTime:string
+  modes:Record<'points'|'paid',{ banners:string[]; rates:GachaRateRow[] }>
+}
 
 /* ─── capsule color configs (image 5 reference) ─── */
 const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;label:string}> = {
@@ -141,6 +155,7 @@ const ORBIT_POSITIONS = [
 const PHASE_MS: Partial<Record<Phase,number>> = {
   guaranteed:2600, inserting:1600, lever:1800, space:2300, falling:2200, opening:1800,
 }
+const PAID_GACHA_PITY_PULLS = 30
 const BG_STARS = Array.from({length:28},(_,i)=>({
   x:`${(i*41.7+8)%90}%`,y:`${(i*63.1+5)%90}%`,s:1+(i%4)*.9,dur:2.8+(i%6)*1.1,delay:(i*.6)%7
 }))
@@ -695,27 +710,40 @@ function GachaModeTabs({ mode, onChange, disabled=false }: { mode:'points'|'paid
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,padding:4,margin:'6px auto 2px',width:'min(360px,92%)',border:'1px solid rgba(218,165,32,.35)',borderRadius:8,background:'rgba(3,2,10,.78)'}}>
       {(['points','paid'] as const).map(value => (
         <button key={value} type="button" disabled={disabled} onClick={()=>onChange(value)} style={{height:38,border:0,borderRadius:6,fontWeight:800,fontSize:12,cursor:disabled?'not-allowed':'pointer',color:mode===value?'#160c00':'rgba(255,255,255,.55)',background:mode===value?'linear-gradient(135deg,#ffe277,#d59a00)':'transparent',boxShadow:mode===value?'0 0 18px rgba(255,190,30,.36)':'none'}}>
-          {value==='points'?'通常ガチャ':'有償ガチャ'}
+          {value==='points'?'ポイントガチャ':'INMUガチャ'}
         </button>
       ))}
     </div>
   )
 }
 
-const GACHA_BANNERS = {
+const FALLBACK_GACHA_BANNERS = {
   points: [normalBannerImg, takuyaBannerImg, nyarushianBannerImg, leonBannerImg],
   paid: [paidBannerImg, takuyaBannerImg, nyarushianBannerImg, leonBannerImg],
 } as const
 
-function GachaBannerCarousel({ mode }:{mode:'points'|'paid'}) {
+const GACHA_ASSET_MAP: Record<string, string> = {
+  'asset:20260717-points-main': eventPointsBannerImg,
+  'asset:20260717-inmu-main': eventInmuBannerImg,
+  'asset:20260717-chinge': eventChingeBannerImg,
+  'asset:20260717-tdn': eventTdnBannerImg,
+  'asset:20260717-whip': eventWhipBannerImg,
+}
+
+function resolveBannerSrc(value: string) {
+  return GACHA_ASSET_MAP[value] ?? value
+}
+
+function GachaBannerCarousel({ mode, config }:{mode:'points'|'paid'; config:GachaRuntimeConfig|null}) {
   const scroller = useRef<HTMLDivElement>(null)
   const [active,setActive] = useState(0)
-  const banners = GACHA_BANNERS[mode]
+  const configured = config?.active ? config.modes?.[mode]?.banners?.map(resolveBannerSrc).filter(Boolean) : null
+  const banners = configured?.length ? configured : FALLBACK_GACHA_BANNERS[mode]
 
   useEffect(()=>{
     setActive(0)
     scroller.current?.scrollTo({left:0,behavior:'auto'})
-  },[mode])
+  },[mode, config?.active, banners.join('|')])
 
   const goTo = (index:number) => {
     const next = (index+banners.length)%banners.length
@@ -731,7 +759,7 @@ function GachaBannerCarousel({ mode }:{mode:'points'|'paid'}) {
         if(node.clientWidth)setActive(Math.round(node.scrollLeft/node.clientWidth))
       }} style={{display:'flex',overflowX:'auto',scrollSnapType:'x mandatory',scrollbarWidth:'none',touchAction:'pan-x',borderRadius:8,border:'1px solid rgba(218,165,32,.38)',background:'#030207'}}>
         {banners.map((src,index)=><div key={src} style={{position:'relative',minWidth:'100%',scrollSnapAlign:'center'}}>
-          <img src={src} alt={`${mode==='points'?'通常':'有償'}ガチャ バナー ${index+1}`} draggable={false} style={{display:'block',width:'100%',height:'auto',aspectRatio:'1280 / 850',objectFit:'contain'}}/>
+          <img src={src} alt={`${mode==='points'?'ポイント':'INMU'}ガチャ バナー ${index+1}`} draggable={false} style={{display:'block',width:'100%',height:'auto',aspectRatio:'1280 / 850',objectFit:'contain'}}/>
         </div>)}
       </div>
       <button type="button" aria-label="前のバナー" onClick={()=>goTo(active-1)} style={{position:'absolute',left:6,top:'50%',transform:'translateY(-50%)',width:32,height:42,borderRadius:6,border:'1px solid rgba(255,215,100,.42)',background:'rgba(0,0,0,.62)',color:'#ffe58a',fontSize:22,zIndex:7}}>‹</button>
@@ -741,11 +769,11 @@ function GachaBannerCarousel({ mode }:{mode:'points'|'paid'}) {
   )
 }
 
-function EmissionRateModal({ open, onClose }:{ open:boolean; onClose:()=>void }) {
+function EmissionRateModal({ open, onClose, config }:{ open:boolean; onClose:()=>void; config:GachaRuntimeConfig|null }) {
   const [tab,setTab] = useState<'points'|'paid'>('points')
   useEffect(()=>{ if(open) setTab('points') },[open])
   if(!open) return null
-  const list = tab==='points'?BALLS:PAID_BALLS
+  const list = config?.active ? (config.modes?.[tab]?.rates ?? []) : (tab==='points'?BALLS:PAID_BALLS)
   return (
     <div style={{position:'fixed',inset:0,zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.72)',padding:16}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:420,maxHeight:'82vh',overflow:'hidden',display:'flex',flexDirection:'column',borderRadius:14,border:'1px solid rgba(218,165,32,.5)',background:'linear-gradient(160deg,#120a1e,#08040e)',boxShadow:'0 12px 40px rgba(0,0,0,.6)'}}>
@@ -754,8 +782,8 @@ function EmissionRateModal({ open, onClose }:{ open:boolean; onClose:()=>void })
           <button type="button" onClick={onClose} aria-label="閉じる" style={{background:'none',border:0,color:'rgba(255,255,255,.7)',fontSize:20,cursor:'pointer',lineHeight:1}}>×</button>
         </div>
         <div style={{display:'flex',gap:6,padding:'10px 16px 0'}}>
-          <button type="button" onClick={()=>setTab('points')} style={{flex:1,padding:'8px 0',borderRadius:8,border:tab==='points'?'1px solid rgba(255,215,100,.7)':'1px solid rgba(255,255,255,.15)',background:tab==='points'?'rgba(255,215,100,.15)':'transparent',color:tab==='points'?'#ffe58a':'rgba(255,255,255,.6)',fontWeight:800,fontSize:12,cursor:'pointer'}}>通常ガチャ</button>
-          <button type="button" onClick={()=>setTab('paid')} style={{flex:1,padding:'8px 0',borderRadius:8,border:tab==='paid'?'1px solid rgba(255,215,100,.7)':'1px solid rgba(255,255,255,.15)',background:tab==='paid'?'rgba(255,215,100,.15)':'transparent',color:tab==='paid'?'#ffe58a':'rgba(255,255,255,.6)',fontWeight:800,fontSize:12,cursor:'pointer'}}>有償ガチャ</button>
+          <button type="button" onClick={()=>setTab('points')} style={{flex:1,padding:'8px 0',borderRadius:8,border:tab==='points'?'1px solid rgba(255,215,100,.7)':'1px solid rgba(255,255,255,.15)',background:tab==='points'?'rgba(255,215,100,.15)':'transparent',color:tab==='points'?'#ffe58a':'rgba(255,255,255,.6)',fontWeight:800,fontSize:12,cursor:'pointer'}}>ポイントガチャ</button>
+          <button type="button" onClick={()=>setTab('paid')} style={{flex:1,padding:'8px 0',borderRadius:8,border:tab==='paid'?'1px solid rgba(255,215,100,.7)':'1px solid rgba(255,255,255,.15)',background:tab==='paid'?'rgba(255,215,100,.15)':'transparent',color:tab==='paid'?'#ffe58a':'rgba(255,255,255,.6)',fontWeight:800,fontSize:12,cursor:'pointer'}}>INMUガチャ</button>
         </div>
         <div style={{overflowY:'auto',padding:'12px 16px 16px'}}>
           {list.map(item=>(
@@ -844,7 +872,26 @@ export function GachaPage() {
   const [rateModalOpen,setRateModalOpen] = useState(false)
   const [paidSinglePrice,setPaidSinglePrice] = useState(10000)
   const [paidElevenPrice,setPaidElevenPrice] = useState(100000)
+  const [gachaConfig,setGachaConfig] = useState<GachaRuntimeConfig|null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
+
+  const loadGachaConfig = useCallback(async()=>{
+    try{
+      const r=await fetch('/api/pet-gacha/config',{credentials:'include'})
+      if(!r.ok)return
+      const d=await r.json() as GachaRuntimeConfig
+      setGachaConfig(d)
+    }catch{/**/}
+  },[])
+  useEffect(()=>{void loadGachaConfig()},[loadGachaConfig])
+  useEffect(()=>{
+    if(!gachaConfig || gachaConfig.active)return
+    const startsAt = new Date(gachaConfig.startsAt).getTime()
+    const delay = startsAt - Date.now()
+    if(!Number.isFinite(delay) || delay <= 0)return
+    const timeout = window.setTimeout(()=>{void loadGachaConfig()}, Math.min(delay + 500, 2_147_483_647))
+    return ()=>window.clearTimeout(timeout)
+  },[gachaConfig,loadGachaConfig])
 
   useEffect(()=>{
     (async()=>{
@@ -992,7 +1039,7 @@ export function GachaPage() {
       body:JSON.stringify({txId,pullType}),
     })
     const data=await response.json().catch(()=>({})) as Result&{error?:string}
-    if(!response.ok)throw new Error(data.error??'有償ガチャの確定に失敗しました')
+    if(!response.ok)throw new Error(data.error??'INMUガチャの確定に失敗しました')
     localStorage.removeItem('inmu-pet-paid-gacha-pending')
     const hasCharacter=data.results.some(prize=>prize.type==='character')
     setResult({...data,hasInmu:false,wasGuaranteed:hasCharacter,costPoints:0})
@@ -1042,7 +1089,7 @@ export function GachaPage() {
       localStorage.setItem('inmu-pet-paid-gacha-pending',JSON.stringify({txId,pullType}))
       setPaidStatus('送金を確認しています…')
       await completePaidGacha(txId,pullType)
-    }catch(error){toast.error(error instanceof Error?error.message:'有償ガチャに失敗しました')}
+    }catch(error){toast.error(error instanceof Error?error.message:'INMUガチャに失敗しました')}
     finally{setPaidBusy(false);setPaidStatus('')}
   }
 
@@ -1139,7 +1186,7 @@ export function GachaPage() {
       <PageBg>
         <div style={{display:'flex',flexDirection:'column',minHeight:'100%',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode} disabled={paidBusy}/>
-          <div style={{margin:'6px 12px 0'}}><GachaBannerCarousel mode="paid"/></div>
+          <div style={{margin:'6px 12px 0'}}><GachaBannerCarousel mode="paid" config={gachaConfig}/></div>
           <p style={{margin:'4px 12px 0',fontSize:9,lineHeight:1.4,color:'rgba(255,255,255,.4)',textAlign:'center'}}>※レベル報酬で得られる購入申請還元は最大10%までです。(各キャラ保持で上乗せし最大＋30%効果はあり)次回更新時に誤記変更予定。</p>
           <div style={{margin:'8px 12px 0'}}>
             <button type="button" onClick={()=>setRateModalOpen(true)} style={{width:'100%',padding:'8px 14px',border:'1px solid rgba(218,165,32,.5)',borderRadius:8,background:'rgba(8,4,14,.7)',color:'#e8c65a',fontSize:11,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
@@ -1153,7 +1200,7 @@ export function GachaPage() {
                   <p style={{margin:0,fontSize:14,fontWeight:800,color:paidFreeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{paidFreeLoading?'処理中…': paidFreeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${paidFreeRemaining}回）`}</p>
                   {!paidFreeUsed&&paidFreeSharedRemaining>0&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.5)',marginTop:2}}>うち拓也共通ボーナス残り{paidFreeSharedRemaining}回</p>}
                   {paidFreeUsed&&paidFreeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(paidFreeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
-                  {!paidFreeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで有償ガチャを引けます</p>}
+                  {!paidFreeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしでINMUガチャを引けます</p>}
                 </div>
                 {!paidFreeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
               </div>
@@ -1164,9 +1211,9 @@ export function GachaPage() {
               <InmuBalancePanel balance={inmuBalance} loading={inmuBalanceLoading}/>
             </div>
             <div style={{marginTop:18,width:'min(430px,100%)',padding:16,borderRadius:8,border:'1px solid rgba(218,165,32,.48)',background:'rgba(8,4,14,.82)',boxShadow:'0 14px 45px rgba(0,0,0,.42)'}}>
-              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#f3d97c'}}><span>50連キャラ確定まで</span><strong>{50-paidPity}回</strong></div>
-              <div style={{height:6,marginTop:8,borderRadius:99,background:'rgba(255,255,255,.08)',overflow:'hidden'}}><div style={{height:'100%',width:`${paidPity/50*100}%`,background:'linear-gradient(90deg,#a855f7,#ffd700)',boxShadow:'0 0 12px #d8a900'}}/></div>
-              <p style={{fontSize:10,color:'rgba(255,255,255,.45)',margin:'9px 0 0'}}>50回以内に対象キャラを獲得するとカウントはリセットされます</p>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#f3d97c'}}><span>30連キャラ確定まで</span><strong>{Math.max(0,PAID_GACHA_PITY_PULLS-paidPity)}回</strong></div>
+              <div style={{height:6,marginTop:8,borderRadius:99,background:'rgba(255,255,255,.08)',overflow:'hidden'}}><div style={{height:'100%',width:`${Math.min(100,paidPity/PAID_GACHA_PITY_PULLS*100)}%`,background:'linear-gradient(90deg,#a855f7,#ffd700)',boxShadow:'0 0 12px #d8a900'}}/></div>
+              <p style={{fontSize:10,color:'rgba(255,255,255,.45)',margin:'9px 0 0'}}>30回以内に対象キャラを獲得するとカウントはリセットされます</p>
             </div>
           </div>
           <div style={{padding:'10px 14px'}}>
@@ -1178,14 +1225,14 @@ export function GachaPage() {
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,marginTop:12,color:'rgba(255,255,255,.38)',fontSize:9}}><LockKeyhole style={{width:12}}/>送金成功をサーバーで確認後に抽選します</div>
             <div style={{marginTop:10,border:'1px solid rgba(184,134,11,.35)',borderRadius:8,overflow:'hidden'}}>
-              <p style={{margin:0,padding:'7px 10px',fontSize:11,fontWeight:800,color:'#e8c65a'}}>有償ガチャ履歴</p>
+              <p style={{margin:0,padding:'7px 10px',fontSize:11,fontWeight:800,color:'#e8c65a'}}>INMUガチャ履歴</p>
               {commerceHistory.filter(row=>row.gachaType==='paid').slice(0,3).map(row=><div key={row.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'6px 10px',borderTop:'1px solid rgba(184,134,11,.15)',fontSize:9,color:'rgba(255,255,255,.68)'}}><span>{row.pullType==='eleven'?'11連':'1連'}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.results.map(prize=>prize.label).join(' / ')}</span><span>{new Date(row.createdAt).toLocaleDateString('ja-JP')}</span></div>)}
               {commerceHistory.filter(row=>row.gachaType==='paid').length===0&&<p style={{margin:0,padding:'8px 10px',fontSize:9,color:'rgba(255,255,255,.35)'}}>履歴はありません</p>}
             </div>
           </div>
         </div>
       </PageBg>
-      <EmissionRateModal open={rateModalOpen} onClose={()=>setRateModalOpen(false)}/>
+      <EmissionRateModal open={rateModalOpen} onClose={()=>setRateModalOpen(false)} config={gachaConfig}/>
     </AppShell>
   )
 
@@ -1195,7 +1242,7 @@ export function GachaPage() {
       <PageBg>
         <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflowY:'auto',overflowX:'hidden'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode}/>
-          <div style={{margin:'6px 12px 10px'}}><GachaBannerCarousel mode="points"/></div>
+          <div style={{margin:'6px 12px 10px'}}><GachaBannerCarousel mode="points" config={gachaConfig}/></div>
           <p style={{margin:'-6px 12px 8px',fontSize:9,lineHeight:1.4,color:'rgba(255,255,255,.4)',textAlign:'center'}}>※レベル報酬で得られる購入申請還元は最大10%までです。(各キャラ保持で上乗せし最大＋30%効果はあり)次回更新時に誤記変更予定。</p>
           <div style={{margin:'0 12px 8px'}}>
             <button type="button" onClick={()=>setRateModalOpen(true)} style={{width:'100%',padding:'8px 14px',border:'1px solid rgba(218,165,32,.5)',borderRadius:8,background:'rgba(8,4,14,.7)',color:'#e8c65a',fontSize:11,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
@@ -1209,7 +1256,7 @@ export function GachaPage() {
                   <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{freeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${freeRemaining}回）`}</p>
                   {!freeUsed&&freeSharedRemaining>0&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.5)',marginTop:2}}>うち拓也共通ボーナス残り{freeSharedRemaining}回</p>}
                   {freeUsed&&freeNextReset&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.35)',marginTop:2}}>リセット: {new Date(freeNextReset).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>}
-                  {!freeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしで通常ガチャを引けます</p>}
+                  {!freeUsed&&<p style={{margin:0,fontSize:9,color:'rgba(134,239,172,.55)',marginTop:2}}>ポイント消費なしでポイントガチャを引けます</p>}
                 </div>
                 {!freeUsed&&<span style={{fontSize:18,color:'rgba(134,239,172,.8)'}}>›</span>}
               </div>
@@ -1234,7 +1281,7 @@ export function GachaPage() {
           </div>
         </div>
       </PageBg>
-      <EmissionRateModal open={rateModalOpen} onClose={()=>setRateModalOpen(false)}/>
+      <EmissionRateModal open={rateModalOpen} onClose={()=>setRateModalOpen(false)} config={gachaConfig}/>
     </AppShell>
   )
 

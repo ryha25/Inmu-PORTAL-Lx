@@ -193,8 +193,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomImage: takuyaRoomImage,
     skill: {
       name: '卍解',
-      effect: 'ガチャ無料回数 +3回（毎日・通常＋有償合算）',
-      notes: ['Lv.1から発動', '通常ガチャ・有償ガチャ合わせて毎日+3回分', '毎日0:00（JST）リセット'],
+      effect: 'ガチャ無料回数 +3回（毎日・ポイント＋INMU合算）',
+      notes: ['Lv.1から発動', 'ポイントガチャ・INMUガチャ合わせて毎日+3回分', '毎日0:00（JST）リセット'],
     },
     levelRewards: [
       { level: 10, label: '金のダンベル + 購入申請還元 +5%', detail: 'Lv.10到達で還元率+5%が自動適用', rebateBonus: 5 },
