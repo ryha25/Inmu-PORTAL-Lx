@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { notificationsTable, systemSettingsTable, userTable } from "@workspace/db/schema";
+import { systemSettingsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAdmin } from "../middlewares/session";
 
@@ -68,44 +68,6 @@ const PUBLIC_PRICE_KEYS = [
   "reward_whip_lv30_inmu",
 ] as const;
 
-const PRICE_SETTING_LABELS: Record<(typeof PUBLIC_PRICE_KEYS)[number], string> = {
-  gacha_paid_single_inmu: "有償ガチャ1連価格",
-  gacha_paid_eleven_inmu: "有償ガチャ11連価格",
-  slot_unlock_2_inmu: "PETスロット2枠目解放価格",
-  slot_unlock_3_inmu: "PETスロット3枠目解放価格",
-  reward_level_inmu: "INMUくんLv.15報酬",
-  reward_gacha_lv20_inmu: "ガチャキャラLv.20報酬",
-  reward_gacha_lv30_inmu: "ガチャキャラLv.30報酬",
-  reward_nyarushian_lv20_inmu: "ニャルシアンLv.20報酬",
-  reward_nyarushian_lv30_inmu: "ニャルシアンLv.30報酬",
-  reward_takuya_lv20_inmu: "拓也Lv.20報酬",
-  reward_takuya_lv30_inmu: "拓也Lv.30報酬",
-  reward_leon_lv20_inmu: "レオンLv.20報酬",
-  reward_leon_lv30_inmu: "レオンLv.30報酬",
-  reward_chinge_lv20_inmu: "チンゲLv.20報酬",
-  reward_chinge_lv30_inmu: "チンゲLv.30報酬",
-  reward_tdn_lv20_inmu: "TDNLv.20報酬",
-  reward_tdn_lv30_inmu: "TDNLv.30報酬",
-  reward_whip_lv20_inmu: "ホイップLv.20報酬",
-  reward_whip_lv30_inmu: "ホイップLv.30報酬",
-};
-
-function isPublicPriceKey(key: string): key is (typeof PUBLIC_PRICE_KEYS)[number] {
-  return (PUBLIC_PRICE_KEYS as readonly string[]).includes(key);
-}
-
-async function notifyAllUsers(type: string, title: string, message: string) {
-  const users = await db.select({ id: userTable.id }).from(userTable);
-  if (users.length === 0) return;
-
-  await db.insert(notificationsTable).values(users.map((user) => ({
-    userId: user.id,
-    type,
-    title,
-    message,
-  })));
-}
-
 router.get("/admin/system-settings", requireAdmin, async (_req, res): Promise<void> => {
   try {
     const rows = await db.select().from(systemSettingsTable);
@@ -160,12 +122,6 @@ router.put("/admin/system-settings/:key", requireAdmin, async (req, res): Promis
   const strVal = String(value).trim();
 
   try {
-    const before = await db
-      .select({ value: systemSettingsTable.value })
-      .from(systemSettingsTable)
-      .where(eq(systemSettingsTable.key, key))
-      .then((rows) => rows[0]?.value ?? DEFAULTS[key]?.value ?? null);
-
     await db
       .insert(systemSettingsTable)
       .values({
@@ -182,14 +138,6 @@ router.put("/admin/system-settings/:key", requireAdmin, async (req, res): Promis
           updatedAt: new Date(),
         },
       });
-
-    if (isPublicPriceKey(key) && before !== strVal) {
-      const title = key.startsWith("gacha_") ? "ガチャ設定が更新されました" : "価格設定が更新されました";
-      const label = PRICE_SETTING_LABELS[key];
-      const amount = Number(strVal);
-      const valueLabel = Number.isFinite(amount) ? `${amount.toLocaleString()} INMU` : strVal;
-      await notifyAllUsers("price_change", title, `${label} が ${valueLabel} に変更されました`);
-    }
 
     res.json({ ok: true, key, value: strVal });
   } catch {
