@@ -274,7 +274,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
   {
     id: 'tdn',
     name: 'TDN',
-    rarity: 5,
+    rarity: 3,
     maxLevel: 30,
     image: tdnImage,
     expressions: {
@@ -313,7 +313,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
   {
     id: 'whip',
     name: 'ホイップ',
-    rarity: 1,
+    rarity: 3,
     maxLevel: 30,
     image: whipImage,
     expressions: {
