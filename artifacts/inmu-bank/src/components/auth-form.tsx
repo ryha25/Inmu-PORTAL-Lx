@@ -122,14 +122,6 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
                 育成ゲーム、ポイント、ランキング、イベント、SOLアドレス登録などをまとめて利用できるコミュニティ向けWebサービスです。
               </p>
             </div>
-            <div className="flex w-full max-w-xs flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
-              <Button asChild size="lg" className="min-h-11 font-semibold">
-                <Link href="/sign-in">ログイン</Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="min-h-11 font-semibold">
-                <Link href="/sign-up">新規登録</Link>
-              </Button>
-            </div>
           </div>
 
           <Card className="w-full max-w-md border-primary/25 bg-card/95 text-left shadow-xl">
