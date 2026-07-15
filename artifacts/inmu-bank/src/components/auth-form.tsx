@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trophy,
+  type LucideIcon,
   WalletCards,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -24,9 +25,18 @@ import { Label } from '@/components/ui/label'
 import { LangToggle } from '@/components/lang-toggle'
 import { useI18n } from '@/lib/i18n/context'
 
-const features = [
+type FeatureItem = {
+  title: string
+  detail: string
+  note?: string
+  icon: LucideIcon
+}
+
+const features: FeatureItem[] = [
   { title: 'INMU PET（育成ゲーム）', detail: 'キャラクターを育成し、レベル報酬や散歩を楽しめる育成ゲームです。', icon: Gamepad2 },
   { title: 'ポイントシステム', detail: 'ログインやミッションなど、活動に応じたポイント機能を提供します。', icon: Coins },
+  { title: 'ガチャ', detail: 'INMU PETのキャラクターや育成に関わる要素を獲得できる機能です。', note: '注意: ガチャ結果は抽選で決まり、必ず希望のキャラクターや報酬が出るものではありません。', icon: Sparkles },
+  { title: '購入申請', detail: '条件を満たしたユーザーが、購入申請や還元に関する手続きを確認できる機能です。', note: '注意: 申請可能数や還元率はスロット解放状況、キャラクタースキル、運営ルールにより変動します。', icon: WalletCards },
   { title: 'ランキング', detail: 'コミュニティ内の活動状況をランキング形式で確認できます。', icon: Trophy },
   { title: 'イベント', detail: '期間限定イベントやアップデート情報をポータル内で案内します。', icon: CalendarDays },
   { title: 'SOLアドレス登録', detail: '必要に応じてSOLアドレスを登録し、各種機能と連携できます。', icon: WalletCards },
@@ -205,80 +215,109 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             </CardContent>
           </Card>
 
-          <div>
-            <div className="mb-4 flex items-center gap-2">
-              <Sparkles className="size-5 text-primary" />
-              <h2 className="text-xl font-bold">主な機能</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {features.map(({ title, detail, icon: Icon }) => (
-                <Card key={title} className="border-border bg-card/90">
-                  <CardContent className="flex h-full flex-col gap-3 p-4">
-                    <Icon className="size-5 text-primary" />
-                    <div>
-                      <h3 className="text-sm font-bold">{title}</h3>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+          <Card className="border-border bg-card/90">
+            <CardContent className="p-0">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="features" className="border-0 px-5">
+                  <AccordionTrigger className="text-base font-bold">
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="size-5 text-primary" />
+                      主な機能
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid gap-3 pt-1 sm:grid-cols-2 lg:grid-cols-3">
+                      {features.map(({ title, detail, note, icon: Icon }) => (
+                        <div key={title} className="flex h-full flex-col gap-3 rounded-md border border-border bg-secondary/30 p-4">
+                          <Icon className="size-5 text-primary" />
+                          <div>
+                            <h3 className="text-sm font-bold">{title}</h3>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+                            {note && <p className="mt-2 text-[11px] leading-5 text-amber-200">{note}</p>}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-            <Card className="border-border bg-card/90">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <ShieldCheck className="size-5 text-primary" />
-                  安全性
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {safetyItems.map(({ title, icon: Icon }) => (
-                  <div key={title} className="flex items-center gap-3 rounded-md border border-border bg-secondary/30 p-3">
-                    <Icon className="size-4 text-primary" />
-                    <span className="text-sm font-medium">{title}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card className="border-border bg-card/90">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Megaphone className="size-5 text-primary" />
-                  お知らせ
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {notices.map((notice) => (
-                  <div key={notice.title} className="rounded-md border border-border bg-secondary/30 p-3">
-                    <div className="flex items-center gap-2">
-                      <Bell className="size-4 text-primary" />
-                      <h3 className="text-sm font-bold">{notice.title}</h3>
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{notice.detail}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+          </Card>
 
           <Card className="border-border bg-card/90">
-            <CardHeader className="pb-0">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <CircleHelp className="size-5 text-primary" />
-                よくある質問
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="p-0">
               <Accordion type="single" collapsible>
-                {faqItems.map((item, index) => (
-                  <AccordionItem key={item.question} value={`faq-${index}`}>
-                    <AccordionTrigger>{item.question}</AccordionTrigger>
-                    <AccordionContent className="text-sm leading-6 text-muted-foreground">{item.answer}</AccordionContent>
-                  </AccordionItem>
-                ))}
+                <AccordionItem value="safety" className="border-0 px-5">
+                  <AccordionTrigger className="text-base font-bold">
+                    <span className="flex items-center gap-2">
+                      <ShieldCheck className="size-5 text-primary" />
+                      安全性
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid gap-3 pt-1 sm:grid-cols-3">
+                      {safetyItems.map(({ title, icon: Icon }) => (
+                        <div key={title} className="flex items-center gap-3 rounded-md border border-border bg-secondary/30 p-3">
+                          <Icon className="size-4 text-primary" />
+                          <span className="text-sm font-medium">{title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card/90">
+            <CardContent className="p-0">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="notices" className="border-0 px-5">
+                  <AccordionTrigger className="text-base font-bold">
+                    <span className="flex items-center gap-2">
+                      <Megaphone className="size-5 text-primary" />
+                      お知らせ
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid gap-3 pt-1">
+                      {notices.map((notice) => (
+                        <div key={notice.title} className="rounded-md border border-border bg-secondary/30 p-3">
+                          <div className="flex items-center gap-2">
+                            <Bell className="size-4 text-primary" />
+                            <h3 className="text-sm font-bold">{notice.title}</h3>
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">{notice.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card/90">
+            <CardContent className="p-0">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="faq" className="border-0 px-5">
+                  <AccordionTrigger className="text-base font-bold">
+                    <span className="flex items-center gap-2">
+                      <CircleHelp className="size-5 text-primary" />
+                      よくある質問
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <Accordion type="single" collapsible className="pt-1">
+                      {faqItems.map((item, index) => (
+                        <AccordionItem key={item.question} value={`faq-${index}`}>
+                          <AccordionTrigger>{item.question}</AccordionTrigger>
+                          <AccordionContent className="text-sm leading-6 text-muted-foreground">{item.answer}</AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </AccordionContent>
+                </AccordionItem>
               </Accordion>
             </CardContent>
           </Card>
