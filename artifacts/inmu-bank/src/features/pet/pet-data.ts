@@ -85,6 +85,15 @@ export type PetDefinition = {
     idle: readonly string[]
     walking: readonly string[]
     care: readonly string[]
+    feed?: readonly string[]
+    play?: readonly string[]
+    pet?: readonly string[]
+    happy?: readonly string[]
+    angry?: readonly string[]
+    sleeping?: readonly string[]
+    sleepy?: readonly string[]
+    hungry?: readonly string[]
+    affectionate?: readonly string[]
   }
   reactionDurations: {
     feed: number
@@ -291,9 +300,27 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     walk: { enabled: true, frames: [tdnImage, tdnImage], distancePercent: 19, tickMs: 260 },
     messages: { overpetted: '試合前だ、集中させろ。' },
     dialogues: {
-      idle: ['肩はできている。', '全力投球だ。', '勝つ準備はできた。'],
-      walking: ['ブルペンまで走るぞ。', '足腰も大事だ。', '球筋を確かめる。'],
-      care: ['悪くない補給だ。', '気合いが入った。', 'まだ投げられる。'],
+      idle: [
+        'オナシャス！センセンシャル！',
+        'センセンシャル！',
+        'これだけは、はっきり伝えたかった。',
+        'たった一度の過ちであり、二度と同じ間違いはしません。',
+        '当時は若く、お金が必要でした。',
+        'ホモビデオ出よう、主演は俺だから。',
+        'イグッ！',
+        'オフッ！',
+      ],
+      walking: ['行くぜ！', '遅れるなよ！', 'まだまだ走れる！'],
+      care: ['オナシャス！', '勝負だ！', 'いただきます！'],
+      feed: ['いただきます！', 'うまい！'],
+      play: ['勝負だ！', '全力投球だ！'],
+      pet: ['自分、指いいすか？', 'やれば返していただけるんですか？', 'オナシャス！'],
+      happy: ['やれば出来るじゃねぇか！'],
+      angry: ['アッー！', '穴が広がりそうです。'],
+      sleeping: ['今日はここまでだ…。'],
+      sleepy: ['少し休ませてくれ…。'],
+      hungry: ['腹減ったな…。'],
+      affectionate: ['お前といるのも悪くねぇ。', '今日もよろしくな！'],
     },
     reactionDurations: { feed: 4000, play: 4300, pet: 3600, angry: 4500 },
     roomWidth: 'clamp(200px, 44%, 280px)',

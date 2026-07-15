@@ -173,6 +173,14 @@ function pickRandom<T>(items: readonly T[]): T | undefined {
   return items.length > 0 ? items[Math.floor(Math.random() * items.length)] : undefined
 }
 
+function getDialogueLines(pet: PetDefinition, context: 'idle' | 'walking' | 'feed' | 'play' | 'pet' | 'happy' | 'angry' | 'sleeping' | 'sleepy' | 'hungry' | 'affectionate') {
+  return pet.dialogues[context] ?? (
+    context === 'walking' ? pet.dialogues.walking
+      : context === 'feed' || context === 'play' || context === 'pet' ? pet.dialogues.care
+        : pet.dialogues.idle
+  )
+}
+
 function StatusBar({
   label,
   value,
@@ -1306,6 +1314,8 @@ export function PetPage() {
   const walkingRef = useRef(false)
   const interactionRef = useRef(false)
   const sleepingRef = useRef(false)
+  const expressionRef = useRef<PetExpression>('default')
+  const affectionRef = useRef(0)
   const displayedPetId = (ownedPetIds ?? []).includes(selectedPetId) ? selectedPetId : ((ownedPetIds ?? [])[0] ?? 'inmu-festival')
   const pet = PET_BY_ID[displayedPetId] ?? PET_BY_ID['inmu-festival']
   const walkDailyLimit = PET_WALK_DAILY_LIMIT + (skillActiveCharacterIds.includes('whip') ? PET_WALK_WHIP_DAILY_BONUS : 0)
@@ -1376,6 +1386,8 @@ export function PetPage() {
   walkingRef.current = walkMotion.moving
   interactionRef.current = Boolean(reactionMotion)
   sleepingRef.current = isSleeping
+  expressionRef.current = expression
+  affectionRef.current = selectedStats.affection
   const displayImage = canShowWalk && walkMotion.moving ? pet.walk.frames[walkMotion.frame] : pet.expressions[expression]
 
   useEffect(() => {
@@ -1565,8 +1577,14 @@ export function PetPage() {
   useEffect(() => {
     function scheduleSpeech() {
       speechTimer.current = setTimeout(() => {
-        if (!interactionRef.current && !sleepingRef.current) {
-          const lines = walkingRef.current ? pet.dialogues.walking : pet.dialogues.idle
+        if (!interactionRef.current) {
+          const context = walkingRef.current ? 'walking'
+            : sleepingRef.current ? 'sleeping'
+              : expressionRef.current === 'angry' || expressionRef.current === 'sleepy' || expressionRef.current === 'hungry' || expressionRef.current === 'happy'
+                ? expressionRef.current
+                : expressionRef.current === 'affectionate' || affectionRef.current >= 80 ? 'affectionate'
+                  : 'idle'
+          const lines = getDialogueLines(pet, context)
           const line = pickRandom(lines)
           if (line) {
             setSpeechBubble(line)
@@ -1582,7 +1600,7 @@ export function PetPage() {
       if (speechTimer.current) clearTimeout(speechTimer.current)
       if (speechResetTimer.current) clearTimeout(speechResetTimer.current)
     }
-  }, [selectedPetId, pet.dialogues])
+  }, [selectedPetId, pet])
 
   useEffect(() => {
     setWalkTick(0)
@@ -1621,7 +1639,10 @@ export function PetPage() {
       : pet.reactionDurations[result.motion]
     setExpression(result.expression, duration, actionNow)
     setReactionMotion(result.motion)
-    const careSpeech = result.message === 'overpetted' ? pet.messages.overpetted : pickRandom(pet.dialogues.care) ?? ''
+    const context = result.message === 'fed' ? 'feed' : result.message === 'played' ? 'play' : result.message === 'petted' ? 'pet' : 'angry'
+    const careSpeech = result.message === 'overpetted'
+      ? pickRandom(getDialogueLines(pet, 'angry')) ?? pet.messages.overpetted
+      : pickRandom(getDialogueLines(pet, context)) ?? ''
     if (speechResetTimer.current) clearTimeout(speechResetTimer.current)
     setSpeechBubble(careSpeech)
     setMessage({

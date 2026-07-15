@@ -1899,42 +1899,23 @@ export function GachaPage() {
                   </div>
                 )
               })}
-              {result.tdnReroll&&(
-                <button type="button" disabled={tdnRerollBusy} onPointerDown={(event)=>event.stopPropagation()} onClick={(event)=>{event.stopPropagation();void spinTdnReroll()}} style={{
-                  position:'relative',
-                  zIndex:50,
-                  border:'1px solid rgba(80,220,255,.7)',
-                  borderRadius:12,
-                  padding:'12px 24px',
-                  background:'linear-gradient(135deg,rgba(7,64,88,.95),rgba(12,24,46,.95))',
-                  color:'#9eeeff',
-                  fontWeight:900,
-                  letterSpacing:'0.04em',
-                  boxShadow:'0 0 24px rgba(34,211,238,.28)',
-                  cursor:tdnRerollBusy?'wait':'pointer',
-                  pointerEvents:'auto',
-                  WebkitTapHighlightColor:'transparent',
-                  opacity:tdnRerollBusy ? .7 : 1,
-                }}>
-                  {tdnRerollBusy?'処理中…':'もう一度引く'}
-                </button>
-              )}
-              <button type="button" onPointerDown={(event)=>event.stopPropagation()} onClick={(event)=>{event.stopPropagation();reset()}} style={{
+              <button type="button" disabled={Boolean(result.tdnReroll)&&tdnRerollBusy} onPointerDown={(event)=>event.stopPropagation()} onClick={(event)=>{event.stopPropagation();result.tdnReroll?void spinTdnReroll():reset()}} style={{
                 position:'relative',
                 zIndex:50,
-                border:'1px solid rgba(218,165,32,.55)',
+                border:result.tdnReroll?'1px solid rgba(80,220,255,.7)':'1px solid rgba(218,165,32,.55)',
                 borderRadius:12,
                 padding:'12px 24px',
-                background:'linear-gradient(135deg,rgba(55,34,9,.92),rgba(16,10,4,.92))',
-                color:'#ffd700',
+                background:result.tdnReroll?'linear-gradient(135deg,rgba(7,64,88,.95),rgba(12,24,46,.95))':'linear-gradient(135deg,rgba(55,34,9,.92),rgba(16,10,4,.92))',
+                color:result.tdnReroll?'#9eeeff':'#ffd700',
                 fontWeight:900,
                 letterSpacing:'0.04em',
-                boxShadow:'0 0 22px rgba(218,165,32,.22)',
-                cursor:'pointer',
+                boxShadow:result.tdnReroll?'0 0 24px rgba(34,211,238,.28)':'0 0 22px rgba(218,165,32,.22)',
+                cursor:tdnRerollBusy?'wait':'pointer',
                 pointerEvents:'auto',
-                WebkitTapHighlightColor:'transparent'
+                WebkitTapHighlightColor:'transparent',
+                opacity:tdnRerollBusy ? .7 : 1,
               }}>
-                {'\u30ac\u30c1\u30e3\u753b\u9762\u3078\u623b\u308b'}
+                {result.tdnReroll ? (tdnRerollBusy ? '処理中…' : 'もう一度引く') : '\u30ac\u30c1\u30e3\u753b\u9762\u3078\u623b\u308b'}
               </button>
             </div>
           )}
@@ -2006,24 +1987,16 @@ export function GachaPage() {
                   filter:'drop-shadow(0 4px 12px rgba(0,0,0,.7))',
                   animation:'ga-bounce 1s ease-in-out infinite'}}/>
               </div>
-              {result.tdnReroll&&(
-                <button type="button" disabled={tdnRerollBusy} onClick={()=>void spinTdnReroll()} style={{
-                  marginTop:8,padding:'8px 32px',borderRadius:8,
-                  background:'linear-gradient(135deg,rgba(7,64,88,.95),rgba(12,24,46,.95))',
-                  border:'1px solid rgba(80,220,255,.7)',
-                  color:'#9eeeff',fontSize:14,fontWeight:800,cursor:tdnRerollBusy?'wait':'pointer',
-                  position:'relative',zIndex:4,letterSpacing:'0.06em',
-                  boxShadow:'0 0 20px rgba(34,211,238,.25)',
-                  opacity:tdnRerollBusy ? .7 : 1,
-                }}>{tdnRerollBusy?'処理中…':'もう一度引く'}</button>
-              )}
-              <button onClick={reset} style={{
+              <button type="button" disabled={Boolean(result.tdnReroll)&&tdnRerollBusy} onClick={()=>result.tdnReroll?void spinTdnReroll():reset()} style={{
                 marginTop:8,padding:'8px 32px',borderRadius:8,
-                background:'rgba(255,255,255,.12)',border:'1px solid rgba(218,165,32,.45)',
-                color:'#ffd700',fontSize:14,fontWeight:700,cursor:'pointer',
+                background:result.tdnReroll?'linear-gradient(135deg,rgba(7,64,88,.95),rgba(12,24,46,.95))':'rgba(255,255,255,.12)',
+                border:result.tdnReroll?'1px solid rgba(80,220,255,.7)':'1px solid rgba(218,165,32,.45)',
+                color:result.tdnReroll?'#9eeeff':'#ffd700',fontSize:14,fontWeight:700,cursor:tdnRerollBusy?'wait':'pointer',
                 position:'relative',zIndex:4,letterSpacing:'0.06em',
                 backdropFilter:'blur(4px)',
-              }}>もどる</button>
+                boxShadow:result.tdnReroll?'0 0 20px rgba(34,211,238,.25)':undefined,
+                opacity:tdnRerollBusy ? .7 : 1,
+              }}>{result.tdnReroll ? (tdnRerollBusy ? '処理中…' : 'もう一度引く') : 'もどる'}</button>
             </div>
           )}
 
