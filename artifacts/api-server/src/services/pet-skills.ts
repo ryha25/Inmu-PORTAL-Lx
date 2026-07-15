@@ -3,6 +3,23 @@ import { ensurePetStateTable } from "./pet-state-store";
 
 const TDN_REROLL_DAILY_LIMIT = 3;
 
+function normalizePetSkillId(value: unknown): string {
+  const normalized = String(value ?? "").trim().toLowerCase().replace(/_/g, "-").replace(/^character-/, "");
+  const aliases: Record<string, string> = {
+    "チンゲ": "chinge",
+    "ｔｄｎ": "tdn",
+    "ティーディーエヌ": "tdn",
+    "ホイップ": "whip",
+    "拓也": "takuya",
+    "レオン": "leon",
+    "nyarushian": "nyarushian",
+    "ニャルシアン": "nyarushian",
+    "inmuくん": "inmu-festival",
+    "inmu君": "inmu-festival",
+  };
+  return aliases[normalized] ?? aliases[String(value ?? "").trim()] ?? normalized;
+}
+
 // ── JST 今日の開始時刻（UTC）を返す ──
 function jstTodayStartUtc(): Date {
   const jstOffset = 9 * 3600 * 1000;
@@ -21,16 +38,15 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
       pool.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 LIMIT 1`, [userId]),
     ]);
     const state = saved.rows[0]?.state ?? {};
-    const normalizeId = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/_/g, "-").replace(/^character-/, "");
-    const targetId = normalizeId(characterId);
-    const statePetId = Object.keys(state?.pets ?? {}).find(id => normalizeId(id) === targetId) ?? characterId;
+    const targetId = normalizePetSkillId(characterId);
+    const statePetId = Object.keys(state?.pets ?? {}).find(id => normalizePetSkillId(id) === targetId) ?? characterId;
     const level = Number(state?.pets?.[statePetId]?.level ?? 1);
     const legacySingle = state?.skillActiveCharacterId;
     const rawSkillActiveIds: unknown[] = Array.isArray(state?.skillActiveCharacterIds)
       ? state.skillActiveCharacterIds
       : legacySingle != null ? [legacySingle] : [];
-    const ownedCharacterIds = ownership.rows.map(row => normalizeId(row.characterId));
-    const skillActiveCharacterIds = rawSkillActiveIds.slice(0, 3).map(normalizeId);
+    const ownedCharacterIds = ownership.rows.map(row => normalizePetSkillId(row.characterId));
+    const skillActiveCharacterIds = rawSkillActiveIds.slice(0, 3).map(normalizePetSkillId);
     // Ownership is authoritative. PET saves contain default stats for characters the
     // user does not own, so character-state presence must never unlock a skill.
     // A unique skill is only active for up to 3 characters explicitly set via the
@@ -131,8 +147,17 @@ export async function getSkillLockStatus(userId: string, characterIds: string[])
         );
         result[id] = Number(r.rows[0]?.count ?? 0) >= TDN_REROLL_DAILY_LIMIT;
       } else if (normalized === "inmu-festival") {
-        // イベント期間外はロックなし（イベント検知未実装のため常時 false）
-        result[id] = false;
+        // イベント固有スキルが購入申請に実際に適用された日だけロックする。
+        const r = await pool.query(
+          `SELECT 1 FROM "purchaseRequests"
+           WHERE "userId"=$1
+             AND "createdAt">=$2
+             AND "requestPetRebateDetails" LIKE '%"source":"skill"%'
+             AND "requestPetRebateDetails" LIKE '%"eventOnly":true%'
+           LIMIT 1`,
+          [userId, todayStart.toISOString()],
+        );
+        result[id] = (r.rowCount ?? 0) > 0;
       } else {
         result[id] = false;
       }

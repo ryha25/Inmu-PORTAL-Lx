@@ -357,9 +357,31 @@ function jstTomorrowStartUtc(): Date {
   return new Date(today.getTime() + 24 * 3600 * 1000);
 }
 
+async function getUnusedTdnReroll(client: any, userId: string): Promise<TdnRerollInfo | null> {
+  const todayStart = jstTodayStartUtc();
+  const existing = await client.query(
+    `SELECT "tdnRerollToken","gachaType","pullType"
+     FROM "petGachaHistory"
+     WHERE "userId"=$1
+       AND "tdnRerollGrantedAt">=$2
+       AND "tdnRerollToken" IS NOT NULL
+       AND "tdnRerollUsedAt" IS NULL
+     ORDER BY "tdnRerollGrantedAt" DESC
+     LIMIT 1`,
+    [userId, todayStart.toISOString()],
+  );
+  const row = existing.rows[0];
+  if (!row?.tdnRerollToken) return null;
+  const mode = row.gachaType === "paid" ? "paid" : "points";
+  const pullType = (row.pullType === "eleven" ? "eleven" : row.pullType === "multi" ? "multi" : "single") as PullType;
+  return { token: String(row.tdnRerollToken), mode, pullType, expiresAt: jstTomorrowStartUtc().toISOString() };
+}
+
 async function grantTdnReroll(client: any, userId: string, historyId: number, mode: GachaMode, pullType: PullType): Promise<TdnRerollInfo | null> {
   const tdnSkillActive = await hasActivePetSkill(userId, "tdn");
   if (!tdnSkillActive) return null;
+  const unusedReroll = await getUnusedTdnReroll(client, userId);
+  if (unusedReroll) return unusedReroll;
   const todayStart = jstTodayStartUtc();
   const todayGrants = await client.query(
     `SELECT COUNT(*)::int AS count FROM "petGachaHistory"
@@ -520,7 +542,8 @@ router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
       const state = await pool.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1`, [req.userId!]);
       const recoveredResults = Array.isArray(existing.rows[0].results) ? existing.rows[0].results : [];
       const totalPoints = recoveredResults.reduce((sum: number, prize: any) => sum + (prize.type === "points" ? Number(prize.amount ?? 0) : Number(prize.convertedPoints ?? 0)), 0);
-      res.json({ results: recoveredResults, totalPoints, premiumFood: recoveredResults.filter((prize: any) => prize.type === "premium_food").length, hasInmu: false, costPoints: 0, costInmu: Number(existing.rows[0].costInmu), txId, newPoints: currentPoints, paidPity: Number(state.rows[0]?.paidPity ?? 0), recovered: true });
+      const tdnReroll = await getUnusedTdnReroll(client, req.userId!);
+      res.json({ results: recoveredResults, totalPoints, premiumFood: recoveredResults.filter((prize: any) => prize.type === "premium_food").length, hasInmu: false, costPoints: 0, costInmu: Number(existing.rows[0].costInmu), txId, newPoints: currentPoints, paidPity: Number(state.rows[0]?.paidPity ?? 0), recovered: true, tdnReroll });
       return;
     }
     const payment = await verifyStoredPayment(req.userId!, txId, costInmu, `paid-gacha:${pullType}`);
