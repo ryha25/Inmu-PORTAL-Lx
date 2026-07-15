@@ -2006,7 +2006,7 @@ export function GachaPage() {
   )
 }
 
-/* ════ JACKPOT SCREEN (10,000 INMU)  Emulti-step sequential reveal ════ */
+/* ════ JACKPOT SCREEN (10,000 INMU) ════ */
 function JackpotScreen({ pts, onReset, profile, unread }:{
   pts:number; onReset:()=>void;
   profile:{role?:string;displayName?:string}|null;
@@ -2018,14 +2018,10 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
   useEffect(()=>{
     playJackpotSE()
     const ts=[
-      setTimeout(()=>setFlash(false),1100),
-      setTimeout(()=>setStep(1),420),    // JACKPOT title
-      setTimeout(()=>setStep(2),1300),   // gold capsule + burst glow
-      setTimeout(()=>setStep(3),2700),   // capsule opens (split)
-      setTimeout(()=>setStep(4),3900),   // mascot burst from capsule
-      setTimeout(()=>setStep(5),4700),   // multiple mascots jumping
-      setTimeout(()=>setStep(6),5600),   // 10,000 INMU display
-      setTimeout(()=>setStep(7),7000),   // back button
+      setTimeout(()=>setFlash(false),700),
+      setTimeout(()=>setStep(1),280),
+      setTimeout(()=>setStep(2),900),
+      setTimeout(()=>setStep(3),1800),
     ]
     return()=>ts.forEach(clearTimeout)
   },[])
@@ -2041,9 +2037,6 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
         animation:'ga-goldflash .9s ease-out forwards'}}/>}
 
       <PageBg jackpot>
-        {(step===2||step===3||step===4||step===5)&&(
-          <GeneratedScene kind={step===2?'falling':'opening'} prizeId="inmu10k" guaranteed zIndex={2}/>
-        )}
         {/* Rising coins */}
         <div style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:4,overflow:'hidden'}}>
           {COIN_RISES.map((c,i)=>(
@@ -2095,78 +2088,8 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
             </div>
           )}
 
-          {/* Step 2: Gold capsule burst */}
-          {step===2&&(
-            <div className="ga-reveal" style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <div style={{position:'relative'}}>
-                <div style={{position:'absolute',inset:-32,borderRadius:'50%',
-                  background:'radial-gradient(circle,rgba(255,250,80,.68) 0%,rgba(218,165,32,.36) 42%,transparent 68%)',
-                  animation:'ga-glow .8s ease-in-out infinite'}}/>
-                <div style={{position:'absolute',inset:-52,borderRadius:'50%',
-                  animation:'ga-burst .65s ease-out forwards',opacity:0,
-                  background:'radial-gradient(circle,rgba(255,255,120,.52) 0%,transparent 60%)'}}/>
-                <PrizeCapsule prizeId="inmu10k" size={168}/>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Capsule opening */}
-          {step===3&&(
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-              <div style={{position:'relative',height:200,width:200,
-                display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-                <div style={{position:'absolute',inset:-28,borderRadius:'50%',
-                  background:'radial-gradient(circle,rgba(255,255,180,.9) 0%,rgba(218,165,32,.68) 36%,transparent 62%)',
-                  animation:'ga-burst .72s ease-out .05s forwards',opacity:0}}/>
-                {[0,1,2].map(i=>(
-                  <div key={i} style={{position:'absolute',
-                    width:68+i*58,height:68+i*58,borderRadius:'50%',
-                    border:`1px solid rgba(218,165,32,${.55-i*.15})`,
-                    animation:`ga-ring ${.48+i*.24}s ease-out ${.12+i*.14}s forwards`}}/>
-                ))}
-                <div style={{position:'absolute',width:155,height:78,
-                  borderRadius:'78px 78px 0 0',overflow:'hidden',
-                  top:14,transformOrigin:'bottom center',
-                  animation:'ga-split-t .6s ease-out .1s forwards',
-                  boxShadow:'0 -8px 32px rgba(218,165,32,.7)',zIndex:5}}>
-                  <PrizeCapsule prizeId="inmu10k" size={155}/>
-                </div>
-                <div style={{position:'absolute',width:155,height:78,
-                  borderRadius:'0 0 78px 78px',overflow:'hidden',
-                  top:110,transformOrigin:'top center',
-                  animation:'ga-split-b .6s ease-out .1s forwards',
-                  boxShadow:'0 8px 32px rgba(218,165,32,.58)',zIndex:5}}>
-                  <PrizeCapsule prizeId="inmu10k" size={155}/>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Mascot bursts from capsule */}
-          {step===4&&(
-            <div className="ga-reveal" style={{display:'flex',flexDirection:'column',
-              alignItems:'center',gap:6}}>
-              <img src={mascotImg} style={{
-                width:110,height:'auto',objectFit:'contain',
-                filter:'drop-shadow(0 0 32px rgba(218,165,32,.88)) drop-shadow(-2px 8px 18px rgba(0,0,0,.8))',
-                animation:'ga-popin .42s ease-out both'}}/>
-            </div>
-          )}
-
-          {/* Step 5+: Multiple mascots jumping */}
-          {step>=5&&(
-            <div style={{display:'flex',gap:12,alignItems:'flex-end',justifyContent:'center'}}>
-              {[{s:82,d:'0s'},{s:108,d:'.24s'},{s:82,d:'.48s'}].map((m,i)=>(
-                <img key={i} src={mascotImg} style={{
-                  width:m.s,height:'auto',objectFit:'contain',
-                  filter:'drop-shadow(-2px 8px 18px rgba(0,0,0,.8)) drop-shadow(0 0 16px rgba(218,165,32,.55))',
-                  animation:`ga-bounce .82s ease-in-out ${m.d} infinite`}}/>
-              ))}
-            </div>
-          )}
-
-          {/* Step 6+: 10,000 INMU display */}
-          {step>=6&&(
+          {/* Step 2+: 10,000 INMU display */}
+          {step>=2&&(
             <div className="ga-reveal" style={{textAlign:'center',
               background:'linear-gradient(135deg,rgba(26,12,2,.96),rgba(36,20,4,.96))',
               border:'2px solid rgba(218,165,32,.72)',borderRadius:22,
@@ -2186,8 +2109,8 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
             </div>
           )}
 
-          {/* Step 6+: Points counter */}
-          {step>=6&&(
+          {/* Step 2+: Points counter */}
+          {step>=2&&(
             <div className="ga-reveal" style={{background:'linear-gradient(135deg,rgba(16,8,2,.96),rgba(24,14,2,.96))',
               border:'1px solid rgba(184,134,11,.58)',borderRadius:14,
               padding:'10px 22px',display:'flex',alignItems:'center',gap:12,
@@ -2205,8 +2128,8 @@ function JackpotScreen({ pts, onReset, profile, unread }:{
             </div>
           )}
 
-          {/* Step 7: Back button */}
-          {step>=7&&(
+          {/* Step 3: Back button */}
+          {step>=3&&(
             <button type="button" onClick={onReset} className="ga-reveal"
               style={{background:'linear-gradient(160deg,#ffe680 0%,#d4a017 30%,#7a5500 100%)',
                 border:'none',borderRadius:20,padding:'14px 48px',

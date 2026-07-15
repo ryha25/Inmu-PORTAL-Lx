@@ -14,6 +14,7 @@ const INMU_DECIMALS = 6;
 const DUPLICATE_CHARACTER_POINTS = 50_000;
 const DUPLICATE_CHARACTER_SLEEP_TEA = 3;
 const TDN_REROLL_CHANCE = 0.3;
+const TDN_REROLL_GUARANTEE_PULLS = 50;
 
 const CHARACTERS = [
   { id: "nyarushian", name: "ニャルシアン" },
@@ -355,6 +356,12 @@ function jstTomorrowStartUtc(): Date {
   return new Date(today.getTime() + 24 * 3600 * 1000);
 }
 
+function pullCountForTdnReroll(pullType: PullType): number {
+  if (pullType === "eleven") return 11;
+  if (pullType === "multi") return 10;
+  return 1;
+}
+
 async function grantTdnReroll(client: any, userId: string, historyId: number, mode: GachaMode, pullType: PullType): Promise<TdnRerollInfo | null> {
   const tdnSkillActive = await hasActivePetSkill(userId, "tdn");
   if (!tdnSkillActive) return null;
@@ -366,7 +373,34 @@ async function grantTdnReroll(client: any, userId: string, historyId: number, mo
     [userId, todayStart.toISOString()],
   );
   if (existing.rowCount) return null;
-  if (Math.random() >= TDN_REROLL_CHANCE) {
+
+  const lastGrant = await client.query(
+    `SELECT "tdnRerollGrantedAt" FROM "petGachaHistory"
+     WHERE "userId"=$1 AND "tdnRerollGrantedAt" IS NOT NULL
+     ORDER BY "tdnRerollGrantedAt" DESC LIMIT 1`,
+    [userId],
+  );
+  const sinceLastGrant = lastGrant.rows[0]?.tdnRerollGrantedAt
+    ? new Date(lastGrant.rows[0].tdnRerollGrantedAt).toISOString()
+    : "1970-01-01T00:00:00.000Z";
+  const attempts = await client.query(
+    `SELECT COALESCE(SUM(
+       CASE "pullType"
+         WHEN 'eleven' THEN 11
+         WHEN 'multi' THEN 10
+         ELSE 1
+       END
+     ), 0)::int AS pulls
+     FROM "petGachaHistory"
+     WHERE "userId"=$1
+       AND "tdnRerollSourceId" IS NULL
+       AND ("tdnRerollGrantedAt" IS NOT NULL OR "tdnRerollUsedAt" IS NOT NULL)
+       AND COALESCE("tdnRerollGrantedAt", "tdnRerollUsedAt") > $2`,
+    [userId, sinceLastGrant],
+  );
+  const pullsSinceLastGrant = Number(attempts.rows[0]?.pulls ?? 0);
+  const guaranteed = pullsSinceLastGrant + pullCountForTdnReroll(pullType) >= TDN_REROLL_GUARANTEE_PULLS;
+  if (!guaranteed && Math.random() >= TDN_REROLL_CHANCE) {
     await client.query(
       `UPDATE "petGachaHistory" SET "tdnRerollUsedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
       [historyId, userId],
