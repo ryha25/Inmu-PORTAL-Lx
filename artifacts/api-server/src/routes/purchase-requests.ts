@@ -63,10 +63,29 @@ function getSlotBaseRebateRate(unlockedSlots: number): number {
   return unlockedSlots >= 3 ? 15 : 5;
 }
 
-function getSlotMaxRebateRate(unlockedSlots: number): number {
-  if (unlockedSlots >= 3) return 45;
-  if (unlockedSlots >= 2) return 25;
-  return 15;
+function getMaxPetRebateBonus(unlockedSlots: number, isEventDay: boolean): number {
+  const levelRewardRates = new Map<string, number>();
+  const skillRates = new Map<string, number>();
+
+  for (const rule of PET_PURCHASE_BONUS_RULES) {
+    if (rule.eventOnly && !isEventDay) continue;
+    const targetMap = rule.source === "skill" ? skillRates : levelRewardRates;
+    targetMap.set(rule.characterId, (targetMap.get(rule.characterId) ?? 0) + rule.rate);
+  }
+
+  const levelRewardMax = [...levelRewardRates.values()]
+    .sort((a, b) => b - a)
+    .slice(0, Math.min(3, Math.max(1, unlockedSlots)))
+    .reduce((total, rate) => total + rate, 0);
+  const skillMax = [...skillRates.values()]
+    .sort((a, b) => b - a)
+    .slice(0, 3)
+    .reduce((total, rate) => total + rate, 0);
+  return levelRewardMax + skillMax;
+}
+
+function getSlotMaxRebateRate(unlockedSlots: number, baseRebateRate: number, isEventDay: boolean): number {
+  return baseRebateRate + getMaxPetRebateBonus(unlockedSlots, isEventDay);
 }
 
 async function getUnlockedPetSlots(userId: string): Promise<number> {
@@ -330,8 +349,8 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
 
     const petRebateBonuses = petBonusesByUser.get(userId) ?? [];
     const slotRebateRuleActive = isSlotRebateRuleActive(now);
-    const maxRebateRate = getSlotMaxRebateRate(unlockedSlots);
     const baseRebateRate = await getBaseRebateRate(eventSettings.isEventDay, unlockedSlots, slotRebateRuleActive);
+    const maxRebateRate = getSlotMaxRebateRate(unlockedSlots, baseRebateRate, eventSettings.isEventDay);
     const rawPetRebateBonusRate = petRebateBonuses.reduce((total, bonus) => total + bonus.rate, 0);
     const petRebateBonusRate = slotRebateRuleActive && !eventSettings.isEventDay
       ? capPetRebateBonus(baseRebateRate, rawPetRebateBonusRate, maxRebateRate)
@@ -355,7 +374,7 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
       slotRebateRuleActive,
       slotRebateRuleStartDate: SLOT_REBATE_RULE_START_JST,
       scheduledSlotBaseRebateRate: getSlotBaseRebateRate(unlockedSlots),
-      scheduledSlotMaxRebateRate: maxRebateRate,
+      scheduledSlotMaxRebateRate: getSlotMaxRebateRate(unlockedSlots, getSlotBaseRebateRate(unlockedSlots), false),
       baseRebateRate,                          // 管理者設定の基本還元率（通常/イベント）
       maxRebateRate,
       petRebateBonuses,                        // PET由来の還元率内訳（レベル報酬・固有スキル）
@@ -427,8 +446,8 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
       getPetPurchaseBonuses([userId], eventSettings.isEventDay),
     ]);
     const requestSlotRebateRuleActive = isSlotRebateRuleActive(now);
-    const requestMaxRebateRate = getSlotMaxRebateRate(requestUnlockedSlots);
     const requestBaseRebateRate = await getBaseRebateRate(eventSettings.isEventDay, requestUnlockedSlots, requestSlotRebateRuleActive);
+    const requestMaxRebateRate = getSlotMaxRebateRate(requestUnlockedSlots, requestBaseRebateRate, eventSettings.isEventDay);
     const requestPetRebateBonuses = requestPetBonusesByUser.get(userId) ?? [];
     const rawRequestPetRebateBonusRate = requestPetRebateBonuses.reduce((t, b) => t + b.rate, 0);
     const requestPetRebateBonusRate = requestSlotRebateRuleActive && !eventSettings.isEventDay
@@ -496,7 +515,7 @@ router.get("/admin/purchase-requests", requireAdmin, async (_req, res): Promise<
       const currentUnlockedSlots = slotsByUser.get(request.userId) ?? 1;
       const currentSlotRebateRuleActive = isSlotRebateRuleActive();
       const currentBaseRebateRate = await getBaseRebateRate(eventSettings.isEventDay, currentUnlockedSlots, currentSlotRebateRuleActive);
-      const currentMaxRebateRate = getSlotMaxRebateRate(currentUnlockedSlots);
+      const currentMaxRebateRate = getSlotMaxRebateRate(currentUnlockedSlots, currentBaseRebateRate, eventSettings.isEventDay);
       const rawCurrentPetRebateBonusRate = currentPetBonuses.reduce((total, bonus) => total + bonus.rate, 0);
       const currentPetRebateBonusRate = currentSlotRebateRuleActive && !eventSettings.isEventDay
         ? capPetRebateBonus(currentBaseRebateRate, rawCurrentPetRebateBonusRate, currentMaxRebateRate)
