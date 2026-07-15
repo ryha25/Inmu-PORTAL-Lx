@@ -328,8 +328,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomImage: tdnRoomImage,
     skill: {
       name: 'オナシャス！センセンシャル',
-      effect: 'ガチャ後に1日1回、ランダムでもう一度同じ回数を引ける',
-      notes: ['Lv.1から発動', '発動時は結果画面に「もう一度引く」が表示されます'],
+      effect: 'ガチャ後に1日3回まで、ランダムでもう一度同じ回数を引ける',
+      notes: ['Lv.1から発動', '1日3回まで発動', '50連ごとに最低1回は発動', '発動時は結果画面に「もう一度引く」が表示されます'],
     },
     levelRewards: [
       { level: 10, label: '炎のミット + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },

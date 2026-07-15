@@ -1,6 +1,8 @@
 import { pool } from "@workspace/db";
 import { ensurePetStateTable } from "./pet-state-store";
 
+const TDN_REROLL_DAILY_LIMIT = 3;
+
 // ── JST 今日の開始時刻（UTC）を返す ──
 function jstTodayStartUtc(): Date {
   const jstOffset = 9 * 3600 * 1000;
@@ -123,12 +125,11 @@ export async function getSkillLockStatus(userId: string, characterIds: string[])
         result[id] = (r.rowCount ?? 0) > 0;
       } else if (normalized === "tdn") {
         const r = await pool.query(
-          `SELECT 1 FROM "petGachaHistory"
-           WHERE "userId"=$1 AND ("tdnRerollGrantedAt">=$2 OR "tdnRerollUsedAt">=$2)
-           LIMIT 1`,
+          `SELECT COUNT(*)::int AS count FROM "petGachaHistory"
+           WHERE "userId"=$1 AND "tdnRerollGrantedAt">=$2`,
           [userId, todayStart.toISOString()],
         );
-        result[id] = (r.rowCount ?? 0) > 0;
+        result[id] = Number(r.rows[0]?.count ?? 0) >= TDN_REROLL_DAILY_LIMIT;
       } else if (normalized === "inmu-festival") {
         // イベント期間外はロックなし（イベント検知未実装のため常時 false）
         result[id] = false;

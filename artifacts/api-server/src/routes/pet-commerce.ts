@@ -15,6 +15,7 @@ const DUPLICATE_CHARACTER_POINTS = 50_000;
 const DUPLICATE_CHARACTER_SLEEP_TEA = 3;
 const TDN_REROLL_CHANCE = 0.3;
 const TDN_REROLL_GUARANTEE_PULLS = 50;
+const TDN_REROLL_DAILY_LIMIT = 3;
 
 const CHARACTERS = [
   { id: "nyarushian", name: "ニャルシアン" },
@@ -356,23 +357,16 @@ function jstTomorrowStartUtc(): Date {
   return new Date(today.getTime() + 24 * 3600 * 1000);
 }
 
-function pullCountForTdnReroll(pullType: PullType): number {
-  if (pullType === "eleven") return 11;
-  if (pullType === "multi") return 10;
-  return 1;
-}
-
 async function grantTdnReroll(client: any, userId: string, historyId: number, mode: GachaMode, pullType: PullType): Promise<TdnRerollInfo | null> {
   const tdnSkillActive = await hasActivePetSkill(userId, "tdn");
   if (!tdnSkillActive) return null;
   const todayStart = jstTodayStartUtc();
-  const existing = await client.query(
-    `SELECT 1 FROM "petGachaHistory"
-     WHERE "userId"=$1 AND ("tdnRerollGrantedAt">=$2 OR "tdnRerollUsedAt">=$2)
-     LIMIT 1`,
+  const todayGrants = await client.query(
+    `SELECT COUNT(*)::int AS count FROM "petGachaHistory"
+     WHERE "userId"=$1 AND "tdnRerollGrantedAt">=$2`,
     [userId, todayStart.toISOString()],
   );
-  if (existing.rowCount) return null;
+  if (Number(todayGrants.rows[0]?.count ?? 0) >= TDN_REROLL_DAILY_LIMIT) return null;
 
   const lastGrant = await client.query(
     `SELECT "tdnRerollGrantedAt" FROM "petGachaHistory"
@@ -394,17 +388,12 @@ async function grantTdnReroll(client: any, userId: string, historyId: number, mo
      FROM "petGachaHistory"
      WHERE "userId"=$1
        AND "tdnRerollSourceId" IS NULL
-       AND ("tdnRerollGrantedAt" IS NOT NULL OR "tdnRerollUsedAt" IS NOT NULL)
-       AND COALESCE("tdnRerollGrantedAt", "tdnRerollUsedAt") > $2`,
+       AND "createdAt" > $2`,
     [userId, sinceLastGrant],
   );
   const pullsSinceLastGrant = Number(attempts.rows[0]?.pulls ?? 0);
-  const guaranteed = pullsSinceLastGrant + pullCountForTdnReroll(pullType) >= TDN_REROLL_GUARANTEE_PULLS;
+  const guaranteed = pullsSinceLastGrant >= TDN_REROLL_GUARANTEE_PULLS;
   if (!guaranteed && Math.random() >= TDN_REROLL_CHANCE) {
-    await client.query(
-      `UPDATE "petGachaHistory" SET "tdnRerollUsedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
-      [historyId, userId],
-    );
     return null;
   }
   const token = randomUUID();
