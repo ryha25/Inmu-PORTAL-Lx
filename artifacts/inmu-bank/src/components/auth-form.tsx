@@ -22,7 +22,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LangToggle } from '@/components/lang-toggle'
-import { Logo } from '@/components/logo'
 import { useI18n } from '@/lib/i18n/context'
 
 const features = [
@@ -114,7 +113,6 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-8 text-center">
           <div className="flex flex-col items-center gap-4">
             <img src="/app-icon.jpg" alt="INMU PORTAL" className="h-20 w-20 rounded-2xl border border-primary/25 shadow-lg" />
-            <Logo size={48} className="justify-center" />
             <div>
               <h1 className="text-3xl font-bold tracking-tight gold-text sm:text-5xl">INMU PORTAL</h1>
               <p className="mt-3 text-base font-semibold text-foreground sm:text-xl">INMUコミュニティの総合プラットフォーム</p>
@@ -129,16 +127,6 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
               <CardTitle className="text-lg">{mode === 'sign-up' ? '新規登録' : 'ログイン'}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="mb-4 grid grid-cols-2 gap-2">
-                <Button type="button" variant="outline" disabled className="min-h-11 justify-center text-xs">
-                  {t('signin_with_x')}
-                </Button>
-                <Button type="button" variant="outline" disabled className="min-h-11 justify-center text-xs">
-                  {t('signin_with_discord')}
-                </Button>
-              </div>
-              <p className="mb-4 text-center text-[11px] text-muted-foreground">{t('demo_notice')}</p>
-
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="name">ユーザー名</Label>
