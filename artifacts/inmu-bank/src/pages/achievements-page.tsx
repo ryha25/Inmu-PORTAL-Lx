@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { PageHeader } from '@/components/page-header'
 import { RankingView } from '@/components/ranking-view'
+import type { MonthlyVolumeRow, MonthlyVolumeSeason } from '@/components/ranking-view'
 import { Card } from '@/components/ui/card'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/hooks/use-auth'
@@ -21,6 +22,7 @@ type InmuRow      = { rank: number; userId: string; displayName: string; balance
 type PointsRow    = { rank: number; userId: string; displayName: string; points: number; participations: number }
 type CompositeRow = { rank: number; userId: string; displayName: string; balance: number; points: number; clears: number; score: number }
 type CompositeResult = { ranking: CompositeRow[]; myRank: number | null; totalUsers: number }
+type MonthlyVolumeResult = { season: MonthlyVolumeSeason; formula: string; ranking: MonthlyVolumeRow[] }
 
 function summaryValueSize(value: number) {
   const length = Math.abs(Math.trunc(value)).toLocaleString().length
@@ -37,6 +39,9 @@ export function AchievementsPage() {
   const [inmuRows,      setInmuRows]      = useState<InmuRow[]>([])
   const [pointsRows,    setPointsRows]    = useState<PointsRow[]>([])
   const [compositeRows, setCompositeRows] = useState<CompositeRow[]>([])
+  const [monthlyVolumeRows, setMonthlyVolumeRows] = useState<MonthlyVolumeRow[]>([])
+  const [monthlyVolumeSeason, setMonthlyVolumeSeason] = useState<MonthlyVolumeSeason | null>(null)
+  const [monthlyVolumeFormula, setMonthlyVolumeFormula] = useState('')
   const [myCompositeRank, setMyCompositeRank] = useState<number | null>(null)
   const [myInmuRank,    setMyInmuRank]    = useState<number | null>(null)
   const [myPointsRank,  setMyPointsRank]  = useState<number | null>(null)
@@ -76,6 +81,17 @@ export function AchievementsPage() {
           setTotalUsers(d.totalUsers ?? 0)
         }
       })
+
+    fetch('/api/ranking/monthly-volume', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: MonthlyVolumeResult | null) => {
+        if (d) {
+          setMonthlyVolumeRows(d.ranking ?? [])
+          setMonthlyVolumeSeason(d.season ?? null)
+          setMonthlyVolumeFormula(d.formula ?? '')
+        }
+      })
+      .catch(() => {})
   }, [profile?.userId])
 
   return (
@@ -164,6 +180,9 @@ export function AchievementsPage() {
         inmuRows={inmuRows}
         pointsRows={pointsRows}
         compositeRows={compositeRows}
+        monthlyVolumeRows={monthlyVolumeRows}
+        monthlyVolumeSeason={monthlyVolumeSeason}
+        monthlyVolumeFormula={monthlyVolumeFormula}
         myCompositeRank={myCompositeRank}
         myInmuRank={myInmuRank}
         myPointsRank={myPointsRank}
