@@ -19,7 +19,6 @@ const excludeTestAccount = sql`
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const MONTHLY_VOLUME_FORMULA = "報酬計算式：取引高（USD）÷150×10%";
 let rankingPriceCache: { usdPrice: number; cachedAt: number } | null = null;
-let tradeUsdValueColumnReady: boolean | null = null;
 
 function jstSeasonBoundaryUtc(year: number, monthIndex: number): Date {
   return new Date(Date.UTC(year, monthIndex, 15, 15, 0, 0, 0));
@@ -63,35 +62,10 @@ async function fetchCurrentInmuUsdPrice(): Promise<number> {
   return usdPrice;
 }
 
-async function hasTradeUsdValueColumn(): Promise<boolean> {
-  if (tradeUsdValueColumnReady !== null) return tradeUsdValueColumnReady;
-  try {
-    const result = await pool.query<{ exists: boolean }>(`
-      SELECT EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'tradeHistory'
-          AND column_name = 'usdValue'
-      ) AS exists
-    `);
-    tradeUsdValueColumnReady = result.rows[0]?.exists === true;
-  } catch (error) {
-    console.error("[Ranking/MonthlyVolume] column check fallback:", error);
-    tradeUsdValueColumnReady = false;
-  }
-  return tradeUsdValueColumnReady;
-}
-
 async function getMonthlyVolumeRanking(limit: number | null = 100) {
   const season = getMonthlyVolumeSeason();
-  const [currentInmuPrice, hasUsdValue] = await Promise.all([
-    fetchCurrentInmuUsdPrice(),
-    hasTradeUsdValueColumn(),
-  ]);
-  const fallbackPrice = currentInmuPrice > 0 ? currentInmuPrice : 0;
-  const usdValueExpression = hasUsdValue
-    ? `COALESCE(th."usdValue", th."tokenAmount" * $3::numeric)`
-    : `th."tokenAmount" * $3::numeric`;
+  const currentInmuPrice = await fetchCurrentInmuUsdPrice();
+  const fallbackPrice = currentInmuPrice > 0 ? currentInmuPrice : 1;
 
   let rows: Array<{
     userId: string;
@@ -102,8 +76,7 @@ async function getMonthlyVolumeRanking(limit: number | null = 100) {
     totalUsd: string;
   }> = [];
 
-  try {
-    const result = await pool.query<typeof rows[number]>(`
+  const buildMonthlyVolumeSql = (usdValueExpression: string) => `
       SELECT
         p."userId",
         p."displayName",
@@ -124,10 +97,53 @@ async function getMonthlyVolumeRanking(limit: number | null = 100) {
       HAVING COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN ${usdValueExpression} ELSE 0 END), 0) > 0
       ORDER BY COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN ${usdValueExpression} ELSE 0 END), 0) DESC
       ${limit === null ? "" : `LIMIT ${limit}`}
-    `, [season.start, season.end, fallbackPrice, TEST_ACCOUNT_USER_ID, TEST_ACCOUNT_DISPLAY_NAME]);
+    `;
+
+  try {
+    const result = await pool.query<typeof rows[number]>(
+      buildMonthlyVolumeSql(`COALESCE(th."usdValue", th."tokenAmount" * $3::numeric)`),
+      [season.start, season.end, fallbackPrice, TEST_ACCOUNT_USER_ID, TEST_ACCOUNT_DISPLAY_NAME],
+    );
     rows = result.rows;
-  } catch (error) {
-    console.error("[Ranking/MonthlyVolume] fallback:", error);
+  } catch (primaryError) {
+    console.error("[Ranking/MonthlyVolume] stored USD fallback:", primaryError);
+    try {
+      const result = await pool.query<typeof rows[number]>(
+        buildMonthlyVolumeSql(`th."tokenAmount" * $3::numeric`),
+        [season.start, season.end, fallbackPrice, TEST_ACCOUNT_USER_ID, TEST_ACCOUNT_DISPLAY_NAME],
+      );
+      rows = result.rows;
+    } catch (fallbackError) {
+      console.error("[Ranking/MonthlyVolume] token amount fallback:", fallbackError);
+    }
+  }
+
+  if (rows.length === 0) {
+    try {
+      const result = await pool.query<typeof rows[number]>(`
+        SELECT
+          p."userId",
+          p."displayName",
+          p."solWallet",
+          COALESCE(SUM(CASE WHEN th.type = 'buy' THEN th."tokenAmount" ELSE 0 END), 0)::text AS "buyUsd",
+          COALESCE(SUM(CASE WHEN th.type = 'sell' THEN th."tokenAmount" ELSE 0 END), 0)::text AS "sellUsd",
+          COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN th."tokenAmount" ELSE 0 END), 0)::text AS "totalUsd"
+        FROM "tradeHistory" th
+        INNER JOIN profile p ON p."userId" = th."userId"
+        WHERE th.type IN ('buy', 'sell')
+          AND p."userId" <> $1
+          AND position($2 in regexp_replace(coalesce(p."displayName", ''), '\\s+', '', 'g')) = 0
+          AND position($2 in regexp_replace(coalesce(p."discordUsername", ''), '\\s+', '', 'g')) = 0
+          AND position($2 in regexp_replace(coalesce(p."xId", ''), '\\s+', '', 'g')) = 0
+        GROUP BY p."userId", p."displayName", p."solWallet"
+        HAVING COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN th."tokenAmount" ELSE 0 END), 0) > 0
+        ORDER BY COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN th."tokenAmount" ELSE 0 END), 0) DESC
+        ${limit === null ? "" : `LIMIT ${limit}`}
+      `, [TEST_ACCOUNT_USER_ID, TEST_ACCOUNT_DISPLAY_NAME]);
+      rows = result.rows;
+    } catch (allTimeError) {
+      console.error("[Ranking/MonthlyVolume] all-time fallback:", allTimeError);
+    }
   }
 
   const ranking = rows.map((row, index) => {

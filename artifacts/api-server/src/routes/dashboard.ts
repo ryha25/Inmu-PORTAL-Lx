@@ -12,11 +12,49 @@ import { requireAuth } from "../middlewares/session";
 
 const router = Router();
 
+type DashboardTransactionRow = {
+  id: number;
+  type: string;
+  amount: string;
+  counterparty: string | null;
+  memo: string | null;
+  createdAt: Date;
+};
+
+type DashboardMonthlyTransactionRow = {
+  type: string;
+  amount: string;
+};
+
+type DashboardJarRow = {
+  balance: string;
+};
+
+type DashboardGoalRow = {
+  targetAmount: string;
+  currentAmount: string;
+};
+
+type DashboardTradeRow = {
+  id: number;
+  type: string;
+  tokenAmount: string;
+  dex: string | null;
+  txSignature: string;
+  tradedAt: Date;
+};
+
 router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
     const profile = await db
-      .select()
+      .select({
+        balance: profileTable.balance,
+        savingsBalance: profileTable.savingsBalance,
+        totalReceived: profileTable.totalReceived,
+        totalSent: profileTable.totalSent,
+        monthlyPoints: profileTable.monthlyPoints,
+      })
       .from(profileTable)
       .where(eq(profileTable.userId, userId))
       .then((r) => r[0]);
@@ -29,14 +67,21 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const monthlyTxs = await db
-      .select()
+      .select({
+        type: transactionsTable.type,
+        amount: transactionsTable.amount,
+      })
       .from(transactionsTable)
       .where(
         and(
           eq(transactionsTable.userId, userId),
           gte(transactionsTable.createdAt, monthStart),
         ),
-      );
+      )
+      .catch((error) => {
+        console.error("[Dashboard] monthly transactions fallback:", error);
+        return [] as DashboardMonthlyTransactionRow[];
+      });
 
     const monthlyChange = monthlyTxs.reduce((acc, tx) => {
       const amt = Number(tx.amount);
@@ -45,15 +90,28 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     }, 0);
 
     const jars = await db
-      .select()
+      .select({
+        balance: jarsTable.balance,
+      })
       .from(jarsTable)
-      .where(eq(jarsTable.userId, userId));
+      .where(eq(jarsTable.userId, userId))
+      .catch((error) => {
+        console.error("[Dashboard] jars fallback:", error);
+        return [] as DashboardJarRow[];
+      });
     const jarTotal = jars.reduce((s, j) => s + Number(j.balance), 0);
 
     const goals = await db
-      .select()
+      .select({
+        targetAmount: goalsTable.targetAmount,
+        currentAmount: goalsTable.currentAmount,
+      })
       .from(goalsTable)
-      .where(eq(goalsTable.userId, userId));
+      .where(eq(goalsTable.userId, userId))
+      .catch((error) => {
+        console.error("[Dashboard] goals fallback:", error);
+        return [] as DashboardGoalRow[];
+      });
     let goalRate = 0;
     if (goals.length > 0) {
       const rates = goals.map((g) => {
@@ -66,11 +124,22 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     }
 
     const recent = await db
-      .select()
+      .select({
+        id: transactionsTable.id,
+        type: transactionsTable.type,
+        amount: transactionsTable.amount,
+        counterparty: transactionsTable.counterparty,
+        memo: transactionsTable.memo,
+        createdAt: transactionsTable.createdAt,
+      })
       .from(transactionsTable)
       .where(eq(transactionsTable.userId, userId))
       .orderBy(sql`${transactionsTable.createdAt} DESC`)
-      .limit(20);
+      .limit(20)
+      .catch((error) => {
+        console.error("[Dashboard] recent transactions fallback:", error);
+        return [] as DashboardTransactionRow[];
+      });
 
     const recentTrades = await db
       .select({
@@ -87,7 +156,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       .limit(20)
       .catch((error) => {
         console.error("[Dashboard] recent trades fallback:", error);
-        return [];
+        return [] as DashboardTradeRow[];
       });
 
     const merged = [
