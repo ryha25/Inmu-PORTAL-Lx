@@ -26,18 +26,6 @@ import bcrypt from "bcryptjs";
 
 const router = Router();
 
-let tradeUsdColumnsReady: Promise<void> | null = null;
-function ensureTradeUsdColumns(): Promise<void> {
-  if (!tradeUsdColumnsReady) {
-    tradeUsdColumnsReady = pool.query(`
-      ALTER TABLE "tradeHistory"
-      ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
-      ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
-    `).then(() => undefined);
-  }
-  return tradeUsdColumnsReady;
-}
-
 // ── Rate limiting: admin passcode verify (5 fails → 30 min lock) ──
 interface FailRecord { count: number; lockedUntil: number }
 const passcodeFailMap = new Map<string, FailRecord>();
@@ -254,13 +242,20 @@ router.get("/admin/user-transactions", requireAdmin, async (req, res): Promise<v
     return;
   }
   try {
-    await ensureTradeUsdColumns();
     const [txRows, tradeRows] = await Promise.all([
       db.select().from(transactionsTable)
         .where(eq(transactionsTable.userId, userId))
         .orderBy(sql`${transactionsTable.createdAt} DESC`)
         .limit(100),
-      db.select().from(tradeHistoryTable)
+      db.select({
+        id: tradeHistoryTable.id,
+        walletAddress: tradeHistoryTable.walletAddress,
+        txSignature: tradeHistoryTable.txSignature,
+        type: tradeHistoryTable.type,
+        tokenAmount: tradeHistoryTable.tokenAmount,
+        dex: tradeHistoryTable.dex,
+        tradedAt: tradeHistoryTable.tradedAt,
+      }).from(tradeHistoryTable)
         .where(eq(tradeHistoryTable.userId, userId))
         .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
         .limit(100),

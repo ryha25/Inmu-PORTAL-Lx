@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { UserSendDialog } from '@/components/user-send-dialog'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
+import { Redirect } from 'wouter'
 
 async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 12000) {
   const controller = new AbortController()
@@ -21,7 +22,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}
 
 export function DashboardPage() {
   const { t } = useI18n()
-  const { profile, unread } = useAuth()
+  const { profile, unread, loading: authLoading } = useAuth()
   const [data, setData] = useState<{
     balance: number; savingsBalance: number; monthlyChange: number; totalReceived: number; totalSent: number; jarTotal: number; goalRate: number; monthlyPoints: number
     recent: { id: number; type: string; amount: string; counterparty: string | null; memo: string | null; createdAt: string }[]
@@ -48,12 +49,13 @@ export function DashboardPage() {
   }
 
   const loadDashboard = useCallback(() => {
+    if (authLoading || !profile) return
     setDashboardError(false)
     fetchWithTimeout('/api/dashboard', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.recent) setData(d); else setDashboardError(true) })
       .catch(() => setDashboardError(true))
-  }, [])
+  }, [authLoading, profile])
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 
@@ -83,20 +85,23 @@ export function DashboardPage() {
   }
 
   useEffect(() => {
-    if (!profile?.solWallet) { setWalletInmu(null); return }
+    if (authLoading || !profile?.solWallet) { setWalletInmu(null); return }
     const wallet = profile.solWallet
     fetch(`/api/solana/inmu-balance?wallet=${encodeURIComponent(wallet)}`, { credentials: 'include' })
       .then(async r => r.ok ? r.json() as Promise<{ balance: number }> : null)
       .then(d => { setWalletInmu(d?.balance ?? null) })
       .catch(() => { setWalletInmu(null) })
-  }, [profile?.solWallet])
+  }, [authLoading, profile?.solWallet])
 
   useEffect(() => {
+    if (authLoading || !profile) return
     fetch('/api/solana/inmu-price', { credentials: 'include' })
       .then(r => r.ok ? r.json() as Promise<{ usdPrice: number; jpyRate: number }> : null)
       .then(d => { if (d) setInmuPrice(d) })
       .catch(() => {})
-  }, [])
+  }, [authLoading, profile])
+
+  if (!authLoading && !profile) return <Redirect to="/sign-in" />
 
   if (!data) return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>

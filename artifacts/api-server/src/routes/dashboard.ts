@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, pool } from "@workspace/db";
+import { db } from "@workspace/db";
 import {
   profileTable,
   transactionsTable,
@@ -12,22 +12,9 @@ import { requireAuth } from "../middlewares/session";
 
 const router = Router();
 
-let tradeUsdColumnsReady: Promise<void> | null = null;
-function ensureTradeUsdColumns(): Promise<void> {
-  if (!tradeUsdColumnsReady) {
-    tradeUsdColumnsReady = pool.query(`
-      ALTER TABLE "tradeHistory"
-      ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
-      ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
-    `).then(() => undefined);
-  }
-  return tradeUsdColumnsReady;
-}
-
 router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
-    await ensureTradeUsdColumns();
     const profile = await db
       .select()
       .from(profileTable)
@@ -86,7 +73,14 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       .limit(20);
 
     const recentTrades = await db
-      .select()
+      .select({
+        id: tradeHistoryTable.id,
+        type: tradeHistoryTable.type,
+        tokenAmount: tradeHistoryTable.tokenAmount,
+        dex: tradeHistoryTable.dex,
+        txSignature: tradeHistoryTable.txSignature,
+        tradedAt: tradeHistoryTable.tradedAt,
+      })
       .from(tradeHistoryTable)
       .where(eq(tradeHistoryTable.userId, userId))
       .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
