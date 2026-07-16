@@ -44,6 +44,19 @@ type DashboardTradeRow = {
   tradedAt: Date;
 };
 
+async function safeDashboardQuery<T>(
+  label: string,
+  run: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    console.error(`[Dashboard] ${label} fallback:`, error);
+    return fallback;
+  }
+}
+
 router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
@@ -66,22 +79,22 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const monthlyTxs = await db
-      .select({
-        type: transactionsTable.type,
-        amount: transactionsTable.amount,
-      })
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.userId, userId),
-          gte(transactionsTable.createdAt, monthStart),
+    const monthlyTxs = await safeDashboardQuery<DashboardMonthlyTransactionRow[]>(
+      "monthly transactions",
+      () => db
+        .select({
+          type: transactionsTable.type,
+          amount: transactionsTable.amount,
+        })
+        .from(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.userId, userId),
+            gte(transactionsTable.createdAt, monthStart),
+          ),
         ),
-      )
-      .catch((error) => {
-        console.error("[Dashboard] monthly transactions fallback:", error);
-        return [] as DashboardMonthlyTransactionRow[];
-      });
+      [],
+    );
 
     const monthlyChange = monthlyTxs.reduce((acc, tx) => {
       const amt = Number(tx.amount);
@@ -89,29 +102,29 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       return acc + amt;
     }, 0);
 
-    const jars = await db
-      .select({
-        balance: jarsTable.balance,
-      })
-      .from(jarsTable)
-      .where(eq(jarsTable.userId, userId))
-      .catch((error) => {
-        console.error("[Dashboard] jars fallback:", error);
-        return [] as DashboardJarRow[];
-      });
+    const jars = await safeDashboardQuery<DashboardJarRow[]>(
+      "jars",
+      () => db
+        .select({
+          balance: jarsTable.balance,
+        })
+        .from(jarsTable)
+        .where(eq(jarsTable.userId, userId)),
+      [],
+    );
     const jarTotal = jars.reduce((s, j) => s + Number(j.balance), 0);
 
-    const goals = await db
-      .select({
-        targetAmount: goalsTable.targetAmount,
-        currentAmount: goalsTable.currentAmount,
-      })
-      .from(goalsTable)
-      .where(eq(goalsTable.userId, userId))
-      .catch((error) => {
-        console.error("[Dashboard] goals fallback:", error);
-        return [] as DashboardGoalRow[];
-      });
+    const goals = await safeDashboardQuery<DashboardGoalRow[]>(
+      "goals",
+      () => db
+        .select({
+          targetAmount: goalsTable.targetAmount,
+          currentAmount: goalsTable.currentAmount,
+        })
+        .from(goalsTable)
+        .where(eq(goalsTable.userId, userId)),
+      [],
+    );
     let goalRate = 0;
     if (goals.length > 0) {
       const rates = goals.map((g) => {
@@ -123,41 +136,41 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       goalRate = rates.reduce((s, r) => s + r, 0) / rates.length;
     }
 
-    const recent = await db
-      .select({
-        id: transactionsTable.id,
-        type: transactionsTable.type,
-        amount: transactionsTable.amount,
-        counterparty: transactionsTable.counterparty,
-        memo: transactionsTable.memo,
-        createdAt: transactionsTable.createdAt,
-      })
-      .from(transactionsTable)
-      .where(eq(transactionsTable.userId, userId))
-      .orderBy(sql`${transactionsTable.createdAt} DESC`)
-      .limit(20)
-      .catch((error) => {
-        console.error("[Dashboard] recent transactions fallback:", error);
-        return [] as DashboardTransactionRow[];
-      });
+    const recent = await safeDashboardQuery<DashboardTransactionRow[]>(
+      "recent transactions",
+      () => db
+        .select({
+          id: transactionsTable.id,
+          type: transactionsTable.type,
+          amount: transactionsTable.amount,
+          counterparty: transactionsTable.counterparty,
+          memo: transactionsTable.memo,
+          createdAt: transactionsTable.createdAt,
+        })
+        .from(transactionsTable)
+        .where(eq(transactionsTable.userId, userId))
+        .orderBy(sql`${transactionsTable.createdAt} DESC`)
+        .limit(20),
+      [],
+    );
 
-    const recentTrades = await db
-      .select({
-        id: tradeHistoryTable.id,
-        type: tradeHistoryTable.type,
-        tokenAmount: tradeHistoryTable.tokenAmount,
-        dex: tradeHistoryTable.dex,
-        txSignature: tradeHistoryTable.txSignature,
-        tradedAt: tradeHistoryTable.tradedAt,
-      })
-      .from(tradeHistoryTable)
-      .where(eq(tradeHistoryTable.userId, userId))
-      .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
-      .limit(20)
-      .catch((error) => {
-        console.error("[Dashboard] recent trades fallback:", error);
-        return [] as DashboardTradeRow[];
-      });
+    const recentTrades = await safeDashboardQuery<DashboardTradeRow[]>(
+      "recent trades",
+      () => db
+        .select({
+          id: tradeHistoryTable.id,
+          type: tradeHistoryTable.type,
+          tokenAmount: tradeHistoryTable.tokenAmount,
+          dex: tradeHistoryTable.dex,
+          txSignature: tradeHistoryTable.txSignature,
+          tradedAt: tradeHistoryTable.tradedAt,
+        })
+        .from(tradeHistoryTable)
+        .where(eq(tradeHistoryTable.userId, userId))
+        .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
+        .limit(20),
+      [],
+    );
 
     const merged = [
       ...recent.map((t) => ({
