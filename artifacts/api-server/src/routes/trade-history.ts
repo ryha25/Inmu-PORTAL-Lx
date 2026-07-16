@@ -1,10 +1,16 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { tradeHistoryTable } from "@workspace/db/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
+
+pool.query(`
+  ALTER TABLE "tradeHistory"
+  ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
+  ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
+`).catch((e: unknown) => console.error("[TradeHistory] ALTER TABLE error:", e));
 
 // ── 購入履歴の有効期間開始日（2026-05-01以降のみ対象）──
 const HISTORY_CUTOFF = new Date("2026-05-01T00:00:00.000Z");

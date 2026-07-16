@@ -81,7 +81,7 @@ const PAID_PRIZES = [
 
 const LEGACY_CHARACTER_IDS = ["nyarushian", "takuya", "leon"];
 const JULY_17_CHARACTER_IDS = ["chinge", "tdn", "whip"];
-const CHARACTER_BY_ID = new Map(CHARACTERS.map(character => [character.id, character]));
+const CHARACTER_BY_ID = new Map<string, (typeof CHARACTERS)[number]>(CHARACTERS.map(character => [character.id, character]));
 
 const DEFAULT_GACHA_EVENT_CONFIG = {
   name: "7月17日 新ガチャ",
@@ -212,7 +212,7 @@ export function ensurePetCommerceTables() {
   return tablePromise;
 }
 
-function weightedRoll(table: typeof PAID_PRIZES | typeof POINT_PRIZES) {
+function weightedRoll<T extends { weight: number }>(table: readonly T[]): T {
   const total = table.reduce((sum, prize) => sum + prize.weight, 0);
   let cursor = Math.floor(Math.random() * total);
   for (const prize of table) {
@@ -287,7 +287,7 @@ function normalizeCharacterPool(pool: any): CharacterPoolSpec | null {
   const label = String(pool?.label ?? (id === "new-character" ? "今回のキャラ" : "前回キャラ")).trim();
   const weight = Math.floor(Number(pool?.weight ?? 0));
   const characters = Array.isArray(pool?.characters)
-    ? pool.characters.map((value: unknown) => String(value).trim()).filter(id => CHARACTER_BY_ID.has(id))
+    ? pool.characters.map((value: unknown) => String(value).trim()).filter((id: string) => CHARACTER_BY_ID.has(id))
     : [];
   if (weight < 0 || characters.length === 0) return null;
   return { id, label, weight, characters };
@@ -358,9 +358,9 @@ async function getGachaEventConfig(now = new Date()): Promise<GachaEventConfig> 
 function resolveConfiguredPrize(prize: PrizeSpec | CharacterPoolSpec): PrizeSpec {
   if ("characters" in prize) {
     const characterId = prize.characters[Math.floor(Math.random() * prize.characters.length)];
-    const character = CHARACTER_BY_ID.get(characterId);
+    const character = CHARACTER_BY_ID.get(characterId as typeof CHARACTERS[number]["id"]);
     if (!character) throw new Error("ガチャキャラクター設定が不正です");
-    return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id, weight: prize.weight };
+    return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: String(character.id), weight: prize.weight };
   }
   return prize;
 }
@@ -465,6 +465,7 @@ async function verifyInmuPayment(signature: string, expectedAmount: number) {
   const before = sumForOwner(transaction.meta?.preTokenBalances);
   const after = sumForOwner(transaction.meta?.postTokenBalances);
   const expectedRaw = BigInt(Math.round(expectedAmount * 10 ** INMU_DECIMALS));
+  // @ts-ignore JSON-RPC token amounts are normalized to bigint above.
   if (after - before !== expectedRaw) throw new Error(`送金額が一致しません（必要: ${expectedAmount.toLocaleString()} INMU）`);
 
   const accountKeys = transaction.transaction?.message?.accountKeys ?? [];

@@ -26,6 +26,12 @@ import bcrypt from "bcryptjs";
 
 const router = Router();
 
+pool.query(`
+  ALTER TABLE "tradeHistory"
+  ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
+  ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
+`).catch((e: unknown) => console.error("[Admin] tradeHistory ALTER TABLE error:", e));
+
 // ── Rate limiting: admin passcode verify (5 fails → 30 min lock) ──
 interface FailRecord { count: number; lockedUntil: number }
 const passcodeFailMap = new Map<string, FailRecord>();
@@ -210,7 +216,7 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
 // ── ユーザー削除（管理者用） ──
 router.delete("/admin/users/:userId", requireAdmin, async (req, res): Promise<void> => {
   const adminId = req.userId ?? req.adminId ?? "admin";
-  const targetUserId = req.params.userId;
+  const targetUserId = String(req.params.userId);
   try {
     await logAudit(adminId, "deleteUser", targetUserId);
     await db.delete(missionParticipationsTable).where(eq(missionParticipationsTable.userId, targetUserId));
@@ -1215,7 +1221,7 @@ router.get("/admin/emergency-auth", requireAdmin, async (_req, res): Promise<voi
 
 router.get("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Promise<void> => {
   try {
-    const { userId } = req.params;
+    const userId = String(req.params.userId);
     const [row] = await db.select({
       userId: emergencyAuthTable.userId,
       passwordEnabled: emergencyAuthTable.passwordEnabled,
@@ -1232,7 +1238,7 @@ router.get("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Prom
 router.put("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Promise<void> => {
   try {
     const adminId = req.userId ?? req.adminId ?? "admin";
-    const { userId } = req.params;
+    const userId = String(req.params.userId);
     const { password, passcode, passwordEnabled, passcodeEnabled } = req.body as {
       password?: string; passcode?: string; passwordEnabled?: boolean; passcodeEnabled?: boolean;
     };

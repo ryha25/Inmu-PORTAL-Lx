@@ -380,8 +380,8 @@ function getInventorySnapshot(save: PetSaveData): PetInventorySnapshot {
 }
 
 function sameInventorySnapshot(a: PetInventorySnapshot | null | undefined, b: PetInventorySnapshot | null | undefined) {
-  return Boolean(a && b)
-    && a.sleepTea === b.sleepTea
+  if (!a || !b) return false
+  return a.sleepTea === b.sleepTea
     && a.premiumInventory === b.premiumInventory
     && a.takuyaSunglasses === b.takuyaSunglasses
     && a.catHeadband === b.catHeadband
@@ -727,7 +727,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
         exp,
         sleepiness,
         ...reward,
-        pointsGrantStatus: reward.rewardType === 'points' ? 'pending' : undefined,
+        pointsGrantStatus: reward.rewardType === 'points' ? ('pending' as const) : undefined,
         seen: false,
       },
     ].slice(-8)

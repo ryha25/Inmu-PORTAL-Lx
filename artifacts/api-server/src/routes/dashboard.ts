@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import {
   profileTable,
   transactionsTable,
@@ -11,6 +11,12 @@ import { eq, sql, and, gte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
 
 const router = Router();
+
+pool.query(`
+  ALTER TABLE "tradeHistory"
+  ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
+  ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
+`).catch((e: unknown) => console.error("[Dashboard] tradeHistory ALTER TABLE error:", e));
 
 router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
