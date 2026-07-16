@@ -12,15 +12,22 @@ import { requireAuth } from "../middlewares/session";
 
 const router = Router();
 
-pool.query(`
-  ALTER TABLE "tradeHistory"
-  ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
-  ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
-`).catch((e: unknown) => console.error("[Dashboard] tradeHistory ALTER TABLE error:", e));
+let tradeUsdColumnsReady: Promise<void> | null = null;
+function ensureTradeUsdColumns(): Promise<void> {
+  if (!tradeUsdColumnsReady) {
+    tradeUsdColumnsReady = pool.query(`
+      ALTER TABLE "tradeHistory"
+      ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
+      ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
+    `).then(() => undefined);
+  }
+  return tradeUsdColumnsReady;
+}
 
 router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
+    await ensureTradeUsdColumns();
     const profile = await db
       .select()
       .from(profileTable)

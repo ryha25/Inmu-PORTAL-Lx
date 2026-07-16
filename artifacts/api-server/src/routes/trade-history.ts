@@ -6,11 +6,17 @@ import { requireAuth, requireAdmin } from "../middlewares/session";
 
 const router = Router();
 
-pool.query(`
-  ALTER TABLE "tradeHistory"
-  ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
-  ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
-`).catch((e: unknown) => console.error("[TradeHistory] ALTER TABLE error:", e));
+let tradeUsdColumnsReady: Promise<void> | null = null;
+function ensureTradeUsdColumns(): Promise<void> {
+  if (!tradeUsdColumnsReady) {
+    tradeUsdColumnsReady = pool.query(`
+      ALTER TABLE "tradeHistory"
+      ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
+      ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
+    `).then(() => undefined);
+  }
+  return tradeUsdColumnsReady;
+}
 
 // ── 購入履歴の有効期間開始日（2026-05-01以降のみ対象）──
 const HISTORY_CUTOFF = new Date("2026-05-01T00:00:00.000Z");
@@ -47,6 +53,7 @@ router.get("/trade-history", requireAuth, async (req, res): Promise<void> => {
   const limit = Math.min(Number(req.query.limit ?? 100), 200);
 
   try {
+    await ensureTradeUsdColumns();
     const startDate = effectiveStart(period);
     const conditions = [
       eq(tradeHistoryTable.userId, userId),
@@ -83,6 +90,7 @@ router.get("/trade-history/stats", requireAuth, async (req, res): Promise<void> 
   const period = req.query.period as string | undefined;
 
   try {
+    await ensureTradeUsdColumns();
     const startDate = effectiveStart(period);
     const conditions = [
       eq(tradeHistoryTable.userId, userId),
@@ -115,6 +123,7 @@ router.get("/admin/trade-history", requireAdmin, async (req, res): Promise<void>
   const limit = Math.min(Number(req.query.limit ?? 100), 500);
 
   try {
+    await ensureTradeUsdColumns();
     const conditions = [];
     if (userId) conditions.push(eq(tradeHistoryTable.userId, userId));
     if (type === "buy" || type === "sell") conditions.push(eq(tradeHistoryTable.type, type));
