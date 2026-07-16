@@ -61,6 +61,21 @@ const faqItems = [
   { question: 'データは保存されますか？', answer: 'アカウント情報およびゲームデータは安全に保存されます。' },
 ]
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 15000) {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('通信がタイムアウトしました。時間をおいて再度お試しください。')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
 export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const { t } = useI18n()
   const [, navigate] = useLocation()
@@ -78,7 +93,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
     setLoading(true)
     try {
       if (mode === 'sign-up') {
-        const res = await fetch('/api/auth/sign-up', {
+        const res = await fetchWithTimeout('/api/auth/sign-up', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -89,7 +104,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
           throw new Error(d.error ?? '登録に失敗しました')
         }
       } else {
-        const requestSignIn = () => fetch('/api/auth/sign-in', {
+        const requestSignIn = () => fetchWithTimeout('/api/auth/sign-in', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

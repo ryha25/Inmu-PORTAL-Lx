@@ -9,6 +9,16 @@ import { UserSendDialog } from '@/components/user-send-dialog'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 12000) {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
 export function DashboardPage() {
   const { t } = useI18n()
   const { profile, unread } = useAuth()
@@ -21,6 +31,7 @@ export function DashboardPage() {
   const [sendOpen, setSendOpen] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [inmuPrice, setInmuPrice] = useState<{ usdPrice: number; jpyRate: number } | null>(null)
+  const [dashboardError, setDashboardError] = useState(false)
 
   async function handleScanTrades() {
     setScanning(true)
@@ -37,10 +48,11 @@ export function DashboardPage() {
   }
 
   const loadDashboard = useCallback(() => {
-    fetch('/api/dashboard', { credentials: 'include' })
+    setDashboardError(false)
+    fetchWithTimeout('/api/dashboard', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.recent) setData(d) })
-      .catch(() => {})
+      .then(d => { if (d?.recent) setData(d); else setDashboardError(true) })
+      .catch(() => setDashboardError(true))
   }, [])
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
@@ -88,7 +100,14 @@ export function DashboardPage() {
 
   if (!data) return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
-      <div className="py-20 text-center text-muted-foreground">{t('loading')}</div>
+      <div className="py-20 text-center text-muted-foreground">
+        {dashboardError ? (
+          <div className="space-y-3">
+            <p>読み込みに失敗しました。</p>
+            <Button size="sm" variant="outline" onClick={loadDashboard}>再読み込み</Button>
+          </div>
+        ) : t('loading')}
+      </div>
     </AppShell>
   )
 
