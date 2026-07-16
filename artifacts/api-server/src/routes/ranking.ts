@@ -18,19 +18,8 @@ const excludeTestAccount = sql`
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const MONTHLY_VOLUME_FORMULA = "報酬計算式：取引高（USD）÷150×10%";
-let tradeUsdColumnsReady: Promise<void> | null = null;
 let rankingPriceCache: { usdPrice: number; cachedAt: number } | null = null;
-
-function ensureTradeUsdColumns(): Promise<void> {
-  if (!tradeUsdColumnsReady) {
-    tradeUsdColumnsReady = pool.query(`
-      ALTER TABLE "tradeHistory"
-      ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
-      ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
-    `).then(() => undefined);
-  }
-  return tradeUsdColumnsReady;
-}
+let tradeUsdValueColumnReady: boolean | null = null;
 
 function jstSeasonBoundaryUtc(year: number, monthIndex: number): Date {
   return new Date(Date.UTC(year, monthIndex, 15, 15, 0, 0, 0));
@@ -74,41 +63,72 @@ async function fetchCurrentInmuUsdPrice(): Promise<number> {
   return usdPrice;
 }
 
-async function getMonthlyVolumeRanking(limit: number | null = 100) {
-  await ensureTradeUsdColumns();
-  const season = getMonthlyVolumeSeason();
-  const currentInmuPrice = await fetchCurrentInmuUsdPrice();
-  const fallbackPrice = currentInmuPrice > 0 ? currentInmuPrice : 0;
+async function hasTradeUsdValueColumn(): Promise<boolean> {
+  if (tradeUsdValueColumnReady !== null) return tradeUsdValueColumnReady;
+  try {
+    const result = await pool.query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'tradeHistory'
+          AND column_name = 'usdValue'
+      ) AS exists
+    `);
+    tradeUsdValueColumnReady = result.rows[0]?.exists === true;
+  } catch (error) {
+    console.error("[Ranking/MonthlyVolume] column check fallback:", error);
+    tradeUsdValueColumnReady = false;
+  }
+  return tradeUsdValueColumnReady;
+}
 
-  const { rows } = await pool.query<{
+async function getMonthlyVolumeRanking(limit: number | null = 100) {
+  const season = getMonthlyVolumeSeason();
+  const [currentInmuPrice, hasUsdValue] = await Promise.all([
+    fetchCurrentInmuUsdPrice(),
+    hasTradeUsdValueColumn(),
+  ]);
+  const fallbackPrice = currentInmuPrice > 0 ? currentInmuPrice : 0;
+  const usdValueExpression = hasUsdValue
+    ? `COALESCE(th."usdValue", th."tokenAmount" * $3::numeric)`
+    : `th."tokenAmount" * $3::numeric`;
+
+  let rows: Array<{
     userId: string;
     displayName: string;
     solWallet: string | null;
     buyUsd: string;
     sellUsd: string;
     totalUsd: string;
-  }>(`
-    SELECT
-      p."userId",
-      p."displayName",
-      p."solWallet",
-      COALESCE(SUM(CASE WHEN th.type = 'buy' THEN COALESCE(th."usdValue", th."tokenAmount" * $3::numeric) ELSE 0 END), 0)::text AS "buyUsd",
-      COALESCE(SUM(CASE WHEN th.type = 'sell' THEN COALESCE(th."usdValue", th."tokenAmount" * $3::numeric) ELSE 0 END), 0)::text AS "sellUsd",
-      COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN COALESCE(th."usdValue", th."tokenAmount" * $3::numeric) ELSE 0 END), 0)::text AS "totalUsd"
-    FROM "tradeHistory" th
-    INNER JOIN profile p ON p."userId" = th."userId"
-    WHERE th.type IN ('buy', 'sell')
-      AND th."tradedAt" >= $1
-      AND th."tradedAt" < $2
-      AND p."userId" <> $4
-      AND position($5 in regexp_replace(coalesce(p."displayName", ''), '\\s+', '', 'g')) = 0
-      AND position($5 in regexp_replace(coalesce(p."discordUsername", ''), '\\s+', '', 'g')) = 0
-      AND position($5 in regexp_replace(coalesce(p."xId", ''), '\\s+', '', 'g')) = 0
-    GROUP BY p."userId", p."displayName", p."solWallet"
-    HAVING COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN COALESCE(th."usdValue", th."tokenAmount" * $3::numeric) ELSE 0 END), 0) > 0
-    ORDER BY COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN COALESCE(th."usdValue", th."tokenAmount" * $3::numeric) ELSE 0 END), 0) DESC
-    ${limit === null ? "" : `LIMIT ${limit}`}
-  `, [season.start, season.end, fallbackPrice, TEST_ACCOUNT_USER_ID, TEST_ACCOUNT_DISPLAY_NAME]);
+  }> = [];
+
+  try {
+    const result = await pool.query<typeof rows[number]>(`
+      SELECT
+        p."userId",
+        p."displayName",
+        p."solWallet",
+        COALESCE(SUM(CASE WHEN th.type = 'buy' THEN ${usdValueExpression} ELSE 0 END), 0)::text AS "buyUsd",
+        COALESCE(SUM(CASE WHEN th.type = 'sell' THEN ${usdValueExpression} ELSE 0 END), 0)::text AS "sellUsd",
+        COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN ${usdValueExpression} ELSE 0 END), 0)::text AS "totalUsd"
+      FROM "tradeHistory" th
+      INNER JOIN profile p ON p."userId" = th."userId"
+      WHERE th.type IN ('buy', 'sell')
+        AND th."tradedAt" >= $1
+        AND th."tradedAt" < $2
+        AND p."userId" <> $4
+        AND position($5 in regexp_replace(coalesce(p."displayName", ''), '\\s+', '', 'g')) = 0
+        AND position($5 in regexp_replace(coalesce(p."discordUsername", ''), '\\s+', '', 'g')) = 0
+        AND position($5 in regexp_replace(coalesce(p."xId", ''), '\\s+', '', 'g')) = 0
+      GROUP BY p."userId", p."displayName", p."solWallet"
+      HAVING COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN ${usdValueExpression} ELSE 0 END), 0) > 0
+      ORDER BY COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN ${usdValueExpression} ELSE 0 END), 0) DESC
+      ${limit === null ? "" : `LIMIT ${limit}`}
+    `, [season.start, season.end, fallbackPrice, TEST_ACCOUNT_USER_ID, TEST_ACCOUNT_DISPLAY_NAME]);
+    rows = result.rows;
+  } catch (error) {
+    console.error("[Ranking/MonthlyVolume] fallback:", error);
+  }
 
   const ranking = rows.map((row, index) => {
     const buyUsd = Number(row.buyUsd);

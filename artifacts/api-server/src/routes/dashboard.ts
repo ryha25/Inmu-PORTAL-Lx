@@ -73,11 +73,22 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       .limit(20);
 
     const recentTrades = await db
-      .select()
+      .select({
+        id: tradeHistoryTable.id,
+        type: tradeHistoryTable.type,
+        tokenAmount: tradeHistoryTable.tokenAmount,
+        dex: tradeHistoryTable.dex,
+        txSignature: tradeHistoryTable.txSignature,
+        tradedAt: tradeHistoryTable.tradedAt,
+      })
       .from(tradeHistoryTable)
       .where(eq(tradeHistoryTable.userId, userId))
       .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
-      .limit(20);
+      .limit(20)
+      .catch((error) => {
+        console.error("[Dashboard] recent trades fallback:", error);
+        return [];
+      });
 
     const merged = [
       ...recent.map((t) => ({
@@ -111,7 +122,8 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       monthlyPoints: Number(profile.monthlyPoints),
       recent: merged,
     });
-  } catch {
+  } catch (error) {
+    console.error("[Dashboard] fetch error:", error);
     res.status(500).json({ error: "Internal error" });
   }
 });
