@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { RankingView } from '@/components/ranking-view'
+import type { MonthlyVolumeRow, MonthlyVolumeSeason } from '@/components/ranking-view'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
@@ -15,12 +16,21 @@ type CompositeResult = {
   myRank: number | null
   totalUsers: number
 }
+type MonthlyVolumeResult = {
+  season: MonthlyVolumeSeason
+  formula: string
+  ranking: MonthlyVolumeRow[]
+}
 
 export function RankingPage() {
   const { profile, unread } = useAuth()
+  const profileUserId = (profile as { userId?: string } | null)?.userId
   const [inmuRows,   setInmuRows]   = useState<InmuRow[]>([])
   const [pointsRows, setPointsRows] = useState<PointsRow[]>([])
   const [compositeRows, setCompositeRows] = useState<CompositeRow[]>([])
+  const [monthlyVolumeRows, setMonthlyVolumeRows] = useState<MonthlyVolumeRow[]>([])
+  const [monthlyVolumeSeason, setMonthlyVolumeSeason] = useState<MonthlyVolumeSeason | null>(null)
+  const [monthlyVolumeFormula, setMonthlyVolumeFormula] = useState('')
   const [myCompositeRank, setMyCompositeRank] = useState<number | null>(null)
   const [myInmuRank, setMyInmuRank] = useState<number | null>(null)
   const [myPointsRank, setMyPointsRank] = useState<number | null>(null)
@@ -28,7 +38,7 @@ export function RankingPage() {
   const [loading, setLoading] = useState(false)
 
   const fetchAll = useCallback(async () => {
-    const userId = profile?.userId
+    const userId = profileUserId
     setLoading(true)
     try {
       await Promise.all([
@@ -62,11 +72,22 @@ export function RankingPage() {
             }
           })
           .catch(() => {}),
+
+        fetch('/api/ranking/monthly-volume', { credentials: 'include' })
+          .then(r => r.ok ? r.json() : null)
+          .then((d: MonthlyVolumeResult | null) => {
+            if (d) {
+              setMonthlyVolumeRows(d.ranking ?? [])
+              setMonthlyVolumeSeason(d.season ?? null)
+              setMonthlyVolumeFormula(d.formula ?? '')
+            }
+          })
+          .catch(() => {}),
       ])
     } finally {
       setLoading(false)
     }
-  }, [profile?.userId])
+  }, [profileUserId])
 
   useEffect(() => {
     fetchAll()
@@ -84,11 +105,14 @@ export function RankingPage() {
         inmuRows={inmuRows}
         pointsRows={pointsRows}
         compositeRows={compositeRows}
+        monthlyVolumeRows={monthlyVolumeRows}
+        monthlyVolumeSeason={monthlyVolumeSeason}
+        monthlyVolumeFormula={monthlyVolumeFormula}
         myCompositeRank={myCompositeRank}
         myInmuRank={myInmuRank}
         myPointsRank={myPointsRank}
         totalUsers={totalUsers}
-        currentUserId={profile?.userId}
+        currentUserId={profileUserId}
       />
     </AppShell>
   )

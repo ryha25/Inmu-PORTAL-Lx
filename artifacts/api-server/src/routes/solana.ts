@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { profileTable, tradeHistoryTable } from "@workspace/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireAdmin, requireAuthOrAdmin } from "../middlewares/session";
@@ -8,6 +8,49 @@ const router = Router();
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
+const PRICE_CACHE_MS = 5 * 60 * 1000;
+
+let priceCache: { usdPrice: number; jpyRate: number; cachedAt: number } | null = null;
+let tradeUsdColumnsReady: Promise<void> | null = null;
+
+function ensureTradeUsdColumns(): Promise<void> {
+  if (!tradeUsdColumnsReady) {
+    tradeUsdColumnsReady = pool.query(`
+      ALTER TABLE "tradeHistory"
+      ADD COLUMN IF NOT EXISTS "usdPrice" NUMERIC,
+      ADD COLUMN IF NOT EXISTS "usdValue" NUMERIC
+    `).then(() => undefined);
+  }
+  return tradeUsdColumnsReady;
+}
+
+async function fetchCurrentInmuPrice(): Promise<{ usdPrice: number; jpyRate: number }> {
+  const now = Date.now();
+  if (priceCache && now - priceCache.cachedAt < PRICE_CACHE_MS) {
+    return { usdPrice: priceCache.usdPrice, jpyRate: priceCache.jpyRate };
+  }
+
+  const [jupRes, fxRes] = await Promise.all([
+    fetch(`https://api.jup.ag/price/v3?ids=${INMU_TOKEN_MINT}`).catch(() => null),
+    fetch("https://open.er-api.com/v6/latest/USD").catch(() => null),
+  ]);
+
+  let usdPrice = 0;
+  if (jupRes?.ok) {
+    const jupData = await jupRes.json() as Record<string, { usdPrice?: number }>;
+    const tokenData = jupData?.[INMU_TOKEN_MINT];
+    usdPrice = typeof tokenData?.usdPrice === "number" ? tokenData.usdPrice : 0;
+  }
+
+  let jpyRate = 150;
+  if (fxRes?.ok) {
+    const fxData = await fxRes.json() as { rates?: Record<string, number> };
+    jpyRate = fxData?.rates?.JPY ?? 150;
+  }
+
+  priceCache = { usdPrice, jpyRate, cachedAt: now };
+  return { usdPrice, jpyRate };
+}
 
 // ── 既知DEX/スワッププログラム ──
 const ALL_KNOWN_LABELS: Record<string, string> = {
@@ -258,6 +301,8 @@ async function doScanTrades(
   walletAddress: string,
 ): Promise<{ added: number; total: number; skipped: number }> {
   const t0 = Date.now();
+  await ensureTradeUsdColumns();
+  const inmuPrice = await fetchCurrentInmuPrice().catch(() => ({ usdPrice: 0, jpyRate: 150 }));
 
   const [existingRows, tokenAccounts] = await Promise.all([
     db.select({ txSignature: tradeHistoryTable.txSignature })
@@ -344,6 +389,11 @@ async function doScanTrades(
         const matchedProgram = [...invokedProgramIds].find((k) => ALL_KNOWN_LABELS[k]);
         const dexLabel = matchedProgram ? ALL_KNOWN_LABELS[matchedProgram] : "DEX";
         const tokenAmount = (Math.abs(diffRaw) / Math.pow(10, INMU_DECIMALS)).toString();
+        const tokenAmountNumber = Number(tokenAmount);
+        const usdPrice = inmuPrice.usdPrice > 0 ? inmuPrice.usdPrice.toString() : null;
+        const usdValue = inmuPrice.usdPrice > 0 && Number.isFinite(tokenAmountNumber)
+          ? (tokenAmountNumber * inmuPrice.usdPrice).toString()
+          : null;
 
         try {
           await db.insert(tradeHistoryTable).values({
@@ -351,6 +401,8 @@ async function doScanTrades(
             walletAddress,
             type: swapType,
             tokenAmount,
+            usdPrice,
+            usdValue,
             txSignature: sigInfo.signature,
             dex: dexLabel,
             tradedAt: new Date(sigInfo.blockTime! * 1000),
@@ -597,38 +649,9 @@ router.post("/admin/solana/reclassify-trades", requireAdmin, async (req, res): P
   }
 });
 
-// ── INMU価格取得（Jupiter + ExchangeRate） ──
-let priceCache: { usdPrice: number; jpyRate: number; cachedAt: number } | null = null;
-const PRICE_CACHE_MS = 5 * 60 * 1000;
-
 router.get("/solana/inmu-price", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
-    const now = Date.now();
-    if (priceCache && now - priceCache.cachedAt < PRICE_CACHE_MS) {
-      res.json({ usdPrice: priceCache.usdPrice, jpyRate: priceCache.jpyRate });
-      return;
-    }
-
-    const [jupRes, fxRes] = await Promise.all([
-      fetch(`https://api.jup.ag/price/v3?ids=${INMU_TOKEN_MINT}`).catch(() => null),
-      fetch("https://open.er-api.com/v6/latest/USD").catch(() => null),
-    ]);
-
-    let usdPrice = 0;
-    if (jupRes?.ok) {
-      const jupData = await jupRes.json() as Record<string, { usdPrice?: number }>;
-      const tokenData = jupData?.[INMU_TOKEN_MINT];
-      usdPrice = typeof tokenData?.usdPrice === "number" ? tokenData.usdPrice : 0;
-    }
-
-    let jpyRate = 150;
-    if (fxRes?.ok) {
-      const fxData = await fxRes.json() as { rates?: Record<string, number> };
-      jpyRate = fxData?.rates?.JPY ?? 150;
-    }
-
-    priceCache = { usdPrice, jpyRate, cachedAt: now };
-    res.json({ usdPrice, jpyRate });
+    res.json(await fetchCurrentInmuPrice());
   } catch {
     res.status(502).json({ error: "価格取得に失敗しました", usdPrice: 0, jpyRate: 150 });
   }

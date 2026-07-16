@@ -418,6 +418,56 @@ router.post("/admin/record-airdrop-batch", requireAdmin, async (req, res): Promi
   }
 });
 
+router.post("/admin/record-airdrop-batch-variable", requireAdmin, async (req, res): Promise<void> => {
+  const adminId = req.userId ?? req.adminId ?? "admin";
+  const { payments, txSignature, memo } = req.body as {
+    payments?: Array<{ userId: string; wallet?: string | null; amount: number }>;
+    txSignature?: string;
+    memo?: string;
+  };
+  const validPayments = (payments ?? []).filter((p) => p.userId && Number.isFinite(Number(p.amount)) && Number(p.amount) > 0);
+  if (validPayments.length === 0 || !txSignature) {
+    res.status(400).json({ error: "payments and txSignature required" });
+    return;
+  }
+  try {
+    for (const p of validPayments) {
+      const amount = Number(p.amount);
+      await db.insert(transactionsTable).values({
+        userId: p.userId,
+        type: "airdrop",
+        amount: String(amount),
+        memo: memo ?? `Monthly volume reward (tx: ${txSignature.slice(0, 12)}...)`,
+        counterparty: "Admin wallet",
+        txHash: txSignature,
+      });
+      await db
+        .update(profileTable)
+        .set({
+          balance: sql`${profileTable.balance} + ${amount}`,
+          totalReceived: sql`${profileTable.totalReceived} + ${amount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(profileTable.userId, p.userId));
+      await notify(
+        p.userId,
+        "airdrop",
+        "月間取引高ランキング還元を受け取りました",
+        `${amount.toLocaleString()} INMU (tx: ${txSignature})`,
+      );
+    }
+    await logAudit(adminId, "adminAirdropBatchVariable", undefined, {
+      count: validPayments.length,
+      totalAmount: validPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      txSignature,
+    });
+    res.json({ ok: true, count: validPayments.length });
+  } catch (e) {
+    console.error("[Admin] record variable airdrop batch error:", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 router.post("/admin/balance", requireAdmin, async (req, res): Promise<void> => {
   const adminId = req.userId ?? req.adminId ?? "admin";
   const { targetUserId, newBalance, reason } = req.body as {

@@ -73,6 +73,8 @@ export const tradeHistoryTable = pgTable("tradeHistory", {
   walletAddress: text("walletAddress").notNull(),
   type: text("type").notNull(), // "buy" | "sell"
   tokenAmount: numeric("tokenAmount").notNull(),
+  usdPrice: numeric("usdPrice"),
+  usdValue: numeric("usdValue"),
   txSignature: text("txSignature").notNull().unique(),
   dex: text("dex"),
   tradedAt: timestamp("tradedAt").notNull(),
