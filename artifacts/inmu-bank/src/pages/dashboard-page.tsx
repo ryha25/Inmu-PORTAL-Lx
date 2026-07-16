@@ -9,13 +9,22 @@ import { UserSendDialog } from '@/components/user-send-dialog'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
 
+type DashboardData = {
+  balance: number
+  savingsBalance: number
+  monthlyChange: number
+  totalReceived: number
+  totalSent: number
+  jarTotal: number
+  goalRate: number
+  monthlyPoints: number
+  recent: { id: number; type: string; amount: string; counterparty: string | null; memo: string | null; createdAt: string }[]
+}
+
 export function DashboardPage() {
   const { t } = useI18n()
   const { profile, unread } = useAuth()
-  const [data, setData] = useState<{
-    balance: number; savingsBalance: number; monthlyChange: number; totalReceived: number; totalSent: number; jarTotal: number; goalRate: number; monthlyPoints: number
-    recent: { id: number; type: string; amount: string; counterparty: string | null; memo: string | null; createdAt: string }[]
-  } | null>(null)
+  const [data, setData] = useState<DashboardData | null>(null)
   const [walletInmu, setWalletInmu] = useState<number | null>(null)
   const [dailyClaim, setDailyClaim] = useState<{ alreadyClaimed: boolean; streak: number } | null>(null)
   const [sendOpen, setSendOpen] = useState(false)
@@ -36,12 +45,33 @@ export function DashboardPage() {
     }
   }
 
+  const fallbackDashboardData = useCallback((): DashboardData => {
+    const p = profile as (typeof profile & {
+      balance?: number | string
+      savingsBalance?: number | string
+      totalReceived?: number | string
+      totalSent?: number | string
+      monthlyPoints?: number | string
+    })
+    return {
+      balance: Number(p?.balance ?? 0),
+      savingsBalance: Number(p?.savingsBalance ?? 0),
+      monthlyChange: 0,
+      totalReceived: Number(p?.totalReceived ?? 0),
+      totalSent: Number(p?.totalSent ?? 0),
+      jarTotal: 0,
+      goalRate: 0,
+      monthlyPoints: Number(p?.monthlyPoints ?? 0),
+      recent: [],
+    }
+  }, [profile])
+
   const loadDashboard = useCallback(() => {
     fetch('/api/dashboard', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.recent) setData(d) })
-      .catch(() => {})
-  }, [])
+      .then(d => { setData(Array.isArray(d?.recent) ? d : fallbackDashboardData()) })
+      .catch(() => { setData(fallbackDashboardData()) })
+  }, [fallbackDashboardData])
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 

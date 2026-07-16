@@ -211,6 +211,59 @@ async function ensureMonthlyVolumeSnapshots(season: ReturnType<typeof getMonthly
   }
 }
 
+type MonthlyVolumeDbRow = {
+  userId: string;
+  displayName: string;
+  solWallet: string | null;
+  buyUsd: string;
+  sellUsd: string;
+  totalUsd: string;
+};
+
+async function queryMonthlyVolumeFromTrades(
+  season: ReturnType<typeof getMonthlyVolumeSeason>,
+  fallbackPrice: number,
+  limit: number | null,
+): Promise<MonthlyVolumeDbRow[]> {
+  const buildMonthlyVolumeSql = (usdValueExpression: string) => `
+    SELECT
+      p."userId",
+      p."displayName",
+      p."solWallet",
+      COALESCE(SUM(CASE WHEN th.type = 'buy' THEN ${usdValueExpression} ELSE 0 END), 0)::text AS "buyUsd",
+      COALESCE(SUM(CASE WHEN th.type = 'sell' THEN ${usdValueExpression} ELSE 0 END), 0)::text AS "sellUsd",
+      COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN ${usdValueExpression} ELSE 0 END), 0)::text AS "totalUsd"
+    FROM "tradeHistory" th
+    INNER JOIN profile p ON p."userId" = th."userId"
+    WHERE th.type IN ('buy', 'sell')
+      AND th."tradedAt" >= $1
+      AND th."tradedAt" < $2
+      AND p."userId" <> $4
+      AND position($5 in regexp_replace(coalesce(p."displayName", ''), '\\s+', '', 'g')) = 0
+      AND position($5 in regexp_replace(coalesce(p."discordUsername", ''), '\\s+', '', 'g')) = 0
+      AND position($5 in regexp_replace(coalesce(p."xId", ''), '\\s+', '', 'g')) = 0
+    GROUP BY p."userId", p."displayName", p."solWallet"
+    HAVING COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN ${usdValueExpression} ELSE 0 END), 0) > 0
+    ORDER BY COALESCE(SUM(CASE WHEN th.type IN ('buy', 'sell') THEN ${usdValueExpression} ELSE 0 END), 0) DESC
+    ${limit === null ? "" : `LIMIT ${limit}`}
+  `;
+
+  try {
+    const result = await pool.query<MonthlyVolumeDbRow>(
+      buildMonthlyVolumeSql(`COALESCE(th."usdValue", th."tokenAmount" * $3::numeric)`),
+      [season.start, season.end, fallbackPrice, TEST_ACCOUNT_USER_ID, TEST_ACCOUNT_DISPLAY_NAME],
+    );
+    return result.rows;
+  } catch (primaryError) {
+    console.error("[Ranking/MonthlyVolume] direct stored USD fallback:", primaryError);
+    const result = await pool.query<MonthlyVolumeDbRow>(
+      buildMonthlyVolumeSql(`th."tokenAmount" * $3::numeric`),
+      [season.start, season.end, fallbackPrice, TEST_ACCOUNT_USER_ID, TEST_ACCOUNT_DISPLAY_NAME],
+    );
+    return result.rows;
+  }
+}
+
 async function getMonthlyVolumeRanking(limit: number | null = 100) {
   const season = getMonthlyVolumeSeason();
   const currentInmuPrice = await fetchCurrentInmuUsdPrice();
@@ -222,17 +275,10 @@ async function getMonthlyVolumeRanking(limit: number | null = 100) {
     console.error("[Ranking/MonthlyVolume] snapshot refresh fallback:", snapshotError);
   }
 
-  let rows: Array<{
-    userId: string;
-    displayName: string;
-    solWallet: string | null;
-    buyUsd: string;
-    sellUsd: string;
-    totalUsd: string;
-  }> = [];
+  let rows: MonthlyVolumeDbRow[] = [];
 
   try {
-    const result = await pool.query<typeof rows[number]>(`
+    const result = await pool.query<MonthlyVolumeDbRow>(`
       SELECT
         s."userId",
         MAX(s."displayName") AS "displayName",
@@ -250,6 +296,15 @@ async function getMonthlyVolumeRanking(limit: number | null = 100) {
     rows = result.rows;
   } catch (readError) {
     console.error("[Ranking/MonthlyVolume] snapshot read fallback:", readError);
+  }
+
+  try {
+    const directRows = await queryMonthlyVolumeFromTrades(season, fallbackPrice, limit);
+    if (rows.length === 0 || directRows.length > rows.length) {
+      rows = directRows;
+    }
+  } catch (directError) {
+    console.error("[Ranking/MonthlyVolume] direct read fallback:", directError);
   }
 
   const ranking = rows.map((row, index) => {
@@ -516,7 +571,7 @@ router.get("/ranking/composite", requireAuthOrAdmin, async (req, res): Promise<v
 
 router.get("/ranking/monthly-volume", requireAuthOrAdmin, async (_req, res): Promise<void> => {
   try {
-    const result = await getMonthlyVolumeRanking(100);
+    const result = await getMonthlyVolumeRanking(null);
     res.set("Cache-Control", "no-store");
     res.json({
       ...result,

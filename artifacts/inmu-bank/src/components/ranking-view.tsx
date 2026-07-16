@@ -218,7 +218,6 @@ export function RankingView({
                   <RankBadge rank={r.rank} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{r.displayName}{r.userId === currentUserId ? ` (${t('you_label')})` : ''}</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">購入 {formatUsd(r.buyUsd)} / 売却 {formatUsd(r.sellUsd)}</p>
                     {isAdmin && (
                       <div className="mt-2 grid grid-cols-2 gap-1 text-[10px] text-muted-foreground">
                         <span>推定Dev Fee {formatUsd(r.estimatedDevFeeUsd)}</span>
