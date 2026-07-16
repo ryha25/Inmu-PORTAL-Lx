@@ -210,7 +210,7 @@ router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
 // ── ユーザー削除（管理者用） ──
 router.delete("/admin/users/:userId", requireAdmin, async (req, res): Promise<void> => {
   const adminId = req.userId ?? req.adminId ?? "admin";
-  const targetUserId = String(req.params.userId);
+  const targetUserId = req.params.userId;
   try {
     await logAudit(adminId, "deleteUser", targetUserId);
     await db.delete(missionParticipationsTable).where(eq(missionParticipationsTable.userId, targetUserId));
@@ -247,15 +247,7 @@ router.get("/admin/user-transactions", requireAdmin, async (req, res): Promise<v
         .where(eq(transactionsTable.userId, userId))
         .orderBy(sql`${transactionsTable.createdAt} DESC`)
         .limit(100),
-      db.select({
-        id: tradeHistoryTable.id,
-        walletAddress: tradeHistoryTable.walletAddress,
-        txSignature: tradeHistoryTable.txSignature,
-        type: tradeHistoryTable.type,
-        tokenAmount: tradeHistoryTable.tokenAmount,
-        dex: tradeHistoryTable.dex,
-        tradedAt: tradeHistoryTable.tradedAt,
-      }).from(tradeHistoryTable)
+      db.select().from(tradeHistoryTable)
         .where(eq(tradeHistoryTable.userId, userId))
         .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
         .limit(100),
@@ -1223,7 +1215,7 @@ router.get("/admin/emergency-auth", requireAdmin, async (_req, res): Promise<voi
 
 router.get("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Promise<void> => {
   try {
-    const userId = String(req.params.userId);
+    const { userId } = req.params;
     const [row] = await db.select({
       userId: emergencyAuthTable.userId,
       passwordEnabled: emergencyAuthTable.passwordEnabled,
@@ -1240,7 +1232,7 @@ router.get("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Prom
 router.put("/admin/emergency-auth/:userId", requireAdmin, async (req, res): Promise<void> => {
   try {
     const adminId = req.userId ?? req.adminId ?? "admin";
-    const userId = String(req.params.userId);
+    const { userId } = req.params;
     const { password, passcode, passwordEnabled, passcodeEnabled } = req.body as {
       password?: string; passcode?: string; passwordEnabled?: boolean; passcodeEnabled?: boolean;
     };

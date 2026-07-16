@@ -33,7 +33,6 @@ function summaryValueSize(value: number) {
 export function AchievementsPage() {
   const { t } = useI18n()
   const { profile, unread } = useAuth()
-  const profileUserId = (profile as { userId?: string } | null)?.userId
   const [stats,         setStats]         = useState<CommunityStats | null>(null)
   const [inmuRows,      setInmuRows]      = useState<InmuRow[]>([])
   const [pointsRows,    setPointsRows]    = useState<PointsRow[]>([])
@@ -44,7 +43,7 @@ export function AchievementsPage() {
   const [totalUsers,    setTotalUsers]    = useState(0)
 
   useEffect(() => {
-    const userId = profileUserId
+    const userId = profile?.userId
 
     fetch('/api/community', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
@@ -77,7 +76,7 @@ export function AchievementsPage() {
           setTotalUsers(d.totalUsers ?? 0)
         }
       })
-  }, [profileUserId])
+  }, [profile?.userId])
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
@@ -169,7 +168,7 @@ export function AchievementsPage() {
         myInmuRank={myInmuRank}
         myPointsRank={myPointsRank}
         totalUsers={totalUsers}
-        currentUserId={profileUserId}
+        currentUserId={profile?.userId}
       />
     </AppShell>
   )

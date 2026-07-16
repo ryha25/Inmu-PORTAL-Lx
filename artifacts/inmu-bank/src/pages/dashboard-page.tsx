@@ -8,21 +8,10 @@ import { useAuth } from '@/hooks/use-auth'
 import { UserSendDialog } from '@/components/user-send-dialog'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
-import { Redirect } from 'wouter'
-
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 12000) {
-  const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(input, { ...init, signal: controller.signal })
-  } finally {
-    window.clearTimeout(timeoutId)
-  }
-}
 
 export function DashboardPage() {
   const { t } = useI18n()
-  const { profile, unread, loading: authLoading } = useAuth()
+  const { profile, unread } = useAuth()
   const [data, setData] = useState<{
     balance: number; savingsBalance: number; monthlyChange: number; totalReceived: number; totalSent: number; jarTotal: number; goalRate: number; monthlyPoints: number
     recent: { id: number; type: string; amount: string; counterparty: string | null; memo: string | null; createdAt: string }[]
@@ -32,7 +21,6 @@ export function DashboardPage() {
   const [sendOpen, setSendOpen] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [inmuPrice, setInmuPrice] = useState<{ usdPrice: number; jpyRate: number } | null>(null)
-  const [dashboardError, setDashboardError] = useState(false)
 
   async function handleScanTrades() {
     setScanning(true)
@@ -49,13 +37,11 @@ export function DashboardPage() {
   }
 
   const loadDashboard = useCallback(() => {
-    if (authLoading || !profile) return
-    setDashboardError(false)
-    fetchWithTimeout('/api/dashboard', { credentials: 'include' })
+    fetch('/api/dashboard', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.recent) setData(d); else setDashboardError(true) })
-      .catch(() => setDashboardError(true))
-  }, [authLoading, profile])
+      .then(d => { if (d?.recent) setData(d) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 
@@ -85,34 +71,24 @@ export function DashboardPage() {
   }
 
   useEffect(() => {
-    if (authLoading || !profile?.solWallet) { setWalletInmu(null); return }
+    if (!profile?.solWallet) { setWalletInmu(null); return }
     const wallet = profile.solWallet
     fetch(`/api/solana/inmu-balance?wallet=${encodeURIComponent(wallet)}`, { credentials: 'include' })
       .then(async r => r.ok ? r.json() as Promise<{ balance: number }> : null)
       .then(d => { setWalletInmu(d?.balance ?? null) })
       .catch(() => { setWalletInmu(null) })
-  }, [authLoading, profile?.solWallet])
+  }, [profile?.solWallet])
 
   useEffect(() => {
-    if (authLoading || !profile) return
     fetch('/api/solana/inmu-price', { credentials: 'include' })
       .then(r => r.ok ? r.json() as Promise<{ usdPrice: number; jpyRate: number }> : null)
       .then(d => { if (d) setInmuPrice(d) })
       .catch(() => {})
-  }, [authLoading, profile])
-
-  if (!authLoading && !profile) return <Redirect to="/sign-in" />
+  }, [])
 
   if (!data) return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
-      <div className="py-20 text-center text-muted-foreground">
-        {dashboardError ? (
-          <div className="space-y-3">
-            <p>読み込みに失敗しました。</p>
-            <Button size="sm" variant="outline" onClick={loadDashboard}>再読み込み</Button>
-          </div>
-        ) : t('loading')}
-      </div>
+      <div className="py-20 text-center text-muted-foreground">{t('loading')}</div>
     </AppShell>
   )
 

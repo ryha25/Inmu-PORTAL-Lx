@@ -51,17 +51,7 @@ router.get("/trade-history", requireAuth, async (req, res): Promise<void> => {
     }
 
     const rows = await db
-      .select({
-        id: tradeHistoryTable.id,
-        userId: tradeHistoryTable.userId,
-        walletAddress: tradeHistoryTable.walletAddress,
-        txSignature: tradeHistoryTable.txSignature,
-        type: tradeHistoryTable.type,
-        tokenAmount: tradeHistoryTable.tokenAmount,
-        dex: tradeHistoryTable.dex,
-        tradedAt: tradeHistoryTable.tradedAt,
-        createdAt: tradeHistoryTable.createdAt,
-      })
+      .select()
       .from(tradeHistoryTable)
       .where(and(...conditions))
       .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)
@@ -94,10 +84,7 @@ router.get("/trade-history/stats", requireAuth, async (req, res): Promise<void> 
     ];
 
     const rows = await db
-      .select({
-        type: tradeHistoryTable.type,
-        tokenAmount: tradeHistoryTable.tokenAmount,
-      })
+      .select()
       .from(tradeHistoryTable)
       .where(and(...conditions));
 
@@ -127,17 +114,7 @@ router.get("/admin/trade-history", requireAdmin, async (req, res): Promise<void>
     if (type === "buy" || type === "sell") conditions.push(eq(tradeHistoryTable.type, type));
 
     const rows = await db
-      .select({
-        id: tradeHistoryTable.id,
-        userId: tradeHistoryTable.userId,
-        walletAddress: tradeHistoryTable.walletAddress,
-        txSignature: tradeHistoryTable.txSignature,
-        type: tradeHistoryTable.type,
-        tokenAmount: tradeHistoryTable.tokenAmount,
-        dex: tradeHistoryTable.dex,
-        tradedAt: tradeHistoryTable.tradedAt,
-        createdAt: tradeHistoryTable.createdAt,
-      })
+      .select()
       .from(tradeHistoryTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)

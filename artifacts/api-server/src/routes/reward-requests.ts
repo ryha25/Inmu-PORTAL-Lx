@@ -334,10 +334,9 @@ router.put("/admin/pet-reward-requests/:id", requireAdmin, async (req, res): Pro
 });
 
 router.put("/admin/pet-reward-requests", requireAdmin, async (req, res): Promise<void> => {
-  const rawIds: unknown[] = Array.isArray(req.body?.ids) ? req.body.ids : [];
-  const ids: number[] = [...new Set(rawIds
-    .map((value: unknown) => Number(value))
-    .filter((value: number): value is number => Number.isInteger(value)))];
+  const ids = Array.isArray(req.body?.ids)
+    ? [...new Set(req.body.ids.map(Number).filter(Number.isInteger))]
+    : [];
   const status = typeof req.body?.status === "string" ? req.body.status : "";
   const txHash = typeof req.body?.txHash === "string" ? req.body.txHash.trim() : "";
   if (ids.length === 0 || !["rejected", "paid"].includes(status) || (status === "paid" && !txHash)) {

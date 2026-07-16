@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useI18n } from '@/lib/i18n/context'
 import { formatInmu } from '@/lib/format'
-import { BarChart3, CalendarDays, Layers, Medal, Send, Star, Trophy } from 'lucide-react'
+import { BarChart3, CalendarDays, Layers, Medal, Send, Sparkles, Star, Trophy } from 'lucide-react'
 
 type InmuRow = { rank: number; userId: string; displayName: string; balance: number; showBalance: boolean; totalReceived: number; participations: number }
 type PointsRow = { rank: number; userId: string; displayName: string; points: number; participations: number }
@@ -89,6 +89,8 @@ export function RankingView({
       <TabsList className="grid w-full grid-cols-2 gap-1 bg-muted/40 p-1">
         <TabsTrigger value="cumulative" className="gap-1 text-xs"><Layers className="size-3.5" />累計</TabsTrigger>
         <TabsTrigger value="monthly" className="gap-1 text-xs"><CalendarDays className="size-3.5" />月間</TabsTrigger>
+        <TabsTrigger value="event" className="gap-1 text-xs"><Sparkles className="size-3.5" />イベント</TabsTrigger>
+        <TabsTrigger value="other" className="gap-1 text-xs"><BarChart3 className="size-3.5" />その他</TabsTrigger>
       </TabsList>
 
       <TabsContent value="cumulative">
@@ -238,6 +240,8 @@ export function RankingView({
         </Tabs>
       </TabsContent>
 
+      <TabsContent value="event"><EmptyRanking label="イベントランキングは今後追加予定です" /></TabsContent>
+      <TabsContent value="other"><EmptyRanking label="その他のランキングは今後追加予定です" /></TabsContent>
     </Tabs>
   )
 }

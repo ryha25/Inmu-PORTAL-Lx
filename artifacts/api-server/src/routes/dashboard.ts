@@ -73,14 +73,7 @@ router.get("/dashboard", requireAuth, async (req, res): Promise<void> => {
       .limit(20);
 
     const recentTrades = await db
-      .select({
-        id: tradeHistoryTable.id,
-        type: tradeHistoryTable.type,
-        tokenAmount: tradeHistoryTable.tokenAmount,
-        dex: tradeHistoryTable.dex,
-        txSignature: tradeHistoryTable.txSignature,
-        tradedAt: tradeHistoryTable.tradedAt,
-      })
+      .select()
       .from(tradeHistoryTable)
       .where(eq(tradeHistoryTable.userId, userId))
       .orderBy(sql`${tradeHistoryTable.tradedAt} DESC`)

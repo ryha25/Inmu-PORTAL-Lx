@@ -223,9 +223,16 @@ const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date' | 'text'
   event_mode_enabled: 'boolean',
   event_start_date:   'date',
   event_end_date:     'date',
+  pet_gacha_event_name: 'text',
+  pet_gacha_event_start_at: 'text',
+  pet_gacha_event_end_at: 'text',
+  pet_gacha_event_banners: 'json',
+  pet_gacha_event_points_prizes: 'json',
+  pet_gacha_event_paid_prizes: 'json',
+  pet_gacha_event_points_character_pools: 'json',
+  pet_gacha_event_paid_character_pools: 'json',
+  pet_gacha_event_pity_policy: 'text',
 }
-
-const HIDDEN_SYSTEM_SETTING_PREFIXES = ['pet_gacha_event_']
 
 const REWARD_CALC_KEYS: Array<{ key: string; label: string }> = [
   { key: 'reward_level_inmu',      label: '配布キャラ Lv.15 報酬INMU' },
@@ -1346,7 +1353,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     setSettingsLoading(true)
     try {
       const data = await api('/admin/system-settings', 'GET') as SystemSettingRow[]
-      setSystemSettings(Array.isArray(data) ? data.filter(setting => !HIDDEN_SYSTEM_SETTING_PREFIXES.some(prefix => setting.key.startsWith(prefix))) : [])
+      setSystemSettings(Array.isArray(data) ? data : [])
     } catch { toast.error(t('error')) }
     finally { setSettingsLoading(false) }
   }
