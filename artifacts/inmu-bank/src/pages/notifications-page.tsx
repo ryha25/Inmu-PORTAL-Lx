@@ -13,7 +13,20 @@ export function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   const load = useCallback(() => {
-    fetch('/api/notifications', { credentials: 'include' }).then(r => r.json()).then(setNotifications)
+    fetch('/api/notifications', { credentials: 'include' })
+      .then(async (r) => {
+        if (!r.ok) return []
+        const text = await r.text()
+        if (!text.trim()) return []
+        try {
+          const data = JSON.parse(text) as unknown
+          return Array.isArray(data) ? data as Notification[] : []
+        } catch {
+          return []
+        }
+      })
+      .then(setNotifications)
+      .catch(() => setNotifications([]))
   }, [])
 
   useEffect(() => { load() }, [load])

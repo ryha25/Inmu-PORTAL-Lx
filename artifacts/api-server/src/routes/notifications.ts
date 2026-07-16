@@ -52,8 +52,9 @@ router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
         .where(and(eq(notificationsTable.id, original.id), eq(notificationsTable.userId, userId)));
     }));
     res.json(normalizedRows.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() })));
-  } catch {
-    res.status(500).json({ error: "Internal error" });
+  } catch (error) {
+    console.error("[Notifications] fetch fallback:", error);
+    res.json([]);
   }
 });
 
