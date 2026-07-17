@@ -18,6 +18,8 @@ const TDN_REROLL_GUARANTEE_PULLS = 50;
 const TDN_REROLL_DAILY_LIMIT = 3;
 const PAID_GACHA_PITY_PULLS = 30;
 const EVENT_PITY_NEW_CHARACTER_BOOST = 4;
+const PITY_UNOWNED_CHARACTER_WEIGHT = 4;
+const PITY_OWNED_CHARACTER_WEIGHT = 1;
 const GACHA_EVENT_SETTING_PREFIX = "pet_gacha_event_";
 const DEFAULT_EVENT_START_JST = "2026-07-17T12:00:00+09:00";
 
@@ -355,22 +357,41 @@ async function getGachaEventConfig(now = new Date()): Promise<GachaEventConfig> 
   };
 }
 
-function resolveConfiguredPrize(prize: PrizeSpec | CharacterPoolSpec): PrizeSpec {
+function pickPityCharacterId(characterIds: string[], ownedCharacterIds?: Set<string>) {
+  if (!ownedCharacterIds) return characterIds[Math.floor(Math.random() * characterIds.length)];
+  const unownedCharacters = characterIds.filter(characterId => !ownedCharacterIds.has(characterId));
+  const ownedCharacters = characterIds.filter(characterId => ownedCharacterIds.has(characterId));
+  const pityTables = [
+    { characters: unownedCharacters, weight: PITY_UNOWNED_CHARACTER_WEIGHT },
+    { characters: ownedCharacters, weight: PITY_OWNED_CHARACTER_WEIGHT },
+  ].filter(table => table.characters.length > 0);
+  const selectedTable = weightedRollByWeight(pityTables);
+  return selectedTable.characters[Math.floor(Math.random() * selectedTable.characters.length)];
+}
+
+async function getOwnedPetCharacterIds(client: any, userId: string): Promise<Set<string>> {
+  const result = await client.query(`SELECT "characterId" FROM "userPetCharacters" WHERE "userId"=$1`, [userId]);
+  return new Set(result.rows.map((row: { characterId: string }) => row.characterId));
+}
+
+function resolveConfiguredPrize(prize: PrizeSpec | CharacterPoolSpec, ownedCharacterIds?: Set<string>): PrizeSpec {
   if ("characters" in prize) {
-    const characterId = prize.characters[Math.floor(Math.random() * prize.characters.length)];
-    const character = CHARACTER_BY_ID.get(characterId);
+    const characterId = pickPityCharacterId(prize.characters, ownedCharacterIds);
+    const character = CHARACTER_BY_ID.get(characterId as (typeof CHARACTERS)[number]["id"]);
     if (!character) throw new Error("ガチャキャラクター設定が不正です");
     return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id, weight: prize.weight };
   }
   return prize;
 }
 
-function randomCharacter() {
+function randomCharacter(ownedCharacterIds?: Set<string>) {
   const legacyCharacters = CHARACTERS.filter(character => character.release === "legacy");
-  return legacyCharacters[Math.floor(Math.random() * legacyCharacters.length)];
+  const legacyCharacterIds = legacyCharacters.map(character => character.id);
+  const characterId = pickPityCharacterId(legacyCharacterIds, ownedCharacterIds);
+  return CHARACTER_BY_ID.get(characterId as (typeof CHARACTERS)[number]["id"]) ?? legacyCharacters[Math.floor(Math.random() * legacyCharacters.length)];
 }
 
-async function rollPetGachaPrize(mode: GachaMode, guaranteedCharacter = false) {
+async function rollPetGachaPrize(mode: GachaMode, guaranteedCharacter = false, ownedCharacterIds?: Set<string>) {
   const config = await getGachaEventConfig();
   if (config.active) {
     const pool = config.modes[mode];
@@ -380,12 +401,12 @@ async function rollPetGachaPrize(mode: GachaMode, guaranteedCharacter = false) {
         weight: characterPool.id === "new-character" ? characterPool.weight * EVENT_PITY_NEW_CHARACTER_BOOST : characterPool.weight,
       }));
       const selectedPool = weightedRollByWeight(pityPools);
-      return resolveConfiguredPrize(selectedPool);
+      return resolveConfiguredPrize(selectedPool, ownedCharacterIds);
     }
     return resolveConfiguredPrize(weightedRollSpecs([...pool.prizes, ...pool.characterPools]));
   }
   if (guaranteedCharacter) {
-    const character = randomCharacter();
+    const character = randomCharacter(ownedCharacterIds);
     return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id };
   }
   return mode === "paid" ? weightedRoll(PAID_PRIZES) : weightedRoll(POINT_PRIZES);
@@ -796,10 +817,13 @@ router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
     if (duplicateTx.rowCount) throw new Error("このTXIDは既に使用されています");
     const state = await client.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1 FOR UPDATE`, [req.userId!]);
     let pity = Number(state.rows[0]?.paidPity ?? 0);
+    const ownedCharacterIds = await getOwnedPetCharacterIds(client, req.userId!);
     const rolled: any[] = [];
     for (let index = 0; index < count; index += 1) {
-      const prize = await rollPetGachaPrize("paid", pity >= PAID_GACHA_PITY_PULLS - 1);
+      const guaranteedCharacter = pity >= PAID_GACHA_PITY_PULLS - 1;
+      const prize = await rollPetGachaPrize("paid", guaranteedCharacter, guaranteedCharacter ? ownedCharacterIds : undefined);
       rolled.push(prize);
+      if (prize.type === "character" && prize.characterId) ownedCharacterIds.add(prize.characterId);
       pity = prize.type === "character" ? 0 : pity + 1;
     }
     const applied = await applyPrizes(client, req.userId!, rolled);
@@ -838,7 +862,9 @@ router.post("/pet-gacha/paid-free", requireAuth, async (req, res): Promise<void>
     if (!recheckState.canDrawPaid) throw new Error("本日の無料ガチャは使用済みです");
     const state = await client.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1 FOR UPDATE`, [req.userId!]);
     let pity = Number(state.rows[0]?.paidPity ?? 0);
-    const prize = await rollPetGachaPrize("paid", pity >= PAID_GACHA_PITY_PULLS - 1);
+    const guaranteedCharacter = pity >= PAID_GACHA_PITY_PULLS - 1;
+    const ownedCharacterIds = guaranteedCharacter ? await getOwnedPetCharacterIds(client, req.userId!) : undefined;
+    const prize = await rollPetGachaPrize("paid", guaranteedCharacter, ownedCharacterIds);
     pity = prize.type === "character" ? 0 : pity + 1;
     const applied = await applyPrizes(client, req.userId!, [prize]);
     await client.query(`
@@ -896,10 +922,13 @@ router.post("/pet-gacha/tdn-reroll", requireAuth, async (req, res): Promise<void
       ? await client.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1 FOR UPDATE`, [req.userId!])
       : null;
     let pity = Number(state?.rows[0]?.paidPity ?? 0);
+    const ownedCharacterIds = mode === "paid" ? await getOwnedPetCharacterIds(client, req.userId!) : undefined;
     const rolled: any[] = [];
     for (let index = 0; index < count; index += 1) {
-      const prize = await rollPetGachaPrize(mode, mode === "paid" && pity >= PAID_GACHA_PITY_PULLS - 1);
+      const guaranteedCharacter = mode === "paid" && pity >= PAID_GACHA_PITY_PULLS - 1;
+      const prize = await rollPetGachaPrize(mode, guaranteedCharacter, guaranteedCharacter ? ownedCharacterIds : undefined);
       rolled.push(prize);
+      if (mode === "paid" && prize.type === "character" && prize.characterId) ownedCharacterIds?.add(prize.characterId);
       if (mode === "paid") pity = prize.type === "character" ? 0 : pity + 1;
     }
     const applied = await applyPrizes(client, req.userId!, rolled);
