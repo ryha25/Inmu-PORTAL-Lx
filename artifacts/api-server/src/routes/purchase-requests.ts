@@ -26,6 +26,9 @@ pool.query(`
 `).catch((e: unknown) => console.error('[PurchaseRequests] ALTER TABLE error:', e));
 
 type PetRebateBonus = { characterId: string; source: "level_reward" | "skill"; label: string; rate: number; eventOnly: boolean };
+const PURCHASE_LIMIT_SKILL_REDUCTION_START = new Date("2026-07-18T15:00:00.000Z");
+const PURCHASE_LIMIT_SKILL_BONUS_BEFORE_REDUCTION = 100_000;
+const PURCHASE_LIMIT_SKILL_BONUS_AFTER_REDUCTION = 50_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SLOT_REBATE_RULE_START_JST = "2026-07-16";
 
@@ -254,7 +257,14 @@ async function getUserDailyLimit(userId: string, isEventDay: boolean): Promise<n
     hasActivePetSkill(userId, "leon"),
     hasActivePetSkill(userId, "chinge"),
   ]);
-  return baseLimit + (hasLeonSkill ? 100_000 : 0) + (hasChingeSkill ? 100_000 : 0);
+  const skillBonus = getPurchaseLimitSkillBonusAmount();
+  return baseLimit + (hasLeonSkill ? skillBonus : 0) + (hasChingeSkill ? skillBonus : 0);
+}
+
+function getPurchaseLimitSkillBonusAmount(now = new Date()): number {
+  return now >= PURCHASE_LIMIT_SKILL_REDUCTION_START
+    ? PURCHASE_LIMIT_SKILL_BONUS_AFTER_REDUCTION
+    : PURCHASE_LIMIT_SKILL_BONUS_BEFORE_REDUCTION;
 }
 
 async function getPurchaseLimitSkillBonus(userId: string): Promise<number> {
@@ -262,7 +272,8 @@ async function getPurchaseLimitSkillBonus(userId: string): Promise<number> {
     hasActivePetSkill(userId, "leon"),
     hasActivePetSkill(userId, "chinge"),
   ]);
-  return (hasLeonSkill ? 100_000 : 0) + (hasChingeSkill ? 100_000 : 0);
+  const skillBonus = getPurchaseLimitSkillBonusAmount();
+  return (hasLeonSkill ? skillBonus : 0) + (hasChingeSkill ? skillBonus : 0);
 }
 
 // ── JST当月の購入実績合計（tradeHistoryTable の buy）──
