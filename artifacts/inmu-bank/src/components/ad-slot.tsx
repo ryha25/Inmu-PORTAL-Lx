@@ -15,12 +15,13 @@ const showAdPlaceholders =
 
 const adEnabled = import.meta.env.VITE_NINJA_ADMAX_ENABLED !== 'false'
 
-const NINJA_ADMAX_COMMON_BOTTOM_SRC = 'https://adm.shinobi.jp/s/c0b9f17e093bef6243dec45abece2751'
-const NINJA_ADMAX_GACHA_RESULT_SRC = 'https://adm.shinobi.jp/s/b25fbb1d23d8754f051cd322fc876777'
+const NINJA_ADMAX_PRIMARY_BANNER_SRC = 'https://adm.shinobi.jp/s/c0b9f17e093bef6243dec45abece2751'
+const NINJA_ADMAX_SECONDARY_BANNER_SRC = 'https://adm.shinobi.jp/s/b25fbb1d23d8754f051cd322fc876777'
 
 function getAdScriptSrc(slotId: string, variant: AdSlotVariant) {
-  if (variant === 'banner' && slotId === 'gacha-result-bottom') return NINJA_ADMAX_GACHA_RESULT_SRC
-  if (variant === 'banner') return NINJA_ADMAX_COMMON_BOTTOM_SRC
+  if (variant === 'banner' && slotId === 'guest-auth-break') return NINJA_ADMAX_SECONDARY_BANNER_SRC
+  if (variant === 'banner' && slotId === 'gacha-result-bottom') return NINJA_ADMAX_SECONDARY_BANNER_SRC
+  if (variant === 'banner') return NINJA_ADMAX_PRIMARY_BANNER_SRC
   return null
 }
 
@@ -47,7 +48,7 @@ function NinjaAdMaxScript({ src, slotId }: { src: string; slotId: string }) {
     }
   }, [src, slotId])
 
-  return <div ref={containerRef} className="flex w-full items-center justify-center" />
+  return <div ref={containerRef} className="flex min-h-[inherit] w-full items-center justify-center" />
 }
 
 export function AdSlot({ slotId, variant = 'banner', className }: AdSlotProps) {
@@ -59,12 +60,10 @@ export function AdSlot({ slotId, variant = 'banner', className }: AdSlotProps) {
       aria-label="広告"
       data-ad-slot={slotId}
       className={cn(
-        scriptSrc
-          ? 'mx-auto flex w-full justify-center overflow-hidden'
-          : 'overflow-hidden rounded-lg border border-border/70 bg-card/55 text-muted-foreground shadow-sm',
+        'overflow-hidden rounded-lg border border-border/70 bg-card/55 text-muted-foreground shadow-sm',
         variant === 'banner'
-          ? scriptSrc ? 'max-w-[360px]' : 'mx-auto min-h-[58px] w-full max-w-[360px]'
-          : scriptSrc ? 'w-full' : 'min-h-[280px] w-full',
+          ? 'mx-auto min-h-[58px] w-full max-w-[360px]'
+          : 'min-h-[280px] w-full',
         className,
       )}
     >
