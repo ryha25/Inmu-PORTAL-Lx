@@ -49,9 +49,7 @@ export function AppShell({
     ? 'dashboard'
     : location.replace(/^\/+/, '').replace(/[^a-z0-9-]+/gi, '-') || 'dashboard'
   const showAds = !isAdmin
-  const bottomAdSlotId = `${pageAdKey}-bottom`
   const railAdSlotId = `${pageAdKey}-rail`
-  const showBottomAd = showAds && canRenderAdSlot(bottomAdSlotId, 'banner')
   const showRailAd = showAds && canRenderAdSlot(railAdSlotId, 'rail')
 
   return (
@@ -123,13 +121,6 @@ export function AppShell({
         <main className="mx-auto flex w-full max-w-6xl gap-5 px-4 pb-28 pt-5 lg:px-8 lg:pb-10">
           <div className="mx-auto min-w-0 flex-1 lg:max-w-4xl">
             {children}
-            {showBottomAd && (
-              <AdSlot
-                slotId={bottomAdSlotId}
-                variant="banner"
-                className="mt-6"
-              />
-            )}
           </div>
           {showRailAd && (
             <div className="sticky top-[4.75rem] hidden h-fit w-64 shrink-0 xl:block">

@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LangToggle } from '@/components/lang-toggle'
+import { AdSlot } from '@/components/ad-slot'
 import { useI18n } from '@/lib/i18n/context'
 
 type FeatureItem = {
@@ -119,25 +120,27 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
         <LangToggle />
       </div>
 
-      <section className="px-5 pb-10 pt-10 sm:pt-14">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-8 text-center">
-          <div className="flex flex-col items-center gap-4">
-            <img src="/app-icon.jpg" alt="INMU PORTAL" className="h-20 w-20 rounded-2xl border border-primary/25 shadow-lg" />
+      <section className="px-5 pb-7 pt-8 sm:pt-10">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-5 text-center">
+          <div className="flex flex-col items-center gap-3">
+            <img src="/app-icon.jpg" alt="INMU PORTAL" className="h-16 w-16 rounded-2xl border border-primary/25 shadow-lg sm:h-[72px] sm:w-[72px]" />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight gold-text sm:text-5xl">INMU PORTAL</h1>
-              <p className="mt-3 text-base font-semibold text-foreground sm:text-xl">INMUコミュニティの総合プラットフォーム</p>
-              <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
+              <h1 className="text-2xl font-bold tracking-tight gold-text sm:text-4xl">INMU PORTAL</h1>
+              <p className="mt-2 text-sm font-semibold text-foreground sm:text-lg">INMUコミュニティの総合プラットフォーム</p>
+              <p className="mx-auto mt-2 max-w-2xl text-xs leading-6 text-muted-foreground sm:text-sm">
                 育成ゲーム、ポイント、ランキング、イベント、SOLアドレス登録などをまとめて利用できるコミュニティ向けWebサービスです。
               </p>
             </div>
           </div>
 
-          <Card className="w-full max-w-md border-primary/25 bg-card/95 text-left shadow-xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">{mode === 'sign-up' ? '新規登録' : 'ログイン'}</CardTitle>
+          <AdSlot slotId="guest-hero-auth-break" variant="banner" />
+
+          <Card className="w-full max-w-sm border-primary/25 bg-card/95 text-left shadow-xl">
+            <CardHeader className="pb-2 pt-4">
+              <CardTitle className="text-base">{mode === 'sign-up' ? '新規登録' : 'ログイン'}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <CardContent className="pb-4">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="name">ユーザー名</Label>
                   <Input
@@ -146,7 +149,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
                     onChange={(e) => setName(e.target.value)}
                     required
                     autoComplete="username"
-                    className="min-h-11 text-base"
+                    className="min-h-10 text-sm"
                     placeholder="例: taro"
                   />
                 </div>
@@ -160,7 +163,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
                     required
                     minLength={8}
                     autoComplete={mode === 'sign-up' ? 'new-password' : 'current-password'}
-                    className="min-h-11 text-base"
+                    className="min-h-10 text-sm"
                   />
                 </div>
                 {mode === 'sign-up' && (
@@ -173,7 +176,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
                       onChange={(e) => setPasscode(e.target.value)}
                       required
                       autoComplete="off"
-                      className="min-h-11 text-base"
+                      className="min-h-10 text-sm"
                       placeholder="招待コードを入力してください"
                     />
                     <p className="text-[11px] text-muted-foreground">
@@ -181,12 +184,12 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
                     </p>
                   </div>
                 )}
-                <Button type="submit" disabled={loading} className="min-h-11 w-full font-semibold">
+                <Button type="submit" disabled={loading} className="min-h-10 w-full font-semibold">
                   {loading ? t('loading') : mode === 'sign-up' ? t('signup') : t('signin')}
                 </Button>
               </form>
 
-              <p className="mt-4 text-center text-sm text-muted-foreground">
+              <p className="mt-3 text-center text-xs text-muted-foreground">
                 {mode === 'sign-in' ? (
                   <>アカウントをお持ちでない方は <Link href="/sign-up" className="font-medium text-primary hover:underline">{t('signup')}</Link></>
                 ) : (
@@ -196,6 +199,10 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             </CardContent>
           </Card>
         </div>
+      </section>
+
+      <section className="px-5 pb-7">
+        <AdSlot slotId="guest-auth-break" variant="banner" />
       </section>
 
       <section className="px-5 pb-12">

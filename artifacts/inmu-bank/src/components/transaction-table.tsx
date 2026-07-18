@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { AdSlot } from '@/components/ad-slot'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TxTypeBadge, isOutgoing } from '@/components/tx-type-badge'
@@ -81,22 +82,29 @@ export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu
           <p className="px-4 py-12 text-center text-sm text-muted-foreground">データがありません</p>
         ) : (
           <ul className="divide-y divide-border">
-            {filtered.map((tx) => {
+            {filtered.map((tx, index) => {
               const out = isOutgoing(tx.type)
               return (
-                <li key={tx.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <TxTypeBadge type={tx.type} />
-                      <span className="text-xs text-muted-foreground">{formatDate(tx.createdAt, locale)}</span>
+                <li key={tx.id}>
+                  {index === 3 && (
+                    <div className="border-b border-border px-3 py-3">
+                      <AdSlot slotId="transaction-list-mid" variant="banner" />
                     </div>
-                    {(tx.counterparty || tx.memo) && (
-                      <p className="mt-1 truncate text-xs text-muted-foreground">{[tx.counterparty, tx.memo].filter(Boolean).join(' · ')}</p>
-                    )}
+                  )}
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <TxTypeBadge type={tx.type} />
+                        <span className="text-xs text-muted-foreground">{formatDate(tx.createdAt, locale)}</span>
+                      </div>
+                      {(tx.counterparty || tx.memo) && (
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{[tx.counterparty, tx.memo].filter(Boolean).join(' · ')}</p>
+                      )}
+                    </div>
+                    <p className={cn('shrink-0 font-mono text-sm font-bold tabular-nums', out ? 'text-destructive' : 'text-chart-5')}>
+                      {out ? '-' : '+'}{formatInmu(tx.amount)}
+                    </p>
                   </div>
-                  <p className={cn('shrink-0 font-mono text-sm font-bold tabular-nums', out ? 'text-destructive' : 'text-chart-5')}>
-                    {out ? '-' : '+'}{formatInmu(tx.amount)}
-                  </p>
                 </li>
               )
             })}

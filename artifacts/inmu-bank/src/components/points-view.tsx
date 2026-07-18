@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card'
+import { AdSlot } from '@/components/ad-slot'
 import { Button } from '@/components/ui/button'
 import {
   Award, Flame, ChevronDown, ChevronUp, ExternalLink,
@@ -550,19 +551,26 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">ポイント履歴がありません</p>
             : (
               <ul className="divide-y divide-border">
-                {data.history.map(h => {
+                {data.history.map((h, index) => {
                   const isPlus = Number(h.amount) >= 0
                   return (
-                    <li key={h.id} className="px-4 py-2.5 flex items-center justify-between gap-2">
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <p className="text-xs font-medium">{POINT_TYPE_LABEL[h.type] ?? h.type}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(h.createdAt).toLocaleString('ja-JP')}
-                        </p>
+                    <li key={h.id}>
+                      {index === 3 && (
+                        <div className="border-b border-border px-3 py-3">
+                          <AdSlot slotId="points-history-mid" variant="banner" />
+                        </div>
+                      )}
+                      <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <p className="text-xs font-medium">{POINT_TYPE_LABEL[h.type] ?? h.type}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {new Date(h.createdAt).toLocaleString('ja-JP')}
+                          </p>
+                        </div>
+                        <span className={`font-mono text-sm font-bold shrink-0 ${isPlus ? 'text-chart-5' : 'text-destructive'}`}>
+                          {isPlus ? '+' : ''}{Number(h.amount).toLocaleString()} pt
+                        </span>
                       </div>
-                      <span className={`font-mono text-sm font-bold shrink-0 ${isPlus ? 'text-chart-5' : 'text-destructive'}`}>
-                        {isPlus ? '+' : ''}{Number(h.amount).toLocaleString()} pt
-                      </span>
                     </li>
                   )
                 })}

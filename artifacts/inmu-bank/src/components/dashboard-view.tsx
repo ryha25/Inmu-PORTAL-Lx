@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card'
+import { AdSlot } from '@/components/ad-slot'
 import { StatCard } from '@/components/stat-card'
 import { TxTypeBadge, isOutgoing } from '@/components/tx-type-badge'
 import { useI18n } from '@/lib/i18n/context'
@@ -176,20 +177,27 @@ export function DashboardView({
           <p className="px-4 py-10 text-center text-sm text-muted-foreground">{t('no_data')}</p>
         ) : (
           <ul className="divide-y divide-border">
-            {data.recent.map((tx) => {
+            {data.recent.map((tx, index) => {
               const out = isOutgoing(tx.type)
               return (
-                <li key={tx.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <TxTypeBadge type={tx.type} />
-                      {tx.counterparty && <span className="truncate text-xs text-muted-foreground">{tx.counterparty}</span>}
+                <li key={tx.id}>
+                  {index === 3 && (
+                    <div className="border-b border-border px-3 py-3">
+                      <AdSlot slotId="dashboard-recent-mid" variant="banner" />
                     </div>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">{tx.memo || formatDate(tx.createdAt, locale)}</p>
+                  )}
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <TxTypeBadge type={tx.type} />
+                        {tx.counterparty && <span className="truncate text-xs text-muted-foreground">{tx.counterparty}</span>}
+                      </div>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{tx.memo || formatDate(tx.createdAt, locale)}</p>
+                    </div>
+                    <p className={cn('shrink-0 font-mono text-sm font-bold tabular-nums', out ? 'text-destructive' : 'text-chart-5')}>
+                      {out ? '-' : '+'}{formatInmu(tx.amount)}
+                    </p>
                   </div>
-                  <p className={cn('shrink-0 font-mono text-sm font-bold tabular-nums', out ? 'text-destructive' : 'text-chart-5')}>
-                    {out ? '-' : '+'}{formatInmu(tx.amount)}
-                  </p>
                 </li>
               )
             })}
