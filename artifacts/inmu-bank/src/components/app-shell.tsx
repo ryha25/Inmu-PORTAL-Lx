@@ -123,7 +123,7 @@ export function AppShell({
             {children}
           </div>
           {showRailAd && (
-            <div className="sticky top-[4.75rem] hidden h-fit w-64 shrink-0 xl:block">
+            <div className="sticky top-[4.75rem] hidden h-fit w-[300px] shrink-0 xl:block">
               <AdSlot slotId={railAdSlotId} variant="rail" />
             </div>
           )}
