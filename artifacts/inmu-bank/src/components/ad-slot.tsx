@@ -18,7 +18,7 @@ const adEnabled = import.meta.env.VITE_NINJA_ADMAX_ENABLED !== 'false'
 const NINJA_ADMAX_BANNER_SRC = 'https://adm.shinobi.jp/s/e36c5e4e74950a07f9e7c9025c204e92'
 
 function getAdScriptSrc(slotId: string, variant: AdSlotVariant) {
-  if (variant === 'banner' && slotId === 'guest-hero-auth-break') return NINJA_ADMAX_BANNER_SRC
+  if (variant === 'banner' && slotId === 'static-html-review-only') return NINJA_ADMAX_BANNER_SRC
   return null
 }
 
