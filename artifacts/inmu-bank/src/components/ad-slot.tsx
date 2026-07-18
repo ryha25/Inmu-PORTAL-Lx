@@ -47,7 +47,7 @@ function NinjaAdMaxScript({ src, slotId }: { src: string; slotId: string }) {
     }
   }, [src, slotId])
 
-  return <div ref={containerRef} className="flex min-h-[inherit] w-full items-center justify-center" />
+  return <div ref={containerRef} className="flex w-full items-center justify-center" />
 }
 
 export function AdSlot({ slotId, variant = 'banner', className }: AdSlotProps) {
@@ -59,10 +59,12 @@ export function AdSlot({ slotId, variant = 'banner', className }: AdSlotProps) {
       aria-label="広告"
       data-ad-slot={slotId}
       className={cn(
-        'overflow-hidden rounded-lg border border-border/70 bg-card/55 text-muted-foreground shadow-sm',
+        scriptSrc
+          ? 'mx-auto flex w-full justify-center overflow-hidden'
+          : 'overflow-hidden rounded-lg border border-border/70 bg-card/55 text-muted-foreground shadow-sm',
         variant === 'banner'
-          ? 'mx-auto min-h-[58px] w-full max-w-[360px]'
-          : 'min-h-[280px] w-full',
+          ? scriptSrc ? 'max-w-[360px]' : 'mx-auto min-h-[58px] w-full max-w-[360px]'
+          : scriptSrc ? 'w-full' : 'min-h-[280px] w-full',
         className,
       )}
     >
