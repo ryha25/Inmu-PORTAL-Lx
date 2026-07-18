@@ -15,11 +15,15 @@ const showAdPlaceholders =
 
 const adEnabled = import.meta.env.VITE_NINJA_ADMAX_ENABLED !== 'false'
 
-const NINJA_ADMAX_BANNER_SRC = 'https://adm.shinobi.jp/s/e36c5e4e74950a07f9e7c9025c204e92'
+const NINJA_ADMAX_GUEST_PRIMARY_SRC = 'https://adm.shinobi.jp/s/e36c5e4e74950a07f9e7c9025c204e92'
+const NINJA_ADMAX_GENERAL_BANNER_SRC = 'https://adm.shinobi.jp/s/c0b9f17e093bef6243dec45abece2751'
+const NINJA_ADMAX_RESULT_BANNER_SRC = 'https://adm.shinobi.jp/s/b25fbb1d23d8754f051cd322fc876777'
 
 function getAdScriptSrc(slotId: string, variant: AdSlotVariant) {
-  if (variant === 'banner' && slotId === 'static-html-review-only') return NINJA_ADMAX_BANNER_SRC
-  return null
+  if (variant !== 'banner') return null
+  if (slotId === 'guest-hero-auth-break') return NINJA_ADMAX_GUEST_PRIMARY_SRC
+  if (slotId === 'gacha-result-bottom') return NINJA_ADMAX_RESULT_BANNER_SRC
+  return NINJA_ADMAX_GENERAL_BANNER_SRC
 }
 
 export function canRenderAdSlot(slotId: string, variant: AdSlotVariant = 'banner') {
