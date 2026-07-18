@@ -39,7 +39,7 @@ function NinjaAdMaxScript({ src, slotId }: { src: string; slotId: string }) {
     container.innerHTML = ''
     const script = document.createElement('script')
     script.src = src
-    script.async = true
+    script.type = 'text/javascript'
     script.dataset.slotId = slotId
     container.appendChild(script)
 
