@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { pool } from "@workspace/db";
 import { randomUUID } from "crypto";
-import { requireAuth } from "../middlewares/session";
+import { requireAdmin, requireAuth } from "../middlewares/session";
 import { fetchInmuBalance } from "./solana";
 import { hasActivePetSkill, getFreeGachaState } from "../services/pet-skills";
 import { getSystemSettingNumber } from "../services/system-settings-store";
@@ -692,6 +692,43 @@ router.get("/pet-commerce/status", requireAuth, async (req, res): Promise<void> 
   } catch (error) {
     console.error("[PetCommerce] status", error);
     res.status(500).json({ error: "PETガチャ情報の取得に失敗しました" });
+  }
+});
+
+router.get("/admin/pet-gacha/history", requireAdmin, async (_req, res): Promise<void> => {
+  try {
+    await ensurePetCommerceTables();
+    const result = await pool.query(`
+      SELECT
+        h.id,
+        h."userId",
+        p."displayName",
+        p."solWallet",
+        h."gachaType",
+        h."pullType",
+        h."costPoints",
+        h."costInmu",
+        h."txId",
+        h."payerWallet",
+        h.results,
+        h."tdnRerollGrantedAt",
+        h."tdnRerollUsedAt",
+        h."tdnRerollSourceId",
+        h."createdAt"
+      FROM "petGachaHistory" h
+      LEFT JOIN profile p ON p."userId" = h."userId"
+      ORDER BY h."createdAt" DESC
+      LIMIT 200
+    `);
+    res.json(result.rows.map(row => ({
+      ...row,
+      createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+      tdnRerollGrantedAt: row.tdnRerollGrantedAt ? new Date(row.tdnRerollGrantedAt).toISOString() : null,
+      tdnRerollUsedAt: row.tdnRerollUsedAt ? new Date(row.tdnRerollUsedAt).toISOString() : null,
+    })));
+  } catch (error) {
+    console.error("[PetCommerce] admin history", error);
+    res.status(500).json({ error: "PETガチャ履歴の取得に失敗しました" });
   }
 });
 

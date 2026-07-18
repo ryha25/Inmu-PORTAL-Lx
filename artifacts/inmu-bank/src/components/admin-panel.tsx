@@ -301,6 +301,24 @@ type SpinRow = {
   createdAt: string
 }
 
+type PetGachaHistoryRow = {
+  id: number
+  userId: string
+  displayName: string | null
+  solWallet: string | null
+  gachaType: 'points' | 'paid'
+  pullType: string
+  costPoints: number
+  costInmu: number
+  txId: string | null
+  payerWallet: string | null
+  results: Array<{ label?: string; type?: string; amount?: number; characterId?: string }>
+  tdnRerollGrantedAt: string | null
+  tdnRerollUsedAt: string | null
+  tdnRerollSourceId: number | null
+  createdAt: string
+}
+
 function formatSettingDisplay(key: string, value: string): string {
   if (SYSTEM_SETTING_TYPE[key] === 'boolean') return value === 'true' ? '✅ 有効' : '❌ 無効'
   if (SYSTEM_SETTING_TYPE[key] === 'date') return value || '未設定'
@@ -651,6 +669,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [gachaSpins, setGachaSpins] = useState<SpinRow[]>([])
   const [gachaSpinsLoading, setGachaSpinsLoading] = useState(false)
   const [gachaSpinsFetched, setGachaSpinsFetched] = useState(false)
+  const [petGachaHistory, setPetGachaHistory] = useState<PetGachaHistoryRow[]>([])
+  const [petGachaLoading, setPetGachaLoading] = useState(false)
+  const [petGachaFetched, setPetGachaFetched] = useState(false)
 
   const loadGachaResults = useCallback(async () => {
     if (gachaFetched) return
@@ -674,21 +695,54 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     finally { setGachaSpinsLoading(false) }
   }, [api, gachaSpinsFetched])
 
+  const loadPetGachaHistory = useCallback(async () => {
+    if (petGachaFetched) return
+    setPetGachaLoading(true)
+    try {
+      const data = await api('/admin/pet-gacha/history', 'GET') as PetGachaHistoryRow[]
+      setPetGachaHistory(Array.isArray(data) ? data : [])
+      setPetGachaFetched(true)
+    } catch { toast.error('PETガチャ履歴の取得に失敗しました') }
+    finally { setPetGachaLoading(false) }
+  }, [api, petGachaFetched])
+
+  useEffect(() => {
+    if (gachaFetched && !petGachaFetched && !petGachaLoading) {
+      void loadPetGachaHistory()
+    }
+  }, [gachaFetched, loadPetGachaHistory, petGachaFetched, petGachaLoading])
+
+  async function reloadPetGachaHistory() {
+    setPetGachaFetched(false)
+    setPetGachaLoading(true)
+    try {
+      const data = await api('/admin/pet-gacha/history', 'GET') as PetGachaHistoryRow[]
+      setPetGachaHistory(Array.isArray(data) ? data : [])
+      setPetGachaFetched(true)
+    } catch { toast.error('PETガチャ履歴の取得に失敗しました') }
+    finally { setPetGachaLoading(false) }
+  }
+
   async function reloadGachaResults() {
     setGachaFetched(false)
     setGachaSpinsFetched(false)
+    setPetGachaFetched(false)
     setGachaLoading(true)
+    setPetGachaLoading(true)
     try {
-      const [data, spins] = await Promise.all([
+      const [data, spins, petHistory] = await Promise.all([
         api('/admin/gacha/results', 'GET') as Promise<GachaResultRow[]>,
         api('/admin/gacha/spins', 'GET') as Promise<SpinRow[]>,
+        api('/admin/pet-gacha/history', 'GET') as Promise<PetGachaHistoryRow[]>,
       ])
       setGachaResults(Array.isArray(data) ? data : [])
       setGachaSpins(Array.isArray(spins) ? spins : [])
+      setPetGachaHistory(Array.isArray(petHistory) ? petHistory : [])
       setGachaFetched(true)
       setGachaSpinsFetched(true)
+      setPetGachaFetched(true)
     } catch { toast.error('ガチャデータの取得に失敗しました') }
-    finally { setGachaLoading(false) }
+    finally { setGachaLoading(false); setPetGachaLoading(false) }
   }
 
   // ── 個別 Phantom 送金（1当選 = 1 TX）──
@@ -2840,6 +2894,71 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
               </>
             )
           })()}
+
+          <Card className="border-border bg-card p-3 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">INMU PETガチャ履歴</p>
+                <p className="text-[10px] text-muted-foreground">ポイントガチャ / INMUガチャの直近200件</p>
+              </div>
+              <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={reloadPetGachaHistory} disabled={petGachaLoading}>
+                <RefreshCw className={`size-3 mr-1 ${petGachaLoading ? 'animate-spin' : ''}`} />更新
+              </Button>
+            </div>
+
+            {petGachaLoading ? (
+              <p className="text-xs text-center text-muted-foreground py-4">読み込み中...</p>
+            ) : petGachaHistory.length === 0 ? (
+              <p className="text-xs text-center text-muted-foreground py-4 border border-dashed border-border rounded-lg">PETガチャ履歴はありません</p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1">
+                {petGachaHistory.map(row => {
+                  const isPaid = row.gachaType === 'paid'
+                  const pullLabel = row.pullType === 'eleven'
+                    ? '11連'
+                    : row.pullType === 'multi'
+                      ? '10連'
+                      : row.pullType === 'free'
+                        ? '無料'
+                        : row.pullType === 'tdn_reroll'
+                          ? 'TDN再抽選'
+                          : '1連'
+                  const resultLabels = Array.isArray(row.results)
+                    ? row.results.map(prize => prize.label || prize.characterId || prize.type || '不明').join(' / ')
+                    : ''
+                  return (
+                    <div key={row.id} className="rounded-lg border border-border bg-secondary/10 p-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold">{row.displayName || row.userId.slice(0, 12)}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${isPaid ? 'border-yellow-500/40 text-yellow-300 bg-yellow-950/20' : 'border-cyan-500/40 text-cyan-300 bg-cyan-950/20'}`}>
+                              {isPaid ? 'INMUガチャ' : 'ポイントガチャ'}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">{pullLabel}</span>
+                            {row.tdnRerollSourceId != null && <span className="text-[10px] text-purple-300 border border-purple-500/30 rounded px-1.5 py-0.5">TDN再抽選</span>}
+                            {row.tdnRerollGrantedAt && !row.tdnRerollUsedAt && <span className="text-[10px] text-emerald-300 border border-emerald-500/30 rounded px-1.5 py-0.5">もう一度引く権利あり</span>}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {new Date(row.createdAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            {row.costPoints > 0 && ` / ${Number(row.costPoints).toLocaleString()}pt`}
+                            {row.costInmu > 0 && ` / ${Number(row.costInmu).toLocaleString()} INMU`}
+                          </p>
+                          {row.txId && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              txId: <span className="font-mono">{row.txId.slice(0, 14)}...</span>
+                            </p>
+                          )}
+                          <p className="text-[10px] text-foreground/80 mt-1 truncate">{resultLabels || '結果なし'}</p>
+                        </div>
+                        <span className="text-[9px] text-muted-foreground shrink-0">#{row.id}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
         </TabsContent>
       </Tabs>
 

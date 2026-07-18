@@ -26,9 +26,6 @@ pool.query(`
 `).catch((e: unknown) => console.error('[PurchaseRequests] ALTER TABLE error:', e));
 
 type PetRebateBonus = { characterId: string; source: "level_reward" | "skill"; label: string; rate: number; eventOnly: boolean };
-const PURCHASE_LIMIT_SKILL_REDUCTION_START = new Date("2026-07-18T15:00:00.000Z");
-const PURCHASE_LIMIT_SKILL_BONUS_BEFORE_REDUCTION = 100_000;
-const PURCHASE_LIMIT_SKILL_BONUS_AFTER_REDUCTION = 50_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SLOT_REBATE_RULE_START_JST = "2026-07-16";
 
@@ -253,26 +250,16 @@ async function getDailyLimit(isEventDay: boolean): Promise<number> {
 
 async function getUserDailyLimit(userId: string, isEventDay: boolean): Promise<number> {
   const baseLimit = await getDailyLimit(isEventDay);
+  const skillBonus = await getPurchaseLimitSkillBonus(userId, baseLimit);
+  return baseLimit + skillBonus;
+}
+
+async function getPurchaseLimitSkillBonus(userId: string, baseLimit: number): Promise<number> {
   const [hasLeonSkill, hasChingeSkill] = await Promise.all([
     hasActivePetSkill(userId, "leon"),
     hasActivePetSkill(userId, "chinge"),
   ]);
-  const skillBonus = getPurchaseLimitSkillBonusAmount();
-  return baseLimit + (hasLeonSkill ? skillBonus : 0) + (hasChingeSkill ? skillBonus : 0);
-}
-
-function getPurchaseLimitSkillBonusAmount(now = new Date()): number {
-  return now >= PURCHASE_LIMIT_SKILL_REDUCTION_START
-    ? PURCHASE_LIMIT_SKILL_BONUS_AFTER_REDUCTION
-    : PURCHASE_LIMIT_SKILL_BONUS_BEFORE_REDUCTION;
-}
-
-async function getPurchaseLimitSkillBonus(userId: string): Promise<number> {
-  const [hasLeonSkill, hasChingeSkill] = await Promise.all([
-    hasActivePetSkill(userId, "leon"),
-    hasActivePetSkill(userId, "chinge"),
-  ]);
-  const skillBonus = getPurchaseLimitSkillBonusAmount();
+  const skillBonus = Math.max(0, Number(baseLimit) || 0);
   return (hasLeonSkill ? skillBonus : 0) + (hasChingeSkill ? skillBonus : 0);
 }
 
@@ -330,15 +317,15 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const monthEnd   = getMonthEndUTC(now);
     const daysInMonth = getDaysInCurrentMonth(now);
 
-    const [eventSettings, requests, normalDailyLimit, purchaseLimitSkillBonus] = await Promise.all([
+    const [eventSettings, requests, normalDailyLimit] = await Promise.all([
       getEventSettings(),
       db.select().from(purchaseRequestsTable)
         .where(eq(purchaseRequestsTable.userId, userId))
         .orderBy(desc(purchaseRequestsTable.createdAt))
         .limit(50),
       getNormalDailyLimit(),
-      getPurchaseLimitSkillBonus(userId),
     ]);
+    const purchaseLimitSkillBonus = await getPurchaseLimitSkillBonus(userId, normalDailyLimit);
 
     const monthlyCapacity = (normalDailyLimit + purchaseLimitSkillBonus) * daysInMonth;
     // サイクル残り日数（今日〜15日終わりまで）。15日当日も23:59までは1日分として扱う。
@@ -418,11 +405,11 @@ router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> =
     const monthEnd   = getMonthEndUTC(now);
     const daysInMonth = getDaysInCurrentMonth(now);
 
-    const [eventSettings, normalDailyLimit, purchaseLimitSkillBonus] = await Promise.all([
+    const [eventSettings, normalDailyLimit] = await Promise.all([
       getEventSettings(),
       getNormalDailyLimit(),
-      getPurchaseLimitSkillBonus(userId),
     ]);
+    const purchaseLimitSkillBonus = await getPurchaseLimitSkillBonus(userId, normalDailyLimit);
 
     const monthlyCapacity = (normalDailyLimit + purchaseLimitSkillBonus) * daysInMonth;
 

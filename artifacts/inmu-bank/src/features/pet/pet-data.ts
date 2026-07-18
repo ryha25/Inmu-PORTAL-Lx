@@ -232,8 +232,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomImage: leonRoomImage,
     skill: {
       name: '百獣の王',
-      effect: '購入申請上限 +50,000 INMU（1日）',
-      notes: ['Lv.1から発動', '1日の購入申請可能枚数を5万INMU拡張'],
+      effect: '購入申請上限 +購入上限枚数分（1日）',
+      notes: ['Lv.1から発動', '1日の購入申請可能枚数を、その日の購入上限枚数分拡張'],
     },
     levelRewards: [
       { level: 10, label: '王家の絨毯 + 購入申請還元 +5%', detail: 'Lv.10到達で還元率+5%が自動適用', rebateBonus: 5 },
@@ -271,8 +271,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomImage: chingeRoomImage,
     skill: {
       name: '月夜',
-      effect: '購入申請上限 +50,000 INMU（1日）',
-      notes: ['Lv.1から発動', '1日の購入申請可能枠を5万INMU拡張'],
+      effect: '購入申請上限 +購入上限枚数分（1日）',
+      notes: ['Lv.1から発動', '1日の購入申請可能枠を、その日の購入上限枚数分拡張'],
     },
     levelRewards: [
       { level: 10, label: '月影の護符 + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },
