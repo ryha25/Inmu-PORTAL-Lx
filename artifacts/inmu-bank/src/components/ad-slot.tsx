@@ -29,9 +29,24 @@ function pickStableScriptSrc(slotId: string, sources: string[]) {
   return sources[hash % sources.length]
 }
 
+function isPrimaryMobileBannerSlot(slotId: string) {
+  return [
+    'achievements-top',
+    'dashboard-top',
+    'gacha-paid-banner-break',
+    'guest-hero-auth-break',
+    'history-top',
+    'pet-top',
+    'points-top',
+    'profile-top',
+    'ranking-top',
+  ].includes(slotId)
+}
+
 function getAdScriptSrc(slotId: string, variant: AdSlotVariant) {
   if (variant === 'rail') return pickStableScriptSrc(slotId, NINJA_ADMAX_PC_RAIL_SRCS)
   if (variant !== 'banner') return null
+  if (!isPrimaryMobileBannerSlot(slotId)) return null
   if (slotId === 'guest-hero-auth-break') return NINJA_ADMAX_GUEST_PRIMARY_SRC
   if (slotId === 'gacha-result-bottom') return NINJA_ADMAX_RESULT_BANNER_SRC
   return NINJA_ADMAX_GENERAL_BANNER_SRC
