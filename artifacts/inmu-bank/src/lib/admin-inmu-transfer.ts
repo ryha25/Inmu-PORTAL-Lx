@@ -5,7 +5,7 @@ import {
   getAssociatedTokenAddress,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
-import { confirmSignaturePolling } from '@/lib/solana-confirm'
+import { confirmSignaturePolling, getSolanaConfirmationError, SOLANA_SEND_OPTIONS } from '@/lib/solana-confirm'
 
 type PhantomProvider = {
   isPhantom: boolean
@@ -92,24 +92,20 @@ export async function sendInmuWithPhantom(
     createTransferInstruction(fromAta, toAta, from, rawAmount, [], TOKEN_2022_PROGRAM_ID),
   )
   transaction.feePayer = from
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
   transaction.recentBlockhash = blockhash
 
   onProgress?.('Phantomで署名してください...')
   const signed = await phantom.signTransaction(transaction)
   onProgress?.('Solanaへ送信しています...')
-  const signature = await connection.sendRawTransaction(signed.serialize(), {
-    skipPreflight: true,
-    maxRetries: 5,
-  })
+  const signature = await connection.sendRawTransaction(signed.serialize(), SOLANA_SEND_OPTIONS)
 
   // オンチェーンでの確定を待ってから成功として扱う（未確定・失敗TXを送金済みとして
   // 記録してしまうのを防ぐ。ハッシュだけ発行されて実際には送られていない状態を防止）
   onProgress?.('オンチェーンでの確定を待っています...')
   const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
-  if (confirmation.err) {
-    throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
-  }
+  const confirmationError = getSolanaConfirmationError(confirmation, signature)
+  if (confirmationError) throw new Error(confirmationError)
 
   onProgress?.('送信完了。サーバーで確認しています...')
   return signature

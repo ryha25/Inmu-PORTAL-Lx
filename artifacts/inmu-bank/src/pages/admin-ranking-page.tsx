@@ -14,7 +14,7 @@ import {
   getAssociatedTokenAddress,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
-import { confirmSignaturePolling } from '@/lib/solana-confirm'
+import { confirmSignaturePolling, getSolanaConfirmationError, SOLANA_SEND_OPTIONS } from '@/lib/solana-confirm'
 
 type InmuRow      = { rank: number; userId: string; displayName: string; balance: number; showBalance: boolean; totalReceived: number; participations: number }
 type PointsRow    = { rank: number; userId: string; displayName: string; points: number; participations: number }
@@ -31,7 +31,7 @@ interface PhantomProvider {
 
 const INMU_MINT_PUBKEY = new PublicKey('4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump')
 const INMU_DECIMALS = 6
-const AIRDROP_CHUNK_SIZE = 5
+const AIRDROP_CHUNK_SIZE = 2
 
 function getPhantom(): PhantomProvider | null {
   const w = window as Window & { phantom?: { solana?: PhantomProvider }; solana?: PhantomProvider }
@@ -172,7 +172,7 @@ export function AdminRankingPage() {
         const tx = new Transaction()
         tx.add(...instrs)
         tx.feePayer = fromPubkey
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
         tx.recentBlockhash = blockhash
 
         toast.loading(`Phantomで署名してください${chunkLabel}...`, { id: 'monthly-volume-sign' })
@@ -180,13 +180,14 @@ export function AdminRankingPage() {
         toast.dismiss('monthly-volume-sign')
 
         toast.loading(`Solanaへ送信中${chunkLabel}...`, { id: 'monthly-volume-send' })
-        const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
+        const signature = await connection.sendRawTransaction(signedTx.serialize(), SOLANA_SEND_OPTIONS)
         toast.dismiss('monthly-volume-send')
 
         toast.loading(`オンチェーン確認中${chunkLabel}...`, { id: 'monthly-volume-confirm' })
         const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
         toast.dismiss('monthly-volume-confirm')
-        if (confirmation.err) throw new Error(`トランザクションが失敗しました: ${JSON.stringify(confirmation.err)}`)
+        const confirmationError = getSolanaConfirmationError(confirmation, signature)
+        if (confirmationError) throw new Error(confirmationError)
 
         await api('/admin/record-airdrop-batch-variable', 'POST', {
           payments: chunk.map(row => ({ userId: row.userId, wallet: row.solWallet, amount: row.estimatedInmuAmount })),

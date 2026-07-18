@@ -15,7 +15,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
-import { confirmSignaturePolling } from '@/lib/solana-confirm'
+import { confirmSignaturePolling, getSolanaConfirmationError, SOLANA_SEND_OPTIONS } from '@/lib/solana-confirm'
 
 const INMU_MINT = new PublicKey('4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump')
 const INMU_DECIMALS = 6
@@ -209,7 +209,7 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       tx.add(...instructions)
       tx.feePayer = fromPubkey
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: 'signing' })
@@ -218,10 +218,7 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
 
       toast.loading('Solanaネットワークへ送信中…', { id: 'sending' })
       const rawTx = signedTx.serialize()
-      const signature = await connection.sendRawTransaction(rawTx, {
-        skipPreflight: true,
-        maxRetries: 5,
-      })
+      const signature = await connection.sendRawTransaction(rawTx, SOLANA_SEND_OPTIONS)
       toast.dismiss('sending')
 
       // オンチェーンでの確定を待ってから履歴記録する（未確定・失敗TXを送金済みとして
@@ -229,9 +226,8 @@ export function UserSendDialog({ open, onClose, senderWallet, onSuccess }: Props
       toast.loading('オンチェーンでの確定を待っています…', { id: 'confirming' })
       const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
       toast.dismiss('confirming')
-      if (confirmation.err) {
-        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
-      }
+      const confirmationError = getSolanaConfirmationError(confirmation, signature)
+      if (confirmationError) throw new Error(confirmationError)
 
       const recordRes = await fetch('/api/transfer/send', {
         method: 'POST',

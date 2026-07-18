@@ -1,6 +1,25 @@
-import type { Connection } from '@solana/web3.js'
+import type { Connection, SendOptions } from '@solana/web3.js'
 
 export type ConfirmResult = { err: unknown | null; timedOut?: boolean }
+
+export const SOLANA_SEND_OPTIONS: SendOptions = {
+  skipPreflight: false,
+  preflightCommitment: 'confirmed',
+  maxRetries: 10,
+}
+
+export function getSolanaConfirmationError(
+  confirmation: ConfirmResult,
+  signature: string,
+): string | null {
+  if (confirmation.err) {
+    return `トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`
+  }
+  if (confirmation.timedOut) {
+    return `送信後の確認がタイムアウトしました。SolscanでTXを確認してください: ${signature}`
+  }
+  return null
+}
 
 /**
  * オンチェーン確定をポーリングで待つ。

@@ -25,7 +25,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token'
-import { confirmSignaturePolling } from '@/lib/solana-confirm'
+import { confirmSignaturePolling, getSolanaConfirmationError, SOLANA_SEND_OPTIONS } from '@/lib/solana-confirm'
 
 interface PhantomProvider {
   isPhantom: boolean
@@ -64,7 +64,7 @@ const PHANTOM_PENDING_AIRDROP_KEY = 'inmu_admin_pending_airdrop'
 
 const INMU_MINT_PUBKEY = new PublicKey('4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump')
 const INMU_DECIMALS = 6
-const AIRDROP_CHUNK_SIZE = 5
+const AIRDROP_CHUNK_SIZE = 2
 
 type AuditRow = {
   id: number
@@ -791,7 +791,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         createTransferInstruction(fromATA, toATA, adminPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID),
       )
       tx.feePayer = adminPubkey
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
       tx.recentBlockhash = blockhash
 
       toast.loading('Phantom で署名してください…', { id: toastId })
@@ -799,7 +799,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       toast.dismiss(toastId)
 
       toast.loading('Solana へ送信中…', { id: toastId })
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), SOLANA_SEND_OPTIONS)
       toast.dismiss(toastId)
 
       // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
@@ -807,9 +807,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
       const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
       toast.dismiss(toastId)
-      if (confirmation.err) {
-        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
-      }
+      const confirmationError = getSolanaConfirmationError(confirmation, signature)
+      if (confirmationError) throw new Error(confirmationError)
 
       await api(`/admin/gacha/results/${row.id}/mark-sent`, 'PUT', { txHash: signature, solWallet: wallet })
 
@@ -834,7 +833,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
     }
   }
 
-  // ── 一括 Phantom 送金（選択した全当選を1つの TX にまとめる）──
+  // ── 一括 Phantom 送金（小さな TX に分割して安定化）──
   async function markGachaBulkSent(selectedRows: GachaResultRow[]) {
     const sendable = selectedRows.filter(r =>
       (r.inmuSentStatus === 'pending' || r.inmuSentStatus === 'failed') &&
@@ -871,6 +870,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'sending' } : r
     ))
 
+    const sentIds = new Set<number>()
+
     try {
       const connection = new Connection(getAdminRpcUrl(), 'confirmed')
 
@@ -880,94 +881,93 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       const fromATA = await getAssociatedTokenAddress(INMU_MINT_PUBKEY, adminPubkey, false, TOKEN_2022_PROGRAM_ID)
       toast.dismiss(toastId)
 
-      // 1つの TX に全 transfer 命令をまとめる
-      const tx = new Transaction()
-      for (const row of sendable) {
-        const wallet = row.profileSolWallet ?? row.solWallet!
-        const toPubkey = new PublicKey(wallet)
-        const toATA = await getAssociatedTokenAddress(INMU_MINT_PUBKEY, toPubkey, false, TOKEN_2022_PROGRAM_ID)
-        const rawAmount = Math.floor((row.inmuAmount ?? 10000) * Math.pow(10, INMU_DECIMALS))
-        tx.add(
-          createAssociatedTokenAccountIdempotentInstruction(adminPubkey, toATA, toPubkey, INMU_MINT_PUBKEY, TOKEN_2022_PROGRAM_ID),
-          createTransferInstruction(fromATA, toATA, adminPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID),
-        )
-      }
-      tx.feePayer = adminPubkey
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
-      tx.recentBlockhash = blockhash
-
-      toast.loading(`Phantom で署名してください（${sendable.length}件 まとめて送金）…`, { id: toastId })
-      const signedTx = await phantom.signTransaction(tx)
-      toast.dismiss(toastId)
-
-      toast.loading('Solana へ送信中…', { id: toastId })
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
-      toast.dismiss(toastId)
-
-      // オンチェーンでの確定を待つ（未確定のうちに DB 反映してしまうと、失敗TXでも
-      // 送金済みとして記録してしまうため）
-      toast.loading('オンチェーンでの確定を待っています…', { id: toastId })
-      const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
-      toast.dismiss(toastId)
-
-      if (confirmation.err) {
-        throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
+      const chunks: GachaResultRow[][] = []
+      for (let i = 0; i < sendable.length; i += AIRDROP_CHUNK_SIZE) {
+        chunks.push(sendable.slice(i, i + AIRDROP_CHUNK_SIZE))
       }
 
-      // TX は1つの atomic 命令セット（全員成功 or 全員失敗）なので、DB側も
-      // 1件の一括APIで全件をまとめて記録する（個別APIをループすると一部だけ
-      // 記録漏れが起きるため、DB側は1トランザクションで整合させる）
-      const sentAt = new Date().toISOString()
-      const wallets: Record<string, string> = {}
-      for (const row of sendable) {
-        wallets[String(row.id)] = row.profileSolWallet ?? row.solWallet!
-      }
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const chunk = chunks[ci]
+        const chunkLabel = chunks.length > 1 ? ` (${ci + 1}/${chunks.length})` : ''
+        const tx = new Transaction()
+        const wallets: Record<string, string> = {}
 
-      let lastErr: unknown = null
-      let recorded = false
-      for (let attempt = 0; attempt < 5 && !recorded; attempt++) {
-        try {
-          if (attempt > 0) {
-            toast.loading(`DBへの記録を再試行しています…（${attempt + 1}回目）`, { id: toastId })
-            await new Promise(r => setTimeout(r, 1500 * attempt))
+        for (const row of chunk) {
+          const wallet = row.profileSolWallet ?? row.solWallet!
+          const toPubkey = new PublicKey(wallet)
+          const toATA = await getAssociatedTokenAddress(INMU_MINT_PUBKEY, toPubkey, false, TOKEN_2022_PROGRAM_ID)
+          const rawAmount = Math.floor((row.inmuAmount ?? 10000) * Math.pow(10, INMU_DECIMALS))
+          wallets[String(row.id)] = wallet
+          tx.add(
+            createAssociatedTokenAccountIdempotentInstruction(adminPubkey, toATA, toPubkey, INMU_MINT_PUBKEY, TOKEN_2022_PROGRAM_ID),
+            createTransferInstruction(fromATA, toATA, adminPubkey, rawAmount, [], TOKEN_2022_PROGRAM_ID),
+          )
+        }
+
+        tx.feePayer = adminPubkey
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+        tx.recentBlockhash = blockhash
+
+        toast.loading(`Phantom で署名してください${chunkLabel}…`, { id: toastId })
+        const signedTx = await phantom.signTransaction(tx)
+        toast.dismiss(toastId)
+
+        toast.loading(`Solana へ送信中${chunkLabel}…`, { id: toastId })
+        const signature = await connection.sendRawTransaction(signedTx.serialize(), SOLANA_SEND_OPTIONS)
+        toast.dismiss(toastId)
+
+        toast.loading(`オンチェーンでの確定を待っています${chunkLabel}…`, { id: toastId })
+        const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
+        toast.dismiss(toastId)
+        const confirmationError = getSolanaConfirmationError(confirmation, signature)
+        if (confirmationError) throw new Error(`${confirmationError}${chunkLabel}`)
+
+        let lastErr: unknown = null
+        let recorded = false
+        for (let attempt = 0; attempt < 5 && !recorded; attempt++) {
+          try {
+            if (attempt > 0) {
+              toast.loading(`DBへの記録を再試行しています${chunkLabel}…（${attempt + 1}回目）`, { id: toastId })
+              await new Promise(r => setTimeout(r, 1500 * attempt))
+            }
+            await api('/admin/gacha/results/mark-sent-bulk', 'PUT', {
+              ids: chunk.map(r => r.id),
+              txHash: signature,
+              wallets,
+            })
+            recorded = true
+          } catch (err) {
+            lastErr = err
           }
-          await api('/admin/gacha/results/mark-sent-bulk', 'PUT', {
-            ids: sendable.map(r => r.id),
-            txHash: signature,
-            wallets,
-          })
-          recorded = true
-        } catch (err) {
-          lastErr = err
         }
-      }
-      toast.dismiss(toastId)
+        toast.dismiss(toastId)
 
-      if (!recorded) {
-        // TX はオンチェーンで確定済み（資金は送られている）が、DB記録だけ失敗。
-        // 再試行できるよう pending には戻さず failed にし、手動での再記録を促す。
-        const msg = lastErr instanceof Error ? lastErr.message : '不明なエラー'
-        for (const row of sendable) {
-          await api(`/admin/gacha/results/${row.id}/mark-failed`, 'PUT', { failureReason: `TX成功済みだがDB記録失敗: ${msg}` }).catch(() => {})
+        if (!recorded) {
+          const msg = lastErr instanceof Error ? lastErr.message : '不明なエラー'
+          for (const row of chunk) {
+            await api(`/admin/gacha/results/${row.id}/mark-failed`, 'PUT', { failureReason: `TX成功済みだがDB記録失敗: ${msg}` }).catch(() => {})
+          }
+          setGachaResults(p => p.map(r =>
+            chunk.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'failed', failureReason: 'TX成功済みだがDB記録失敗' } : r
+          ))
+          throw new Error(`送金は完了しましたがDB記録に失敗しました${chunkLabel}: ${msg}`)
         }
-        setGachaResults(p => p.map(r =>
-          sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'failed', failureReason: 'TX成功済みだがDB記録失敗' } : r
+
+        const sentAt = new Date().toISOString()
+        const chunkIds = new Set(chunk.map(r => r.id))
+        chunkIds.forEach(id => sentIds.add(id))
+        setGachaResults(p => p.map(r => chunkIds.has(r.id)
+          ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallets[String(r.id)], inmuSentAt: sentAt }
+          : r
         ))
-        toast.error(`送金はオンチェーンで完了しましたが、DBへの記録に失敗しました。txHash: ${signature.slice(0, 16)}… を確認し「再試行」してください。`, { duration: 15000 })
-        return
+        setGachaSelectedIds(previous => {
+          const remaining = new Set(previous)
+          chunkIds.forEach(id => remaining.delete(id))
+          return remaining
+        })
       }
 
-      const successfulIds = new Set(sendable.map(r => r.id))
-      setGachaResults(p => p.map(r => successfulIds.has(r.id)
-        ? { ...r, inmuSentStatus: 'sent', txHash: signature, solWallet: wallets[String(r.id)], inmuSentAt: sentAt }
-        : r
-      ))
-      setGachaSelectedIds(previous => {
-        const remaining = new Set(previous)
-        successfulIds.forEach(id => remaining.delete(id))
-        return remaining
-      })
-      toast.success(`✅ 一括送金完了！ ${sendable.length}/${sendable.length}件 成功（txHash: ${signature.slice(0, 16)}…）`)
+      toast.success(`✅ 一括送金完了！ ${sentIds.size}/${sendable.length}件 成功`)
 
     } catch (e: unknown) {
       toast.dismiss(toastId)
@@ -976,18 +976,19 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       if (msg === 'User rejected the request.') {
         // キャンセル → pending に戻す
         setGachaResults(p => p.map(r =>
-          sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'pending' } : r
+          sendable.some(s => s.id === r.id && !sentIds.has(s.id)) ? { ...r, inmuSentStatus: 'pending' } : r
         ))
         toast.info('一括送金をキャンセルしました')
       } else {
-        // 全件 failed
+        const failedRows = sendable.filter(row => !sentIds.has(row.id))
         for (const row of sendable) {
+          if (sentIds.has(row.id)) continue
           await api(`/admin/gacha/results/${row.id}/mark-failed`, 'PUT', { failureReason: msg }).catch(() => {})
         }
         setGachaResults(p => p.map(r =>
-          sendable.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'failed', failureReason: msg } : r
+          failedRows.some(s => s.id === r.id) ? { ...r, inmuSentStatus: 'failed', failureReason: msg } : r
         ))
-        toast.error(`一括送金失敗: ${msg}`)
+        toast.error(`一括送金失敗: ${msg}${sentIds.size > 0 ? `（${sentIds.size}件は送金済み）` : ''}`)
       }
     } finally {
       setBulkSending(false)
@@ -1152,7 +1153,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         const tx = new Transaction()
         tx.add(...instrs)
         tx.feePayer = fromPubkey
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
         tx.recentBlockhash = blockhash
 
         toast.loading(`Phantom で署名してください${chunkLabel}…`, { id: 'ph-airdrop-sign' })
@@ -1160,7 +1161,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         toast.dismiss('ph-airdrop-sign')
 
         toast.loading(`Solana へ送信中${chunkLabel}…`, { id: 'ph-airdrop-send' })
-        const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
+        const signature = await connection.sendRawTransaction(signedTx.serialize(), SOLANA_SEND_OPTIONS)
         toast.dismiss('ph-airdrop-send')
 
         // オンチェーンでの確定を待ってから記録する（未確定・失敗TXを送金済みとして
@@ -1168,9 +1169,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
         toast.loading(`オンチェーンでの確定を待っています${chunkLabel}…`, { id: 'ph-airdrop-confirm' })
         const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
         toast.dismiss('ph-airdrop-confirm')
-        if (confirmation.err) {
-          throw new Error(`トランザクションがオンチェーンで失敗しました${chunkLabel}: ${JSON.stringify(confirmation.err)}`)
-        }
+        const confirmationError = getSolanaConfirmationError(confirmation, signature)
+        if (confirmationError) throw new Error(`${confirmationError}${chunkLabel}`)
 
         await api('/admin/record-airdrop-batch', 'POST', {
           users: chunk.map(u => ({ userId: u.userId, wallet: u.solWallet })),
@@ -1354,7 +1354,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           const tx = new Transaction()
           tx.add(...instrs)
           tx.feePayer = fromPubkey
-          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('processed')
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
           tx.recentBlockhash = blockhash
 
           toast.loading('Phantom で署名してください…', { id: 'ph-sign' })
@@ -1362,7 +1362,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           toast.dismiss('ph-sign')
 
           toast.loading('Solana へ送信中…', { id: 'ph-send' })
-          const signature = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true, maxRetries: 5 })
+          const signature = await connection.sendRawTransaction(signedTx.serialize(), SOLANA_SEND_OPTIONS)
           toast.dismiss('ph-send')
 
           // オンチェーンでの確定を待ってから成功として記録する（未確定・失敗TXを
@@ -1370,9 +1370,8 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           toast.loading('オンチェーンでの確定を待っています…', { id: 'ph-confirm' })
           const confirmation = await confirmSignaturePolling(connection, signature, lastValidBlockHeight)
           toast.dismiss('ph-confirm')
-          if (confirmation.err) {
-            throw new Error(`トランザクションがオンチェーンで失敗しました: ${JSON.stringify(confirmation.err)}`)
-          }
+          const confirmationError = getSolanaConfirmationError(confirmation, signature)
+          if (confirmationError) throw new Error(confirmationError)
           rebateTxSignature = signature
 
           toast.success(`オンチェーン送金完了: ${numRebate.toLocaleString()} INMU → ${pr.displayName ?? pr.userId}`)
