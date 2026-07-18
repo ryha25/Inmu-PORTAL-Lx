@@ -1,5 +1,6 @@
 import { Logo } from '@/components/logo'
 import { LangToggle } from '@/components/lang-toggle'
+import { AdSlot } from '@/components/ad-slot'
 import { signOut } from '@/lib/auth-client'
 import { useI18n } from '@/lib/i18n/context'
 import type { TranslationKey } from '@/lib/i18n/dict'
@@ -44,6 +45,10 @@ export function AppShell({
 
   const isActive = (href: string) =>
     href === '/' ? location === '/' : location.startsWith(href)
+  const pageAdKey = location === '/'
+    ? 'dashboard'
+    : location.replace(/^\/+/, '').replace(/[^a-z0-9-]+/gi, '-') || 'dashboard'
+  const showAds = !isAdmin
 
   return (
     <div className="min-h-dvh">
@@ -111,8 +116,22 @@ export function AppShell({
         </header>
 
         {/* Page content — bottom padding for tab bar */}
-        <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 lg:px-8 lg:pb-10">
-          {children}
+        <main className="mx-auto flex w-full max-w-7xl gap-5 px-4 pb-28 pt-5 lg:px-8 lg:pb-10">
+          <div className="mx-auto min-w-0 flex-1 lg:max-w-5xl">
+            {children}
+            {showAds && (
+              <AdSlot
+                slotId={`${pageAdKey}-bottom`}
+                variant="banner"
+                className="mt-6"
+              />
+            )}
+          </div>
+          {showAds && (
+            <div className="sticky top-[4.75rem] hidden h-fit w-64 shrink-0 xl:block">
+              <AdSlot slotId={`${pageAdKey}-rail`} variant="rail" />
+            </div>
+          )}
         </main>
       </div>
 
