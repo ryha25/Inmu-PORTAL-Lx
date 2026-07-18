@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
+import { AdSlot } from '@/components/ad-slot'
 import { RankingView } from '@/components/ranking-view'
 import type { MonthlyVolumeRow, MonthlyVolumeSeason } from '@/components/ranking-view'
 import { PageHeader } from '@/components/page-header'
@@ -101,6 +102,7 @@ export function RankingPage() {
           更新
         </Button>
       </PageHeader>
+      <AdSlot slotId="ranking-top" variant="banner" className="mb-4" />
       <RankingView
         inmuRows={inmuRows}
         pointsRows={pointsRows}

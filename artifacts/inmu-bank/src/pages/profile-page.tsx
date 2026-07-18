@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
+import { AdSlot } from '@/components/ad-slot'
 import { ProfileView } from '@/components/profile-view'
 import { PageHeader } from '@/components/page-header'
 import { useI18n } from '@/lib/i18n/context'
@@ -25,6 +26,7 @@ export function ProfilePage() {
   return (
     <AppShell isAdmin={auth?.role === 'admin'} displayName={auth?.displayName ?? ''} unread={unread}>
       <PageHeader titleKey="nav_profile" />
+      <AdSlot slotId="profile-top" variant="banner" className="mb-4" />
       {!profile ? <div className="py-20 text-center text-muted-foreground">{t('loading')}</div> : <ProfileView profile={profile} isAdmin={auth?.role === 'admin'} onRefresh={load} />}
     </AppShell>
   )

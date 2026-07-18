@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
+import { AdSlot } from '@/components/ad-slot'
 import { PointsView } from '@/components/points-view'
 import { PageHeader } from '@/components/page-header'
 import { useI18n } from '@/lib/i18n/context'
@@ -23,6 +24,7 @@ export function PointsPage() {
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
       <PageHeader titleKey="nav_points" />
+      <AdSlot slotId="points-top" variant="banner" className="mb-4" />
       {!data ? <div className="py-20 text-center text-muted-foreground">{t('loading')}</div> : <PointsView data={data} onRefresh={load} />}
     </AppShell>
   )

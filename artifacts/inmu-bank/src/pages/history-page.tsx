@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
+import { AdSlot } from '@/components/ad-slot'
 import { TransactionTable, type TxRow } from '@/components/transaction-table'
 import { PageHeader } from '@/components/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -446,6 +447,7 @@ export function HistoryPage() {
           購入申請
         </Button>
       </PageHeader>
+      <AdSlot slotId="history-top" variant="banner" className="mb-4" />
       <Tabs defaultValue="transactions">
         <TabsList className="grid w-full grid-cols-3 mb-4">
           <TabsTrigger value="transactions" className="gap-1.5">
@@ -461,6 +463,7 @@ export function HistoryPage() {
             売却
           </TabsTrigger>
         </TabsList>
+        <AdSlot slotId="history-tabs-break" variant="banner" className="mb-4" />
 
         <TabsContent value="transactions">
           {txLoading

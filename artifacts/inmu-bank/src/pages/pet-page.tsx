@@ -1,6 +1,7 @@
 import type { ElementType, ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
+import { AdSlot } from '@/components/ad-slot'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
@@ -1826,6 +1827,7 @@ export function PetPage() {
             <BalanceChip icon={<CircleDollarSign className="size-3.5" />} label="POINT" value={balances.points} />
           </div>
         </header>
+        <AdSlot slotId="pet-top" variant="banner" className="mb-4" />
 
         {!isHydrated && <p className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100">育成データを同期しています…</p>}
         {syncError && <p className="rounded-md border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs text-rose-100">{syncError} 一時データを表示しています。</p>}
@@ -1873,6 +1875,7 @@ export function PetPage() {
                 onWalk={() => setWalkMenuOpen(true)}
               />
               <CharacterSelectStrip pets={ownedPets} displayedPetId={displayedPetId} onSelect={handleSelect} />
+              <AdSlot slotId="pet-character-break" variant="banner" />
               <div className="grid grid-cols-2 gap-2">
                 <SkillActivationButton ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} skillLockStatus={skillLockStatus} />
                 <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />

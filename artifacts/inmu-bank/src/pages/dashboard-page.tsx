@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
+import { AdSlot } from '@/components/ad-slot'
 import { DashboardView } from '@/components/dashboard-view'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
@@ -153,6 +154,7 @@ export function DashboardPage() {
           INMU送金
         </Button>
       </PageHeader>
+      <AdSlot slotId="dashboard-top" variant="banner" className="mb-4" />
       <DashboardView
         data={data}
         displayName={profile?.displayName ?? ''}

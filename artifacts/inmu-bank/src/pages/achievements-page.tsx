@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
+import { AdSlot } from '@/components/ad-slot'
 import { PageHeader } from '@/components/page-header'
 import { RankingView } from '@/components/ranking-view'
 import type { MonthlyVolumeRow, MonthlyVolumeSeason } from '@/components/ranking-view'
@@ -97,6 +98,7 @@ export function AchievementsPage() {
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
       <PageHeader titleKey="nav_achievements" />
+      <AdSlot slotId="achievements-top" variant="banner" className="mb-4" />
 
       {/* ── 実績サマリー ── */}
       {stats ? (
@@ -170,6 +172,8 @@ export function AchievementsPage() {
       ) : (
         <div className="py-10 text-center text-muted-foreground mb-4">{t('loading')}</div>
       )}
+
+      <AdSlot slotId="achievements-ranking-break" variant="banner" className="mb-4" />
 
       {/* ── ランキング ── */}
       <div className="flex items-center gap-2 mb-3">
