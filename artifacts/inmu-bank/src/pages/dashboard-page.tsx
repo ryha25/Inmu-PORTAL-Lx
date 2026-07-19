@@ -6,9 +6,10 @@ import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/hooks/use-auth'
-import { UserSendDialog } from '@/components/user-send-dialog'
 import { toast } from 'sonner'
-import { Send } from 'lucide-react'
+import { Gamepad2 } from 'lucide-react'
+
+const INMU_DAIFUGO_URL = 'https://inmu.replit.app'
 
 type DashboardData = {
   balance: number
@@ -28,7 +29,6 @@ export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [walletInmu, setWalletInmu] = useState<number | null>(null)
   const [dailyClaim, setDailyClaim] = useState<{ alreadyClaimed: boolean; streak: number } | null>(null)
-  const [sendOpen, setSendOpen] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [inmuPrice, setInmuPrice] = useState<{ usdPrice: number; jpyRate: number } | null>(null)
 
@@ -123,35 +123,19 @@ export function DashboardPage() {
     </AppShell>
   )
 
-  function handleSendClick() {
-    const w = window as Window & { phantom?: { solana?: { isPhantom?: boolean } }; solana?: { isPhantom?: boolean } }
-    const hasPhantom = !!(w.phantom?.solana?.isPhantom || w.solana?.isPhantom)
-    const mob = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-    if (mob && !hasPhantom) {
-      const url = encodeURIComponent(window.location.href)
-      const ref = encodeURIComponent(window.location.origin)
-      const phantomUrl = `phantom://browse/${url}?ref=${ref}`
-      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        window.location.assign(phantomUrl)
-      } else {
-        window.location.assign(`intent://browse/${url}#Intent;scheme=phantom;package=app.phantom;end`)
-      }
-      return
-    }
-    setSendOpen(true)
-  }
-
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
       <PageHeader titleKey="nav_dashboard">
         <Button
+          asChild
           size="sm"
           variant="outline"
           className="gap-1.5 h-8 text-xs"
-          onClick={handleSendClick}
         >
-          <Send className="size-3.5" />
-          INMU送金
+          <a href={INMU_DAIFUGO_URL}>
+            <Gamepad2 className="size-3.5" />
+            INMU大富豪
+          </a>
         </Button>
       </PageHeader>
       <AdSlot slotId="dashboard-top" variant="banner" className="mb-4" />
@@ -163,14 +147,7 @@ export function DashboardPage() {
         hasSolWallet={!!profile?.solWallet}
         onScan={handleScanTrades}
         scanning={scanning}
-        onSend={handleSendClick}
         inmuPrice={inmuPrice ?? undefined}
-      />
-      <UserSendDialog
-        open={sendOpen}
-        onClose={() => setSendOpen(false)}
-        senderWallet={profile?.solWallet ?? null}
-        onSuccess={loadDashboard}
       />
     </AppShell>
   )

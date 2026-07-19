@@ -30,7 +30,6 @@ export function DashboardView({
   hasSolWallet?: boolean
   onScan?: () => void
   scanning?: boolean
-  onSend?: () => void
   inmuPrice?: { usdPrice: number; jpyRate: number }
 }) {
   const { t, locale } = useI18n()
