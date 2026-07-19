@@ -6,6 +6,7 @@ export const PET_CHARACTER_NAMES: Record<string, string> = {
   leon: "レオン",
   chinge: "チンゲ",
   tdn: "TDN",
+  shikoiruka: "シコイルカ",
   whip: "ホイップ",
   "inmu-festival": "INMUくん（810祭りVer.）",
 };
@@ -13,6 +14,9 @@ export const PET_CHARACTER_NAMES: Record<string, string> = {
 const DEFAULT_STATS = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 50 };
 const EMPTY_ACTIONS = { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "play-ball": 0, "play-toy": 0, pet: 0 };
 const EMPTY_COOLDOWNS = { feed: 0, play: 0 };
+const SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID = "shikoiruka";
+// 2026-07-21 00:00 JST.
+const SHIKOIRUKA_DISTRIBUTION_START_MS = Date.UTC(2026, 6, 20, 15, 0, 0);
 
 let tablePromise: Promise<void> | null = null;
 
@@ -117,4 +121,17 @@ export async function initializePetCharacterState(userId: string, characterId: s
     VALUES ($1, $2::jsonb, $3)
     ON CONFLICT ("userId") DO UPDATE SET state = EXCLUDED.state, "clientUpdatedAt" = EXCLUDED."clientUpdatedAt", "updatedAt" = NOW()
   `, [userId, JSON.stringify(state), now]);
+}
+
+export async function ensureShikoirukaDistributionForUser(userId: string, now = Date.now()) {
+  if (now < SHIKOIRUKA_DISTRIBUTION_START_MS) return false;
+  await ensurePetStateTable();
+  const inserted = await pool.query(
+    `INSERT INTO "userPetCharacters" ("userId", "characterId")
+     VALUES ($1, $2)
+     ON CONFLICT ("userId", "characterId") DO NOTHING
+     RETURNING "characterId"`,
+    [userId, SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID],
+  );
+  return Boolean(inserted.rowCount);
 }

@@ -143,7 +143,7 @@ type PremiumFoodSave = { dailyDate: string; dailyUsed: number; inventory: number
 type PetInventorySnapshot = { sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number }
 
 type PetSaveData = {
-  version: 5 | 6 | 7
+  version: 5 | 6 | 7 | 8
   selectedPetId: PetId
   activePetIds: PetId[]
   pets: Record<PetId, PetStats>
@@ -163,6 +163,7 @@ type PetSaveData = {
   hungerAffectionPenaltyAt: Record<PetId, number>
   affectionGiftProgress: Record<PetId, number>
   affectionGifts: PetAffectionGift[]
+  skillGiftProgress: Record<PetId, number>
   skillState: Record<PetId, boolean>
   skillActiveCharacterIds: PetId[]
 }
@@ -390,7 +391,7 @@ function sameInventorySnapshot(a: PetInventorySnapshot | null | undefined, b: Pe
 function createDefaultSave(): PetSaveData {
   const now = Date.now()
   return {
-    version: 7,
+    version: 8,
     selectedPetId: PET_DEFINITIONS[0].id,
     activePetIds: [],
     pets: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...DEFAULT_STATS }])) as Record<PetId, PetStats>,
@@ -408,6 +409,7 @@ function createDefaultSave(): PetSaveData {
     hungerAffectionPenaltyAt: createPetNumberRecord(now),
     affectionGiftProgress: createPetNumberRecord(0),
     affectionGifts: [],
+    skillGiftProgress: createPetNumberRecord(0),
     skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, true])) as Record<PetId, boolean>,
     skillActiveCharacterIds: [],
   }
@@ -424,7 +426,7 @@ function loadSave(source?: unknown): PetSaveData {
     const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
     const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(parsed.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
     return {
-      version: 7,
+      version: 8,
       selectedPetId: validSelection ? parsed.selectedPetId! : fallback.selectedPetId,
       activePetIds,
       pets,
@@ -471,6 +473,7 @@ function loadSave(source?: unknown): PetSaveData {
             seen: gift.seen === true,
           }))
         : [],
+      skillGiftProgress: sanitizePetNumberRecord(parsed.skillGiftProgress, 0),
       skillState: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, parsed.skillState?.[pet.id] !== false])) as Record<PetId, boolean>,
       skillActiveCharacterIds: (() => {
         const legacySingle = (parsed as { skillActiveCharacterId?: unknown }).skillActiveCharacterId
@@ -536,6 +539,91 @@ function rollAffectionGift(petId: PetId, now: number): PetAffectionGift | null {
     pointsGrantStatus: reward.rewardType === 'points' ? 'pending' : undefined,
     seen: false,
   }
+}
+
+function rollShikoirukaSkillGift(now: number): PetAffectionGift {
+  const roll = Math.random()
+  const count = Math.floor(Math.random() * 3) + 1
+  if (roll < 0.02) {
+    return {
+      id: `affection-shikoiruka-skill-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      petId: 'shikoiruka',
+      createdAt: now,
+      rewardType: 'sleep_tea',
+      rewardAmount: 1,
+      rewardLabel: 'アイスティー（睡眠薬入り）',
+      seen: false,
+    }
+  }
+  if (roll < 0.18) {
+    const amount = (Math.floor(Math.random() * 5) + 1) * 100
+    return {
+      id: `affection-shikoiruka-skill-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      petId: 'shikoiruka',
+      createdAt: now,
+      rewardType: 'points',
+      rewardAmount: amount,
+      rewardLabel: `${amount.toLocaleString('ja-JP')}ポイント`,
+      pointsGrantStatus: 'pending',
+      seen: false,
+    }
+  }
+  if (roll < 0.46) {
+    return {
+      id: `affection-shikoiruka-skill-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      petId: 'shikoiruka',
+      createdAt: now,
+      rewardType: 'takuya_sunglasses',
+      rewardAmount: count,
+      rewardLabel: '拓也のサングラス',
+      seen: false,
+    }
+  }
+  if (roll < 0.74) {
+    return {
+      id: `affection-shikoiruka-skill-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      petId: 'shikoiruka',
+      createdAt: now,
+      rewardType: 'cat_headband',
+      rewardAmount: count,
+      rewardLabel: '猫のカチューシャ',
+      seen: false,
+    }
+  }
+  return {
+    id: `affection-shikoiruka-skill-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    petId: 'shikoiruka',
+    createdAt: now,
+    rewardType: 'premium_food',
+    rewardAmount: count,
+    rewardLabel: '高級ごはん',
+    seen: false,
+  }
+}
+
+function rollShikoirukaSkillGiftAfterCare(
+  save: Pick<PetSaveData, 'skillActiveCharacterIds' | 'activePetIds'>,
+  progress: Record<PetId, number>,
+  gifts: PetAffectionGift[],
+  now: number,
+) {
+  const nextProgress = { ...progress }
+  let nextGifts = gifts
+  let gift: PetAffectionGift | null = null
+  if (isPetSkillActive(save, 'shikoiruka')) {
+    const count = (nextProgress.shikoiruka ?? 0) + 1
+    const shouldTrigger = count >= 5 || (count >= 4 && Math.random() < 0.5)
+    if (shouldTrigger) {
+      nextProgress.shikoiruka = 0
+      gift = rollShikoirukaSkillGift(now)
+      nextGifts = [...nextGifts, gift].slice(-8)
+    } else {
+      nextProgress.shikoiruka = count
+    }
+  } else {
+    nextProgress.shikoiruka = 0
+  }
+  return { progress: nextProgress, gifts: nextGifts, gift }
 }
 
 function applyRewardToInventory(
@@ -610,6 +698,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
   const hungerAffectionPenaltyAt = { ...sanitizePetNumberRecord(save.hungerAffectionPenaltyAt, now) }
   let affectionGiftProgress = { ...sanitizePetNumberRecord(save.affectionGiftProgress, 0) }
   let affectionGifts = Array.isArray(save.affectionGifts) ? save.affectionGifts.slice(-8) : []
+  let skillGiftProgress = { ...sanitizePetNumberRecord(save.skillGiftProgress, 0) }
   let premiumFood = sanitizePremiumFood(save.premiumFood, now)
   const skillState = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, save.skillState?.[pet.id] !== false])) as Record<PetId, boolean>
 
@@ -718,6 +807,14 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
       Object.assign(items, giftInventory.items)
       premiumFood = giftInventory.premiumFood
     }
+    const skillGiftRoll = rollShikoirukaSkillGiftAfterCare({ skillActiveCharacterIds, activePetIds }, skillGiftProgress, affectionGifts, now)
+    skillGiftProgress = skillGiftRoll.progress
+    affectionGifts = skillGiftRoll.gifts
+    if (skillGiftRoll.gift) {
+      const skillGiftInventory = applyRewardToInventory(skillGiftRoll.gift, items, premiumFood)
+      Object.assign(items, skillGiftInventory.items)
+      premiumFood = skillGiftInventory.premiumFood
+    }
     walks.results = [
       ...walks.results,
       {
@@ -751,6 +848,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
     hungerAffectionPenaltyAt,
     affectionGiftProgress,
     affectionGifts,
+    skillGiftProgress,
     premiumFood,
     skillState,
     skillActiveCharacterIds,
@@ -1062,6 +1160,7 @@ export function usePetState() {
       let items = materialized.items
       let affectionGiftProgress = materialized.affectionGiftProgress
       let affectionGifts = materialized.affectionGifts
+      let skillGiftProgress = materialized.skillGiftProgress
       if (!overpetted) {
         const giftRoll = rollAffectionGiftAfterCare(currentPetId, nextStats.affection, materialized.affectionGiftProgress, materialized.affectionGifts, actionNow)
         affectionGiftProgress = giftRoll.progress
@@ -1070,6 +1169,14 @@ export function usePetState() {
           const giftInventory = applyRewardToInventory(giftRoll.gift, items, premiumFood)
           items = giftInventory.items
           premiumFood = giftInventory.premiumFood
+        }
+        const skillGiftRoll = rollShikoirukaSkillGiftAfterCare(materialized, skillGiftProgress, affectionGifts, actionNow)
+        skillGiftProgress = skillGiftRoll.progress
+        affectionGifts = skillGiftRoll.gifts
+        if (skillGiftRoll.gift) {
+          const skillGiftInventory = applyRewardToInventory(skillGiftRoll.gift, items, premiumFood)
+          items = skillGiftInventory.items
+          premiumFood = skillGiftInventory.premiumFood
         }
       }
 
@@ -1097,6 +1204,7 @@ export function usePetState() {
         hungerAffectionPenaltyAt: { ...materialized.hungerAffectionPenaltyAt, [currentPetId]: actionNow },
         affectionGiftProgress,
         affectionGifts,
+        skillGiftProgress,
         items,
         premiumFood,
       }

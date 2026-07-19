@@ -29,7 +29,8 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
-const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'inmu-festival'])
+const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'shikoiruka', 'inmu-festival'])
+const SHIKOIRUKA_UNLOCK_SEEN_KEY = 'inmu-portal:pet:shikoiruka-unlock-seen:v1'
 
 const PET_ROOM_CSS = `
   @keyframes pet-meter-shine {
@@ -56,6 +57,16 @@ const PET_ROOM_CSS = `
   @keyframes pet-room-fire {
     0%, 100% { transform: scale(.92, 1.05); opacity: .55; }
     45% { transform: translateY(-3px) scale(1.08, .9); opacity: .9; }
+  }
+  @keyframes pet-room-water-flow {
+    0% { transform: translate3d(-3%, -2%, 0); opacity: .24; }
+    50% { transform: translate3d(4%, 2%, 0); opacity: .5; }
+    100% { transform: translate3d(-3%, -2%, 0); opacity: .24; }
+  }
+  @keyframes pet-water-bubble {
+    0% { transform: translateY(36px) scale(.72); opacity: 0; }
+    18% { opacity: .75; }
+    100% { transform: translateY(-210px) translateX(22px) scale(1.2); opacity: 0; }
   }
   @keyframes pet-room-speaker {
     0% { transform: scale(.65); opacity: .65; }
@@ -106,12 +117,31 @@ const PET_ROOM_CSS = `
     12%, 82% { opacity: 1; transform: translate(-50%, 0) scale(1); }
     100% { opacity: 0; transform: translate(-50%, -4px) scale(.98); }
   }
+  @keyframes shikoiruka-unlock-approach {
+    0% { opacity: .18; transform: translate3d(90px, 54px, 0) scale(.18) rotate(-10deg); filter: blur(5px); }
+    58% { opacity: .82; transform: translate3d(-8px, 10px, 0) scale(.72) rotate(4deg); filter: blur(1px); }
+    100% { opacity: 1; transform: translate3d(0, -6px, 0) scale(1) rotate(0); filter: blur(0); }
+  }
+  @keyframes shikoiruka-unlock-float {
+    0%, 100% { transform: translateY(-6px) rotate(-1deg); }
+    50% { transform: translateY(8px) rotate(1deg); }
+  }
+  @keyframes shikoiruka-unlock-ring {
+    0% { opacity: 0; transform: scale(.35); }
+    22% { opacity: .9; }
+    100% { opacity: 0; transform: scale(1.55); }
+  }
+  @keyframes shikoiruka-unlock-text {
+    to { opacity: 1; transform: translateY(0); }
+  }
   .pet-meter-shine { animation: pet-meter-shine 3.1s ease-in-out infinite; }
   .pet-neon-sign { animation: pet-neon-breathe 3.8s ease-in-out infinite; }
   .pet-room-enter { animation: pet-room-enter .7s ease-out both; }
   .pet-room-drift { animation: pet-room-drift 7s ease-in-out infinite; }
   .pet-room-sway { animation: pet-room-sway 3.6s ease-in-out infinite; transform-origin: 50% 0; }
   .pet-room-fire { animation: pet-room-fire 1.25s ease-in-out infinite; transform-origin: 50% 100%; }
+  .pet-room-water-flow { animation: pet-room-water-flow 8s ease-in-out infinite; }
+  .pet-water-bubble { animation: pet-water-bubble 5.8s linear infinite; }
   .pet-room-speaker { animation: pet-room-speaker 1.8s ease-out infinite; }
   .pet-character-motion { animation: pet-idle-float 6.8s ease-in-out infinite; transform-origin: 50% 90%; }
   .pet-react-feed { animation: pet-react-feed 1.35s ease-out both; }
@@ -121,8 +151,11 @@ const PET_ROOM_CSS = `
   .pet-sleeping-motion { animation: pet-sleep-breathe 3.4s ease-in-out infinite; transform-origin: 50% 90%; }
   .pet-zzz { animation: pet-zzz 2.3s ease-out infinite; }
   .pet-speech-bubble { animation: pet-speech-pop 4.2s ease-in-out both; }
+  .shikoiruka-unlock-approach { animation: shikoiruka-unlock-approach 4.4s cubic-bezier(.16,.86,.25,1) both, shikoiruka-unlock-float 2.8s ease-in-out 4.4s infinite; }
+  .shikoiruka-unlock-ring { animation: shikoiruka-unlock-ring 1.55s ease-out 3.95s forwards; }
+  .shikoiruka-unlock-text { opacity: 0; transform: translateY(14px); animation: shikoiruka-unlock-text .72s ease-out 4.3s forwards; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-speaker { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text { animation: none; }
   }
 `
 
@@ -265,7 +298,7 @@ function PetRoom({
   name: string
   image: string
   roomWidth: string
-  roomTheme: 'cat' | 'dog' | 'lion' | 'festival'
+  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water'
   roomImage: string
   expression: PetExpression
   stats: PetStats
@@ -377,6 +410,13 @@ function PetRoom({
       )}
       {roomTheme === 'lion' && (
         <div className="pet-room-fire absolute left-[45%] top-[46%] z-[4] h-12 w-8 rounded-[50%_50%_45%_45%] bg-[radial-gradient(circle_at_50%_70%,#fff7ae,#f59e0b_45%,rgba(220,38,38,.35)_72%,transparent_73%)] blur-[1px]" />
+      )}
+      {roomTheme === 'water' && (
+        <>
+          <div className="pet-room-water-flow pointer-events-none absolute inset-0 z-[4] bg-[linear-gradient(100deg,transparent_0%,rgba(224,251,255,.16)_28%,transparent_48%,rgba(92,225,255,.12)_62%,transparent_84%)] mix-blend-screen blur-[6px]" />
+          <div className="pet-water-bubble pointer-events-none absolute bottom-[19%] left-[13%] z-[4] size-4 rounded-full border border-cyan-100/65 bg-cyan-100/15 shadow-[70px_-22px_0_-4px_rgba(224,251,255,.55),185px_-14px_0_-6px_rgba(224,251,255,.5),260px_-36px_0_-3px_rgba(224,251,255,.4)]" />
+          <div className="pet-water-bubble pointer-events-none absolute bottom-[22%] right-[17%] z-[4] size-3 rounded-full border border-cyan-100/55 bg-cyan-100/10 [animation-delay:2.1s] shadow-[-80px_-18px_0_-5px_rgba(224,251,255,.45),-170px_-42px_0_-4px_rgba(224,251,255,.45)]" />
+        </>
       )}
       <div
         className="absolute inset-x-0 bottom-[148px] z-10 flex h-[50%] items-end justify-center"
@@ -650,6 +690,34 @@ function SkillPanel({ pet }: { pet: PetDefinition }) {
   )
 }
 
+function ShikoirukaUnlockDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const pet = PET_BY_ID.shikoiruka
+  if (!pet) return null
+  return (
+    <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) onClose() }}>
+      <DialogContent className="overflow-hidden border-cyan-200/35 bg-[#03152a] p-0 text-white shadow-[0_0_48px_rgba(56,189,248,.26)] sm:max-w-[430px]">
+        <div className="relative min-h-[620px] overflow-hidden bg-cover bg-center" style={{ backgroundImage: `url(${pet.roomImage})` }}>
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,159,213,.12),rgba(0,11,35,.38)_58%,rgba(0,4,20,.78))]" />
+          <div className="pet-room-water-flow pointer-events-none absolute inset-0 bg-[linear-gradient(100deg,transparent_0%,rgba(224,251,255,.18)_28%,transparent_48%,rgba(92,225,255,.14)_62%,transparent_84%)] mix-blend-screen blur-[6px]" />
+          <div className="pet-water-bubble pointer-events-none absolute bottom-24 left-8 size-4 rounded-full border border-cyan-100/65 bg-cyan-100/15 shadow-[80px_-40px_0_-4px_rgba(224,251,255,.55),210px_-20px_0_-6px_rgba(224,251,255,.5),300px_-60px_0_-3px_rgba(224,251,255,.4)]" />
+          <div className="absolute inset-x-0 top-16 z-10 flex justify-center">
+            <div className="relative w-[74%] max-w-[300px]">
+              <span className="shikoiruka-unlock-ring absolute inset-[-18%] rounded-full border-2 border-cyan-100/65" />
+              <img src={pet.walk.frames[0]} alt={pet.name} className="shikoiruka-unlock-approach relative z-10 w-full drop-shadow-[0_26px_36px_rgba(0,18,45,.65)]" />
+            </div>
+          </div>
+          <div className="shikoiruka-unlock-text absolute inset-x-5 bottom-10 z-20 text-center">
+            <p className="mx-auto inline-flex min-h-9 items-center rounded-full border border-cyan-100/55 bg-cyan-950/70 px-5 text-xs font-black tracking-[0.18em] text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,.35)]">NEW PET</p>
+            <h2 className="mt-4 text-4xl font-black text-white drop-shadow-[0_4px_18px_rgba(0,0,0,.55)]">シコイルカ GET!</h2>
+            <p className="mt-2 text-sm font-bold text-cyan-50/90">水の中から近づいてきた！</p>
+            <Button type="button" onClick={onClose} className="mt-6 h-11 rounded-md bg-cyan-300 px-8 font-black text-cyan-950 hover:bg-cyan-200">育成する</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function ItemPanel({ inventory, level, maxLevel, disabled = false, onUse }: { inventory: number; level: number; maxLevel: number; disabled?: boolean; onUse: (amount: number) => void }) {
   const [amount, setAmount] = useState(1)
   const maxUsable = disabled ? 0 : Math.min(3, inventory, Math.max(0, maxLevel - level))
@@ -713,6 +781,7 @@ const PET_DISPLAY_NAMES: Record<PetId, string> = {
   chinge: 'チンゲ',
   tdn: 'TDN',
   whip: 'ホイップ',
+  shikoiruka: 'シコイルカ',
   'inmu-festival': 'INMUくん（810祭りVer.）',
 }
 
@@ -748,7 +817,7 @@ function getDisplayLevelRewards(pet: PetDefinition, rewardAmounts: PetRewardAmou
     })
   }
 
-  if (pet.id === 'nyarushian' || pet.id === 'takuya' || pet.id === 'leon' || pet.id === 'chinge' || pet.id === 'tdn' || pet.id === 'whip') {
+  if (pet.id === 'nyarushian' || pet.id === 'takuya' || pet.id === 'leon' || pet.id === 'chinge' || pet.id === 'tdn' || pet.id === 'whip' || pet.id === 'shikoiruka') {
     const lv20Amount = getRewardAmountForPet(rewardAmounts, pet.id, 20)
     const lv30Amount = getRewardAmountForPet(rewardAmounts, pet.id, 30)
     return pet.levelRewards.map(reward => {
@@ -1211,6 +1280,7 @@ export function PetPage() {
   const [careMenu, setCareMenu] = useState<PetCareCategory | null>(null)
   const [walkMenuOpen, setWalkMenuOpen] = useState(false)
   const [walkResult, setWalkResult] = useState<PetWalkResult | null>(null)
+  const [shikoirukaUnlockOpen, setShikoirukaUnlockOpen] = useState(false)
   const [reactionMotion, setReactionMotion] = useState<ReactionMotion>(null)
   const [speechBubble, setSpeechBubble] = useState('')
   const [ownedPetIds, setOwnedPetIds] = useState<PetId[] | null>(null)
@@ -1332,25 +1402,33 @@ export function PetPage() {
   const hasOwnedPet = (ownedPetIds?.length ?? 0) > 0
 
   useEffect(() => {
-    if (!isHydrated || displayedPetId !== 'inmu-festival' || selectedStats.level < 10 || !ownedPetIds?.includes(displayedPetId)) return
-    const key = `${displayedPetId}:10`
-    if (levelRewardSyncRef.current.has(key)) return
-    levelRewardSyncRef.current.add(key)
-    void fetch('/api/pet/level-rewards/claim', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: displayedPetId, currentLevel: selectedStats.level }),
-    }).then(async response => {
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error ?? 'ポイント報酬の受取に失敗しました')
-      if (!data.alreadyClaimed) {
-        toast.success('Lv.10報酬として100,000ポイントを受け取りました！')
-        setBalances(current => ({ ...current, points: current.points + 100_000 }))
-      }
-    }).catch(error => {
-      levelRewardSyncRef.current.delete(key)
-      toast.error(error instanceof Error ? error.message : 'ポイント報酬の受取に失敗しました')
+    if (!isHydrated || !ownedPetIds?.includes(displayedPetId)) return
+    const rewardLevels = displayedPetId === 'inmu-festival'
+      ? selectedStats.level >= 10 ? [10] : []
+      : displayedPetId === 'shikoiruka'
+        ? ([10, 15] as const).filter(level => selectedStats.level >= level)
+        : []
+    rewardLevels.forEach(rewardLevel => {
+      const key = `${displayedPetId}:${rewardLevel}`
+      if (levelRewardSyncRef.current.has(key)) return
+      levelRewardSyncRef.current.add(key)
+      void fetch('/api/pet/level-rewards/claim', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: displayedPetId, rewardLevel, currentLevel: selectedStats.level }),
+      }).then(async response => {
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error ?? 'ポイント報酬の受け取りに失敗しました')
+        const points = Number(data.points ?? 0)
+        if (!data.alreadyClaimed && points > 0) {
+          toast.success(`Lv.${rewardLevel}報酬として${points.toLocaleString('ja-JP')}ポイントを受け取りました！`)
+          setBalances(current => ({ ...current, points: current.points + points }))
+        }
+      }).catch(error => {
+        levelRewardSyncRef.current.delete(key)
+        toast.error(error instanceof Error ? error.message : 'ポイント報酬の受け取りに失敗しました')
+      })
     })
   }, [displayedPetId, isHydrated, ownedPetIds, selectedStats.level])
 
@@ -1463,6 +1541,11 @@ export function PetPage() {
           .filter((id): id is PetId => Boolean(PET_BY_ID[id as PetId]) && USER_VISIBLE_PET_IDS.has(id as PetId))
           .filter((id, index, list) => list.indexOf(id) === index)
         setOwnedPetIds(owned)
+        if (owned.includes('shikoiruka') && localStorage.getItem(SHIKOIRUKA_UNLOCK_SEEN_KEY) !== '1') {
+          localStorage.setItem(SHIKOIRUKA_UNLOCK_SEEN_KEY, '1')
+          selectPet('shikoiruka')
+          setShikoirukaUnlockOpen(true)
+        }
         setOwnershipError(false)
         if (owned.length > 0) {
           setActivePetIds(current =>
@@ -1898,6 +1981,7 @@ export function PetPage() {
       </div>
       {hasOwnedPet && <CareChoiceDialog kind={careMenu} premiumFood={premiumFood} actionCooldowns={actionCooldowns} onClose={() => setCareMenu(null)} onChoose={handleCare} />}
       {hasOwnedPet && <WalkChoiceDialog open={walkMenuOpen} walks={walks} dailyLimit={walkDailyLimit} items={items} petId={displayedPetId} onClose={() => setWalkMenuOpen(false)} onChoose={handleStartWalk} />}
+      <ShikoirukaUnlockDialog open={shikoirukaUnlockOpen} onClose={() => setShikoirukaUnlockOpen(false)} />
       <WalkResultDialog result={walkResult} onClose={closeWalkResult} />
     </AppShell>
   )

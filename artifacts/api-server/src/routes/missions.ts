@@ -11,7 +11,7 @@ import {
   tradeHistoryTable,
 } from "@workspace/db/schema";
 import { eq, and, sql, gte } from "drizzle-orm";
-import { ensurePetStateTable } from "../services/pet-state-store";
+import { ensurePetStateTable, ensureShikoirukaDistributionForUser } from "../services/pet-state-store";
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
@@ -66,6 +66,7 @@ const PET_CHARACTER_NAMES: Record<string, string> = {
   leon: "レオン",
   chinge: "チンゲ",
   tdn: "TDN",
+  shikoiruka: "シコイルカ",
   whip: "ホイップ",
   "inmu-festival": "INMUくん（810祭りVer.）",
 };
@@ -952,6 +953,7 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
 router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensureRewardTables();
+    await ensureShikoirukaDistributionForUser(req.userId!);
     const { rows } = await pool.query(
       `SELECT "characterId", "acquiredAt" FROM "userPetCharacters"
        WHERE "userId" = $1 ORDER BY "acquiredAt" ASC`,

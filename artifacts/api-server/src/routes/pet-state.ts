@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
-import { ensurePetStateTable, PET_CHARACTER_NAMES } from "../services/pet-state-store";
+import { ensurePetStateTable, ensureShikoirukaDistributionForUser, PET_CHARACTER_NAMES } from "../services/pet-state-store";
 import { ensurePetCommerceTables } from "./pet-commerce";
 import { getSkillLockStatus } from "../services/pet-skills";
 
@@ -36,6 +36,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensurePetStateTable();
     await ensurePetCommerceTables();
+    const shikoirukaGranted = await ensureShikoirukaDistributionForUser(req.userId!);
     const [stateResult, ownershipResult, claimsResult] = await Promise.all([
       pool.query(`SELECT state, "updatedAt" FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]),
       pool.query(`SELECT "characterId" FROM "userPetCharacters" WHERE "userId" = $1 ORDER BY "acquiredAt" ASC`, [req.userId!]),
@@ -51,6 +52,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
       characters: Object.entries(PET_CHARACTER_NAMES).map(([id, name]) => ({ id, name })),
       levelRewardClaims: claimsResult.rows,
       skillLockStatus,
+      shikoirukaGranted,
     });
   } catch (error) {
     console.error("[PetState] load", error);

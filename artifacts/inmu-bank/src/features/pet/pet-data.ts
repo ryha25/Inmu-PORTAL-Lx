@@ -54,6 +54,16 @@ import whipHappyImage from '@assets/inmu-pet-whip-happy-v1.png'
 import whipHungryImage from '@assets/inmu-pet-whip-hungry-v1.png'
 import whipPettedImage from '@assets/inmu-pet-whip-petted-v1.png'
 import whipSleepyImage from '@assets/inmu-pet-whip-sleepy-v1.png'
+import shikoirukaImage from '@assets/inmu-pet-shikoiruka-v1.png'
+import shikoirukaAngryImage from '@assets/inmu-pet-shikoiruka-angry-v1.png'
+import shikoirukaAnnoyedImage from '@assets/inmu-pet-shikoiruka-annoyed-v1.png'
+import shikoirukaBlinkImage from '@assets/inmu-pet-shikoiruka-blink-v1.png'
+import shikoirukaHappyImage from '@assets/inmu-pet-shikoiruka-happy-v1.png'
+import shikoirukaHungryImage from '@assets/inmu-pet-shikoiruka-hungry-v1.png'
+import shikoirukaPettedImage from '@assets/inmu-pet-shikoiruka-petted-v1.png'
+import shikoirukaSleepyImage from '@assets/inmu-pet-shikoiruka-sleepy-v1.png'
+import shikoirukaSwim1Image from '@assets/inmu-pet-shikoiruka-swim-1-v1.png'
+import shikoirukaSwim2Image from '@assets/inmu-pet-shikoiruka-swim-2-v1.png'
 import nyarushianRoomImage from '@assets/inmu-pet-room-nyarushian-v1.jpg'
 import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
 import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
@@ -61,8 +71,9 @@ import festivalRoomImage from '@assets/inmu-pet-room-festival-v1.jpg'
 import chingeRoomImage from '@assets/inmu-pet-room-chinge-v1.jpg'
 import tdnRoomImage from '@assets/inmu-pet-room-tdn-v1.jpg'
 import whipRoomImage from '@assets/inmu-pet-room-whip-v1.jpg'
+import shikoirukaRoomImage from '@assets/inmu-pet-room-shikoiruka-v1.png'
 
-export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'chinge' | 'tdn' | 'whip' | 'inmu-festival'
+export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'chinge' | 'tdn' | 'whip' | 'shikoiruka' | 'inmu-festival'
 export type PetExpression = 'default' | 'blink' | 'happy' | 'sleepy' | 'hungry' | 'petted' | 'affectionate' | 'annoyed' | 'angry'
 
 export type PetDefinition = {
@@ -102,7 +113,7 @@ export type PetDefinition = {
     angry: number
   }
   roomWidth: string
-  roomTheme: 'cat' | 'dog' | 'lion' | 'festival'
+  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water'
   roomImage: string
   costume?: {
     id: 'festival-810'
@@ -374,6 +385,53 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       { level: 10, label: '雲のリボン + 購入申請還元 +5%', detail: 'Lv.10到達で還元率5%が自動適用', rebateBonus: 5 },
       { level: 20, label: 'ふわふわチャーム + INMU報酬', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.20 報酬INMU」と連動', delivery: '申請式（管理者確認後送信）', inmuAmount: 50_000 },
       { level: 30, label: 'ホイップクラウン + INMU報酬 + 購入申請還元 +5%', detail: '報酬INMUは管理画面の「ガチャキャラ Lv.30 報酬INMU」と連動。Lv.10+Lv.30で還元+10%', delivery: '申請式（管理者確認後送信）', inmuAmount: 250_000, rebateBonus: 5 },
+    ],
+  },
+  {
+    id: 'shikoiruka',
+    name: 'シコイルカ',
+    rarity: 3,
+    maxLevel: 15,
+    image: shikoirukaImage,
+    expressions: {
+      default: shikoirukaImage,
+      blink: shikoirukaBlinkImage,
+      happy: shikoirukaHappyImage,
+      sleepy: shikoirukaSleepyImage,
+      hungry: shikoirukaHungryImage,
+      petted: shikoirukaPettedImage,
+      affectionate: shikoirukaPettedImage,
+      annoyed: shikoirukaAnnoyedImage,
+      angry: shikoirukaAngryImage,
+    },
+    walk: { enabled: true, frames: [shikoirukaSwim1Image, shikoirukaSwim2Image], distancePercent: 14, tickMs: 360 },
+    messages: { overpetted: 'くすぐったくて泡が出ちゃうよ！' },
+    dialogues: {
+      idle: ['ぷかぷかしてるよ！', '水の中は気持ちいいね！', '0721、覚えてくれた？'],
+      walking: ['すいーっと行くよ！', '水流に乗ってるよ！', '近くまで泳いできたよ！'],
+      care: ['ありがとう！', 'もっと泳げそう！', '泡がきらきらしてるね！'],
+      feed: ['いただきます！', 'おいしい水分補給だね！'],
+      play: ['一緒に泳ごう！', '水中ダッシュだよ！'],
+      pet: ['やさしく撫でてね！', 'えへへ、うれしい！'],
+      happy: ['水面までジャンプしたい気分！'],
+      angry: ['むー、びっくりした！'],
+      sleeping: ['水のゆりかごで休むね…'],
+      sleepy: ['少しぷかぷか寝たいな…'],
+      hungry: ['おなかが空いてきたよ…'],
+      affectionate: ['あなたのそばが落ち着くよ！', '今日も一緒に泳ごうね！'],
+    },
+    reactionDurations: { feed: 4000, play: 4400, pet: 3700, angry: 4600 },
+    roomWidth: 'clamp(205px, 45%, 295px)',
+    roomTheme: 'water',
+    roomImage: shikoirukaRoomImage,
+    skill: {
+      name: 'ドピュッ！',
+      effect: 'お世話を数回行うとランダムでアイテムを出します。',
+      notes: ['Lv.1から発動', '高級ごはん、散歩アイテム、ポイントなどを抽選'],
+    },
+    levelRewards: [
+      { level: 10, label: '721ポイント', detail: 'Lv.10到達で自動付与', delivery: '自動付与' },
+      { level: 15, label: '4,545ポイント + 購入申請還元率 +7.21%', detail: 'Lv.15到達でポイント報酬と還元率7.21%が適用', delivery: '自動付与', rebateBonus: 7.21 },
     ],
   },
   {

@@ -118,7 +118,14 @@ function ensureRewardRequestTable() {
 
 router.post("/pet/level-rewards/claim", requireAuth, async (req, res): Promise<void> => {
   const characterId = typeof req.body?.characterId === "string" ? req.body.characterId : "";
-  if (characterId !== "inmu-festival") {
+  const requestedRewardLevel = Math.floor(Number(req.body?.rewardLevel ?? req.body?.currentLevel ?? 0));
+  const pointReward = (() => {
+    if (characterId === "inmu-festival" && requestedRewardLevel >= 10) return { level: 10, amount: 100_000, label: "INMU PET Lv.10報酬" };
+    if (characterId === "shikoiruka" && requestedRewardLevel === 10) return { level: 10, amount: 721, label: "シコイルカ Lv.10報酬" };
+    if (characterId === "shikoiruka" && requestedRewardLevel >= 15) return { level: 15, amount: 4_545, label: "シコイルカ Lv.15報酬" };
+    return null;
+  })();
+  if (!pointReward) {
     res.status(400).json({ error: "受け取れるレベル報酬がありません" });
     return;
   }
@@ -127,8 +134,8 @@ router.post("/pet/level-rewards/claim", requireAuth, async (req, res): Promise<v
     await ensurePetStateTable();
     const petState = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]);
     const currentLevel = Number(petState.rows[0]?.state?.pets?.[characterId]?.level ?? 0);
-    if (currentLevel < 10) {
-      res.status(400).json({ error: "Lv.10到達後に受け取れます" });
+    if (currentLevel < pointReward.level) {
+      res.status(400).json({ error: `Lv.${pointReward.level}到達後に受け取れます` });
       return;
     }
     const owned = await pool.query(
@@ -141,34 +148,33 @@ router.post("/pet/level-rewards/claim", requireAuth, async (req, res): Promise<v
     }
     const { rows } = await pool.query(`
       INSERT INTO "petLevelRewardClaims" ("userId", "characterId", "rewardLevel", "rewardType", amount)
-      VALUES ($1, $2, 10, 'points', 100000)
+      VALUES ($1, $2, $3, 'points', $4)
       ON CONFLICT ("userId", "characterId", "rewardLevel", "rewardType") DO NOTHING
       RETURNING id
-    `, [req.userId!, characterId]);
+    `, [req.userId!, characterId, pointReward.level, pointReward.amount]);
     if (rows.length === 0) {
-      res.json({ ok: true, alreadyClaimed: true, points: 100_000 });
+      res.json({ ok: true, alreadyClaimed: true, points: pointReward.amount });
       return;
     }
 
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     await db.insert(pointsTable).values({
-      userId: req.userId!, amount: "100000", type: "pet_level_reward", source: "INMUくん Lv.10報酬", month,
+      userId: req.userId!, amount: String(pointReward.amount), type: "pet_level_reward", source: pointReward.label, month,
     });
     await db.update(profileTable)
-      .set({ monthlyPoints: sql`${profileTable.monthlyPoints} + 100000`, updatedAt: now })
+      .set({ monthlyPoints: sql`${profileTable.monthlyPoints} + ${pointReward.amount}`, updatedAt: now })
       .where(eq(profileTable.userId, req.userId!));
     await db.insert(notificationsTable).values({
-      userId: req.userId!, type: "pet_level_reward", title: "INMU PET Lv.10報酬",
-      message: "INMUくん（810祭りVer.）のLv.10報酬として100,000ポイントを付与しました。",
+      userId: req.userId!, type: "pet_level_reward", title: pointReward.label,
+      message: `${pointReward.label}として${pointReward.amount.toLocaleString("ja-JP")}ポイントを付与しました。`,
     });
-    res.json({ ok: true, alreadyClaimed: false, points: 100_000 });
+    res.json({ ok: true, alreadyClaimed: false, points: pointReward.amount });
   } catch (error) {
     console.error("[RewardRequests] claim point reward", error);
     res.status(500).json({ error: "ポイント報酬の付与に失敗しました" });
   }
 });
-
 router.get("/pet/reward-requests", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensureRewardRequestTable();
