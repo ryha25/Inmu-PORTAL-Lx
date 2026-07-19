@@ -139,13 +139,13 @@ export function DashboardPage() {
       <PageHeader titleKey="nav_dashboard" />
       <button
         type="button"
-        className="mx-auto mb-4 flex h-[52px] w-[104px] max-w-full overflow-hidden rounded-xl border border-amber-300/50 bg-black p-0 shadow-[0_0_18px_rgba(245,158,11,0.2)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:h-[64px] sm:w-[128px]"
+        className="mx-auto mb-4 block h-[82px] w-full max-w-[360px] overflow-hidden rounded-2xl bg-black p-0 shadow-[0_0_18px_rgba(245,158,11,0.18)] ring-1 ring-amber-300/20 transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:h-[96px] sm:max-w-[420px]"
         onClick={handleOpenDaifugo}
         disabled={daifugoOpening}
         aria-label="Daifugoで遊ぶ"
       >
         <img
-          src="/daifugo-play-button.jpg"
+          src="/daifugo-play-button-wide.png"
           alt=""
           className="h-full w-full object-cover"
         />
