@@ -14,12 +14,31 @@ const showAdPlaceholders =
 
 const adEnabled = import.meta.env.VITE_NINJA_ADMAX_ENABLED !== 'false'
 
-const NINJA_ADMAX_GUEST_PRIMARY_SRC = 'https://adm.shinobi.jp/s/e36c5e4e74950a07f9e7c9025c204e92'
+const NINJA_ADMAX_MOBILE_SRCS = [
+  'https://adm.shinobi.jp/s/e36c5e4e74950a07f9e7c9025c204e92',
+  'https://adm.shinobi.jp/s/c0b9f17e093bef6243dec45abece2751',
+  'https://adm.shinobi.jp/s/b25fbb1d23d8754f051cd322fc876777',
+]
 const NINJA_ADMAX_PC_RAIL_SRCS = [
   'https://adm.shinobi.jp/s/481377a347d76d9d3da31fb69cfb3964',
   'https://adm.shinobi.jp/s/06c2b426724793c5e5ab58c843cf7d7c',
   'https://adm.shinobi.jp/s/3ae4dfd997db92197ae038bef451ffdb',
 ]
+
+const BANNER_AD_SLOT_IDS = new Set([
+  'guest-hero-auth-break',
+  'dashboard-recent-mid',
+  'history-tabs-break',
+  'transaction-list-mid',
+  'points-history-mid',
+  'gacha-paid-banner-break',
+  'gacha-points-banner-break',
+  'gacha-result-bottom',
+  'pet-character-break',
+  'ranking-top',
+  'achievements-ranking-break',
+  'profile-top',
+])
 
 function pickStableScriptSrc(slotId: string, sources: string[]) {
   const hash = Array.from(slotId).reduce((sum, char) => sum + char.charCodeAt(0), 0)
@@ -29,8 +48,8 @@ function pickStableScriptSrc(slotId: string, sources: string[]) {
 function getAdScriptSrc(slotId: string, variant: AdSlotVariant) {
   if (variant === 'rail') return pickStableScriptSrc(slotId, NINJA_ADMAX_PC_RAIL_SRCS)
   if (variant !== 'banner') return null
-  if (slotId !== 'guest-hero-auth-break') return null
-  return NINJA_ADMAX_GUEST_PRIMARY_SRC
+  if (!BANNER_AD_SLOT_IDS.has(slotId)) return null
+  return pickStableScriptSrc(slotId, NINJA_ADMAX_MOBILE_SRCS)
 }
 
 export function canRenderAdSlot(slotId: string, variant: AdSlotVariant = 'banner') {
