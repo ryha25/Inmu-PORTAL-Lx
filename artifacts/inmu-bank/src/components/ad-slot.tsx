@@ -1,5 +1,4 @@
 import { Megaphone } from 'lucide-react'
-import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 type AdSlotVariant = 'banner' | 'rail'
@@ -16,8 +15,6 @@ const showAdPlaceholders =
 const adEnabled = import.meta.env.VITE_NINJA_ADMAX_ENABLED !== 'false'
 
 const NINJA_ADMAX_GUEST_PRIMARY_SRC = 'https://adm.shinobi.jp/s/e36c5e4e74950a07f9e7c9025c204e92'
-const NINJA_ADMAX_GENERAL_BANNER_SRC = 'https://adm.shinobi.jp/s/c0b9f17e093bef6243dec45abece2751'
-const NINJA_ADMAX_RESULT_BANNER_SRC = 'https://adm.shinobi.jp/s/b25fbb1d23d8754f051cd322fc876777'
 const NINJA_ADMAX_PC_RAIL_SRCS = [
   'https://adm.shinobi.jp/s/481377a347d76d9d3da31fb69cfb3964',
   'https://adm.shinobi.jp/s/06c2b426724793c5e5ab58c843cf7d7c',
@@ -29,127 +26,45 @@ function pickStableScriptSrc(slotId: string, sources: string[]) {
   return sources[hash % sources.length]
 }
 
-function isPrimaryMobileBannerSlot(slotId: string) {
-  return [
-    'achievements-top',
-    'dashboard-top',
-    'gacha-paid-banner-break',
-    'guest-hero-auth-break',
-    'history-top',
-    'pet-top',
-    'points-top',
-    'profile-top',
-    'ranking-top',
-  ].includes(slotId)
-}
-
 function getAdScriptSrc(slotId: string, variant: AdSlotVariant) {
   if (variant === 'rail') return pickStableScriptSrc(slotId, NINJA_ADMAX_PC_RAIL_SRCS)
   if (variant !== 'banner') return null
-  if (!isPrimaryMobileBannerSlot(slotId)) return null
-  if (slotId === 'guest-hero-auth-break') return NINJA_ADMAX_GUEST_PRIMARY_SRC
-  if (slotId === 'gacha-result-bottom') return NINJA_ADMAX_RESULT_BANNER_SRC
-  return NINJA_ADMAX_GENERAL_BANNER_SRC
+  if (slotId !== 'guest-hero-auth-break') return null
+  return NINJA_ADMAX_GUEST_PRIMARY_SRC
 }
 
 export function canRenderAdSlot(slotId: string, variant: AdSlotVariant = 'banner') {
   return Boolean(getAdScriptSrc(slotId, variant)) || showAdPlaceholders
 }
 
-let ninjaAdMaxQueue = Promise.resolve()
+function NinjaAdMaxFrame({ src, slotId, variant }: { src: string; slotId: string; variant: AdSlotVariant }) {
+  const width = variant === 'rail' ? 300 : 320
+  const height = variant === 'rail' ? 250 : 64
+  const srcDoc = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=${width}, initial-scale=1">
+    <style>html,body{margin:0;padding:0;width:${width}px;min-height:${height}px;overflow:visible;background:transparent;}body{display:flex;align-items:center;justify-content:center;}</style>
+  </head>
+  <body>
+    <!-- admax -->
+    <script src="${src}"></script>
+    <!-- admax -->
+  </body>
+</html>`
 
-function NinjaAdMaxScript({ src, slotId }: { src: string; slotId: string }) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const loadIdRef = useRef(0)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    const loadId = loadIdRef.current + 1
-    loadIdRef.current = loadId
-    let active = true
-    let cleanupCurrentLoad = () => {}
-
-    const loadScript = async () => {
-      const previousLoad = ninjaAdMaxQueue
-      let releaseQueue = () => {}
-      ninjaAdMaxQueue = previousLoad.then(() => new Promise<void>((resolve) => {
-        releaseQueue = resolve
-      }))
-
-      await previousLoad
-      if (!active || loadIdRef.current !== loadId) {
-        releaseQueue()
-        return
-      }
-
-      let restoreTimer: number | null = null
-      let timeoutTimer: number | null = null
-      let finished = false
-      const originalWrite = document.write
-      const originalWriteln = document.writeln
-      const restoreDocumentWrite = () => {
-        if (document.write !== originalWrite) document.write = originalWrite
-        if (document.writeln !== originalWriteln) document.writeln = originalWriteln
-        if (restoreTimer !== null) {
-          window.clearTimeout(restoreTimer)
-          restoreTimer = null
-        }
-        if (timeoutTimer !== null) {
-          window.clearTimeout(timeoutTimer)
-          timeoutTimer = null
-        }
-      }
-      const finishLoad = () => {
-        if (finished) return
-        finished = true
-        restoreTimer = window.setTimeout(() => {
-          restoreDocumentWrite()
-          releaseQueue()
-        }, 1500)
-      }
-      const writeIntoSlot = (...chunks: string[]) => {
-        if (!active || loadIdRef.current !== loadId) return
-        const html = chunks.join('')
-        if (!html.trim()) return
-        const wrapper = document.createElement('div')
-        wrapper.innerHTML = html
-        while (wrapper.firstChild) container.appendChild(wrapper.firstChild)
-      }
-
-      container.innerHTML = ''
-      const script = document.createElement('script')
-      script.src = src
-      script.type = 'text/javascript'
-      script.onload = () => {
-        console.info(`[AdMax] script loaded: ${slotId}`)
-        finishLoad()
-      }
-      script.onerror = (event) => {
-        console.error(`[AdMax] script failed: ${slotId}`, event)
-        finishLoad()
-      }
-      document.write = writeIntoSlot as typeof document.write
-      document.writeln = ((...chunks: string[]) => writeIntoSlot(...chunks, '\n')) as typeof document.writeln
-      cleanupCurrentLoad = () => {
-        restoreDocumentWrite()
-        releaseQueue()
-      }
-      container.appendChild(script)
-      timeoutTimer = window.setTimeout(finishLoad, 5000)
-    }
-
-    void loadScript()
-
-    return () => {
-      active = false
-      cleanupCurrentLoad()
-      container.innerHTML = ''
-    }
-  }, [src, slotId])
-
-  return <div ref={containerRef} className="flex min-h-[inherit] w-full items-center justify-center" />
+  return (
+    <iframe
+      title={`admax-${slotId}`}
+      srcDoc={srcDoc}
+      width={width}
+      height={height}
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+      className="block border-0"
+    />
+  )
 }
 
 export function AdSlot({ slotId, variant = 'banner', className }: AdSlotProps) {
@@ -169,7 +84,7 @@ export function AdSlot({ slotId, variant = 'banner', className }: AdSlotProps) {
       )}
     >
       {scriptSrc ? (
-        <NinjaAdMaxScript src={scriptSrc} slotId={slotId} />
+        <NinjaAdMaxFrame src={scriptSrc} slotId={slotId} variant={variant} />
       ) : (
         <div className="flex min-h-[inherit] items-center justify-center gap-2 px-4 py-5">
           <Megaphone className="size-4 opacity-55" />
