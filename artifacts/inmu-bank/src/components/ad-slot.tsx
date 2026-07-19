@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Megaphone } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -48,7 +48,9 @@ const BANNER_AD_SLOT_IDS = new Set([
   'mission-daily-achievement',
   'mission-achievement-event',
   'gacha-paid-banner-break',
+  'gacha-paid-banner-bottom',
   'gacha-points-banner-break',
+  'gacha-points-banner-bottom',
   'gacha-result-bottom',
   'pet-top',
   'pet-empty-owned',
@@ -81,49 +83,55 @@ export function canRenderAdSlot(slotId: string, variant: AdSlotVariant = 'banner
   return Boolean(getAdScriptSrc(slotId, variant)) || showAdPlaceholders
 }
 
-function NinjaAdMaxFrame({ src, slotId, variant }: { src: string; slotId: string; variant: AdSlotVariant }) {
-  const [loaded, setLoaded] = useState(false)
+function ensureAdMaxConnectionHints() {
+  if (typeof document === 'undefined') return
+  if (document.head.querySelector('link[data-ninja-admax-preconnect="true"]')) return
+
+  const preconnect = document.createElement('link')
+  preconnect.rel = 'preconnect'
+  preconnect.href = 'https://adm.shinobi.jp'
+  preconnect.crossOrigin = 'anonymous'
+  preconnect.dataset.ninjaAdmaxPreconnect = 'true'
+  document.head.appendChild(preconnect)
+
+  const dnsPrefetch = document.createElement('link')
+  dnsPrefetch.rel = 'dns-prefetch'
+  dnsPrefetch.href = 'https://adm.shinobi.jp'
+  dnsPrefetch.dataset.ninjaAdmaxPreconnect = 'true'
+  document.head.appendChild(dnsPrefetch)
+}
+
+function NinjaAdMaxScript({ src, slotId, variant }: { src: string; slotId: string; variant: AdSlotVariant }) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const width = variant === 'rail' ? 300 : 320
   const height = variant === 'rail' ? 250 : 64
 
-  useEffect(() => {
-    setLoaded(false)
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    ensureAdMaxConnectionHints()
+    container.textContent = ''
+    container.dataset.admaxMounted = 'true'
+
+    const script = document.createElement('script')
+    script.src = src
+    script.async = false
+    script.dataset.admaxSlot = slotId
+    container.appendChild(script)
+
+    return () => {
+      container.textContent = ''
+      delete container.dataset.admaxMounted
+    }
   }, [src, slotId])
 
-  const srcDoc = `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=${width}, initial-scale=1">
-    <base target="_blank">
-    <style>html,body{margin:0;padding:0;width:${width}px;min-height:${height}px;overflow:visible;background:transparent;}body{display:flex;align-items:center;justify-content:center;}</style>
-  </head>
-  <body>
-    <!-- admax -->
-    <script src="${src}"></script>
-    <!-- admax -->
-  </body>
-</html>`
-
   return (
-    <div className="relative" style={{ width, minHeight: height }}>
-      {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/55">
-          AD
-        </div>
-      )}
-      <iframe
-        key={`${slotId}-${src}`}
-        title={`admax-${slotId}`}
-        srcDoc={srcDoc}
-        width={width}
-        height={height}
-        loading="eager"
-        referrerPolicy="no-referrer-when-downgrade"
-        onLoad={() => setLoaded(true)}
-        className="relative z-10 block border-0"
-      />
-    </div>
+    <div
+      ref={containerRef}
+      className="flex items-center justify-center overflow-hidden"
+      style={{ width, height, minHeight: height }}
+    />
   )
 }
 
@@ -138,13 +146,13 @@ export function AdSlot({ slotId, variant = 'banner', className }: AdSlotProps) {
       className={cn(
         'overflow-visible rounded-lg border border-border/70 bg-card/55 text-muted-foreground shadow-sm',
         variant === 'banner'
-          ? 'mx-auto min-h-[64px] w-full min-w-[320px] max-w-[360px]'
-          : 'min-h-[250px] w-[300px] max-w-full',
+          ? 'mx-auto h-[64px] min-h-[64px] w-full min-w-[320px] max-w-[360px] shrink-0'
+          : 'h-[250px] min-h-[250px] w-[300px] max-w-full shrink-0',
         className,
       )}
     >
       {scriptSrc ? (
-        <NinjaAdMaxFrame src={scriptSrc} slotId={slotId} variant={variant} />
+        <NinjaAdMaxScript src={scriptSrc} slotId={slotId} variant={variant} />
       ) : (
         <div className="flex min-h-[inherit] items-center justify-center gap-2 px-4 py-5">
           <Megaphone className="size-4 opacity-55" />

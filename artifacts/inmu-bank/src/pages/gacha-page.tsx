@@ -1191,6 +1191,9 @@ export function GachaPage() {
             <AdSlot slotId="gacha-paid-banner-break" variant="banner" />
           </div>
           <div style={{margin:'6px 12px 0'}}><GachaBannerCarousel mode="paid" config={gachaConfig}/></div>
+          <div style={{margin:'8px 12px 0'}}>
+            <AdSlot slotId="gacha-paid-banner-bottom" variant="banner" />
+          </div>
           <p style={{margin:'4px 12px 0',fontSize:9,lineHeight:1.4,color:'rgba(255,255,255,.4)',textAlign:'center'}}>※レベル報酬で得られる購入申請還元は最大10%までです。(各キャラ保持で上乗せし最大＋30%効果はあり)次回更新時に誤記変更予定。</p>
           <div style={{margin:'8px 12px 0'}}>
             <button type="button" onClick={()=>setRateModalOpen(true)} style={{width:'100%',padding:'8px 14px',border:'1px solid rgba(218,165,32,.5)',borderRadius:8,background:'rgba(8,4,14,.7)',color:'#e8c65a',fontSize:11,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
@@ -1250,6 +1253,9 @@ export function GachaPage() {
             <AdSlot slotId="gacha-points-banner-break" variant="banner" />
           </div>
           <div style={{margin:'6px 12px 10px'}}><GachaBannerCarousel mode="points" config={gachaConfig}/></div>
+          <div style={{margin:'0 12px 8px'}}>
+            <AdSlot slotId="gacha-points-banner-bottom" variant="banner" />
+          </div>
           <p style={{margin:'-6px 12px 8px',fontSize:9,lineHeight:1.4,color:'rgba(255,255,255,.4)',textAlign:'center'}}>※レベル報酬で得られる購入申請還元は最大10%までです。(各キャラ保持で上乗せし最大＋30%効果はあり)次回更新時に誤記変更予定。</p>
           <div style={{margin:'0 12px 8px'}}>
             <button type="button" onClick={()=>setRateModalOpen(true)} style={{width:'100%',padding:'8px 14px',border:'1px solid rgba(218,165,32,.5)',borderRadius:8,background:'rgba(8,4,14,.7)',color:'#e8c65a',fontSize:11,fontWeight:800,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
