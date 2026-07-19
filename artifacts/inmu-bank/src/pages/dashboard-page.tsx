@@ -3,7 +3,6 @@ import { AppShell } from '@/components/app-shell'
 import { AdSlot } from '@/components/ad-slot'
 import { DashboardView } from '@/components/dashboard-view'
 import { PageHeader } from '@/components/page-header'
-import { Button } from '@/components/ui/button'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
@@ -137,22 +136,20 @@ export function DashboardPage() {
 
   return (
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
-      <PageHeader titleKey="nav_dashboard">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-11 w-[150px] overflow-hidden rounded-full border border-amber-300/60 bg-black p-0 shadow-[0_0_18px_rgba(245,158,11,0.28)] hover:bg-black/90 sm:w-[180px]"
-          onClick={handleOpenDaifugo}
-          disabled={daifugoOpening}
-          aria-label={daifugoOpening ? '連携中' : '大富豪で遊ぶ'}
-        >
-          <img
-            src="/daifugo-play-button.jpg"
-            alt=""
-            className={`h-full w-full object-cover transition ${daifugoOpening ? 'opacity-60' : 'opacity-100'}`}
-          />
-        </Button>
-      </PageHeader>
+      <PageHeader titleKey="nav_dashboard" />
+      <button
+        type="button"
+        className="mb-4 block h-[68px] w-full overflow-hidden rounded-2xl border border-amber-300/50 bg-black p-0 shadow-[0_0_22px_rgba(245,158,11,0.22)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:h-[84px]"
+        onClick={handleOpenDaifugo}
+        disabled={daifugoOpening}
+        aria-label="Daifugoで遊ぶ"
+      >
+        <img
+          src="/daifugo-play-button.jpg"
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      </button>
       <AdSlot slotId="dashboard-top" variant="banner" className="mb-4" />
       <DashboardView
         data={data}
