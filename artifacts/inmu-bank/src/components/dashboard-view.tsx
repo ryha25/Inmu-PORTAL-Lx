@@ -113,6 +113,8 @@ export function DashboardView({
         )}
       </Card>
 
+      <AdSlot slotId="dashboard-balance-bonus" variant="banner" />
+
       {/* ── ログインボーナスバナー ── */}
       {dailyClaim && (
         <Card className="border-primary/20 bg-primary/5 p-4">
@@ -147,6 +149,8 @@ export function DashboardView({
         <StatCard labelKey="total_received" value={data.totalReceived} icon={ArrowDownLeft} accent="up" />
         <StatCard labelKey="total_sent" value={data.totalSent} icon={ArrowUpRight} accent="down" />
       </div>
+
+      <AdSlot slotId="dashboard-stats-scan" variant="banner" />
 
       {/* ── スキャンボタン（入出金履歴の上） ── */}
       {hasSolWallet && onScan && (

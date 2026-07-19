@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdSlot } from '@/components/ad-slot'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useI18n } from '@/lib/i18n/context'
@@ -290,6 +291,8 @@ export function ProfileView({
         </div>
       </Card>
 
+      <AdSlot slotId="profile-achievements-ranking" variant="banner" />
+
       {/* ── ランキング残高表示設定 ── */}
       <Card className="border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -374,6 +377,8 @@ export function ProfileView({
           {t('registered_at')}: {new Date(profile.createdAt).toLocaleDateString('ja-JP')}
         </p>
       </Card>
+
+      <AdSlot slotId="profile-info-wallet" variant="banner" />
 
       {/* ── SOLアドレス & Phantom ── */}
       <Card className="border-border bg-card p-4">

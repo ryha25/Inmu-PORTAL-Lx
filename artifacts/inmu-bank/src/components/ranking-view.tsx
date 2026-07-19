@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdSlot } from '@/components/ad-slot'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useI18n } from '@/lib/i18n/context'
 import { formatInmu } from '@/lib/format'
@@ -109,6 +110,7 @@ export function RankingView({
                 <p className="mt-1 text-[10px] text-muted-foreground">{t('composite_rank_desc')}</p>
               </Card>
             )}
+            <AdSlot slotId="ranking-composite-list-top" variant="banner" />
             {(compositeRows ?? []).length === 0 ? <EmptyRanking label={t('no_data')} /> : (compositeRows ?? []).map(r => (
               <Card key={r.userId} className={`border-border bg-card p-3 ${r.rank <= 3 ? 'border-primary/40' : ''} ${r.userId === currentUserId ? 'border-primary/60 bg-primary/5' : ''}`}>
                 <div className="flex items-center gap-3">
@@ -212,6 +214,7 @@ export function RankingView({
                 )}
               </div>
             </Card>
+            <AdSlot slotId="ranking-monthly-list-top" variant="banner" />
             {(monthlyVolumeRows ?? []).length === 0 ? <EmptyRanking label={t('no_data')} /> : (monthlyVolumeRows ?? []).map(r => (
               <Card key={r.userId} className={`border-border bg-card p-3 ${r.rank <= 3 ? 'border-primary/40' : ''} ${r.userId === currentUserId ? 'border-primary/60 bg-primary/5' : ''}`}>
                 <div className="flex items-start gap-3">

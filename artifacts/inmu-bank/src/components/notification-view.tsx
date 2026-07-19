@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AdSlot } from '@/components/ad-slot'
 import { useI18n } from '@/lib/i18n/context'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
@@ -40,6 +41,7 @@ export function NotificationView({ notifications, onRefresh }: { notifications: 
       <div className="flex justify-end">
         <Button variant="outline" onClick={handleMarkAllRead} className="min-h-9">{t('mark_all_read')}</Button>
       </div>
+      <AdSlot slotId="notifications-list-top" variant="banner" />
       {notifications.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">{t('no_notifications')}</p>
       ) : (

@@ -444,6 +444,8 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         </div>
       </div>
 
+      <AdSlot slotId="mission-summary-daily" variant="banner" />
+
       {/* ── デイリーミッション ── */}
       <Card className="border-border bg-card overflow-hidden">
         <button type="button"
@@ -490,6 +492,8 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         )}
       </Card>
 
+      <AdSlot slotId="mission-daily-achievement" variant="banner" />
+
       {/* ── アチーブメント ── */}
       <Card className="border-border bg-card overflow-hidden">
         <button type="button"
@@ -512,6 +516,8 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
             : <ul className="divide-y divide-border">{achievementMissions.map(m => <MissionItem key={m.id} m={m} isAchievement />)}</ul>
         )}
       </Card>
+
+      <AdSlot slotId="mission-achievement-event" variant="banner" />
 
       {/* ── イベントミッション ── */}
       {eventMissions.length > 0 && (

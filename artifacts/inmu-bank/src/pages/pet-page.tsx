@@ -1827,7 +1827,6 @@ export function PetPage() {
             <BalanceChip icon={<CircleDollarSign className="size-3.5" />} label="POINT" value={balances.points} />
           </div>
         </header>
-        <AdSlot slotId="pet-top" variant="banner" className="mb-4" />
 
         {!isHydrated && <p className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100">育成データを同期しています…</p>}
         {syncError && <p className="rounded-md border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs text-rose-100">{syncError} 一時データを表示しています。</p>}
@@ -1852,6 +1851,7 @@ export function PetPage() {
           <div className="flex flex-col gap-3">
             <main className="flex min-w-0 flex-col gap-3">
               <CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} />
+              <AdSlot slotId="pet-top" variant="banner" />
               <PetRoom
                 petId={pet.id}
                 name={pet.name}
@@ -1882,6 +1882,7 @@ export function PetPage() {
               </div>
               <SkillPanel pet={pet} />
               <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} disabled={isSleeping || isWalking || walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate} onUse={handleUseSleepTea} />
+              <AdSlot slotId="pet-items-rewards" variant="banner" />
               <RewardsPanel
                 pet={pet}
                 level={selectedStats.level}
