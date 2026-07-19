@@ -34,7 +34,7 @@ type MissionRow = {
   rewardItemType: string | null
   rewardItemAmount: number
 }
-type StageForm = { title: string; description: string; points: string; conditionValue: string }
+type StageForm = { title: string; description: string; points: string; conditionValue: string; rewardItemType: string; rewardItemAmount: string }
 type MissionForm = {
   title: string; description: string; type: string; points: string
   rewardCharacterId: string
@@ -76,7 +76,7 @@ const TYPE_CATEGORIES = [
   { value: 'achievement', label: 'アチーブメント',        color: 'bg-yellow-500/20 text-yellow-400' },
 ]
 const BLANK_FORM: MissionForm = { title: '', description: '', type: 'daily', points: '', rewardCharacterId: '', rewardItemType: '', rewardItemAmount: '', startAt: '', endAt: '', linkUrl: '', conditionType: 'none', conditionValue: '' }
-const BLANK_STAGE: StageForm = { title: '', description: '', points: '', conditionValue: '' }
+const BLANK_STAGE: StageForm = { title: '', description: '', points: '', conditionValue: '', rewardItemType: '', rewardItemAmount: '' }
 const PET_REWARD_OPTIONS = PET_DEFINITIONS.map(pet => ({ value: pet.id, label: pet.name }))
 const REWARD_ITEM_OPTIONS = [
   { value: 'takuya_sunglasses', label: '拓也のサングラス' },
@@ -231,6 +231,8 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
       description: m.description ?? '',
       points: String(m.points),
       conditionValue: m.conditionValue ?? '',
+      rewardItemType: m.rewardItemType ?? '',
+      rewardItemAmount: m.rewardItemAmount ? String(m.rewardItemAmount) : '',
       disabled: m.status === 'inactive',
     })))
     setFormOpen(true)
@@ -286,6 +288,8 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
           description: s.description.trim() || null,
           points: Number(s.points) || 0,
           conditionValue: (condTypeVal && !NO_VALUE_COND.has(condTypeVal) && s.conditionValue) ? Number(s.conditionValue) : null,
+          rewardItemType: s.rewardItemType || null,
+          rewardItemAmount: s.rewardItemType ? (Number(s.rewardItemAmount) || 0) : 0,
         })),
       })
       toast.success(`${chainStages.length}ステージのチェーンを作成しました`)
@@ -315,6 +319,8 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
           description: s.description.trim() || null,
           points: Number(s.points) || 0,
           conditionValue: (condTypeVal && !NO_VALUE_COND.has(condTypeVal) && s.conditionValue) ? Number(s.conditionValue) : null,
+          rewardItemType: s.rewardItemType || null,
+          rewardItemAmount: s.rewardItemType ? (Number(s.rewardItemAmount) || 0) : 0,
           stageStatus: s.disabled ? 'inactive' : editChainMeta.status,
         })),
       })
@@ -388,7 +394,7 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
     setEditChainStages(p => p.map((s, idx) => idx === i ? { ...s, disabled: !s.disabled } : s))
   }
   function addStageToChain() {
-    setEditChainStages(p => [...p, { id: 0, title: '', description: '', points: '', conditionValue: '', disabled: false }])
+    setEditChainStages(p => [...p, { id: 0, ...BLANK_STAGE, disabled: false }])
   }
 
   /* ────────────────────────────────────────────────
@@ -669,6 +675,25 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
                     <Input type="number" placeholder="条件値" value={s.conditionValue} onChange={e => setEditChainStages(p => p.map((x, idx) => idx === i ? { ...x, conditionValue: e.target.value } : x))} className="min-h-9 text-sm flex-1" />
                   )}
                 </div>
+                <div className="flex gap-2">
+                  <select
+                    value={s.rewardItemType}
+                    onChange={e => setEditChainStages(p => p.map((x, idx) => idx === i ? { ...x, rewardItemType: e.target.value, rewardItemAmount: e.target.value ? (x.rewardItemAmount || '1') : '' } : x))}
+                    className={`${SELECT_CLS} h-9 flex-1 text-sm`}
+                  >
+                    <option value="">アイテム報酬なし</option>
+                    {REWARD_ITEM_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="個数"
+                    value={s.rewardItemAmount}
+                    disabled={!s.rewardItemType}
+                    onChange={e => setEditChainStages(p => p.map((x, idx) => idx === i ? { ...x, rewardItemAmount: e.target.value } : x))}
+                    className="min-h-9 w-20 text-sm"
+                  />
+                </div>
               </div>
             ))}
             <button type="button" onClick={addStageToChain} className="text-xs text-primary hover:underline text-left mt-0.5 py-1">
@@ -781,6 +806,25 @@ export function AdminMissionManager({ api }: { api: ApiFunc }) {
                       {form.conditionType !== 'none' && !NO_VALUE_COND.has(form.conditionType) && (
                         <Input type="number" placeholder="条件値" value={s.conditionValue} onChange={e => setChainStages(p => p.map((x, idx) => idx === i ? { ...x, conditionValue: e.target.value } : x))} className="min-h-9 text-sm flex-1" />
                       )}
+                    </div>
+                    <div className="flex gap-2">
+                      <select
+                        value={s.rewardItemType}
+                        onChange={e => setChainStages(p => p.map((x, idx) => idx === i ? { ...x, rewardItemType: e.target.value, rewardItemAmount: e.target.value ? (x.rewardItemAmount || '1') : '' } : x))}
+                        className={`${SELECT_CLS} h-9 flex-1 text-sm`}
+                      >
+                        <option value="">アイテム報酬なし</option>
+                        {REWARD_ITEM_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="個数"
+                        value={s.rewardItemAmount}
+                        disabled={!s.rewardItemType}
+                        onChange={e => setChainStages(p => p.map((x, idx) => idx === i ? { ...x, rewardItemAmount: e.target.value } : x))}
+                        className="min-h-9 w-20 text-sm"
+                      />
                     </div>
                   </div>
                 ))}

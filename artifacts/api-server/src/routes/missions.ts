@@ -1052,6 +1052,8 @@ router.post("/admin/missions/chain", requireAdmin, async (req, res): Promise<voi
         description?: string;
         points?: number;
         conditionValue?: number | null;
+        rewardItemType?: MissionRewardItemType | null;
+        rewardItemAmount?: number | null;
       }>;
     };
 
@@ -1094,6 +1096,12 @@ router.post("/admin/missions/chain", requireAdmin, async (req, res): Promise<voi
         prerequisiteMissionId: prereqId,
         displayOrder: nextOrder++,
       }).returning();
+      await saveMissionExtraReward(
+        mission.id,
+        null,
+        stage.rewardItemType ?? null,
+        stage.rewardItemAmount ?? null,
+      );
       created.push(mission);
     }
 
@@ -1137,6 +1145,7 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
   try {
     // ステージを順番通りに処理し prerequisiteMissionId を再リンク
     const processedIds: number[] = [];
+    const existingExtraRewards = await loadMissionExtraRewards();
 
     for (let i = 0; i < stages.length; i++) {
       const s = stages[i];
@@ -1159,6 +1168,19 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
           isActive:  stageStatus === "active",
           prerequisiteMissionId: prevId,
         }).where(eq(missionsTable.id, s.id));
+        const stageReward = s as typeof s & {
+          rewardItemType?: MissionRewardItemType | null;
+          rewardItemAmount?: number | null;
+        };
+        if (stageReward.rewardItemType !== undefined || stageReward.rewardItemAmount !== undefined) {
+          const existingReward = existingExtraRewards.get(s.id);
+          await saveMissionExtraReward(
+            s.id,
+            existingReward?.characterId ?? null,
+            stageReward.rewardItemType !== undefined ? stageReward.rewardItemType : existingReward?.rewardItemType ?? null,
+            stageReward.rewardItemAmount !== undefined ? stageReward.rewardItemAmount : existingReward?.rewardItemAmount ?? null,
+          );
+        }
         processedIds.push(s.id);
       } else {
         // 新規ステージを作成（後から追加された段階）
@@ -1177,6 +1199,16 @@ router.put("/admin/missions/chain-update", requireAdmin, async (req, res): Promi
           prerequisiteMissionId: prevId,
           displayOrder:  0,
         }).returning({ id: missionsTable.id });
+        const stageReward = s as typeof s & {
+          rewardItemType?: MissionRewardItemType | null;
+          rewardItemAmount?: number | null;
+        };
+        await saveMissionExtraReward(
+          newM.id,
+          null,
+          stageReward.rewardItemType ?? null,
+          stageReward.rewardItemAmount ?? null,
+        );
         processedIds.push(newM.id);
       }
     }

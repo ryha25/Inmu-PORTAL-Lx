@@ -139,7 +139,7 @@ export function DashboardPage() {
       <PageHeader titleKey="nav_dashboard" />
       <button
         type="button"
-        className="mb-4 block h-[68px] w-full overflow-hidden rounded-2xl border border-amber-300/50 bg-black p-0 shadow-[0_0_22px_rgba(245,158,11,0.22)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:h-[84px]"
+        className="mb-4 block h-[52px] w-full overflow-hidden rounded-2xl border border-amber-300/50 bg-black p-0 shadow-[0_0_18px_rgba(245,158,11,0.2)] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:h-[64px]"
         onClick={handleOpenDaifugo}
         disabled={daifugoOpening}
         aria-label="Daifugoで遊ぶ"
@@ -147,7 +147,7 @@ export function DashboardPage() {
         <img
           src="/daifugo-play-button.jpg"
           alt=""
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
         />
       </button>
       <AdSlot slotId="dashboard-top" variant="banner" className="mb-4" />
