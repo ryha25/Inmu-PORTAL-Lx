@@ -1086,6 +1086,24 @@ export function usePetState() {
     }
   }).current
 
+  function recordShikoirukaSkillLockIfNeeded(currentSave: Pick<PetSaveData, 'skillActiveCharacterIds' | 'activePetIds'>) {
+    if (!isPetSkillActive(currentSave, 'shikoiruka') || skillLockStatus.shikoiruka) return
+    setSkillLockStatus(current => ({ ...current, shikoiruka: true }))
+    void fetch('/api/pet/skill-use', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId: 'shikoiruka' }),
+    }).then(async response => {
+      const data = await response.json().catch(() => ({}))
+      if (response.ok && data.skillLockStatus && typeof data.skillLockStatus === 'object') {
+        setSkillLockStatus(data.skillLockStatus)
+      }
+    }).catch(() => {
+      // The local lock keeps the selector stable; the next status refresh will reconcile.
+    })
+  }
+
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
     const config = PET_CARE_CONFIG[action]
     const currentEffective = materializeSaveAt(save, actionNow)
@@ -1098,6 +1116,7 @@ export function usePetState() {
     if (config.category === 'feed' && getActionCooldownRemaining(action, currentEffective.lastCareAt[petId], actionNow) > 0) return null
     if (config.category !== 'pet' && getCareCooldownRemaining(config.category, currentEffective.cooldownUntil[petId], actionNow) > 0) return null
     if (action === 'feed-premium' && getPremiumFoodState(currentEffective.premiumFood, actionNow).totalAvailable <= 0) return null
+    recordShikoirukaSkillLockIfNeeded(currentEffective)
 
     const previousPetting = currentEffective.petting[petId]
     const currentExpression = currentEffective.expressions[petId]
@@ -1297,6 +1316,7 @@ export function usePetState() {
     if (currentWalks.petDaily[petId] === getJstDateKey(walkNow)) return { ok: false, reason: 'pet_daily_limit' }
     if (item === 'takuya_sunglasses' && currentEffective.items.takuyaSunglasses <= 0) return { ok: false, reason: 'no_item' }
     if (item === 'cat_headband' && currentEffective.items.catHeadband <= 0) return { ok: false, reason: 'no_item' }
+    recordShikoirukaSkillLockIfNeeded(currentEffective)
     const special = petId === 'takuya' && item === 'cat_headband' && Math.random() < PET_WALK_TAKUYA_CAT_EVENT_CHANCE
     const sessionId = `walk-${petId}-${walkNow}-${Math.random().toString(36).slice(2, 8)}`
     setSave(current => {

@@ -2,6 +2,7 @@ import { pool } from "@workspace/db";
 import { ensurePetStateTable } from "./pet-state-store";
 
 const TDN_REROLL_DAILY_LIMIT = 3;
+const DAILY_SKILL_USE_TABLE = `"petDailySkillUses"`;
 
 function normalizePetSkillId(value: unknown): string {
   const normalized = String(value ?? "").trim().toLowerCase().replace(/_/g, "-").replace(/^character-/, "");
@@ -28,6 +29,34 @@ function jstTodayStartUtc(): Date {
   const m = nowJst.getUTCMonth();
   const d = nowJst.getUTCDate();
   return new Date(Date.UTC(y, m, d, 0, 0, 0) - jstOffset);
+}
+
+function jstTodayKey(): string {
+  const jstOffset = 9 * 3600 * 1000;
+  return new Date(Date.now() + jstOffset).toISOString().slice(0, 10);
+}
+
+async function ensureDailySkillUseTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ${DAILY_SKILL_USE_TABLE} (
+      "userId" TEXT NOT NULL,
+      "characterId" TEXT NOT NULL,
+      "usedDate" TEXT NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", "characterId", "usedDate")
+    )
+  `);
+}
+
+export async function recordDailyPetSkillUse(userId: string, characterId: string): Promise<void> {
+  const normalized = normalizePetSkillId(characterId);
+  await ensureDailySkillUseTable();
+  await pool.query(
+    `INSERT INTO ${DAILY_SKILL_USE_TABLE} ("userId", "characterId", "usedDate")
+     VALUES ($1, $2, $3)
+     ON CONFLICT ("userId", "characterId", "usedDate") DO NOTHING`,
+    [userId, normalized, jstTodayKey()],
+  );
 }
 
 export async function hasActivePetSkill(userId: string, characterId: string, minLevel = 1): Promise<boolean> {
@@ -146,6 +175,15 @@ export async function getSkillLockStatus(userId: string, characterIds: string[])
           [userId, todayStart.toISOString()],
         );
         result[id] = Number(r.rows[0]?.count ?? 0) >= TDN_REROLL_DAILY_LIMIT;
+      } else if (normalized === "shikoiruka") {
+        await ensureDailySkillUseTable();
+        const r = await pool.query(
+          `SELECT 1 FROM ${DAILY_SKILL_USE_TABLE}
+           WHERE "userId"=$1 AND "characterId"=$2 AND "usedDate"=$3
+           LIMIT 1`,
+          [userId, normalized, jstTodayKey()],
+        );
+        result[id] = (r.rowCount ?? 0) > 0;
       } else if (normalized === "inmu-festival") {
         // イベント固有スキルが購入申請に実際に適用された日だけロックする。
         const r = await pool.query(

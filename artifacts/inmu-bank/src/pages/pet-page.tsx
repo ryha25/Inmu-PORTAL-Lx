@@ -30,7 +30,28 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
 ]
 
 const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'shikoiruka', 'inmu-festival'])
-const SHIKOIRUKA_UNLOCK_SEEN_KEY = 'inmu-portal:pet:shikoiruka-unlock-seen:v1'
+const SHIKOIRUKA_UNLOCK_SEEN_KEY = 'inmu-portal:pet:shikoiruka-unlock-seen:v2'
+
+const shikoirukaUnlockPreloadCache = new Map<string, Promise<void>>()
+
+function preloadImage(src: string) {
+  if (typeof window === 'undefined' || !src) return Promise.resolve()
+  const cached = shikoirukaUnlockPreloadCache.get(src)
+  if (cached) return cached
+  const promise = new Promise<void>(resolve => {
+    const image = new Image()
+    image.onload = () => resolve()
+    image.onerror = () => resolve()
+    image.src = src
+  })
+  shikoirukaUnlockPreloadCache.set(src, promise)
+  return promise
+}
+
+async function preloadShikoirukaUnlockAssets() {
+  const pet = PET_BY_ID.shikoiruka
+  await Promise.all([pet.roomImage, pet.walk.frames[0], pet.walk.frames[1]].map(preloadImage))
+}
 
 const PET_ROOM_CSS = `
   @keyframes pet-meter-shine {
@@ -1542,6 +1563,8 @@ export function PetPage() {
           .filter((id, index, list) => list.indexOf(id) === index)
         setOwnedPetIds(owned)
         if (owned.includes('shikoiruka') && localStorage.getItem(SHIKOIRUKA_UNLOCK_SEEN_KEY) !== '1') {
+          await preloadShikoirukaUnlockAssets()
+          if (cancelled) return
           localStorage.setItem(SHIKOIRUKA_UNLOCK_SEEN_KEY, '1')
           selectPet('shikoiruka')
           setShikoirukaUnlockOpen(true)
@@ -1986,4 +2009,3 @@ export function PetPage() {
     </AppShell>
   )
 }
-

@@ -3,7 +3,7 @@ import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
 import { ensurePetStateTable, ensureShikoirukaDistributionForUser, PET_CHARACTER_NAMES } from "../services/pet-state-store";
 import { ensurePetCommerceTables } from "./pet-commerce";
-import { getSkillLockStatus } from "../services/pet-skills";
+import { getSkillLockStatus, recordDailyPetSkillUse } from "../services/pet-skills";
 
 const router = Router();
 
@@ -71,6 +71,33 @@ router.get("/pet/skill-lock-status", requireAuth, async (req, res): Promise<void
   } catch (error) {
     console.error("[PetState] skill-lock-status", error);
     res.status(500).json({ error: "取得に失敗しました" });
+  }
+});
+
+router.post("/pet/skill-use", requireAuth, async (req, res): Promise<void> => {
+  const characterId = String(req.body?.characterId ?? "").trim();
+  if (characterId !== "shikoiruka") {
+    res.status(400).json({ error: "Unsupported PET skill" });
+    return;
+  }
+  try {
+    await ensurePetStateTable();
+    const [stateResult, ownershipResult] = await Promise.all([
+      pool.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]),
+      pool.query(`SELECT 1 FROM "userPetCharacters" WHERE "userId"=$1 AND "characterId"=$2 LIMIT 1`, [req.userId!, characterId]),
+    ]);
+    const activeSkillIds = extractSkillActiveIds(stateResult.rows[0]?.state ?? null);
+    if ((ownershipResult.rowCount ?? 0) <= 0) {
+      res.status(400).json({ error: "PET character is not owned" });
+      return;
+    }
+    await recordDailyPetSkillUse(req.userId!, characterId);
+    const statusIds = activeSkillIds.includes(characterId) ? activeSkillIds : [...activeSkillIds, characterId];
+    const skillLockStatus = await getSkillLockStatus(req.userId!, statusIds);
+    res.json({ ok: true, skillLockStatus });
+  } catch (error) {
+    console.error("[PetState] skill-use", error);
+    res.status(500).json({ error: "Failed to record PET skill use" });
   }
 });
 
