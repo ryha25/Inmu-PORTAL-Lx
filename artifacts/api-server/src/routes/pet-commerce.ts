@@ -20,6 +20,8 @@ const PAID_GACHA_PITY_PULLS = 30;
 const EVENT_PITY_NEW_CHARACTER_BOOST = 4;
 const PITY_UNOWNED_CHARACTER_WEIGHT = 4;
 const PITY_OWNED_CHARACTER_WEIGHT = 1;
+const POINT_GACHA_DAILY_INMU_LIMIT = 2;
+const POINT_GACHA_SLEEP_TEA_INTERNAL_WEIGHT_RATIO = 0.5;
 const GACHA_EVENT_SETTING_PREFIX = "pet_gacha_event_";
 const DEFAULT_EVENT_START_JST = "2026-07-17T12:00:00+09:00";
 
@@ -250,6 +252,19 @@ function weightedRollByWeight<T extends { weight: number }>(table: readonly T[])
   return table[0];
 }
 
+function tunePointPrizeWeightsForInternalRoll<T extends { id: string; type: PrizeType; weight: number }>(prizes: readonly T[]): T[] {
+  const adjusted = prizes.map(prize => ({ ...prize }));
+  const sleepTea = adjusted.find(prize => prize.type === "sleep_tea");
+  if (!sleepTea) return adjusted;
+  const originalWeight = Math.max(0, Number(sleepTea.weight) || 0);
+  const loweredWeight = Math.floor(originalWeight * POINT_GACHA_SLEEP_TEA_INTERNAL_WEIGHT_RATIO);
+  const redistributedWeight = Math.max(0, originalWeight - loweredWeight);
+  sleepTea.weight = loweredWeight;
+  const fallbackPrize = adjusted.find(prize => prize.id === "pts100") ?? adjusted.find(prize => prize.type === "points");
+  if (fallbackPrize) fallbackPrize.weight = Math.max(0, Number(fallbackPrize.weight) || 0) + redistributedWeight;
+  return adjusted as T[];
+}
+
 function weightToRate(weight: number): string {
   const rate = weight / 1000;
   return `${Number.isInteger(rate) ? rate.toFixed(0) : rate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}%`;
@@ -395,6 +410,7 @@ async function rollPetGachaPrize(mode: GachaMode, guaranteedCharacter = false, o
   const config = await getGachaEventConfig();
   if (config.active) {
     const pool = config.modes[mode];
+    const poolPrizes = mode === "points" ? tunePointPrizeWeightsForInternalRoll(pool.prizes) : pool.prizes;
     if (guaranteedCharacter) {
       const pityPools = pool.characterPools.map(characterPool => ({
         ...characterPool,
@@ -403,13 +419,23 @@ async function rollPetGachaPrize(mode: GachaMode, guaranteedCharacter = false, o
       const selectedPool = weightedRollByWeight(pityPools);
       return resolveConfiguredPrize(selectedPool, ownedCharacterIds);
     }
-    return resolveConfiguredPrize(weightedRollSpecs([...pool.prizes, ...pool.characterPools]));
+    return resolveConfiguredPrize(weightedRollSpecs([...poolPrizes, ...pool.characterPools]));
   }
   if (guaranteedCharacter) {
     const character = randomCharacter(ownedCharacterIds);
     return { id: `character-${character.id}`, label: character.name, type: "character", amount: 1, characterId: character.id };
   }
-  return mode === "paid" ? weightedRoll(PAID_PRIZES) : weightedRoll(POINT_PRIZES);
+  return mode === "paid" ? weightedRoll(PAID_PRIZES) : weightedRollByWeight(tunePointPrizeWeightsForInternalRoll(POINT_PRIZES));
+}
+
+async function rollPetPointGachaPrizeWithoutInmu() {
+  const config = await getGachaEventConfig();
+  if (config.active) {
+    const pool = config.modes.points;
+    const prizes = tunePointPrizeWeightsForInternalRoll(pool.prizes).filter(prize => prize.type !== "inmu");
+    return resolveConfiguredPrize(weightedRollByWeight([...prizes, ...pool.characterPools]));
+  }
+  return weightedRollByWeight(tunePointPrizeWeightsForInternalRoll(POINT_PRIZES).filter(prize => prize.type !== "inmu"));
 }
 
 function wait(ms: number) {
@@ -611,6 +637,39 @@ function jstTomorrowStartUtc(): Date {
   return new Date(today.getTime() + 24 * 3600 * 1000);
 }
 
+async function countTodayPointGachaInmuWins(client: any, userId: string) {
+  const todayStart = jstTodayStartUtc();
+  const result = await client.query(
+    `SELECT COUNT(*)::int AS count
+     FROM "gachaInmuWins" w
+     JOIN "gachaResults" r ON r.id=w."spinId"
+     WHERE w."userId"=$1
+       AND r."gachaKind"='normal'
+       AND r."createdAt">=$2`,
+    [userId, todayStart.toISOString()],
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+async function enforcePointGachaDailyInmuLimit(client: any, userId: string, rolled: any[]) {
+  const todayWins = await countTodayPointGachaInmuWins(client, userId);
+  let remainingInmuWins = Math.max(0, POINT_GACHA_DAILY_INMU_LIMIT - todayWins);
+  const adjusted = [];
+  for (const prize of rolled) {
+    if (prize?.type !== "inmu") {
+      adjusted.push(prize);
+      continue;
+    }
+    if (remainingInmuWins > 0) {
+      remainingInmuWins -= 1;
+      adjusted.push(prize);
+      continue;
+    }
+    adjusted.push(await rollPetPointGachaPrizeWithoutInmu());
+  }
+  return adjusted;
+}
+
 async function getUnusedTdnReroll(client: any, userId: string): Promise<TdnRerollInfo | null> {
   const todayStart = jstTodayStartUtc();
   const existing = await client.query(
@@ -793,13 +852,15 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
   try {
     await ensurePetCommerceTables();
     await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`pet-point-gacha-inmu:${req.userId!}`]);
     const currentPoints = await getCurrentPoints(client, req.userId!);
     if (currentPoints < costPoints) throw new Error("ポイントが不足しています");
     await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"-$1,"updatedAt"=NOW() WHERE "userId"=$2`, [costPoints, req.userId!]);
     await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_gacha_cost','INMU PETポイントガチャ', $3)`, [req.userId!, -costPoints, new Date().toISOString().slice(0, 7)]);
     const rolled = [];
     for (let index = 0; index < count; index += 1) rolled.push(await rollPetGachaPrize("points"));
-    const applied = await applyPrizes(client, req.userId!, rolled);
+    const adjustedRolled = await enforcePointGachaDailyInmuLimit(client, req.userId!, rolled);
+    const applied = await applyPrizes(client, req.userId!, adjustedRolled);
     const history = await client.query(`
       INSERT INTO "petGachaHistory" ("userId","gachaType","pullType","costPoints",results)
       VALUES ($1,'points',$2,$3,$4::jsonb) RETURNING id,"createdAt"
@@ -955,6 +1016,9 @@ router.post("/pet-gacha/tdn-reroll", requireAuth, async (req, res): Promise<void
     const mode = (source.rows[0].gachaType === "paid" ? "paid" : "points") as GachaMode;
     const pullType = (source.rows[0].pullType === "eleven" ? "eleven" : source.rows[0].pullType === "multi" ? "multi" : "single") as PullType;
     const count = pullType === "eleven" ? 11 : pullType === "multi" ? 10 : 1;
+    if (mode === "points") {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`pet-point-gacha-inmu:${req.userId!}`]);
+    }
     const state = mode === "paid"
       ? await client.query(`SELECT "paidPity" FROM "petGachaState" WHERE "userId"=$1 FOR UPDATE`, [req.userId!])
       : null;
@@ -968,7 +1032,10 @@ router.post("/pet-gacha/tdn-reroll", requireAuth, async (req, res): Promise<void
       if (mode === "paid" && prize.type === "character" && prize.characterId) ownedCharacterIds?.add(prize.characterId);
       if (mode === "paid") pity = prize.type === "character" ? 0 : pity + 1;
     }
-    const applied = await applyPrizes(client, req.userId!, rolled);
+    const adjustedRolled = mode === "points"
+      ? await enforcePointGachaDailyInmuLimit(client, req.userId!, rolled)
+      : rolled;
+    const applied = await applyPrizes(client, req.userId!, adjustedRolled);
     if (mode === "paid") {
       await client.query(`
         INSERT INTO "petGachaState" ("userId","paidPity") VALUES ($1,$2)
