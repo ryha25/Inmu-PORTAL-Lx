@@ -10,7 +10,13 @@ import { recordDaifugoEvent, verifyDaifugoLink } from "../services/daifugo-link"
 const router = Router();
 
 const DAIFUGO_PUBLIC_URL = "https://inmu.replit.app";
-const publicCors = cors({ origin: DAIFUGO_PUBLIC_URL, credentials: true });
+const publicCors = cors({
+  origin: DAIFUGO_PUBLIC_URL,
+  credentials: true,
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+  optionsSuccessStatus: 204,
+});
 const CHALLENGE_RECOVERY_COST = 500;
 const DAIFUGO_LINK_TTL_SECONDS = 5 * 60;
 
@@ -166,13 +172,10 @@ router.post("/game-events/daifugo", publicCors, async (req, res): Promise<void> 
   }
 });
 
+router.options("/challenge-recovery", publicCors);
+
 router.post("/challenge-recovery", publicCors, requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
-  const bodyUsername = typeof req.body?.username === "string" ? req.body.username.trim() : "";
-  if (bodyUsername && bodyUsername !== req.userName) {
-    res.status(400).json({ error: "username does not match current session" });
-    return;
-  }
 
   const client = await pool.connect();
   try {

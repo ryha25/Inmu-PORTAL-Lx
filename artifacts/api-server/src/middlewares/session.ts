@@ -6,6 +6,7 @@ export const ADMIN_SESSION_COOKIE = "inmu-admin-session";
 
 const USER_SESSION_MS = 30 * 60 * 1000;
 const ADMIN_SESSION_MS = 60 * 60 * 1000;
+const USER_SESSION_CLEAR_OPTIONS = { sameSite: "none" as const, secure: true, path: "/" };
 
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
@@ -125,7 +126,7 @@ export function sessionMiddleware(
       req.userEmail = parsed.email;
       req.userName = parsed.name;
     } else {
-      res.clearCookie(SESSION_COOKIE, { path: "/" });
+      res.clearCookie(SESSION_COOKIE, USER_SESSION_CLEAR_OPTIONS);
       req.sessionExpired = true;
     }
   }

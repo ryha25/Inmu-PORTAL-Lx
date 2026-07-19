@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type CookieOptions } from "express";
 import bcrypt from "bcryptjs";
 import { createHash } from "crypto";
 import { db } from "@workspace/db";
@@ -25,6 +25,18 @@ const USER_SESSION_MS = 30 * 60 * 1000;
 const LOGIN_LOCK_MS = 10 * 60 * 1000;
 const LOGIN_MAX_FAILS = 5;
 const DB_RETRY_DELAYS_MS = [0, 200, 600] as const;
+const USER_SESSION_COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  sameSite: "none",
+  secure: true,
+  maxAge: USER_SESSION_MS,
+  path: "/",
+};
+const CLEAR_USER_SESSION_COOKIE_OPTIONS: CookieOptions = {
+  sameSite: "none",
+  secure: true,
+  path: "/",
+};
 
 const TRANSIENT_DB_ERROR_CODES = new Set([
   "08000",
@@ -249,9 +261,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
         });
         recordSuccess(lockKey);
         await ensureProfileAfterSignIn(user.id, user.name);
-        res.cookie(SESSION_COOKIE, makeSessionValue(user.id, user.email, user.name ?? ""), {
-          httpOnly: true, sameSite: "lax", maxAge: USER_SESSION_MS, path: "/",
-        });
+        res.cookie(SESSION_COOKIE, makeSessionValue(user.id, user.email, user.name ?? ""), USER_SESSION_COOKIE_OPTIONS);
         res.json({ user: { id: user.id, email: user.email, name: user.name } });
         return;
       }
@@ -267,12 +277,7 @@ router.post("/sign-in", async (req, res): Promise<void> => {
     recordSuccess(lockKey);
     await ensureProfileAfterSignIn(user.id, user.name);
 
-    res.cookie(SESSION_COOKIE, makeSessionValue(user.id, user.email, user.name ?? ""), {
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: USER_SESSION_MS,
-      path: "/",
-    });
+    res.cookie(SESSION_COOKIE, makeSessionValue(user.id, user.email, user.name ?? ""), USER_SESSION_COOKIE_OPTIONS);
     res.json({ user: { id: user.id, email: user.email, name: user.name } });
   } catch (error) {
     const transientDatabaseFailure = isTransientDatabaseError(error);
@@ -343,12 +348,7 @@ router.post("/sign-up", async (req, res): Promise<void> => {
     });
     await ensureProfile(userId, trimmedName, passcodeHash);
 
-    res.cookie(SESSION_COOKIE, makeSessionValue(userId, email, trimmedName), {
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: USER_SESSION_MS,
-      path: "/",
-    });
+    res.cookie(SESSION_COOKIE, makeSessionValue(userId, email, trimmedName), USER_SESSION_COOKIE_OPTIONS);
     res.status(201).json({ user: { id: userId, email, name: trimmedName } });
   } catch (error) {
     logger.error(
@@ -360,7 +360,7 @@ router.post("/sign-up", async (req, res): Promise<void> => {
 });
 
 router.post("/sign-out", (_req, res): void => {
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  res.clearCookie(SESSION_COOKIE, CLEAR_USER_SESSION_COOKIE_OPTIONS);
   res.json({ ok: true });
 });
 

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
-import { Gamepad2 } from 'lucide-react'
 
 type DashboardData = {
   balance: number
@@ -141,13 +140,17 @@ export function DashboardPage() {
       <PageHeader titleKey="nav_dashboard">
         <Button
           size="sm"
-          variant="outline"
-          className="gap-1.5 h-8 text-xs"
+          variant="ghost"
+          className="h-11 w-[150px] overflow-hidden rounded-full border border-amber-300/60 bg-black p-0 shadow-[0_0_18px_rgba(245,158,11,0.28)] hover:bg-black/90 sm:w-[180px]"
           onClick={handleOpenDaifugo}
           disabled={daifugoOpening}
+          aria-label={daifugoOpening ? '連携中' : '大富豪で遊ぶ'}
         >
-          <Gamepad2 className="size-3.5" />
-          {daifugoOpening ? '連携中...' : '大富豪で遊ぶ'}
+          <img
+            src="/daifugo-play-button.jpg"
+            alt=""
+            className={`h-full w-full object-cover transition ${daifugoOpening ? 'opacity-60' : 'opacity-100'}`}
+          />
         </Button>
       </PageHeader>
       <AdSlot slotId="dashboard-top" variant="banner" className="mb-4" />
