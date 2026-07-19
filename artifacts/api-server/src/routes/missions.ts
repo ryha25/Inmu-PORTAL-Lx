@@ -54,6 +54,7 @@ import { requireAuth, requireAdmin } from "../middlewares/session";
 import { initializePetCharacterState } from "../services/pet-state-store";
 import { hasActivePetSkill } from "../services/pet-skills";
 import { getLifetimeEarnedPoints } from "../services/lifetime-points";
+import { getDaifugoEventCount } from "../services/daifugo-link";
 
 const router = Router();
 
@@ -363,6 +364,12 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       weeklyLoginCountRow,
       weeklyDexVoteCountRow,
       lifetimeEarnedPoints,
+      daifugoPlayDaily,
+      daifugoPlayWeekly,
+      daifugoPlayTotal,
+      daifugoWinDaily,
+      daifugoWinWeekly,
+      daifugoWinTotal,
     ] = await Promise.all([
       db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
         .from(missionParticipationsTable)
@@ -423,6 +430,12 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         .where(and(eq(pointsTable.userId, userId), eq(pointsTable.type, "dex_vote"), gte(pointsTable.createdAt, weekStart)))
         .then(r => r[0]),
       getLifetimeEarnedPoints(userId),
+      getDaifugoEventCount(userId, "play", todayStart),
+      getDaifugoEventCount(userId, "play", weekStart),
+      getDaifugoEventCount(userId, "play"),
+      getDaifugoEventCount(userId, "win", todayStart),
+      getDaifugoEventCount(userId, "win", weekStart),
+      getDaifugoEventCount(userId, "win"),
     ]);
 
     // Optionally fetch real on-chain INMU balance
@@ -463,7 +476,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       return false;
     }
 
-    function getConditionStatus(condType: string | null, condVal: string | null) {
+    function getConditionStatus(condType: string | null, condVal: string | null, missionType: string) {
       if (!condType || condType === "none" || condType === "link_visit") {
         return { conditionMet: null as boolean | null, conditionCurrent: null as number | null };
       }
@@ -520,6 +533,10 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
           m.type === "weekly" &&
           participationMap.get(`${m.id}:${weeklyPeriod}`) === "rewarded"
         ).length;
+      } else if (condType === "daifugo_play") {
+        current = missionType === "daily" ? daifugoPlayDaily : missionType === "weekly" ? daifugoPlayWeekly : daifugoPlayTotal;
+      } else if (condType === "daifugo_win") {
+        current = missionType === "daily" ? daifugoWinDaily : missionType === "weekly" ? daifugoWinWeekly : daifugoWinTotal;
       }
 
       if (current === null) return { conditionMet: null as boolean | null, conditionCurrent: null as number | null };
@@ -536,7 +553,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
           ? (missions.find(mx => mx.id === m.prerequisiteMissionId)?.title ?? null)
           : null,
         participationStatus: locked ? null : getStatus(m.id, period),
-        ...getConditionStatus(locked ? null : m.conditionType, locked ? null : m.conditionValue),
+        ...getConditionStatus(locked ? null : m.conditionType, locked ? null : m.conditionValue, m.type),
       };
     }
 
@@ -619,7 +636,7 @@ router.post("/missions/:id/join", requireAuth, async (req, res): Promise<void> =
 
 async function checkCondition(
   userId: string,
-  mission: { conditionType: string | null; conditionValue: string | null },
+  mission: { type?: string | null; conditionType: string | null; conditionValue: string | null },
   profile: {
     solWallet?: string | null;
     totalBought?: string | null;
@@ -650,6 +667,7 @@ async function checkCondition(
 
   const todayStart = getTodayStart();
   const weekStart  = getWeekStart();
+  const daifugoSince = mission.type === "daily" ? todayStart : mission.type === "weekly" ? weekStart : undefined;
 
   if (condType === "inmu_balance") {
     if (!profile?.solWallet) return { met: false, errorMsg: "ウォレットアドレスが設定されていません" };
@@ -748,6 +766,15 @@ async function checkCondition(
       .where(and(eq(missionParticipationsTable.userId, userId), eq(missionParticipationsTable.status, "rewarded"), eq(missionsTable.type, "weekly"), eq(missionParticipationsTable.period, wp)));
     const cur = Number(row?.cnt ?? 0);
     if (cur < condVal) return { met: false, errorMsg: `今週のウィークリーミッション達成数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+  }
+
+  if (condType === "daifugo_play") {
+    const cur = await getDaifugoEventCount(userId, "play", daifugoSince);
+    if (cur < condVal) return { met: false, errorMsg: `INMU大富豪のプレイ回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+  }
+  if (condType === "daifugo_win") {
+    const cur = await getDaifugoEventCount(userId, "win", daifugoSince);
+    if (cur < condVal) return { met: false, errorMsg: `INMU大富豪の勝利回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   }
 
   return { met: true };

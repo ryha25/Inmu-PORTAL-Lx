@@ -65,6 +65,8 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'daily_clears_total',       label: 'デイリーミッションクリア累計' },
   { value: 'weekly_clears_total',      label: 'ウィークリーミッションクリア累計' },
   { value: 'achievement_clears_total', label: 'アチーブメント達成数' },
+  { value: 'daifugo_play',             label: 'INMU大富豪プレイ回数' },
+  { value: 'daifugo_win',              label: 'INMU大富豪勝利回数' },
 ]
 const NO_VALUE_COND = new Set(['none', 'link_visit', 'follow_x', 'join_discord'])
 const TYPE_CATEGORIES = [

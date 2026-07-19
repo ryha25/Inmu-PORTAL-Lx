@@ -5,10 +5,27 @@ import { AdSlot } from '@/components/ad-slot'
 import { useI18n } from '@/lib/i18n/context'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
-import { Bell } from 'lucide-react'
+import { Bell, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Notification = { id: number; type: string; title: string; message: string | null; isRead: boolean; createdAt: string }
+
+function parseGameInviteMessage(message: string | null) {
+  if (!message) return { text: null as string | null, joinUrl: null as string | null }
+  let joinUrl: string | null = null
+  const text = message
+    .split(/\r?\n/)
+    .filter(line => {
+      if (line.startsWith('JOIN_URL:')) {
+        joinUrl = line.slice('JOIN_URL:'.length).trim() || null
+        return false
+      }
+      return true
+    })
+    .join('\n')
+    .trim()
+  return { text: text || null, joinUrl }
+}
 
 function safeNotificationText(notification: Notification) {
   const combined = `${notification.title} ${notification.message ?? ''}`
@@ -49,6 +66,7 @@ export function NotificationView({ notifications, onRefresh }: { notifications: 
         <div className="flex flex-col gap-2">
           {notifications.map((rawNotification, index) => {
             const n = safeNotificationText(rawNotification)
+            const invite = n.type === 'game_invite' ? parseGameInviteMessage(n.message) : { text: n.message, joinUrl: null as string | null }
             return (
               <Fragment key={n.id}>
                 {index === 1 && <AdSlot slotId="notifications-list-mid" variant="banner" />}
@@ -57,7 +75,19 @@ export function NotificationView({ notifications, onRefresh }: { notifications: 
                     <Bell className={cn('size-4 shrink-0 mt-0.5', !n.isRead ? 'text-primary' : 'text-muted-foreground')} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{n.title}</p>
-                      {n.message && <p className="mt-1 text-xs text-muted-foreground">{n.message}</p>}
+                      {invite.text && <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{invite.text}</p>}
+                      {invite.joinUrl && (
+                        <Button
+                          asChild
+                          size="sm"
+                          className="mt-3 h-8 gap-1.5 text-xs"
+                        >
+                          <a href={invite.joinUrl} target="_blank" rel="noreferrer">
+                            <ExternalLink className="size-3.5" />
+                            大富豪へ参加
+                          </a>
+                        </Button>
+                      )}
                       <p className="mt-2 text-xs text-muted-foreground">{formatDate(n.createdAt, locale)}</p>
                     </div>
                     {!n.isRead && <span className="flex size-2 shrink-0 rounded-full bg-primary" />}

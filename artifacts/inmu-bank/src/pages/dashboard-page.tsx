@@ -9,8 +9,6 @@ import { useAuth } from '@/hooks/use-auth'
 import { toast } from 'sonner'
 import { Gamepad2 } from 'lucide-react'
 
-const INMU_DAIFUGO_URL = 'https://inmu.replit.app'
-
 type DashboardData = {
   balance: number
   savingsBalance: number
@@ -30,6 +28,7 @@ export function DashboardPage() {
   const [walletInmu, setWalletInmu] = useState<number | null>(null)
   const [dailyClaim, setDailyClaim] = useState<{ alreadyClaimed: boolean; streak: number } | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [daifugoOpening, setDaifugoOpening] = useState(false)
   const [inmuPrice, setInmuPrice] = useState<{ usdPrice: number; jpyRate: number } | null>(null)
 
   async function handleScanTrades() {
@@ -101,6 +100,20 @@ export function DashboardPage() {
     }
   }
 
+  async function handleOpenDaifugo() {
+    setDaifugoOpening(true)
+    try {
+      const res = await fetch('/api/game-link/daifugo', { method: 'POST', credentials: 'include' })
+      const data = await res.json().catch(() => ({})) as { url?: string; error?: string }
+      if (!res.ok || !data.url) throw new Error(data.error ?? 'INMU大富豪連携に失敗しました')
+      window.location.assign(data.url)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'INMU大富豪連携に失敗しました')
+    } finally {
+      setDaifugoOpening(false)
+    }
+  }
+
   useEffect(() => {
     if (!profile?.solWallet) { setWalletInmu(null); return }
     const wallet = profile.solWallet
@@ -127,15 +140,14 @@ export function DashboardPage() {
     <AppShell isAdmin={profile?.role === 'admin'} displayName={profile?.displayName ?? ''} unread={unread}>
       <PageHeader titleKey="nav_dashboard">
         <Button
-          asChild
           size="sm"
           variant="outline"
           className="gap-1.5 h-8 text-xs"
+          onClick={handleOpenDaifugo}
+          disabled={daifugoOpening}
         >
-          <a href={INMU_DAIFUGO_URL}>
-            <Gamepad2 className="size-3.5" />
-            INMU大富豪
-          </a>
+          <Gamepad2 className="size-3.5" />
+          {daifugoOpening ? '連携中...' : 'INMU大富豪'}
         </Button>
       </PageHeader>
       <AdSlot slotId="dashboard-top" variant="banner" className="mb-4" />

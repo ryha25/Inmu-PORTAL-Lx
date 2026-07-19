@@ -57,6 +57,7 @@ function isOriginAllowed(origin: string): boolean {
   return (
     /^https:\/\/[a-zA-Z0-9-]+\.replit\.dev$/.test(origin) ||
     /^https:\/\/[a-zA-Z0-9-]+\.repl\.co$/.test(origin) ||
+    origin === "https://inmu.replit.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:3000"
   );
