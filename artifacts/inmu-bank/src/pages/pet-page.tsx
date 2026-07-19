@@ -1843,6 +1843,7 @@ export function PetPage() {
               </p>
               {ownershipError && <p className="mt-3 text-xs text-rose-300">所持情報を取得できませんでした。画面を再読み込みしてください。</p>}
             </section>
+            <AdSlot slotId="pet-empty-owned" variant="banner" />
             <div className="grid grid-cols-2 gap-2">
               <LevelRewardEffectButton activePets={[]} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
             </div>
@@ -1874,8 +1875,8 @@ export function PetPage() {
                 onPet={handlePet}
                 onWalk={() => setWalkMenuOpen(true)}
               />
+              <AdSlot slotId="pet-walk-select" variant="banner" />
               <CharacterSelectStrip pets={ownedPets} displayedPetId={displayedPetId} onSelect={handleSelect} />
-              <AdSlot slotId="pet-character-break" variant="banner" />
               <div className="grid grid-cols-2 gap-2">
                 <SkillActivationButton ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} skillLockStatus={skillLockStatus} />
                 <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />

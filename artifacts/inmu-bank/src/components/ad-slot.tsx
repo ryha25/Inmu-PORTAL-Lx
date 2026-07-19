@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Megaphone } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -41,22 +42,26 @@ const BANNER_AD_SLOT_IDS = new Set([
   'dashboard-balance-bonus',
   'dashboard-stats-scan',
   'transaction-controls-history-a',
-  'transaction-controls-history-b',
+  'purchase-request-capacity-rebate',
+  'purchase-request-rebate-amount',
   'mission-summary-daily',
   'mission-daily-achievement',
   'mission-achievement-event',
-  'points-history-mid',
   'gacha-paid-banner-break',
   'gacha-points-banner-break',
   'gacha-result-bottom',
   'pet-top',
+  'pet-empty-owned',
+  'pet-walk-select',
   'pet-items-rewards',
   'ranking-top',
   'ranking-composite-list-top',
   'ranking-monthly-list-top',
   'achievements-ranking-break',
   'notifications-list-top',
+  'notifications-list-mid',
   'profile-achievements-ranking',
+  'profile-ranking-info',
   'profile-info-wallet',
 ])
 
@@ -77,13 +82,20 @@ export function canRenderAdSlot(slotId: string, variant: AdSlotVariant = 'banner
 }
 
 function NinjaAdMaxFrame({ src, slotId, variant }: { src: string; slotId: string; variant: AdSlotVariant }) {
+  const [loaded, setLoaded] = useState(false)
   const width = variant === 'rail' ? 300 : 320
   const height = variant === 'rail' ? 250 : 64
+
+  useEffect(() => {
+    setLoaded(false)
+  }, [src, slotId])
+
   const srcDoc = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=${width}, initial-scale=1">
+    <base target="_blank">
     <style>html,body{margin:0;padding:0;width:${width}px;min-height:${height}px;overflow:visible;background:transparent;}body{display:flex;align-items:center;justify-content:center;}</style>
   </head>
   <body>
@@ -94,15 +106,24 @@ function NinjaAdMaxFrame({ src, slotId, variant }: { src: string; slotId: string
 </html>`
 
   return (
-    <iframe
-      title={`admax-${slotId}`}
-      srcDoc={srcDoc}
-      width={width}
-      height={height}
-      loading="lazy"
-      referrerPolicy="no-referrer-when-downgrade"
-      className="block border-0"
-    />
+    <div className="relative" style={{ width, minHeight: height }}>
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/55">
+          AD
+        </div>
+      )}
+      <iframe
+        key={`${slotId}-${src}`}
+        title={`admax-${slotId}`}
+        srcDoc={srcDoc}
+        width={width}
+        height={height}
+        loading="eager"
+        referrerPolicy="no-referrer-when-downgrade"
+        onLoad={() => setLoaded(true)}
+        className="relative z-10 block border-0"
+      />
+    </div>
   )
 }
 

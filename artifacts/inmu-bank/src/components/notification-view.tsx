@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdSlot } from '@/components/ad-slot'
@@ -46,20 +47,23 @@ export function NotificationView({ notifications, onRefresh }: { notifications: 
         <p className="py-10 text-center text-sm text-muted-foreground">{t('no_notifications')}</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {notifications.map((rawNotification) => {
+          {notifications.map((rawNotification, index) => {
             const n = safeNotificationText(rawNotification)
             return (
-            <Card key={n.id} className={cn('border-border bg-card p-3', !n.isRead && 'border-primary/30 bg-primary/5')}>
-              <div className="flex items-start gap-3">
-                <Bell className={cn('size-4 shrink-0 mt-0.5', !n.isRead ? 'text-primary' : 'text-muted-foreground')} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{n.title}</p>
-                  {n.message && <p className="mt-1 text-xs text-muted-foreground">{n.message}</p>}
-                  <p className="mt-2 text-xs text-muted-foreground">{formatDate(n.createdAt, locale)}</p>
-                </div>
-                {!n.isRead && <span className="flex size-2 shrink-0 rounded-full bg-primary" />}
-              </div>
-            </Card>
+              <Fragment key={n.id}>
+                {index === 1 && <AdSlot slotId="notifications-list-mid" variant="banner" />}
+                <Card className={cn('border-border bg-card p-3', !n.isRead && 'border-primary/30 bg-primary/5')}>
+                  <div className="flex items-start gap-3">
+                    <Bell className={cn('size-4 shrink-0 mt-0.5', !n.isRead ? 'text-primary' : 'text-muted-foreground')} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{n.title}</p>
+                      {n.message && <p className="mt-1 text-xs text-muted-foreground">{n.message}</p>}
+                      <p className="mt-2 text-xs text-muted-foreground">{formatDate(n.createdAt, locale)}</p>
+                    </div>
+                    {!n.isRead && <span className="flex size-2 shrink-0 rounded-full bg-primary" />}
+                  </div>
+                </Card>
+              </Fragment>
             )
           })}
         </div>

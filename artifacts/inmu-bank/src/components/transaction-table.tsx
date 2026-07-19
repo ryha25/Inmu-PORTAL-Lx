@@ -78,21 +78,15 @@ export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu
         </Button>
       </div>
       <AdSlot slotId="transaction-controls-history-a" variant="banner" />
-      <AdSlot slotId="transaction-controls-history-b" variant="banner" />
       <Card className="border-border bg-card">
         {filtered.length === 0 ? (
           <p className="px-4 py-12 text-center text-sm text-muted-foreground">データがありません</p>
         ) : (
           <ul className="divide-y divide-border">
-            {filtered.map((tx, index) => {
+            {filtered.map((tx) => {
               const out = isOutgoing(tx.type)
               return (
                 <li key={tx.id}>
-                  {index === 3 && (
-                    <div className="border-b border-border px-3 py-3">
-                      <AdSlot slotId="transaction-list-mid" variant="banner" />
-                    </div>
-                  )}
                   <div className="flex items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">

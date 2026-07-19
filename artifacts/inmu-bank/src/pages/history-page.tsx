@@ -276,6 +276,8 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
               </p>
             </div>
 
+            <AdSlot slotId="purchase-request-capacity-rebate" variant="banner" />
+
             <div className="rounded-lg bg-secondary/30 p-3 flex flex-col gap-1.5">
               <p className="text-[10px] font-semibold text-muted-foreground">現在の還元率</p>
               <p className="font-mono text-lg font-bold text-green-500">{totalRebateRate.toFixed(1)}%</p>
@@ -310,6 +312,8 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
                 )}
               </div>
             </div>
+
+            <AdSlot slotId="purchase-request-rebate-amount" variant="banner" />
 
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-muted-foreground">購入枚数（INMU）*</Label>

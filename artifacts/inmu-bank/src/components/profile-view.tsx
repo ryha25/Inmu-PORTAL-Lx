@@ -325,6 +325,8 @@ export function ProfileView({
         </p>
       </Card>
 
+      <AdSlot slotId="profile-ranking-info" variant="banner" />
+
       {/* ── プロフィール情報 ── */}
       <Card className="border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-4">
