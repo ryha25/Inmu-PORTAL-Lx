@@ -147,7 +147,7 @@ export function DashboardPage() {
           disabled={daifugoOpening}
         >
           <Gamepad2 className="size-3.5" />
-          {daifugoOpening ? '連携中...' : 'INMU大富豪'}
+          {daifugoOpening ? '連携中...' : '大富豪で遊ぶ'}
         </Button>
       </PageHeader>
       <AdSlot slotId="dashboard-top" variant="banner" className="mb-4" />
