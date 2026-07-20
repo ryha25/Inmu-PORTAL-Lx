@@ -371,6 +371,12 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       daifugoWinDaily,
       daifugoWinWeekly,
       daifugoWinTotal,
+      daifugoChallengePlayDaily,
+      daifugoChallengePlayWeekly,
+      daifugoChallengePlayTotal,
+      daifugoChallengeWinDaily,
+      daifugoChallengeWinWeekly,
+      daifugoChallengeWinTotal,
     ] = await Promise.all([
       db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
         .from(missionParticipationsTable)
@@ -437,6 +443,12 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       getDaifugoEventCount(userId, "win", todayStart),
       getDaifugoEventCount(userId, "win", weekStart),
       getDaifugoEventCount(userId, "win"),
+      getDaifugoEventCount(userId, "challenge_play", todayStart),
+      getDaifugoEventCount(userId, "challenge_play", weekStart),
+      getDaifugoEventCount(userId, "challenge_play"),
+      getDaifugoEventCount(userId, "challenge_win", todayStart),
+      getDaifugoEventCount(userId, "challenge_win", weekStart),
+      getDaifugoEventCount(userId, "challenge_win"),
     ]);
 
     // Optionally fetch real on-chain INMU balance
@@ -538,6 +550,10 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         current = missionType === "daily" ? daifugoPlayDaily : missionType === "weekly" ? daifugoPlayWeekly : daifugoPlayTotal;
       } else if (condType === "daifugo_win") {
         current = missionType === "daily" ? daifugoWinDaily : missionType === "weekly" ? daifugoWinWeekly : daifugoWinTotal;
+      } else if (condType === "daifugo_challenge_play") {
+        current = missionType === "daily" ? daifugoChallengePlayDaily : missionType === "weekly" ? daifugoChallengePlayWeekly : daifugoChallengePlayTotal;
+      } else if (condType === "daifugo_challenge_win") {
+        current = missionType === "daily" ? daifugoChallengeWinDaily : missionType === "weekly" ? daifugoChallengeWinWeekly : daifugoChallengeWinTotal;
       }
 
       if (current === null) return { conditionMet: null as boolean | null, conditionCurrent: null as number | null };
@@ -776,6 +792,14 @@ async function checkCondition(
   if (condType === "daifugo_win") {
     const cur = await getDaifugoEventCount(userId, "win", daifugoSince);
     if (cur < condVal) return { met: false, errorMsg: `INMU大富豪の勝利回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+  }
+  if (condType === "daifugo_challenge_play") {
+    const cur = await getDaifugoEventCount(userId, "challenge_play", daifugoSince);
+    if (cur < condVal) return { met: false, errorMsg: `チャレンジモードのプレイ回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+  }
+  if (condType === "daifugo_challenge_win") {
+    const cur = await getDaifugoEventCount(userId, "challenge_win", daifugoSince);
+    if (cur < condVal) return { met: false, errorMsg: `チャレンジモードの勝利回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
   }
 
   return { met: true };

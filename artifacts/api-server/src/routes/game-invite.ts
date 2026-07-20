@@ -152,10 +152,12 @@ router.get("/game-link/daifugo/verify", publicCors, async (req, res): Promise<vo
 
 router.post("/game-events/daifugo", publicCors, async (req, res): Promise<void> => {
   const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
-  const eventType = req.body?.eventType === "win" ? "win" : req.body?.eventType === "play" ? "play" : null;
+  const VALID_EVENT_TYPES = ["play", "win", "challenge_play", "challenge_win"] as const;
+  type ValidEventType = typeof VALID_EVENT_TYPES[number];
+  const eventType: ValidEventType | null = VALID_EVENT_TYPES.includes(req.body?.eventType) ? req.body.eventType : null;
   const roomId = typeof req.body?.roomId === "string" && req.body.roomId.trim() ? req.body.roomId.trim().slice(0, 120) : null;
   if (!token || !eventType) {
-    res.status(400).json({ error: "token and eventType are required" });
+    res.status(400).json({ error: "token and eventType are required (play/win/challenge_play/challenge_win)" });
     return;
   }
   try {

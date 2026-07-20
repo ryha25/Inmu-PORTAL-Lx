@@ -82,7 +82,9 @@ export async function verifyDaifugoLink(token: string): Promise<PortalGameUser |
   };
 }
 
-export async function recordDaifugoEvent(userId: string, eventType: "play" | "win", roomId: string | null) {
+export type DaifugoEventType = "play" | "win" | "challenge_play" | "challenge_win";
+
+export async function recordDaifugoEvent(userId: string, eventType: DaifugoEventType, roomId: string | null) {
   await ensureDaifugoLinkTables();
   await pool.query(
     `INSERT INTO "portalGameEvents" ("userId", game, "eventType", "roomId") VALUES ($1, $2, $3, $4)`,
@@ -90,9 +92,13 @@ export async function recordDaifugoEvent(userId: string, eventType: "play" | "wi
   );
 }
 
-export async function getDaifugoEventCount(userId: string, eventType: "play" | "win", since?: Date): Promise<number> {
+export async function getDaifugoEventCount(userId: string, eventType: DaifugoEventType, since?: Date): Promise<number> {
   await ensureDaifugoLinkTables();
-  const eventFilter = eventType === "play" ? `AND "eventType" IN ('play', 'win')` : `AND "eventType" = 'win'`;
+  const eventFilter =
+    eventType === "play"            ? `AND "eventType" IN ('play', 'win')` :
+    eventType === "win"             ? `AND "eventType" = 'win'` :
+    eventType === "challenge_play"  ? `AND "eventType" IN ('challenge_play', 'challenge_win')` :
+                                      `AND "eventType" = 'challenge_win'`;
   const sinceFilter = since ? `AND "createdAt" >= $3` : "";
   const params = since ? [userId, DAIFUGO_GAME_ID, since] : [userId, DAIFUGO_GAME_ID];
   const { rows } = await pool.query(
