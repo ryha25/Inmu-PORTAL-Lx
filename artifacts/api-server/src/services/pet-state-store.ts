@@ -15,7 +15,8 @@ const DEFAULT_STATS = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affectio
 const EMPTY_ACTIONS = { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "play-ball": 0, "play-toy": 0, pet: 0 };
 const EMPTY_COOLDOWNS = { feed: 0, play: 0 };
 const SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID = "shikoiruka";
-const SHIKOIRUKA_TEST_ACCOUNT_NAME = "ガチャテスト";
+// 2026-07-21 04:00 JST = 2026-07-20 19:00:00 UTC
+const SHIKOIRUKA_DISTRIBUTION_START_UTC = new Date("2026-07-20T19:00:00Z");
 
 let tablePromise: Promise<void> | null = null;
 
@@ -122,27 +123,9 @@ export async function initializePetCharacterState(userId: string, characterId: s
   `, [userId, JSON.stringify(state), now]);
 }
 
-function normalizeTestAccountName(value: unknown): string {
-  return String(value ?? "").replace(/[\s\u3000]+/g, "").toLowerCase();
-}
-
-async function isShikoirukaTestAccount(userId: string): Promise<boolean> {
-  const result = await pool.query(
-    `SELECT u.name, p."displayName"
-     FROM "user" AS u
-     LEFT JOIN profile AS p ON p."userId" = u.id
-     WHERE u.id = $1
-     LIMIT 1`,
-    [userId],
-  );
-  const row = result.rows[0];
-  const targetName = normalizeTestAccountName(SHIKOIRUKA_TEST_ACCOUNT_NAME);
-  return normalizeTestAccountName(row?.name) === targetName || normalizeTestAccountName(row?.displayName) === targetName;
-}
-
-export async function ensureShikoirukaDistributionForUser(userId: string) {
-  const isTestAccount = await isShikoirukaTestAccount(userId);
-  if (!isTestAccount) return false;
+export async function ensureShikoirukaDistributionForUser(userId: string): Promise<boolean> {
+  // 配布開始時刻（2026-07-21 04:00 JST）より前は配布しない
+  if (new Date() < SHIKOIRUKA_DISTRIBUTION_START_UTC) return false;
   await ensurePetStateTable();
   const inserted = await pool.query(
     `INSERT INTO "userPetCharacters" ("userId", "characterId")
@@ -151,5 +134,8 @@ export async function ensureShikoirukaDistributionForUser(userId: string) {
      RETURNING "characterId"`,
     [userId, SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID],
   );
+  if (inserted.rowCount) {
+    await initializePetCharacterState(userId, SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID);
+  }
   return Boolean(inserted.rowCount);
 }

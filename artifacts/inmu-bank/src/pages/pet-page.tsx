@@ -30,7 +30,7 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
 ]
 
 const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'shikoiruka', 'inmu-festival'])
-const SHIKOIRUKA_UNLOCK_SEEN_KEY = 'inmu-portal:pet:shikoiruka-unlock-seen:v3'
+const SHIKOIRUKA_UNLOCK_SEEN_KEY_PREFIX = 'inmu-portal:pet:shikoiruka-unlock-seen:v4:'
 
 const shikoirukaUnlockPreloadCache = new Map<string, Promise<void>>()
 
@@ -1588,16 +1588,17 @@ export function PetPage() {
       try {
         const response = await fetch('/api/pet/characters', { credentials: 'include' })
         if (!response.ok) throw new Error('ownership fetch failed')
-        const data = await response.json() as { ownedCharacterIds?: string[] }
+        const data = await response.json() as { ownedCharacterIds?: string[]; shikoirukaNewlyDistributed?: boolean }
         if (cancelled) return
         const owned = (data.ownedCharacterIds ?? [])
           .filter((id): id is PetId => Boolean(PET_BY_ID[id as PetId]) && USER_VISIBLE_PET_IDS.has(id as PetId))
           .filter((id, index, list) => list.indexOf(id) === index)
         setOwnedPetIds(owned)
-        if (owned.includes('shikoiruka') && localStorage.getItem(SHIKOIRUKA_UNLOCK_SEEN_KEY) !== '1') {
+        const seenKey = SHIKOIRUKA_UNLOCK_SEEN_KEY_PREFIX + (profile?.userId ?? '')
+        if ((data.shikoirukaNewlyDistributed === true || owned.includes('shikoiruka')) && localStorage.getItem(seenKey) !== '1') {
           await preloadShikoirukaUnlockAssets()
           if (cancelled) return
-          localStorage.setItem(SHIKOIRUKA_UNLOCK_SEEN_KEY, '1')
+          localStorage.setItem(seenKey, '1')
           selectPet('shikoiruka')
           setShikoirukaUnlockOpen(true)
         }

@@ -985,7 +985,7 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
 router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensureRewardTables();
-    await ensureShikoirukaDistributionForUser(req.userId!);
+    const shikoirukaNewlyDistributed = await ensureShikoirukaDistributionForUser(req.userId!);
     const { rows } = await pool.query(
       `SELECT "characterId", "acquiredAt" FROM "userPetCharacters"
        WHERE "userId" = $1 ORDER BY "acquiredAt" ASC`,
@@ -994,6 +994,7 @@ router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
     res.json({
       ownedCharacterIds: rows.map(row => String(row.characterId)),
       characters: Object.entries(PET_CHARACTER_NAMES).map(([id, name]) => ({ id, name })),
+      shikoirukaNewlyDistributed,
     });
   } catch {
     res.status(500).json({ error: "Internal error" });
