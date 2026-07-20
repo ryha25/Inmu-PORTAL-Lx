@@ -61,9 +61,9 @@ import shikoirukaBlinkImage from '@assets/inmu-pet-shikoiruka-blink-v1.png'
 import shikoirukaHappyImage from '@assets/inmu-pet-shikoiruka-happy-v1.png'
 import shikoirukaHungryImage from '@assets/inmu-pet-shikoiruka-hungry-v1.png'
 import shikoirukaPettedImage from '@assets/inmu-pet-shikoiruka-petted-v1.png'
-import shikoirukaSleepyImage from '@assets/inmu-pet-shikoiruka-sleepy-v2.png'
-import shikoirukaSwim1Image from '@assets/inmu-pet-shikoiruka-swim-1-v1.png'
-import shikoirukaSwim2Image from '@assets/inmu-pet-shikoiruka-swim-2-v1.png'
+import shikoirukaSleepyImage from '@assets/inmu-pet-shikoiruka-sleepy-v3.png'
+import shikoirukaSwim1Image from '@assets/inmu-pet-shikoiruka-swim-1-v2.png'
+import shikoirukaSwim2Image from '@assets/inmu-pet-shikoiruka-swim-2-v2.png'
 import nyarushianRoomImage from '@assets/inmu-pet-room-nyarushian-v1.jpg'
 import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
 import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
@@ -421,7 +421,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       affectionate: ['あなたのそばが落ち着くよ！', '今日も一緒に泳ごうね！'],
     },
     reactionDurations: { feed: 4000, play: 4400, pet: 3700, angry: 4600 },
-    roomWidth: 'clamp(205px, 45%, 295px)',
+    roomWidth: 'clamp(250px, 58%, 390px)',
     roomTheme: 'water',
     roomImage: shikoirukaRoomImage,
     skill: {

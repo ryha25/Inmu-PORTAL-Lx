@@ -166,8 +166,8 @@ const PET_ROOM_CSS = `
   .pet-room-speaker { animation: pet-room-speaker 1.8s ease-out infinite; }
   .pet-character-motion { animation: pet-idle-float 6.8s ease-in-out infinite; transform-origin: 50% 90%; }
   @keyframes pet-water-swim-stroke {
-    0%, 100% { transform: translateX(-3px) rotate(-2deg) scaleY(.985); }
-    50% { transform: translateX(6px) rotate(3deg) scaleY(1.018); }
+    0%, 100% { transform: translateX(-4px) translateY(1px) rotate(-1.5deg); }
+    50% { transform: translateX(7px) translateY(-2px) rotate(1.8deg); }
   }
   .pet-water-swim-stroke { animation: pet-water-swim-stroke .78s ease-in-out infinite; transform-origin: 58% 58%; }
   .pet-react-feed { animation: pet-react-feed 1.35s ease-out both; }
@@ -344,7 +344,7 @@ function PetRoom({
   const isWaterSwimmer = petId === 'shikoiruka'
   const activeWalkTransform = walkMotion.active
     ? isWaterSwimmer
-      ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + ((walkMotion.bob * .35) + (walkMotion.moving ? (walkMotion.frame ? -5 : 4) : 0)) + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.facing > 0 ? -74 : 74) + 'deg) scale(' + (walkMotion.moving ? (walkMotion.frame ? 1.025 : .985) : 1) + ')'
+      ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + ((walkMotion.bob * .55) + (walkMotion.moving ? (walkMotion.frame ? -3 : 3) : 0)) + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.stride * .35) + 'deg) scale(' + (walkMotion.moving ? (walkMotion.frame ? 1.018 : .992) : 1) + ')'
       : 'translate3d(' + walkMotion.offsetPercent + '%, ' + walkMotion.bob + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.stride * 1.4) + 'deg) scaleY(' + (walkMotion.moving ? (walkMotion.frame ? .985 : 1.012) : 1) + ')'
     : undefined
 
