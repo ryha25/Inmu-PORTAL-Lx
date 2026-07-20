@@ -166,10 +166,10 @@ const PET_ROOM_CSS = `
   .pet-room-speaker { animation: pet-room-speaker 1.8s ease-out infinite; }
   .pet-character-motion { animation: pet-idle-float 6.8s ease-in-out infinite; transform-origin: 50% 90%; }
   @keyframes pet-water-swim-stroke {
-    0%, 100% { transform: translateX(-4px) translateY(1px) rotate(-1.5deg); }
-    50% { transform: translateX(7px) translateY(-2px) rotate(1.8deg); }
+    0%, 100% { transform: translateX(-1.5px) translateY(.6px) rotate(-.35deg); }
+    50% { transform: translateX(2.5px) translateY(-.8px) rotate(.45deg); }
   }
-  .pet-water-swim-stroke { animation: pet-water-swim-stroke .78s ease-in-out infinite; transform-origin: 58% 58%; }
+  .pet-water-swim-stroke { animation: pet-water-swim-stroke 2.4s ease-in-out infinite; transform-origin: 58% 58%; }
   .pet-react-feed { animation: pet-react-feed 1.35s ease-out both; }
   .pet-react-play { animation: pet-react-play 1.55s ease-in-out both; }
   .pet-react-pet { animation: pet-react-pet 1.35s ease-in-out both; }
@@ -344,7 +344,7 @@ function PetRoom({
   const isWaterSwimmer = petId === 'shikoiruka'
   const activeWalkTransform = walkMotion.active
     ? isWaterSwimmer
-      ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + ((walkMotion.bob * .55) + (walkMotion.moving ? (walkMotion.frame ? -3 : 3) : 0)) + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.stride * .35) + 'deg) scale(' + (walkMotion.moving ? (walkMotion.frame ? 1.018 : .992) : 1) + ')'
+      ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + (walkMotion.bob * .12) + 'px, 0) scaleX(' + walkMotion.facing + ')'
       : 'translate3d(' + walkMotion.offsetPercent + '%, ' + walkMotion.bob + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.stride * 1.4) + 'deg) scaleY(' + (walkMotion.moving ? (walkMotion.frame ? .985 : 1.012) : 1) + ')'
     : undefined
 
@@ -496,13 +496,13 @@ function PetRoom({
           style={{
             width: roomWidth,
             transform: activeWalkTransform,
-            transition: walkMotion.active ? 'transform 300ms ease-in-out' : undefined,
+            transition: walkMotion.active ? (isWaterSwimmer ? 'transform 680ms linear' : 'transform 300ms ease-in-out') : undefined,
           }}
           data-walking={walkMotion.active || undefined}
         >
           <div
             className="absolute bottom-1 left-1/2 h-7 w-[72%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md transition-transform duration-200"
-            style={{ transform: 'translateX(-50%) scaleX(' + (walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1) + ')' }}
+            style={{ transform: 'translateX(-50%) scaleX(' + (isWaterSwimmer ? .96 : walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1) + ')' }}
             data-pet-shadow
           />
           {petId === 'inmu-festival' ? (

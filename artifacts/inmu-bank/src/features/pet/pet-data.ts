@@ -404,10 +404,10 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       annoyed: shikoirukaAnnoyedImage,
       angry: shikoirukaAngryImage,
     },
-    walk: { enabled: true, frames: [shikoirukaSwim1Image, shikoirukaSwim2Image], distancePercent: 14, tickMs: 360 },
+    walk: { enabled: true, frames: [shikoirukaSwim1Image, shikoirukaSwim2Image], distancePercent: 14, tickMs: 720 },
     messages: { overpetted: 'くすぐったくて泡が出ちゃうよ！' },
     dialogues: {
-      idle: ['ぷかぷかしてるよ！', '水の中は気持ちいいね！', '0721、覚えてくれた？', 'ドピュドピュ', 'イきそう', 'シコシコ'],
+      idle: ['ぷかぷかしてるよ！', '水の中は気持ちいいね！', '0721、覚えてくれた？', 'ドピュドピュ', 'イきそう', 'シコシコ', 'ドピュドピュ', 'イきそう', 'シコシコ'],
       walking: ['すいーっと行くよ！', '水流に乗ってるよ！', '近くまで泳いできたよ！'],
       care: ['ありがとう！', 'もっと泳げそう！', '泡がきらきらしてるね！'],
       feed: ['いただきます！', 'おいしい水分補給だね！'],
