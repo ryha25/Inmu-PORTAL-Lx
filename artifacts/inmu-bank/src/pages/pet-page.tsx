@@ -165,6 +165,11 @@ const PET_ROOM_CSS = `
   .pet-water-bubble { animation: pet-water-bubble 5.8s linear infinite; }
   .pet-room-speaker { animation: pet-room-speaker 1.8s ease-out infinite; }
   .pet-character-motion { animation: pet-idle-float 6.8s ease-in-out infinite; transform-origin: 50% 90%; }
+  @keyframes pet-water-swim-stroke {
+    0%, 100% { transform: translateX(-3px) rotate(-2deg) scaleY(.985); }
+    50% { transform: translateX(6px) rotate(3deg) scaleY(1.018); }
+  }
+  .pet-water-swim-stroke { animation: pet-water-swim-stroke .78s ease-in-out infinite; transform-origin: 58% 58%; }
   .pet-react-feed { animation: pet-react-feed 1.35s ease-out both; }
   .pet-react-play { animation: pet-react-play 1.55s ease-in-out both; }
   .pet-react-pet { animation: pet-react-pet 1.35s ease-in-out both; }
@@ -176,7 +181,7 @@ const PET_ROOM_CSS = `
   .shikoiruka-unlock-ring { animation: shikoiruka-unlock-ring 1.55s ease-out 3.95s forwards; }
   .shikoiruka-unlock-text { opacity: 0; transform: translateY(14px); animation: shikoiruka-unlock-text .72s ease-out 4.3s forwards; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-water-swim-stroke, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text { animation: none; }
   }
 `
 
@@ -336,6 +341,13 @@ function PetRoom({
   onPet: () => void
   onWalk: () => void
 }) {
+  const isWaterSwimmer = petId === 'shikoiruka'
+  const activeWalkTransform = walkMotion.active
+    ? isWaterSwimmer
+      ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + ((walkMotion.bob * .35) + (walkMotion.moving ? (walkMotion.frame ? -5 : 4) : 0)) + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.facing > 0 ? -74 : 74) + 'deg) scale(' + (walkMotion.moving ? (walkMotion.frame ? 1.025 : .985) : 1) + ')'
+      : 'translate3d(' + walkMotion.offsetPercent + '%, ' + walkMotion.bob + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.stride * 1.4) + 'deg) scaleY(' + (walkMotion.moving ? (walkMotion.frame ? .985 : 1.012) : 1) + ')'
+    : undefined
+
   return (
     <section className="relative h-[570px] overflow-hidden rounded-lg border border-fuchsia-400/25 bg-[#080611] shadow-[0_0_46px_rgba(168,85,247,.16)] sm:h-[650px]">
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#100b20_0%,#171026_55%,#0b0811_100%)]" />
@@ -483,10 +495,8 @@ function PetRoom({
           )}
           style={{
             width: roomWidth,
-            transform: walkMotion.active
-              ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + walkMotion.bob + 'px, 0) scaleX(' + walkMotion.facing + ') rotate(' + (walkMotion.stride * 1.4) + 'deg) scaleY(' + (walkMotion.moving ? (walkMotion.frame ? .985 : 1.012) : 1) + ')'
-              : undefined,
-            transition: walkMotion.active ? 'transform 280ms linear' : undefined,
+            transform: activeWalkTransform,
+            transition: walkMotion.active ? 'transform 300ms ease-in-out' : undefined,
           }}
           data-walking={walkMotion.active || undefined}
         >
@@ -502,7 +512,7 @@ function PetRoom({
               src={image}
               alt={name}
               decoding="sync"
-              className={cn('relative z-10 max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform] duration-150', expression === 'petted' && 'scale-[.98] brightness-110')}
+              className={cn('relative z-10 max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform] duration-150', expression === 'petted' && 'scale-[.98] brightness-110', isWaterSwimmer && walkMotion.active && 'pet-water-swim-stroke')}
               data-pet-character
               data-expression={expression}
             />
@@ -1406,6 +1416,7 @@ export function PetPage() {
   const walkingRef = useRef(false)
   const interactionRef = useRef(false)
   const sleepingRef = useRef(false)
+  const shikoirukaSkillGiftAnnouncementRef = useRef<Set<string> | null>(null)
   const expressionRef = useRef<PetExpression>('default')
   const affectionRef = useRef(0)
   const displayedPetId = (ownedPetIds ?? []).includes(selectedPetId) ? selectedPetId : ((ownedPetIds ?? [])[0] ?? 'inmu-festival')
@@ -1536,6 +1547,27 @@ export function PetPage() {
       })
     })
   }, [affectionGifts, markAffectionGiftPointsGranted])
+
+  useEffect(() => {
+    const skillGifts = affectionGifts.filter(gift => gift.id.startsWith('affection-shikoiruka-skill-'))
+    if (!shikoirukaSkillGiftAnnouncementRef.current) {
+      shikoirukaSkillGiftAnnouncementRef.current = new Set(skillGifts.map(gift => gift.id))
+      return
+    }
+
+    const announced = shikoirukaSkillGiftAnnouncementRef.current
+    const latest = [...skillGifts].reverse().find(gift => !announced.has(gift.id))
+    skillGifts.forEach(gift => announced.add(gift.id))
+    if (!latest) return
+
+    const amountSuffix = latest.rewardType !== 'points' && latest.rewardAmount > 1 ? ` x${latest.rewardAmount}` : ''
+    const rewardText = `${latest.rewardLabel}${amountSuffix}`
+    const text = `ドピュッ！ もらえたアイテム: ${rewardText}`
+    setMessage(text)
+    setSpeechBubble(text)
+    if (speechResetTimer.current) clearTimeout(speechResetTimer.current)
+    speechResetTimer.current = setTimeout(() => setSpeechBubble(''), 4200)
+  }, [affectionGifts])
 
   useEffect(() => {
     const preloadUrls = new Set(PET_DEFINITIONS.flatMap(candidate => [
