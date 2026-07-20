@@ -69,6 +69,7 @@ const CONDITION_TYPE_OPTIONS = [
   { value: 'daifugo_win',             label: 'INMU大富豪勝利回数' },
   { value: 'daifugo_challenge_play',  label: 'チャレンジモードプレイ回数' },
   { value: 'daifugo_challenge_win',   label: 'チャレンジモード勝利回数' },
+  { value: 'daifugo_challenge_lv',    label: 'チャレンジレベルN以上に到達（1〜100）' },
 ]
 const NO_VALUE_COND = new Set(['none', 'link_visit', 'follow_x', 'join_discord'])
 const TYPE_CATEGORIES = [

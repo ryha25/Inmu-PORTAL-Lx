@@ -37,6 +37,7 @@ export function ensureDaifugoLinkTables(): Promise<void> {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS "portalGameEvents_user_game_event_idx" ON "portalGameEvents" ("userId", game, "eventType", "createdAt" DESC)`);
+    await pool.query(`ALTER TABLE "portalGameEvents" ADD COLUMN IF NOT EXISTS "challengeLevel" SMALLINT`);
   })().catch(error => {
     tablesPromise = null;
     throw error;
@@ -84,12 +85,22 @@ export async function verifyDaifugoLink(token: string): Promise<PortalGameUser |
 
 export type DaifugoEventType = "play" | "win" | "challenge_play" | "challenge_win";
 
-export async function recordDaifugoEvent(userId: string, eventType: DaifugoEventType, roomId: string | null) {
+export async function recordDaifugoEvent(userId: string, eventType: DaifugoEventType, roomId: string | null, challengeLevel?: number | null) {
   await ensureDaifugoLinkTables();
   await pool.query(
-    `INSERT INTO "portalGameEvents" ("userId", game, "eventType", "roomId") VALUES ($1, $2, $3, $4)`,
-    [userId, DAIFUGO_GAME_ID, eventType, roomId],
+    `INSERT INTO "portalGameEvents" ("userId", game, "eventType", "roomId", "challengeLevel") VALUES ($1, $2, $3, $4, $5)`,
+    [userId, DAIFUGO_GAME_ID, eventType, roomId, challengeLevel ?? null],
   );
+}
+
+export async function getDaifugoMaxChallengeLevel(userId: string): Promise<number> {
+  await ensureDaifugoLinkTables();
+  const { rows } = await pool.query(
+    `SELECT COALESCE(MAX("challengeLevel"), 0)::int AS lv FROM "portalGameEvents"
+     WHERE "userId" = $1 AND game = $2 AND "eventType" IN ('challenge_play', 'challenge_win') AND "challengeLevel" IS NOT NULL`,
+    [userId, DAIFUGO_GAME_ID],
+  );
+  return Number(rows[0]?.lv ?? 0);
 }
 
 export async function getDaifugoEventCount(userId: string, eventType: DaifugoEventType, since?: Date): Promise<number> {

@@ -5,7 +5,7 @@ import { db, pool } from "@workspace/db";
 import { userTable, notificationsTable, profileTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
-import { recordDaifugoEvent, verifyDaifugoLink } from "../services/daifugo-link";
+import { recordDaifugoEvent, verifyDaifugoLink, getDaifugoMaxChallengeLevel } from "../services/daifugo-link";
 
 const router = Router();
 
@@ -156,6 +156,9 @@ router.post("/game-events/daifugo", publicCors, async (req, res): Promise<void> 
   type ValidEventType = typeof VALID_EVENT_TYPES[number];
   const eventType: ValidEventType | null = VALID_EVENT_TYPES.includes(req.body?.eventType) ? req.body.eventType : null;
   const roomId = typeof req.body?.roomId === "string" && req.body.roomId.trim() ? req.body.roomId.trim().slice(0, 120) : null;
+  const rawLevel = req.body?.challengeLevel;
+  const challengeLevel = (typeof rawLevel === "number" && rawLevel >= 1 && rawLevel <= 100)
+    ? Math.floor(rawLevel) : null;
   if (!token || !eventType) {
     res.status(400).json({ error: "token and eventType are required (play/win/challenge_play/challenge_win)" });
     return;
@@ -166,7 +169,7 @@ router.post("/game-events/daifugo", publicCors, async (req, res): Promise<void> 
       res.status(401).json({ error: "invalid_or_expired_link" });
       return;
     }
-    await recordDaifugoEvent(user.userId, eventType, roomId);
+    await recordDaifugoEvent(user.userId, eventType, roomId, challengeLevel);
     res.json({ ok: true });
   } catch (error) {
     console.error("[Daifugo] record event", error);

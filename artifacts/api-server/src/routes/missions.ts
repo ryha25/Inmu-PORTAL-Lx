@@ -54,7 +54,7 @@ import { requireAuth, requireAdmin } from "../middlewares/session";
 import { initializePetCharacterState } from "../services/pet-state-store";
 import { hasActivePetSkill } from "../services/pet-skills";
 import { getLifetimeEarnedPoints } from "../services/lifetime-points";
-import { getDaifugoEventCount } from "../services/daifugo-link";
+import { getDaifugoEventCount, getDaifugoMaxChallengeLevel } from "../services/daifugo-link";
 
 const router = Router();
 
@@ -377,6 +377,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       daifugoChallengeWinDaily,
       daifugoChallengeWinWeekly,
       daifugoChallengeWinTotal,
+      daifugoChallengeMaxLv,
     ] = await Promise.all([
       db.select({ missionId: missionParticipationsTable.missionId, period: missionParticipationsTable.period, status: missionParticipationsTable.status })
         .from(missionParticipationsTable)
@@ -449,6 +450,7 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
       getDaifugoEventCount(userId, "challenge_win", todayStart),
       getDaifugoEventCount(userId, "challenge_win", weekStart),
       getDaifugoEventCount(userId, "challenge_win"),
+      getDaifugoMaxChallengeLevel(userId),
     ]);
 
     // Optionally fetch real on-chain INMU balance
@@ -554,6 +556,8 @@ router.get("/missions", requireAuth, async (req, res): Promise<void> => {
         current = missionType === "daily" ? daifugoChallengePlayDaily : missionType === "weekly" ? daifugoChallengePlayWeekly : daifugoChallengePlayTotal;
       } else if (condType === "daifugo_challenge_win") {
         current = missionType === "daily" ? daifugoChallengeWinDaily : missionType === "weekly" ? daifugoChallengeWinWeekly : daifugoChallengeWinTotal;
+      } else if (condType === "daifugo_challenge_lv") {
+        current = daifugoChallengeMaxLv;
       }
 
       if (current === null) return { conditionMet: null as boolean | null, conditionCurrent: null as number | null };
@@ -800,6 +804,10 @@ async function checkCondition(
   if (condType === "daifugo_challenge_win") {
     const cur = await getDaifugoEventCount(userId, "challenge_win", daifugoSince);
     if (cur < condVal) return { met: false, errorMsg: `チャレンジモードの勝利回数が不足しています（必要: ${condVal}回、現在: ${cur}回）` };
+  }
+  if (condType === "daifugo_challenge_lv") {
+    const cur = await getDaifugoMaxChallengeLevel(userId);
+    if (cur < condVal) return { met: false, errorMsg: `チャレンジレベルが不足しています（必要: Lv${condVal}以上、現在: Lv${cur}）` };
   }
 
   return { met: true };
