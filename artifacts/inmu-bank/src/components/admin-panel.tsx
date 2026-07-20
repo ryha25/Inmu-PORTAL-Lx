@@ -2327,7 +2327,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
             <Button onClick={loadSystemSettings} variant="outline">設定を読み込む</Button>
           ) : (
             <div className="flex flex-col gap-2">
-              {systemSettings.filter(s => s.key !== 'pet_gacha_event_banners').map(s => {
+              {systemSettings.filter(s => !s.key.startsWith('pet_gacha_event_')).map(s => {
                 const isEditing = editingSettingKey === s.key
                 const presets = SYSTEM_SETTING_PRESETS[s.key]
                 return (
