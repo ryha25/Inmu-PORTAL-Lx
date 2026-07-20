@@ -345,11 +345,11 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
     const effectiveTotalBought = Math.min(monthlyBought, monthlyCapacity);
     const available = Math.max(0, effectiveTotalBought - monthlyApplied);
     const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
-    const effectiveLimit = effectiveTotalBought > 0
-      ? Math.min(dailyRemaining, available)
-      : dailyRemaining;
-    // 今月の申請可能残り上限 = 残り日数 × 1日上限
-    const remainingMonthlyCapacity = dailyLimit * remainingDays;
+    // 購入ゼロなら available=0 → effectiveLimit=0（申請不可）
+    const effectiveLimit = Math.min(dailyRemaining, available);
+    // 今月の申請可能残り上限 = min(残り日数 × 1日上限, 購入ベースの残り申請枠)
+    // 購入がなければ available=0 なので残りも0になる
+    const remainingMonthlyCapacity = Math.min(dailyLimit * remainingDays, available);
 
     const rawPetRebateBonuses = petBonusesByUser.get(userId) ?? [];
     const slotRebateRuleActive = isSlotRebateRuleActive(now);
