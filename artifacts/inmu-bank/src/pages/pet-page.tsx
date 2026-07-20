@@ -30,7 +30,7 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
 ]
 
 const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'shikoiruka', 'inmu-festival'])
-const SHIKOIRUKA_UNLOCK_SEEN_KEY = 'inmu-portal:pet:shikoiruka-unlock-seen:v2'
+const SHIKOIRUKA_UNLOCK_SEEN_KEY = 'inmu-portal:pet:shikoiruka-unlock-seen:v3'
 
 const shikoirukaUnlockPreloadCache = new Map<string, Promise<void>>()
 
