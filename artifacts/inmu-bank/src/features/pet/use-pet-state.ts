@@ -575,7 +575,7 @@ function rollShikoirukaSkillGift(now: number): PetAffectionGift {
       createdAt: now,
       rewardType: 'takuya_sunglasses',
       rewardAmount: count,
-      rewardLabel: '拓也のサングラス',
+      rewardLabel: `拓也のサングラス ×${count}`,
       seen: false,
     }
   }
@@ -586,7 +586,7 @@ function rollShikoirukaSkillGift(now: number): PetAffectionGift {
       createdAt: now,
       rewardType: 'cat_headband',
       rewardAmount: count,
-      rewardLabel: '猫のカチューシャ',
+      rewardLabel: `猫のカチューシャ ×${count}`,
       seen: false,
     }
   }
@@ -596,7 +596,7 @@ function rollShikoirukaSkillGift(now: number): PetAffectionGift {
     createdAt: now,
     rewardType: 'premium_food',
     rewardAmount: count,
-    rewardLabel: '高級ごはん',
+    rewardLabel: `高級ごはん ×${count}`,
     seen: false,
   }
 }

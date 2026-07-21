@@ -426,8 +426,8 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     roomImage: shikoirukaRoomImage,
     skill: {
       name: 'ドピュッ！',
-      effect: 'お世話を数回行うとランダムでアイテムを出します。',
-      notes: ['Lv.1から発動', '高級ごはん、散歩アイテム、ポイントなどを抽選'],
+      effect: 'お世話を4、5回行うとランダムでアイテムを出します。',
+      notes: ['Lv.1から発動', '高級ごはん、散歩アイテム、ポイントなどを抽選', '出るアイテムの個数は1〜3個'],
     },
     levelRewards: [
       { level: 10, label: '721ポイント', detail: 'Lv.10到達で自動付与', delivery: '自動付与' },
