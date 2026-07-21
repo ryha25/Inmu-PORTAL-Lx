@@ -17,6 +17,8 @@ const EMPTY_COOLDOWNS = { feed: 0, play: 0 };
 const SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID = "shikoiruka";
 // 2026-07-21 04:00 JST = 2026-07-20 19:00:00 UTC
 const SHIKOIRUKA_DISTRIBUTION_START_UTC = new Date("2026-07-20T19:00:00Z");
+// 2026-07-31 23:59:59 JST = 2026-07-31 14:59:59 UTC
+const SHIKOIRUKA_DISTRIBUTION_END_UTC = new Date("2026-07-31T14:59:59Z");
 
 let tablePromise: Promise<void> | null = null;
 
@@ -124,8 +126,9 @@ export async function initializePetCharacterState(userId: string, characterId: s
 }
 
 export async function ensureShikoirukaDistributionForUser(userId: string): Promise<boolean> {
-  // 配布開始時刻（2026-07-21 04:00 JST）より前は配布しない
-  if (new Date() < SHIKOIRUKA_DISTRIBUTION_START_UTC) return false;
+  // 配布期間（2026-07-21 04:00 JST 〜 2026-07-31 23:59:59 JST）外は配布しない
+  const now = new Date();
+  if (now < SHIKOIRUKA_DISTRIBUTION_START_UTC || now > SHIKOIRUKA_DISTRIBUTION_END_UTC) return false;
   await ensurePetStateTable();
   const inserted = await pool.query(
     `INSERT INTO "userPetCharacters" ("userId", "characterId")
