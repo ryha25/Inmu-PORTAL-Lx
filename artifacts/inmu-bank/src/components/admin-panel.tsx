@@ -126,6 +126,11 @@ type PetLevelRegression = {
   stateUpdatedAt: string | null
 }
 
+type PetLevelAuditResponse = {
+  rows: PetLevelRegression[]
+  historyAvailable: boolean
+}
+
 const CONDITION_TYPE_OPTIONS = [
   { value: 'none',                    label: '条件なし' },
   { value: 'link_visit',              label: 'リンク訪問' },
@@ -623,15 +628,17 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [petLevelRegressions, setPetLevelRegressions] = useState<PetLevelRegression[]>([])
   const [petLevelAuditLoading, setPetLevelAuditLoading] = useState(false)
   const [petLevelAuditLoaded, setPetLevelAuditLoaded] = useState(false)
+  const [petLevelHistoryAvailable, setPetLevelHistoryAvailable] = useState(true)
 
   const loadPetLevelRegressions = useCallback(async () => {
     setPetLevelAuditLoading(true)
     try {
-      const data = await api('/admin/pet-level-regressions', 'GET') as PetLevelRegression[]
-      setPetLevelRegressions(Array.isArray(data) ? data : [])
+      const data = await api('/admin/pet-level-regressions', 'GET') as PetLevelAuditResponse
+      setPetLevelRegressions(Array.isArray(data.rows) ? data.rows : [])
+      setPetLevelHistoryAvailable(data.historyAvailable !== false)
       setPetLevelAuditLoaded(true)
-    } catch {
-      toast.error('PETレベルの確認に失敗しました')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'PETレベルの確認に失敗しました')
     } finally {
       setPetLevelAuditLoading(false)
     }
@@ -1532,7 +1539,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 確認
               </Button>
             </div>
-            {petLevelAuditLoaded && petLevelRegressions.length === 0 && (
+            {petLevelAuditLoaded && !petLevelHistoryAvailable && (
+              <p className="mt-3 text-xs text-amber-300">レベル報酬の受取履歴がないため、過去レベルとの照合はできません</p>
+            )}
+            {petLevelAuditLoaded && petLevelHistoryAvailable && petLevelRegressions.length === 0 && (
               <p className="mt-3 text-xs text-green-400">受取履歴から確認できるレベル低下はありません</p>
             )}
             {petLevelRegressions.length > 0 && (
