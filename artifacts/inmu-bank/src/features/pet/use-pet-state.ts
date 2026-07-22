@@ -1453,9 +1453,10 @@ export function initializeAwardedPetAtLevelOne(petId: string) {
   if (!(petId in PET_BY_ID)) return
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<PetSaveData>
+    const id = petId as PetId
+    if (parsed.pets?.[id] && typeof parsed.pets[id] === 'object') return
     const fallback = createDefaultSave()
     const current = materializeSaveAt(parsed.version ? { ...fallback, ...parsed } as PetSaveData : fallback, Date.now())
-    const id = petId as PetId
     const now = Date.now()
     const next: PetSaveData = {
       ...current,

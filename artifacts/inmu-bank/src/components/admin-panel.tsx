@@ -115,6 +115,17 @@ type TradeTxRow = {
   tradedAt: string
 }
 
+type PetLevelRegression = {
+  userId: string
+  displayName: string
+  characterId: string
+  characterName: string
+  currentLevel: number
+  minimumPreviousLevel: number
+  lastClaimedAt: string | null
+  stateUpdatedAt: string | null
+}
+
 const CONDITION_TYPE_OPTIONS = [
   { value: 'none',                    label: '条件なし' },
   { value: 'link_visit',              label: 'リンク訪問' },
@@ -609,6 +620,22 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [petLevelRegressions, setPetLevelRegressions] = useState<PetLevelRegression[]>([])
+  const [petLevelAuditLoading, setPetLevelAuditLoading] = useState(false)
+  const [petLevelAuditLoaded, setPetLevelAuditLoaded] = useState(false)
+
+  const loadPetLevelRegressions = useCallback(async () => {
+    setPetLevelAuditLoading(true)
+    try {
+      const data = await api('/admin/pet-level-regressions', 'GET') as PetLevelRegression[]
+      setPetLevelRegressions(Array.isArray(data) ? data : [])
+      setPetLevelAuditLoaded(true)
+    } catch {
+      toast.error('PETレベルの確認に失敗しました')
+    } finally {
+      setPetLevelAuditLoading(false)
+    }
+  }, [])
 
   const [tradeRows, setTradeRows] = useState<TradeTxRow[]>([])
   const [tradeLoading, setTradeLoading] = useState(false)
@@ -1494,6 +1521,37 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
 
         {/* ── Users tab ── */}
         <TabsContent value="users" className="flex flex-col gap-3 mt-3">
+          <Card className="border-amber-500/30 bg-amber-500/5 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">PETレベル低下確認</p>
+                <p className="text-[11px] text-muted-foreground">現在Lv.と受取済みレベル報酬を照合します</p>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={loadPetLevelRegressions} disabled={petLevelAuditLoading}>
+                <RefreshCw className={`size-3.5 mr-1.5 ${petLevelAuditLoading ? 'animate-spin' : ''}`} />
+                確認
+              </Button>
+            </div>
+            {petLevelAuditLoaded && petLevelRegressions.length === 0 && (
+              <p className="mt-3 text-xs text-green-400">受取履歴から確認できるレベル低下はありません</p>
+            )}
+            {petLevelRegressions.length > 0 && (
+              <div className="mt-3 flex flex-col gap-2">
+                {petLevelRegressions.map(row => (
+                  <div key={`${row.userId}:${row.characterId}`} className="rounded-md border border-red-500/25 bg-red-500/5 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold truncate">{row.displayName}</span>
+                      <span className="shrink-0 text-red-300">現在 Lv.{row.currentLevel}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {row.characterName} / 過去に少なくとも Lv.{row.minimumPreviousLevel} 到達
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <div className="flex items-center justify-between">
             <button
               type="button"

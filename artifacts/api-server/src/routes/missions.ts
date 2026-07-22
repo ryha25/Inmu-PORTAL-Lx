@@ -938,15 +938,18 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
     }
 
     if (extraReward?.characterId) {
-      await pool.query(
+      const insertedCharacter = await pool.query(
         `INSERT INTO "userPetCharacters" ("userId", "characterId", "sourceMissionId")
          VALUES ($1, $2, $3)
-         ON CONFLICT ("userId", "characterId") DO NOTHING`,
+         ON CONFLICT ("userId", "characterId") DO NOTHING
+         RETURNING "characterId"`,
         [userId, extraReward.characterId, missionId],
       );
-      await initializePetCharacterState(userId, extraReward.characterId).catch(error => {
-        console.error("[Missions] initialize awarded PET state", error);
-      });
+      if (insertedCharacter.rowCount) {
+        await initializePetCharacterState(userId, extraReward.characterId).catch(error => {
+          console.error("[Missions] initialize awarded PET state", error);
+        });
+      }
     }
 
     if (extraReward?.rewardItemType && extraReward.rewardItemAmount > 0) {
@@ -992,6 +995,7 @@ router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
       [req.userId!],
     );
     res.json({
+      userId: req.userId!,
       ownedCharacterIds: rows.map(row => String(row.characterId)),
       characters: Object.entries(PET_CHARACTER_NAMES).map(([id, name]) => ({ id, name })),
       shikoirukaNewlyDistributed,

@@ -32,6 +32,34 @@ function readPetItemCount(items: unknown, camelKey: string, snakeKey: string): n
   return Number.isFinite(count) ? Math.max(0, count) : 0;
 }
 
+function preservePetLevelProgress(existingState: unknown, incomingState: Record<string, any>) {
+  if (!existingState || typeof existingState !== "object" || Array.isArray(existingState)) return;
+  const existingPets = (existingState as Record<string, any>).pets;
+  if (!existingPets || typeof existingPets !== "object" || Array.isArray(existingPets)) return;
+  const incomingPets = incomingState.pets && typeof incomingState.pets === "object" && !Array.isArray(incomingState.pets)
+    ? { ...incomingState.pets }
+    : {};
+
+  for (const [characterId, existingStats] of Object.entries(existingPets)) {
+    if (!existingStats || typeof existingStats !== "object" || Array.isArray(existingStats)) continue;
+    const incomingStats = incomingPets[characterId];
+    if (!incomingStats || typeof incomingStats !== "object" || Array.isArray(incomingStats)) {
+      incomingPets[characterId] = existingStats;
+      continue;
+    }
+    const existingLevel = Math.max(1, Math.floor(Number((existingStats as Record<string, any>).level) || 1));
+    const incomingLevel = Math.max(1, Math.floor(Number(incomingStats.level) || 1));
+    const existingExp = Math.max(0, Math.floor(Number((existingStats as Record<string, any>).exp) || 0));
+    const incomingExp = Math.max(0, Math.floor(Number(incomingStats.exp) || 0));
+    if (incomingLevel < existingLevel) {
+      incomingPets[characterId] = { ...incomingStats, level: existingLevel, exp: existingExp };
+    } else if (incomingLevel === existingLevel && incomingExp < existingExp) {
+      incomingPets[characterId] = { ...incomingStats, exp: existingExp };
+    }
+  }
+  incomingState.pets = incomingPets;
+}
+
 router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensurePetStateTable();
@@ -223,6 +251,10 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
         baselineActivePetIds.length < prevActivePetIds.length;
       state.activePetIds = staleOneSlotOverwrite ? prevActivePetIds : nextActivePetIds;
     }
+
+    // PET levels only move forward. Protect server progress from old tabs,
+    // stale localStorage, and duplicate character-grant initialization.
+    preservePetLevelProgress(existingState, state as Record<string, any>);
 
     // Merge consumable item deltas against the current DB state so rewards from
     // missions, gacha, and other server-side paths are not overwritten by autosave.

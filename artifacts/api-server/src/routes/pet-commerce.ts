@@ -549,13 +549,15 @@ async function initializeCharacterAtLevelOne(client: any, userId: string, charac
   const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1 FOR UPDATE`, [userId]);
   const now = Date.now();
   const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
-  state.pets = { ...(state.pets ?? {}), [characterId]: { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 10 } };
-  state.lastCareAt = { ...(state.lastCareAt ?? {}), [characterId]: { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "play-ball": 0, "play-toy": 0, pet: 0 } };
-  state.cooldownUntil = { ...(state.cooldownUntil ?? {}), [characterId]: { feed: 0, play: 0 } };
-  state.expressions = { ...(state.expressions ?? {}), [characterId]: { kind: "default", until: 0 } };
-  state.petting = { ...(state.petting ?? {}), [characterId]: { count: 0, lastAt: 0 } };
-  state.sleepStartedAt = { ...(state.sleepStartedAt ?? {}), [characterId]: 0 };
-  state.progress = { ...(state.progress ?? {}), [characterId]: { fullnessAt: now, sleepinessAt: now } };
+  if (!state.pets?.[characterId] || typeof state.pets[characterId] !== "object") {
+    state.pets = { ...(state.pets ?? {}), [characterId]: { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 50 } };
+    state.lastCareAt = { ...(state.lastCareAt ?? {}), [characterId]: { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "play-ball": 0, "play-toy": 0, pet: 0 } };
+    state.cooldownUntil = { ...(state.cooldownUntil ?? {}), [characterId]: { feed: 0, play: 0 } };
+    state.expressions = { ...(state.expressions ?? {}), [characterId]: { kind: "default", until: 0 } };
+    state.petting = { ...(state.petting ?? {}), [characterId]: { count: 0, lastAt: 0 } };
+    state.sleepStartedAt = { ...(state.sleepStartedAt ?? {}), [characterId]: 0 };
+    state.progress = { ...(state.progress ?? {}), [characterId]: { fullnessAt: now, sleepinessAt: now } };
+  }
   await client.query(`
     INSERT INTO "userPetStates" ("userId",state,"clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
     ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()

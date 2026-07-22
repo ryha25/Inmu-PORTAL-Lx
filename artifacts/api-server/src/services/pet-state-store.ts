@@ -90,43 +90,57 @@ export function ensurePetStateTable(): Promise<void> {
 
 export async function initializePetCharacterState(userId: string, characterId: string) {
   await ensurePetStateTable();
-  const result = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1`, [userId]);
-  const now = Date.now();
-  const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : {
-    version: 5,
-    selectedPetId: characterId,
-    activePetIds: [characterId],
-    pets: {},
-    lastCareAt: {},
-    cooldownUntil: {},
-    expressions: {},
-    petting: {},
-    sleepStartedAt: {},
-    progress: {},
-    premiumFood: { dailyDate: new Date(now + 9 * 60 * 60 * 1000).toISOString().slice(0, 10), dailyUsed: 0, inventory: 0 },
-    skillState: {},
-  };
-  state.pets = { ...(state.pets ?? {}), [characterId]: { ...DEFAULT_STATS } };
-  state.lastCareAt = { ...(state.lastCareAt ?? {}), [characterId]: { ...EMPTY_ACTIONS } };
-  state.cooldownUntil = { ...(state.cooldownUntil ?? {}), [characterId]: { ...EMPTY_COOLDOWNS } };
-  state.expressions = { ...(state.expressions ?? {}), [characterId]: { kind: "default", until: 0 } };
-  state.petting = { ...(state.petting ?? {}), [characterId]: { count: 0, lastAt: 0 } };
-  state.sleepStartedAt = { ...(state.sleepStartedAt ?? {}), [characterId]: 0 };
-  state.progress = { ...(state.progress ?? {}), [characterId]: { fullnessAt: now, sleepinessAt: now } };
-  state.skillState = { ...(state.skillState ?? {}), [characterId]: true };
-  state.selectedPetId = characterId;
-  state.activePetIds = [characterId];
-  state.version = 7;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1 FOR UPDATE`, [userId]);
+    const now = Date.now();
+    const hasExistingState = Boolean(result.rows[0]?.state && typeof result.rows[0].state === "object");
+    const state = hasExistingState ? result.rows[0].state : {
+      version: 5,
+      selectedPetId: characterId,
+      activePetIds: [characterId],
+      pets: {},
+      lastCareAt: {},
+      cooldownUntil: {},
+      expressions: {},
+      petting: {},
+      sleepStartedAt: {},
+      progress: {},
+      premiumFood: { dailyDate: new Date(now + 9 * 60 * 60 * 1000).toISOString().slice(0, 10), dailyUsed: 0, inventory: 0 },
+      skillState: {},
+    };
 
-  await pool.query(`
-    INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt")
-    VALUES ($1, $2::jsonb, $3)
-    ON CONFLICT ("userId") DO UPDATE SET state = EXCLUDED.state, "clientUpdatedAt" = EXCLUDED."clientUpdatedAt", "updatedAt" = NOW()
-  `, [userId, JSON.stringify(state), now]);
+    // Character grants must be idempotent. Re-granting an owned character must
+    // never reset its level, EXP, care state, or the user's active selections.
+    if (!state.pets?.[characterId] || typeof state.pets[characterId] !== "object") {
+      state.pets = { ...(state.pets ?? {}), [characterId]: { ...DEFAULT_STATS } };
+      state.lastCareAt = { ...(state.lastCareAt ?? {}), [characterId]: { ...EMPTY_ACTIONS } };
+      state.cooldownUntil = { ...(state.cooldownUntil ?? {}), [characterId]: { ...EMPTY_COOLDOWNS } };
+      state.expressions = { ...(state.expressions ?? {}), [characterId]: { kind: "default", until: 0 } };
+      state.petting = { ...(state.petting ?? {}), [characterId]: { count: 0, lastAt: 0 } };
+      state.sleepStartedAt = { ...(state.sleepStartedAt ?? {}), [characterId]: 0 };
+      state.progress = { ...(state.progress ?? {}), [characterId]: { fullnessAt: now, sleepinessAt: now } };
+    }
+    state.skillState = { ...(state.skillState ?? {}), [characterId]: state.skillState?.[characterId] ?? true };
+    state.version = Math.max(7, Number(state.version) || 0);
+
+    await client.query(`
+      INSERT INTO "userPetStates" ("userId", state, "clientUpdatedAt")
+      VALUES ($1, $2::jsonb, $3)
+      ON CONFLICT ("userId") DO UPDATE SET state = EXCLUDED.state, "clientUpdatedAt" = EXCLUDED."clientUpdatedAt", "updatedAt" = NOW()
+    `, [userId, JSON.stringify(state), now]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function ensureShikoirukaDistributionForUser(userId: string): Promise<boolean> {
-  // 配布期間（2026-07-21 04:00 JST 〜 2026-07-31 23:59:59 JST）外は配布しない
+  // Distribution window: 2026-07-21 04:00 JST through 2026-07-31 23:59:59 JST.
   const now = new Date();
   if (now < SHIKOIRUKA_DISTRIBUTION_START_UTC || now > SHIKOIRUKA_DISTRIBUTION_END_UTC) return false;
   await ensurePetStateTable();
