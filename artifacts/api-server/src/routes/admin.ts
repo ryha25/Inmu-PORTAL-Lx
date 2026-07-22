@@ -215,62 +215,56 @@ router.get("/admin/pet-level-regressions", requireAdmin, async (_req, res): Prom
       res.json({ rows: [], historyAvailable: false });
       return;
     }
-    const result = await pool.query(`
-      WITH claimed_levels AS (
-        SELECT
-          "userId",
-          "characterId",
-          MAX("rewardLevel")::int AS "minimumPreviousLevel",
-          MAX("claimedAt") AS "lastClaimedAt"
-        FROM "petLevelRewardClaims"
-        GROUP BY "userId", "characterId"
-      ), current_levels AS (
-        SELECT
-          ups."userId",
-          pet.key AS "characterId",
-          CASE
-            WHEN jsonb_typeof(pet.value->'level') = 'number'
-              THEN GREATEST(1, (pet.value->>'level')::int)
-            ELSE 1
-          END AS "currentLevel",
-          ups."updatedAt"
-        FROM "userPetStates" ups
-        CROSS JOIN LATERAL jsonb_each(
-          CASE
-            WHEN jsonb_typeof(ups.state->'pets') = 'object' THEN ups.state->'pets'
-            ELSE '{}'::jsonb
-          END
-        ) pet
-      )
+    const claimsResult = await pool.query(`
       SELECT
-        claimed."userId",
-        COALESCE(NULLIF(profile."displayName", ''), app_user.name, claimed."userId") AS "displayName",
-        claimed."characterId",
-        COALESCE(current."currentLevel", 1) AS "currentLevel",
-        claimed."minimumPreviousLevel",
-        claimed."lastClaimedAt",
-        current."updatedAt" AS "stateUpdatedAt"
-      FROM claimed_levels claimed
-      LEFT JOIN current_levels current
-        ON current."userId" = claimed."userId"
-       AND current."characterId" = claimed."characterId"
-      LEFT JOIN profile ON profile."userId" = claimed."userId"
-      LEFT JOIN "user" app_user ON app_user.id = claimed."userId"
-      WHERE COALESCE(current."currentLevel", 1) < claimed."minimumPreviousLevel"
-      ORDER BY claimed."minimumPreviousLevel" - COALESCE(current."currentLevel", 1) DESC, "displayName" ASC
+        claims."userId",
+        claims."characterId",
+        MAX(claims."rewardLevel")::int AS "minimumPreviousLevel",
+        MAX(claims."claimedAt") AS "lastClaimedAt",
+        COALESCE(NULLIF(MAX(profile."displayName"), ''), claims."userId") AS "displayName"
+      FROM "petLevelRewardClaims" claims
+      LEFT JOIN profile ON profile."userId" = claims."userId"
+      GROUP BY claims."userId", claims."characterId"
     `);
+    const userIds = [...new Set(claimsResult.rows.map(row => String(row.userId)))];
+    const statesResult = userIds.length > 0
+      ? await pool.query(
+          `SELECT "userId", state, "updatedAt" FROM "userPetStates" WHERE "userId" = ANY($1::text[])`,
+          [userIds],
+        )
+      : { rows: [] };
+    const stateByUserId = new Map(statesResult.rows.map(row => [String(row.userId), row]));
+    const rows = claimsResult.rows.flatMap(row => {
+      const stateRow = stateByUserId.get(String(row.userId));
+      const state = stateRow?.state && typeof stateRow.state === "object" ? stateRow.state as Record<string, unknown> : {};
+      const pets = state.pets && typeof state.pets === "object" ? state.pets as Record<string, unknown> : {};
+      const pet = pets[String(row.characterId)];
+      const petState = pet && typeof pet === "object" ? pet as Record<string, unknown> : {};
+      const parsedLevel = Math.floor(Number(petState.level));
+      const currentLevel = Number.isFinite(parsedLevel) && parsedLevel > 0 ? parsedLevel : 1;
+      const minimumPreviousLevel = Number(row.minimumPreviousLevel);
+      if (currentLevel >= minimumPreviousLevel) return [];
+      return [{
+        ...row,
+        currentLevel,
+        minimumPreviousLevel,
+        stateUpdatedAt: stateRow?.updatedAt ?? null,
+      }];
+    }).sort((a, b) =>
+      (b.minimumPreviousLevel - b.currentLevel) - (a.minimumPreviousLevel - a.currentLevel)
+      || String(a.displayName).localeCompare(String(b.displayName), "ja")
+    );
     res.json({
       historyAvailable: true,
-      rows: result.rows.map(row => ({
+      rows: rows.map(row => ({
         ...row,
         characterName: PET_CHARACTER_NAMES[String(row.characterId)] ?? String(row.characterId),
-        currentLevel: Number(row.currentLevel),
-        minimumPreviousLevel: Number(row.minimumPreviousLevel),
       })),
     });
   } catch (error) {
     console.error("[Admin] pet level regression audit error:", error);
-    res.status(500).json({ error: "PET level audit failed" });
+    const detail = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: `PET level audit failed: ${detail}` });
   }
 });
 
