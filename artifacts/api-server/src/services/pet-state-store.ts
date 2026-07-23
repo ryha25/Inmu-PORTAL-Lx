@@ -7,6 +7,7 @@ export const PET_CHARACTER_NAMES: Record<string, string> = {
   chinge: "チンゲ",
   tdn: "TDN",
   shikoiruka: "シコイルカ",
+  daifugo: "大富豪",
   whip: "ホイップ",
   "inmu-festival": "INMUくん（810祭りVer.）",
 };
@@ -42,6 +43,17 @@ export function ensurePetStateTable(): Promise<void> {
         "sourceMissionId" INTEGER,
         "acquiredAt"      TIMESTAMP NOT NULL DEFAULT NOW(),
         UNIQUE ("userId", "characterId")
+      )
+    `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS "petSkillPointGrants" (
+        "userId" TEXT NOT NULL,
+        "characterId" TEXT NOT NULL,
+        "actionId" TEXT NOT NULL,
+        "careAction" TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("userId", "characterId", "actionId")
       )
     `),
   ]).then(async () => {
@@ -284,4 +296,69 @@ export async function ensureShikoirukaDistributionForUser(userId: string): Promi
     await initializePetCharacterState(userId, SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID);
   }
   return Boolean(inserted.rowCount);
+}
+
+export async function getDaifugoRewardStatus(userId: string) {
+  await ensurePetStateTable();
+  const [progress, ownership] = await Promise.all([
+    pool.query(
+      `SELECT COALESCE(p.highest_cleared_level, 0)::int AS "highestClearedLevel"
+       FROM inmu_game_users u
+       LEFT JOIN inmu_challenge_progress p ON p.game_user_id = u.id
+       WHERE u.portal_user_id = $1
+       LIMIT 1`,
+      [userId],
+    ).catch(() => ({ rows: [] })),
+    pool.query(
+      `SELECT 1 FROM "userPetCharacters"
+       WHERE "userId" = $1 AND "characterId" = 'daifugo'
+       LIMIT 1`,
+      [userId],
+    ),
+  ]);
+  const highestClearedLevel = Math.min(100, Math.max(0, Number(progress.rows[0]?.highestClearedLevel ?? 0)));
+  return {
+    highestClearedLevel,
+    eligible: highestClearedLevel >= 100,
+    claimed: ownership.rows.length > 0,
+  };
+}
+
+export async function claimDaifugoReward(userId: string) {
+  await ensurePetStateTable();
+  const client = await pool.connect();
+  let newlyClaimed = false;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`daifugo-pet:${userId}`]);
+    const progress = await client.query(
+      `SELECT COALESCE(p.highest_cleared_level, 0)::int AS "highestClearedLevel"
+       FROM inmu_game_users u
+       LEFT JOIN inmu_challenge_progress p ON p.game_user_id = u.id
+       WHERE u.portal_user_id = $1
+       LIMIT 1`,
+      [userId],
+    );
+    const highestClearedLevel = Math.min(100, Math.max(0, Number(progress.rows[0]?.highestClearedLevel ?? 0)));
+    if (highestClearedLevel < 100) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "not_eligible" as const, highestClearedLevel };
+    }
+    const inserted = await client.query(
+      `INSERT INTO "userPetCharacters" ("userId", "characterId")
+       VALUES ($1, 'daifugo')
+       ON CONFLICT ("userId", "characterId") DO NOTHING
+       RETURNING "characterId"`,
+      [userId],
+    );
+    newlyClaimed = Boolean(inserted.rowCount);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+  await initializePetCharacterState(userId, "daifugo");
+  return { ok: true as const, newlyClaimed };
 }

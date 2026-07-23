@@ -175,7 +175,7 @@ export async function getSkillLockStatus(userId: string, characterIds: string[])
           [userId, todayStart.toISOString()],
         );
         result[id] = Number(r.rows[0]?.count ?? 0) >= TDN_REROLL_DAILY_LIMIT;
-      } else if (normalized === "shikoiruka") {
+      } else if (normalized === "shikoiruka" || normalized === "daifugo") {
         await ensureDailySkillUseTable();
         const r = await pool.query(
           `SELECT 1 FROM ${DAILY_SKILL_USE_TABLE}

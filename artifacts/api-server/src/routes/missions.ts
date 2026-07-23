@@ -11,7 +11,12 @@ import {
   tradeHistoryTable,
 } from "@workspace/db/schema";
 import { eq, and, sql, gte } from "drizzle-orm";
-import { ensurePetStateTable, ensureShikoirukaDistributionForUser } from "../services/pet-state-store";
+import {
+  claimDaifugoReward,
+  ensurePetStateTable,
+  ensureShikoirukaDistributionForUser,
+  getDaifugoRewardStatus,
+} from "../services/pet-state-store";
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
 const INMU_DECIMALS = 6;
@@ -67,6 +72,7 @@ const PET_CHARACTER_NAMES: Record<string, string> = {
   chinge: "チンゲ",
   tdn: "TDN",
   shikoiruka: "シコイルカ",
+  daifugo: "大富豪",
   whip: "ホイップ",
   "inmu-festival": "INMUくん（810祭りVer.）",
 };
@@ -989,19 +995,40 @@ router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensureRewardTables();
     const shikoirukaNewlyDistributed = await ensureShikoirukaDistributionForUser(req.userId!);
-    const { rows } = await pool.query(
-      `SELECT "characterId", "acquiredAt" FROM "userPetCharacters"
-       WHERE "userId" = $1 ORDER BY "acquiredAt" ASC`,
-      [req.userId!],
-    );
+    const [ownership, daifugoReward] = await Promise.all([
+      pool.query(
+        `SELECT "characterId", "acquiredAt" FROM "userPetCharacters"
+         WHERE "userId" = $1 ORDER BY "acquiredAt" ASC`,
+        [req.userId!],
+      ),
+      getDaifugoRewardStatus(req.userId!),
+    ]);
     res.json({
       userId: req.userId!,
-      ownedCharacterIds: rows.map(row => String(row.characterId)),
+      ownedCharacterIds: ownership.rows.map(row => String(row.characterId)),
       characters: Object.entries(PET_CHARACTER_NAMES).map(([id, name]) => ({ id, name })),
       shikoirukaNewlyDistributed,
+      daifugoReward,
     });
   } catch {
     res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/pet/characters/daifugo/claim", requireAuth, async (req, res): Promise<void> => {
+  try {
+    const result = await claimDaifugoReward(req.userId!);
+    if (!result.ok) {
+      res.status(403).json({
+        error: "チャレンジモードLv.100クリア後に受け取れます",
+        highestClearedLevel: result.highestClearedLevel,
+      });
+      return;
+    }
+    res.json({ ok: true, newlyClaimed: result.newlyClaimed, characterId: "daifugo" });
+  } catch (error) {
+    console.error("[Missions] claim daifugo PET", error);
+    res.status(500).json({ error: "大富豪の受取に失敗しました" });
   }
 });
 

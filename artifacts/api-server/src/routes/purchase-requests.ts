@@ -58,6 +58,8 @@ const PET_PURCHASE_BONUS_RULES = [
   { characterId: "whip", minLevel: 10, source: "level_reward" as const, label: "ホイップ Lv.10報酬", rate: 5, eventOnly: false },
   { characterId: "whip", minLevel: 30, source: "level_reward" as const, label: "ホイップ Lv.30報酬", rate: 5, eventOnly: false },
   { characterId: "shikoiruka", minLevel: 15, source: "level_reward" as const, label: "シコイルカ Lv.15報酬", rate: 7.21, eventOnly: false },
+  { characterId: "daifugo", minLevel: 10, source: "level_reward" as const, label: "大富豪 Lv.10報酬", rate: 5, eventOnly: false },
+  { characterId: "daifugo", minLevel: 30, source: "level_reward" as const, label: "大富豪 Lv.30報酬", rate: 5, eventOnly: false },
 ] as const;
 
 function getSlotBaseRebateRate(unlockedSlots: number): number {

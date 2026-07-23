@@ -29,7 +29,7 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
-const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'shikoiruka', 'inmu-festival'])
+const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'shikoiruka', 'daifugo', 'inmu-festival'])
 const SHIKOIRUKA_UNLOCK_SEEN_KEY_PREFIX = 'inmu-portal:pet:shikoiruka-unlock-seen:v4:'
 
 const shikoirukaUnlockPreloadCache = new Map<string, Promise<void>>()
@@ -324,7 +324,7 @@ function PetRoom({
   name: string
   image: string
   roomWidth: string
-  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water'
+  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water' | 'royal'
   roomImage: string
   expression: PetExpression
   stats: PetStats
@@ -813,6 +813,7 @@ const PET_DISPLAY_NAMES: Record<PetId, string> = {
   tdn: 'TDN',
   whip: 'ホイップ',
   shikoiruka: 'シコイルカ',
+  daifugo: '大富豪',
   'inmu-festival': 'INMUくん（810祭りVer.）',
 }
 
@@ -875,6 +876,48 @@ function getDisplayLevelRewards(pet: PetDefinition, rewardAmounts: PetRewardAmou
   }
 
   return [...pet.levelRewards]
+}
+
+type DaifugoRewardStatus = {
+  highestClearedLevel: number
+  eligible: boolean
+  claimed: boolean
+}
+
+function DaifugoRewardCard({
+  status,
+  busy,
+  onClaim,
+}: {
+  status: DaifugoRewardStatus
+  busy: boolean
+  onClaim: () => void
+}) {
+  if (status.claimed) return null
+  const pet = PET_BY_ID.daifugo
+  return (
+    <section className="flex items-center gap-3 rounded-lg border border-amber-300/30 bg-[linear-gradient(115deg,rgba(120,72,12,.28),rgba(10,8,15,.94))] p-3 shadow-[0_12px_30px_rgba(0,0,0,.28)]">
+      <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-amber-200/25 bg-black/35">
+        <img src={pet.image} alt="" className="h-full w-full object-contain" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase text-amber-300">Challenge reward</p>
+        <h2 className="text-base font-black text-white">大富豪 ★3</h2>
+        <p className="mt-0.5 text-xs text-amber-100/75">
+          チャレンジモード Lv.{status.highestClearedLevel} / 100
+        </p>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        disabled={!status.eligible || busy}
+        onClick={onClaim}
+        className="shrink-0 bg-amber-400 px-3 font-black text-black hover:bg-amber-300 disabled:bg-white/10 disabled:text-white/40"
+      >
+        {busy ? '受取中' : status.eligible ? '受け取る' : '未達成'}
+      </Button>
+    </section>
+  )
 }
 
 const PET_REWARD_STATUS_LABEL: Record<PetRewardRequest['status'], string> = {
@@ -1322,8 +1365,11 @@ export function PetPage() {
   const [petRewardAmounts, setPetRewardAmounts] = useState(DEFAULT_PET_REWARD_AMOUNTS)
   const [rewardRequests, setRewardRequests] = useState<PetRewardRequest[]>([])
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
+  const [daifugoReward, setDaifugoReward] = useState<DaifugoRewardStatus | null>(null)
+  const [daifugoClaimBusy, setDaifugoClaimBusy] = useState(false)
   const levelRewardSyncRef = useRef(new Set<string>())
   const walkPointGrantRef = useRef(new Set<string>())
+  const daifugoWalkSkillRef = useRef<Set<string> | null>(null)
   const affectionGiftPointGrantRef = useRef(new Set<string>())
   const [balances, setBalances] = useState({ inmu: 0, points: 0 })
 
@@ -1499,7 +1545,11 @@ export function PetPage() {
   sleepingRef.current = isSleeping
   expressionRef.current = expression
   affectionRef.current = selectedStats.affection
-  const displayImage = canShowWalk && walkMotion.moving ? pet.walk.frames[walkMotion.frame] : pet.expressions[expression]
+  const displayImage = canShowWalk && walkMotion.moving
+    ? pet.walk.frames[walkMotion.frame]
+    : isSleeping && pet.sleepImage
+      ? pet.sleepImage
+      : pet.expressions[expression]
 
   useEffect(() => {
     const latest = walks.results.find(result => result.petId === displayedPetId && !result.seen)
@@ -1526,6 +1576,51 @@ export function PetPage() {
       })
     })
   }, [markWalkPointsGranted, walks.results])
+
+  useEffect(() => {
+    if (!skillActiveCharacterIds.includes('daifugo')) return
+    if (!daifugoWalkSkillRef.current) {
+      daifugoWalkSkillRef.current = new Set(
+        walks.results.filter(result => result.seen).map(result => `walk:${result.id}`),
+      )
+    }
+    walks.results.forEach(result => {
+      const actionId = `walk:${result.id}`
+      if (daifugoWalkSkillRef.current?.has(actionId)) return
+      daifugoWalkSkillRef.current?.add(actionId)
+      void fetch('/api/pet/skill-use', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: 'daifugo', careAction: 'walk', actionId }),
+      }).then(async response => {
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) return
+        if (Number(data.pointsGranted) > 0) {
+          setBalances(current => ({ ...current, points: Number(data.remainingBalance) || current.points + Number(data.pointsGranted) }))
+          setMessage(`億万長者: ${Number(data.pointsGranted).toLocaleString('ja-JP')}ポイント獲得`)
+        }
+        void refreshSkillLockStatus()
+      }).catch(() => {
+        daifugoWalkSkillRef.current?.delete(actionId)
+      })
+    })
+  }, [refreshSkillLockStatus, skillActiveCharacterIds, walks.results])
+
+  useEffect(() => {
+    const onSkillPoints = (event: Event) => {
+      const detail = (event as CustomEvent<{ pointsGranted?: number; remainingBalance?: number }>).detail
+      const pointsGranted = Number(detail?.pointsGranted ?? 0)
+      if (pointsGranted <= 0) return
+      setBalances(current => ({
+        ...current,
+        points: Number.isFinite(Number(detail?.remainingBalance)) ? Number(detail.remainingBalance) : current.points + pointsGranted,
+      }))
+      setMessage(`億万長者: ${pointsGranted.toLocaleString('ja-JP')}ポイント獲得`)
+    }
+    window.addEventListener('inmu-pet-skill-points', onSkillPoints)
+    return () => window.removeEventListener('inmu-pet-skill-points', onSkillPoints)
+  }, [])
 
   useEffect(() => {
     const pending = affectionGifts.filter(gift => gift.rewardType === 'points' && gift.pointsGrantStatus !== 'granted')
@@ -1588,8 +1683,13 @@ export function PetPage() {
       try {
         const response = await fetch('/api/pet/characters', { credentials: 'include' })
         if (!response.ok) throw new Error('ownership fetch failed')
-        const data = await response.json() as { ownedCharacterIds?: string[]; shikoirukaNewlyDistributed?: boolean }
+        const data = await response.json() as {
+          ownedCharacterIds?: string[]
+          shikoirukaNewlyDistributed?: boolean
+          daifugoReward?: DaifugoRewardStatus
+        }
         if (cancelled) return
+        setDaifugoReward(data.daifugoReward ?? null)
         const owned = (data.ownedCharacterIds ?? [])
           .filter((id): id is PetId => Boolean(PET_BY_ID[id as PetId]) && USER_VISIBLE_PET_IDS.has(id as PetId))
           .filter((id, index, list) => list.indexOf(id) === index)
@@ -1625,6 +1725,28 @@ export function PetPage() {
       window.removeEventListener('inmu-pet-ownership-changed', loadOwnership)
     }
   }, [selectedPetId])
+
+  async function claimDaifugoCharacter() {
+    if (!daifugoReward?.eligible || daifugoClaimBusy) return
+    setDaifugoClaimBusy(true)
+    try {
+      const response = await fetch('/api/pet/characters/daifugo/claim', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error ?? '大富豪の受取に失敗しました')
+      setDaifugoReward(current => current ? { ...current, claimed: true } : current)
+      setOwnedPetIds(current => current?.includes('daifugo') ? current : [...(current ?? []), 'daifugo'])
+      selectPet('daifugo')
+      window.dispatchEvent(new Event('inmu-pet-ownership-changed'))
+      toast.success('大富豪を受け取りました')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '大富豪の受取に失敗しました')
+    } finally {
+      setDaifugoClaimBusy(false)
+    }
+  }
 
   const refreshBalances = useCallback(async (connect = false) => {
     try {
@@ -1969,6 +2091,7 @@ export function PetPage() {
 
         {!isHydrated && <p className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100">育成データを同期しています…</p>}
         {syncError && <p className="rounded-md border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs text-rose-100">{syncError} 一時データを表示しています。</p>}
+        {daifugoReward && <div className="mb-3"><DaifugoRewardCard status={daifugoReward} busy={daifugoClaimBusy} onClaim={claimDaifugoCharacter} /></div>}
 
         {ownedPetIds === null ? (
           <div className="flex min-h-64 items-center justify-center rounded-lg border border-violet-300/15 bg-black/25 text-sm text-muted-foreground">所持キャラクターを読み込んでいます…</div>

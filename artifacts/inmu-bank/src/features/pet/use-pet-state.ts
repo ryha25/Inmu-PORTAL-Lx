@@ -1123,6 +1123,34 @@ export function usePetState() {
     })
   }
 
+  function recordDaifugoSkillRewardIfNeeded(
+    currentSave: Pick<PetSaveData, 'skillActiveCharacterIds' | 'activePetIds'>,
+    careAction: 'feed' | 'play' | 'pet' | 'walk',
+    actionId: string,
+  ) {
+    if (!isPetSkillActive(currentSave, 'daifugo')) return
+    setSkillLockStatus(current => ({ ...current, daifugo: true }))
+    void fetch('/api/pet/skill-use', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId: 'daifugo', careAction, actionId }),
+    }).then(async response => {
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) return
+      if (data.skillLockStatus && typeof data.skillLockStatus === 'object') {
+        setSkillLockStatus(data.skillLockStatus)
+      }
+      if (Number(data.pointsGranted) > 0) {
+        window.dispatchEvent(new CustomEvent('inmu-pet-skill-points', {
+          detail: { pointsGranted: Number(data.pointsGranted), remainingBalance: Number(data.remainingBalance) },
+        }))
+      }
+    }).catch(() => {
+      // Autosave and the next lock refresh reconcile transient request failures.
+    })
+  }
+
   function care(action: PetCareAction, actionNow = Date.now()): PetCareResult | null {
     const config = PET_CARE_CONFIG[action]
     const currentEffective = materializeSaveAt(save, actionNow)
@@ -1159,6 +1187,10 @@ export function usePetState() {
           : config.category === 'feed'
             ? { expression: 'happy', motion: 'feed', message: 'fed' }
             : { expression: 'happy', motion: 'play', message: 'played' }
+    if (result.message !== 'overpetted') {
+      const careAction = action === 'pet' ? 'pet' : config.category
+      recordDaifugoSkillRewardIfNeeded(currentEffective, careAction, `care:${actionNow}:${petId}:${action}`)
+    }
 
     setSave(current => {
       const materialized = materializeSaveAt(current, actionNow)

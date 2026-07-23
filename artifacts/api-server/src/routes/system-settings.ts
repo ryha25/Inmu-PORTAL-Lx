@@ -27,6 +27,7 @@ const DEFAULTS: Record<string, { value: string; description: string }> = {
   reward_tdn_lv30_inmu:        { value: "250000",  description: "TDN Lv.30 報酬INMU（未保存時は共通設定を使用）" },
   reward_whip_lv20_inmu:       { value: "50000",   description: "ホイップ Lv.20 報酬INMU（未保存時は共通設定を使用）" },
   reward_whip_lv30_inmu:       { value: "250000",  description: "ホイップ Lv.30 報酬INMU（未保存時は共通設定を使用）" },
+  reward_daifugo_lv20_inmu:    { value: "20000",   description: "大富豪 Lv.20 報酬INMU" },
   gacha_paid_single_inmu:      { value: "10000",   description: "有償ガチャ1連INMU価格" },
   gacha_paid_eleven_inmu:      { value: "100000",  description: "有償ガチャ11連INMU価格" },
   slot_unlock_2_inmu:          { value: "1000000", description: "スロット解放INMU価格（2枠目）" },
@@ -66,6 +67,7 @@ const PUBLIC_PRICE_KEYS = [
   "reward_tdn_lv30_inmu",
   "reward_whip_lv20_inmu",
   "reward_whip_lv30_inmu",
+  "reward_daifugo_lv20_inmu",
 ] as const;
 
 router.get("/admin/system-settings", requireAdmin, async (_req, res): Promise<void> => {

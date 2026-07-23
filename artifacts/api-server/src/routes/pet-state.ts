@@ -105,7 +105,7 @@ router.get("/pet/skill-lock-status", requireAuth, async (req, res): Promise<void
 
 router.post("/pet/skill-use", requireAuth, async (req, res): Promise<void> => {
   const characterId = String(req.body?.characterId ?? "").trim();
-  if (characterId !== "shikoiruka") {
+  if (characterId !== "shikoiruka" && characterId !== "daifugo") {
     res.status(400).json({ error: "Unsupported PET skill" });
     return;
   }
@@ -120,10 +120,60 @@ router.post("/pet/skill-use", requireAuth, async (req, res): Promise<void> => {
       res.status(400).json({ error: "PET character is not owned" });
       return;
     }
+    if (!activeSkillIds.includes(characterId)) {
+      res.status(409).json({ error: "固有スキル発動枠へセットしてください" });
+      return;
+    }
+
+    let pointsGranted = 0;
+    let remainingBalance: number | undefined;
+    if (characterId === "daifugo") {
+      const actionId = String(req.body?.actionId ?? "").trim();
+      const careAction = String(req.body?.careAction ?? "").trim();
+      if (!/^[a-z0-9:_-]{8,120}$/i.test(actionId) || !["feed", "play", "pet", "walk"].includes(careAction)) {
+        res.status(400).json({ error: "Invalid care action" });
+        return;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const inserted = await client.query(
+          `INSERT INTO "petSkillPointGrants" ("userId", "characterId", "actionId", "careAction", amount)
+           VALUES ($1, 'daifugo', $2, $3, 500)
+           ON CONFLICT ("userId", "characterId", "actionId") DO NOTHING
+           RETURNING amount`,
+          [req.userId!, actionId, careAction],
+        );
+        if (inserted.rowCount) {
+          const month = new Date().toISOString().slice(0, 7);
+          await client.query(
+            `UPDATE profile SET "monthlyPoints" = "monthlyPoints" + 500, "updatedAt" = NOW()
+             WHERE "userId" = $1`,
+            [req.userId!],
+          );
+          await client.query(
+            `INSERT INTO points ("userId", amount, type, source, month)
+             VALUES ($1, 500, 'pet_skill_reward', '大富豪「億万長者」', $2)`,
+            [req.userId!, month],
+          );
+          pointsGranted = 500;
+        }
+        const balance = await client.query(
+          `SELECT COALESCE("monthlyPoints", 0) AS balance FROM profile WHERE "userId" = $1 LIMIT 1`,
+          [req.userId!],
+        );
+        remainingBalance = Number(balance.rows[0]?.balance ?? 0);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
     await recordDailyPetSkillUse(req.userId!, characterId);
-    const statusIds = activeSkillIds.includes(characterId) ? activeSkillIds : [...activeSkillIds, characterId];
-    const skillLockStatus = await getSkillLockStatus(req.userId!, statusIds);
-    res.json({ ok: true, skillLockStatus });
+    const skillLockStatus = await getSkillLockStatus(req.userId!, activeSkillIds);
+    res.json({ ok: true, skillLockStatus, pointsGranted, remainingBalance });
   } catch (error) {
     console.error("[PetState] skill-use", error);
     res.status(500).json({ error: "Failed to record PET skill use" });

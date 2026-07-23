@@ -64,6 +64,17 @@ import shikoirukaPettedImage from '@assets/inmu-pet-shikoiruka-petted-v1.png'
 import shikoirukaSleepyImage from '@assets/inmu-pet-shikoiruka-sleepy-v3.png'
 import shikoirukaSwim1Image from '@assets/inmu-pet-shikoiruka-swim-1-v2.png'
 import shikoirukaSwim2Image from '@assets/inmu-pet-shikoiruka-swim-2-v2.png'
+import daifugoImage from '@assets/inmu-pet-daifugo-v1.png'
+import daifugoAngryImage from '@assets/inmu-pet-daifugo-angry-v1.png'
+import daifugoAnnoyedImage from '@assets/inmu-pet-daifugo-annoyed-v1.png'
+import daifugoBlinkImage from '@assets/inmu-pet-daifugo-blink-v1.png'
+import daifugoHappyImage from '@assets/inmu-pet-daifugo-happy-v1.png'
+import daifugoHungryImage from '@assets/inmu-pet-daifugo-hungry-v1.png'
+import daifugoPettedImage from '@assets/inmu-pet-daifugo-petted-v1.png'
+import daifugoSleepImage from '@assets/inmu-pet-daifugo-sleep-v1.png'
+import daifugoSleepyImage from '@assets/inmu-pet-daifugo-sleepy-v1.png'
+import daifugoWalk1Image from '@assets/inmu-pet-daifugo-walk-1-v1.png'
+import daifugoWalk2Image from '@assets/inmu-pet-daifugo-walk-2-v1.png'
 import nyarushianRoomImage from '@assets/inmu-pet-room-nyarushian-v1.jpg'
 import takuyaRoomImage from '@assets/inmu-pet-room-takuya-v1.jpg'
 import leonRoomImage from '@assets/inmu-pet-room-leon-v1.jpg'
@@ -72,8 +83,9 @@ import chingeRoomImage from '@assets/inmu-pet-room-chinge-v1.jpg'
 import tdnRoomImage from '@assets/inmu-pet-room-tdn-v1.jpg'
 import whipRoomImage from '@assets/inmu-pet-room-whip-v1.jpg'
 import shikoirukaRoomImage from '@assets/inmu-pet-room-shikoiruka-v1.png'
+import daifugoRoomImage from '@assets/inmu-pet-room-daifugo-v1.jpg'
 
-export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'chinge' | 'tdn' | 'whip' | 'shikoiruka' | 'inmu-festival'
+export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'chinge' | 'tdn' | 'whip' | 'shikoiruka' | 'daifugo' | 'inmu-festival'
 export type PetExpression = 'default' | 'blink' | 'happy' | 'sleepy' | 'hungry' | 'petted' | 'affectionate' | 'annoyed' | 'angry'
 
 export type PetDefinition = {
@@ -83,6 +95,7 @@ export type PetDefinition = {
   maxLevel: number
   image: string
   expressions: Record<PetExpression, string>
+  sleepImage?: string
   walk: {
     enabled: boolean
     frames: readonly [string, string]
@@ -113,7 +126,7 @@ export type PetDefinition = {
     angry: number
   }
   roomWidth: string
-  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water'
+  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water' | 'royal'
   roomImage: string
   costume?: {
     id: 'festival-810'
@@ -432,6 +445,55 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
     levelRewards: [
       { level: 10, label: '721ポイント', detail: 'Lv.10到達で自動付与', delivery: '自動付与' },
       { level: 15, label: '4,545ポイント + 購入申請還元率 +7.21%', detail: 'Lv.15到達でポイント報酬と還元率7.21%が適用', delivery: '自動付与', rebateBonus: 7.21 },
+    ],
+  },
+  {
+    id: 'daifugo',
+    name: '大富豪',
+    rarity: 3,
+    maxLevel: 30,
+    image: daifugoImage,
+    expressions: {
+      default: daifugoImage,
+      blink: daifugoBlinkImage,
+      happy: daifugoHappyImage,
+      sleepy: daifugoSleepyImage,
+      hungry: daifugoHungryImage,
+      petted: daifugoPettedImage,
+      affectionate: daifugoPettedImage,
+      annoyed: daifugoAnnoyedImage,
+      angry: daifugoAngryImage,
+    },
+    sleepImage: daifugoSleepImage,
+    walk: { enabled: true, frames: [daifugoWalk1Image, daifugoWalk2Image], distancePercent: 12, tickMs: 520 },
+    messages: { overpetted: '気安く触るな。身の程を知れ。' },
+    dialogues: {
+      idle: ['余の時間は高いぞ。', 'その程度の財産で満足か？', '玉座からの眺めは悪くない。', '庶民も少しは励め。'],
+      walking: ['余のお通りだ。', '道を空けろ。', 'たまには直々に見てやろう。'],
+      care: ['褒美が欲しいのか？', 'まあ、悪くない。', '余に尽くすとは見どころがある。'],
+      feed: ['献上品としては及第点だ。', '次はもっと上等なものを用意しろ。'],
+      play: ['余を退屈させるなよ。', '勝てると思ったか？'],
+      pet: ['特別に許してやる。', '勘違いするな、今日だけだ。'],
+      happy: ['ふん、少しはやるようだな。'],
+      angry: ['無礼者！', '余を誰だと思っている。'],
+      sleeping: ['静かにしろ。余は休む。'],
+      sleepy: ['退屈で眠くなってきたぞ。'],
+      hungry: ['まだ食事の支度もできていないのか？'],
+      affectionate: ['お前なら側に置いてやってもいい。', '余の一番近くを許してやる。'],
+    },
+    reactionDurations: { feed: 4000, play: 4300, pet: 3700, angry: 4700 },
+    roomWidth: 'clamp(235px, 53%, 355px)',
+    roomTheme: 'royal',
+    roomImage: daifugoRoomImage,
+    skill: {
+      name: '億万長者',
+      effect: 'お世話をするたびに500ポイント付与',
+      notes: ['Lv.1から発動', '固有スキルをセットしてお世話した時点でロック', 'ロックは毎日0:00（JST）に解除'],
+    },
+    levelRewards: [
+      { level: 10, label: '購入申請還元率 +5%', detail: 'Lv.10到達で還元率+5%が自動適用', rebateBonus: 5 },
+      { level: 20, label: '20,000 INMU', detail: 'Lv.20到達後に申請できます', delivery: '申請式（承認後送金）', inmuAmount: 20_000 },
+      { level: 30, label: '購入申請還元率 +5% + ？？？', detail: '還元率+5%は到達時に適用。追加報酬は8月10日以降発表', rebateBonus: 5 },
     ],
   },
   {

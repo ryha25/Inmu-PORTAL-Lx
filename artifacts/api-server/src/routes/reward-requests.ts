@@ -29,6 +29,7 @@ const PET_LEVEL_INMU_REWARDS: Record<string, { characterName: string; level: num
   "tdn:30":        { characterName: "TDN",            level: 30, amount: 250_000, settingKey: "reward_gacha_lv30_inmu", characterSettingKey: "reward_tdn_lv30_inmu" },
   "whip:20":       { characterName: "ホイップ",       level: 20, amount: 50_000,  settingKey: "reward_gacha_lv20_inmu", characterSettingKey: "reward_whip_lv20_inmu" },
   "whip:30":       { characterName: "ホイップ",       level: 30, amount: 250_000, settingKey: "reward_gacha_lv30_inmu", characterSettingKey: "reward_whip_lv30_inmu" },
+  "daifugo:20":    { characterName: "大富豪",         level: 20, amount: 20_000,  settingKey: "reward_daifugo_lv20_inmu" },
 };
 
 let rewardRequestTablePromise: Promise<void> | null = null;
