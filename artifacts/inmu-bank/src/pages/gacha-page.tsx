@@ -859,6 +859,7 @@ export function GachaPage() {
   const [freeNextReset,setFreeNextReset] = useState<string|null>(null)
   const [freeLoading,setFreeLoading] = useState(false)
   const [gachaMode,setGachaMode] = useState<'points'|'paid'>('points')
+  const [drawRequestBusy,setDrawRequestBusy] = useState(false)
   const [paidBusy,setPaidBusy] = useState(false)
   const [tdnRerollBusy,setTdnRerollBusy] = useState(false)
   const [paidPity,setPaidPity] = useState(0)
@@ -875,6 +876,19 @@ export function GachaPage() {
   const [paidElevenPrice,setPaidElevenPrice] = useState(100000)
   const [gachaConfig,setGachaConfig] = useState<GachaRuntimeConfig|null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
+  const drawRequestLock = useRef(false)
+
+  const beginDrawRequest = () => {
+    if (drawRequestLock.current) return false
+    drawRequestLock.current = true
+    setDrawRequestBusy(true)
+    return true
+  }
+
+  const endDrawRequest = () => {
+    drawRequestLock.current = false
+    setDrawRequestBusy(false)
+  }
 
   const loadGachaConfig = useCallback(async()=>{
     try{
@@ -1002,6 +1016,7 @@ export function GachaPage() {
     if(phase!=='idle')return
     const cost=type==='multi'?10000:1000
     if(pts<cost){toast.error(`ポイント不足（必要: ${cost.toLocaleString()}pt）`);return}
+    if(!beginDrawRequest())return
     try{
       const res=await fetch('/api/pet-gacha/points',{
         method:'POST',credentials:'include',
@@ -1014,10 +1029,11 @@ export function GachaPage() {
       setResult(r);setRevIdx(0);setNewCharacterRevealIndex(0);setPts(r.newPoints)
       setPhase(r.wasGuaranteed?'guaranteed':'inserting')
     }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
+    finally{endDrawRequest()}
   }
 
   async function spinFree(){
-    if(phase!=='idle'||freeUsed||freeLoading)return
+    if(phase!=='idle'||freeUsed||freeLoading||!beginDrawRequest())return
     setFreeLoading(true)
     try{
       const res=await fetch('/api/gacha/free-spin',{
@@ -1031,7 +1047,7 @@ export function GachaPage() {
       void loadFreeStatus()
       setPhase(normalized.wasGuaranteed?'guaranteed':'inserting')
     }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
-    finally{setFreeLoading(false)}
+    finally{setFreeLoading(false);endDrawRequest()}
   }
 
   async function completePaidGacha(txId:string,pullType:'single'|'eleven'){
@@ -1053,7 +1069,7 @@ export function GachaPage() {
   }
 
   async function spinPaidFree(){
-    if(phase!=='idle'||paidFreeUsed||paidFreeLoading)return
+    if(phase!=='idle'||paidFreeUsed||paidFreeLoading||!beginDrawRequest())return
     setPaidFreeLoading(true)
     try{
       const res=await fetch('/api/pet-gacha/paid-free',{
@@ -1070,11 +1086,11 @@ export function GachaPage() {
       void loadPaidFreeStatus()
       setPhase(hasCharacter?'guaranteed':'inserting')
     }catch(e){toast.error(e instanceof Error?e.message:'エラーが発生しました')}
-    finally{setPaidFreeLoading(false)}
+    finally{setPaidFreeLoading(false);endDrawRequest()}
   }
 
   async function spinPaid(pullType:'single'|'eleven'){
-    if(phase!=='idle'||paidBusy)return
+    if(phase!=='idle'||paidBusy||!beginDrawRequest())return
     const amount=pullType==='eleven'?paidElevenPrice:paidSinglePrice
     if(!getPhantomProvider()){
       if(isMobileBrowser()){
@@ -1082,6 +1098,7 @@ export function GachaPage() {
         toast.info('Phantomアプリで開きます…')
         window.setTimeout(openInPhantomBrowser,400)
       }else toast.error('Phantomウォレットをインストールしてください')
+      endDrawRequest()
       return
     }
     setPaidBusy(true)
@@ -1091,7 +1108,7 @@ export function GachaPage() {
       setPaidStatus('送金を確認しています…')
       await completePaidGacha(txId,pullType)
     }catch(error){toast.error(error instanceof Error?error.message:'INMUガチャに失敗しました')}
-    finally{setPaidBusy(false);setPaidStatus('')}
+    finally{setPaidBusy(false);setPaidStatus('');endDrawRequest()}
   }
 
   useEffect(()=>{
@@ -1132,7 +1149,7 @@ export function GachaPage() {
   },[])
 
   async function spinTdnReroll(){
-    if(phase!=='done'||!result?.tdnReroll||tdnRerollBusy)return
+    if(phase!=='done'||!result?.tdnReroll||tdnRerollBusy||!beginDrawRequest())return
     setTdnRerollBusy(true)
     try{
       const res=await fetch('/api/pet-gacha/tdn-reroll',{
@@ -1155,7 +1172,7 @@ export function GachaPage() {
       void loadCommerceStatus()
       setPhase(normalized.wasGuaranteed?'guaranteed':'inserting')
     }catch(e){toast.error(e instanceof Error?e.message:'再抽選に失敗しました')}
-    finally{setTdnRerollBusy(false)}
+    finally{setTdnRerollBusy(false);endDrawRequest()}
   }
 
   const reset=()=>{clr();setPhase('idle');setResult(null);setRevIdx(0);setNewCharacterRevealIndex(0);setJackpotSeen(false);loadPts();loadHist();loadFreeStatus();loadPaidFreeStatus();loadCommerceStatus();void loadInmuBalance(false)}
@@ -1201,7 +1218,7 @@ export function GachaPage() {
             </button>
           </div>
           <div style={{margin:'8px 12px 0'}}>
-            <button type="button" disabled={paidFreeUsed||paidFreeLoading||phase!=='idle'} onClick={spinPaidFree} style={{width:'100%',padding:'10px 16px',border:`1.5px solid ${paidFreeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:paidFreeUsed||paidFreeLoading?'not-allowed':'pointer',background:paidFreeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:paidFreeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:paidFreeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
+            <button type="button" disabled={paidFreeUsed||paidFreeLoading||drawRequestBusy||phase!=='idle'} onClick={spinPaidFree} style={{width:'100%',padding:'10px 16px',border:`1.5px solid ${paidFreeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:paidFreeUsed||paidFreeLoading||drawRequestBusy?'not-allowed':'pointer',background:paidFreeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:paidFreeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:paidFreeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
                   <p style={{margin:0,fontSize:14,fontWeight:800,color:paidFreeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{paidFreeLoading?'処理中…': paidFreeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${paidFreeRemaining}回）`}</p>
@@ -1227,8 +1244,8 @@ export function GachaPage() {
             <p style={{textAlign:'center',fontSize:9,color:'rgba(255,255,255,.45)',margin:'0 0 8px'}}>※価格により必要INMU数が変動する場合があります(最大値は1連1万INMU/11連10万INMU)</p>
             {paidStatus&&<p style={{textAlign:'center',fontSize:11,color:'#8ee7ff',margin:'0 0 8px'}}>{paidStatus}</p>}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <OrnateButton gold enabled={!paidBusy} onClick={()=>spinPaid('single')} label={paidBusy?'処理中…':'1連ガチャ'} price={`${paidSinglePrice.toLocaleString()} INMU`}/>
-              <OrnateButton gold={false} enabled={!paidBusy} onClick={()=>spinPaid('eleven')} label={paidBusy?'処理中…':'11連ガチャ'} price={`${paidElevenPrice.toLocaleString()} INMU`}/>
+              <OrnateButton gold enabled={!paidBusy&&!drawRequestBusy} onClick={()=>spinPaid('single')} label={paidBusy||drawRequestBusy?'処理中…':'1連ガチャ'} price={`${paidSinglePrice.toLocaleString()} INMU`}/>
+              <OrnateButton gold={false} enabled={!paidBusy&&!drawRequestBusy} onClick={()=>spinPaid('eleven')} label={paidBusy||drawRequestBusy?'処理中…':'11連ガチャ'} price={`${paidElevenPrice.toLocaleString()} INMU`}/>
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,marginTop:12,color:'rgba(255,255,255,.38)',fontSize:9}}><LockKeyhole style={{width:12}}/>送金成功をサーバーで確認後に抽選します</div>
             <div style={{marginTop:10,border:'1px solid rgba(184,134,11,.35)',borderRadius:8,overflow:'hidden'}}>
@@ -1263,7 +1280,7 @@ export function GachaPage() {
             </button>
           </div>
           <div style={{flexShrink:0,background:'linear-gradient(to top,rgba(2,1,10,.99) 84%,transparent)',backdropFilter:'blur(16px)',padding:'6px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))'}}>
-            <button type="button" disabled={freeUsed||freeLoading||phase!=='idle'} onClick={spinFree} style={{width:'100%',marginBottom:8,padding:'10px 16px',border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:freeUsed||freeLoading?'not-allowed':'pointer',background:freeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:freeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
+            <button type="button" disabled={freeUsed||freeLoading||drawRequestBusy||phase!=='idle'} onClick={spinFree} style={{width:'100%',marginBottom:8,padding:'10px 16px',border:`1.5px solid ${freeUsed?'rgba(80,200,120,.2)':'rgba(80,200,120,.75)'}`,borderRadius:8,cursor:freeUsed||freeLoading||drawRequestBusy?'not-allowed':'pointer',background:freeUsed?'linear-gradient(135deg,rgba(20,30,20,.92),rgba(16,24,16,.92))':'linear-gradient(135deg,rgba(20,80,40,.95),rgba(10,50,25,.95))',opacity:freeUsed?0.6:1,position:'relative',overflow:'hidden',boxShadow:freeUsed?'none':'0 4px 18px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.15)',transition:'all .2s'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{textAlign:'left'}}>
                   <p style={{margin:0,fontSize:14,fontWeight:800,color:freeUsed?'rgba(134,239,172,.45)':'rgba(134,239,172,.95)',letterSpacing:'0.04em'}}>{freeLoading?'処理中…': freeUsed?'本日の無料ガチャは使用済みです':`無料ガチャ（残り${freeRemaining}回）`}</p>
@@ -1275,8 +1292,8 @@ export function GachaPage() {
               </div>
             </button>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <OrnateButton gold enabled={pts>=1000&&!ptsLoading} onClick={()=>spin('single')} label="1連ガチャ" price="1,000 pt"/>
-              <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading} onClick={()=>spin('multi')} label="10連ガチャ" price="10,000 pt"/>
+              <OrnateButton gold enabled={pts>=1000&&!ptsLoading&&!drawRequestBusy} onClick={()=>spin('single')} label={drawRequestBusy?'処理中…':'1連ガチャ'} price="1,000 pt"/>
+              <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading&&!drawRequestBusy} onClick={()=>spin('multi')} label={drawRequestBusy?'処理中…':'10連ガチャ'} price="10,000 pt"/>
             </div>
             <PointsPanel pts={pts} loading={ptsLoading}/>
             <div style={{marginTop:7,background:'linear-gradient(135deg,rgba(12,6,2,.92),rgba(6,3,16,.92))',border:'1px solid rgba(184,134,11,.4)',borderRadius:10,backdropFilter:'blur(8px)'}}>
