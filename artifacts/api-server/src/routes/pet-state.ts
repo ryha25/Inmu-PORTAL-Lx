@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
-import { ensurePetStateTable, ensureShikoirukaDistributionForUser, PET_CHARACTER_NAMES } from "../services/pet-state-store";
+import { ensurePetStateTable, ensureShikoirukaDistributionForUser, PET_CHARACTER_NAMES, preserveAndRestorePetLevelProgress } from "../services/pet-state-store";
 import { ensurePetCommerceTables } from "./pet-commerce";
 import { getSkillLockStatus, recordDailyPetSkillUse } from "../services/pet-skills";
 
@@ -65,6 +65,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
     await ensurePetStateTable();
     await ensurePetCommerceTables();
     const shikoirukaGranted = await ensureShikoirukaDistributionForUser(req.userId!);
+    await preserveAndRestorePetLevelProgress(req.userId!);
     const [stateResult, ownershipResult, claimsResult] = await Promise.all([
       pool.query(`SELECT state, "updatedAt" FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]),
       pool.query(`SELECT "characterId" FROM "userPetCharacters" WHERE "userId" = $1 ORDER BY "acquiredAt" ASC`, [req.userId!]),
@@ -302,7 +303,17 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
         SET state = EXCLUDED.state, "clientUpdatedAt" = EXCLUDED."clientUpdatedAt", "updatedAt" = NOW()
         WHERE "userPetStates"."clientUpdatedAt" <= EXCLUDED."clientUpdatedAt"
     `, [req.userId!, serialized, clientUpdatedAt]);
-    res.json({ ok: true, mergedItems });
+    const restoredState = await preserveAndRestorePetLevelProgress(req.userId!);
+    const restoredPets = restoredState?.pets && typeof restoredState.pets === "object"
+      ? Object.fromEntries(Object.entries(restoredState.pets).map(([characterId, stats]) => {
+          const record = stats && typeof stats === "object" ? stats as Record<string, unknown> : {};
+          return [characterId, {
+            level: Math.max(1, Math.floor(Number(record.level) || 1)),
+            exp: Math.max(0, Math.floor(Number(record.exp) || 0)),
+          }];
+        }))
+      : {};
+    res.json({ ok: true, mergedItems, petProgress: restoredPets });
   } catch (error) {
     console.error("[PetState] save", error);
     res.status(500).json({ error: "INMU PETデータの保存に失敗しました" });

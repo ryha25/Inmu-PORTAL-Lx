@@ -47,6 +47,42 @@ export function ensurePetStateTable(): Promise<void> {
   ]).then(async () => {
     await pool.query(`ALTER TABLE "userPetStates" ADD COLUMN IF NOT EXISTS "clientUpdatedAt" BIGINT NOT NULL DEFAULT 0`);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS "petLevelProgressBackups" (
+        "userId" TEXT NOT NULL,
+        "characterId" TEXT NOT NULL,
+        level INTEGER NOT NULL DEFAULT 1,
+        exp INTEGER NOT NULL DEFAULT 0,
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("userId", "characterId")
+      )
+    `);
+    await pool.query(`
+      INSERT INTO "petLevelProgressBackups" ("userId", "characterId", level, exp)
+      SELECT
+        states."userId",
+        pet.key,
+        GREATEST(1, CASE
+          WHEN jsonb_typeof(pet.value->'level') = 'number' THEN (pet.value->>'level')::numeric::integer
+          ELSE 1
+        END),
+        GREATEST(0, CASE
+          WHEN jsonb_typeof(pet.value->'exp') = 'number' THEN (pet.value->>'exp')::numeric::integer
+          ELSE 0
+        END)
+      FROM "userPetStates" states
+      CROSS JOIN LATERAL jsonb_each(
+        CASE WHEN jsonb_typeof(states.state->'pets') = 'object' THEN states.state->'pets' ELSE '{}'::jsonb END
+      ) pet
+      ON CONFLICT ("userId", "characterId") DO UPDATE SET
+        level = GREATEST("petLevelProgressBackups".level, EXCLUDED.level),
+        exp = CASE
+          WHEN EXCLUDED.level > "petLevelProgressBackups".level THEN EXCLUDED.exp
+          WHEN EXCLUDED.level = "petLevelProgressBackups".level THEN GREATEST("petLevelProgressBackups".exp, EXCLUDED.exp)
+          ELSE "petLevelProgressBackups".exp
+        END,
+        "updatedAt" = NOW()
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS "petStateMaintenance" (
         "key" TEXT PRIMARY KEY,
         "appliedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -86,6 +122,99 @@ export function ensurePetStateTable(): Promise<void> {
     throw error;
   });
   return tablePromise;
+}
+
+function readProgress(value: unknown): { level: number; exp: number } {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const level = Math.max(1, Math.floor(Number(record.level) || 1));
+  const exp = Math.max(0, Math.floor(Number(record.exp) || 0));
+  return { level, exp };
+}
+
+export async function preserveAndRestorePetLevelProgress(userId: string) {
+  await ensurePetStateTable();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const stateResult = await client.query(
+      `SELECT state FROM "userPetStates" WHERE "userId" = $1 FOR UPDATE`,
+      [userId],
+    );
+    const state = stateResult.rows[0]?.state;
+    if (!state || typeof state !== "object" || Array.isArray(state)) {
+      await client.query("COMMIT");
+      return null;
+    }
+
+    const stateRecord = state as Record<string, any>;
+    const pets = stateRecord.pets && typeof stateRecord.pets === "object" && !Array.isArray(stateRecord.pets)
+      ? { ...stateRecord.pets }
+      : {};
+    await client.query(`
+      INSERT INTO "petLevelProgressBackups" ("userId", "characterId", level, exp)
+      SELECT
+        $1::text,
+        pet.key,
+        GREATEST(1, CASE
+          WHEN jsonb_typeof(pet.value->'level') = 'number' THEN (pet.value->>'level')::numeric::integer
+          ELSE 1
+        END),
+        GREATEST(0, CASE
+          WHEN jsonb_typeof(pet.value->'exp') = 'number' THEN (pet.value->>'exp')::numeric::integer
+          ELSE 0
+        END)
+      FROM jsonb_each(
+        CASE WHEN jsonb_typeof($2::jsonb->'pets') = 'object' THEN $2::jsonb->'pets' ELSE '{}'::jsonb END
+      ) pet
+      ON CONFLICT ("userId", "characterId") DO UPDATE SET
+        level = GREATEST("petLevelProgressBackups".level, EXCLUDED.level),
+        exp = CASE
+          WHEN EXCLUDED.level > "petLevelProgressBackups".level THEN EXCLUDED.exp
+          WHEN EXCLUDED.level = "petLevelProgressBackups".level THEN GREATEST("petLevelProgressBackups".exp, EXCLUDED.exp)
+          ELSE "petLevelProgressBackups".exp
+        END,
+        "updatedAt" = NOW()
+    `, [userId, JSON.stringify(stateRecord)]);
+
+    const backupResult = await client.query(
+      `SELECT "characterId", level, exp FROM "petLevelProgressBackups" WHERE "userId" = $1`,
+      [userId],
+    );
+    let changed = false;
+    for (const backup of backupResult.rows) {
+      const characterId = String(backup.characterId);
+      const currentStats = pets[characterId];
+      const currentProgress = readProgress(currentStats);
+      const backupLevel = Math.max(1, Number(backup.level) || 1);
+      const backupExp = Math.max(0, Number(backup.exp) || 0);
+      if (currentProgress.level > backupLevel || (currentProgress.level === backupLevel && currentProgress.exp >= backupExp)) {
+        continue;
+      }
+      pets[characterId] = {
+        ...(currentStats && typeof currentStats === "object" ? currentStats : DEFAULT_STATS),
+        level: backupLevel,
+        exp: backupExp,
+      };
+      changed = true;
+    }
+
+    if (changed) {
+      stateRecord.pets = pets;
+      await client.query(
+        `UPDATE "userPetStates" SET state = $2::jsonb, "updatedAt" = NOW() WHERE "userId" = $1`,
+        [userId, JSON.stringify(stateRecord)],
+      );
+    }
+    await client.query("COMMIT");
+    return stateRecord;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function initializePetCharacterState(userId: string, characterId: string) {

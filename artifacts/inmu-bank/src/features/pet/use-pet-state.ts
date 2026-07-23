@@ -74,7 +74,7 @@ export const PET_SLEEP_PETTING_ANGER_COUNT = 3
 // 決めておき、そこまで回復したら途中で目が覚めることがある(オフライン経過でも成立する設計)。
 export const PET_SLEEP_RECOVERY_PER_10_SEC = 1
 export const PET_SLEEP_RECOVERY_PER_SEC = PET_SLEEP_RECOVERY_PER_10_SEC / 10
-export const PET_EARLY_NAP_CHECK_MS = 10 * 1000
+export const PET_EARLY_NAP_CHECK_MS = 60 * 1000
 
 // 入眠開始時の眠気(startValue)から、ランダムに「ここまで回復したら起きる」しきい値を決める。
 // 0に近ければぐっすり眠り、startValueに近ければすぐ目が覚める。
@@ -82,7 +82,7 @@ function rollSleepWakeThreshold(startValue: number): number {
   if (startValue <= 0) return 0
   return Math.random() * startValue
 }
-export const PET_EARLY_NAP_MIN_SLEEPINESS = 20
+export const PET_EARLY_NAP_MIN_SLEEPINESS = 45
 export const PET_FULLNESS_DECAY_MS = 12 * 60 * 1000
 export const PET_SLEEPINESS_GAIN_MS = 10 * 60 * 1000
 export const PET_PREMIUM_DAILY_FREE = 3
@@ -107,7 +107,7 @@ export function getSleepChance(sleepiness: number): number {
   if (sleepiness >= PET_SLEEP_THRESHOLD) return 1
   if (sleepiness < PET_EARLY_NAP_MIN_SLEEPINESS) return 0
   const t = (sleepiness - PET_EARLY_NAP_MIN_SLEEPINESS) / (PET_SLEEP_THRESHOLD - PET_EARLY_NAP_MIN_SLEEPINESS)
-  return Math.min(0.9, Math.pow(t, 2.2) * 0.9)
+  return Math.min(0.25, Math.pow(t, 2.4) * 0.25)
 }
 
 export type PetLevelCurve = { baseExp: number; perLevelExp: number }
@@ -963,6 +963,25 @@ export function usePetState() {
         })
       } else {
         itemsBaselineRef.current = getInventorySnapshot(save)
+      }
+      if (data?.petProgress && typeof data.petProgress === 'object') {
+        setSave(current => {
+          const materialized = materializeSaveAt(current, Date.now())
+          const pets = { ...materialized.pets }
+          let changed = false
+          Object.entries(data.petProgress as Record<string, unknown>).forEach(([rawPetId, progress]) => {
+            if (!PET_BY_ID[rawPetId as PetId] || !progress || typeof progress !== 'object') return
+            const petId = rawPetId as PetId
+            const record = progress as Record<string, unknown>
+            const remoteLevel = Math.max(1, Math.floor(readNumber(record.level, 1)))
+            const remoteExp = Math.max(0, Math.floor(readNumber(record.exp, 0)))
+            const local = pets[petId]
+            if (remoteLevel < local.level || (remoteLevel === local.level && remoteExp <= local.exp)) return
+            pets[petId] = { ...local, level: remoteLevel, exp: remoteExp }
+            changed = true
+          })
+          return changed ? { ...materialized, pets } : current
+        })
       }
       setSyncError(null)
     }).catch(error => setSyncError(error instanceof Error ? error.message : 'INMU PETデータの保存に失敗しました'))
