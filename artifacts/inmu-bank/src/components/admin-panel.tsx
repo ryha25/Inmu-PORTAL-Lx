@@ -3,6 +3,7 @@ import { AdminPetRewardRequests } from '@/components/admin-pet-reward-requests'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -15,7 +16,7 @@ import {
   CheckSquare, Square, Send, Star, Coins,
   WalletCards, History, X as XIcon, MinusCircle, Plus, Edit2, Lock,
   TrendingUp, TrendingDown, RefreshCw, Settings, ShoppingCart,
-  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical, CupSoda, Glasses,
+  CheckCircle2, Clock, XCircle, ArrowUp, ArrowDown, GripVertical, CupSoda, Glasses, Bug, Loader2,
 } from 'lucide-react'
 import type { UserRow } from '@/pages/admin-page'
 import { Connection, PublicKey, Transaction } from '@solana/web3.js'
@@ -335,6 +336,23 @@ type PetGachaHistoryRow = {
   createdAt: string
 }
 
+type BugReportRow = {
+  id: number
+  userId: string
+  displayName: string
+  subject: string
+  message: string
+  pageUrl: string | null
+  userAgent: string | null
+  status: 'open' | 'in_progress' | 'resolved'
+  adminReply: string | null
+  repliedAt: string | null
+  createdAt: string
+  updatedAt: string
+  source?: string
+  challengeCompensated?: boolean
+}
+
 function formatSettingDisplay(key: string, value: string): string {
   if (SYSTEM_SETTING_TYPE[key] === 'boolean') return value === 'true' ? '✅ 有効' : '❌ 無効'
   if (SYSTEM_SETTING_TYPE[key] === 'date') return value || '未設定'
@@ -629,6 +647,42 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [petLevelAuditLoading, setPetLevelAuditLoading] = useState(false)
   const [petLevelAuditLoaded, setPetLevelAuditLoaded] = useState(false)
   const [petLevelHistoryAvailable, setPetLevelHistoryAvailable] = useState(true)
+  const [bugReports, setBugReports] = useState<BugReportRow[]>([])
+  const [bugReportsLoading, setBugReportsLoading] = useState(false)
+  const [bugReplyDrafts, setBugReplyDrafts] = useState<Record<number, string>>({})
+  const [bugStatusDrafts, setBugStatusDrafts] = useState<Record<number, BugReportRow['status']>>({})
+  const [bugSavingId, setBugSavingId] = useState<number | null>(null)
+
+  const loadBugReports = useCallback(async () => {
+    setBugReportsLoading(true)
+    try {
+      const data = await api('/admin/bug-reports', 'GET') as BugReportRow[]
+      const rows = Array.isArray(data) ? data : []
+      setBugReports(rows)
+      setBugReplyDrafts(Object.fromEntries(rows.map(row => [row.id, row.adminReply ?? ''])))
+      setBugStatusDrafts(Object.fromEntries(rows.map(row => [row.id, row.status])))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '不具合報告を取得できませんでした')
+    } finally {
+      setBugReportsLoading(false)
+    }
+  }, [])
+
+  async function saveBugReport(row: BugReportRow) {
+    setBugSavingId(row.id)
+    try {
+      const updated = await api(`/admin/bug-reports/${row.id}`, 'PATCH', {
+        status: bugStatusDrafts[row.id] ?? row.status,
+        adminReply: bugReplyDrafts[row.id] ?? '',
+      }) as BugReportRow & { notificationSent?: boolean }
+      setBugReports(current => current.map(item => item.id === row.id ? { ...item, ...updated } : item))
+      toast.success(updated.notificationSent ? '更新してユーザーへ通知しました' : '報告を更新しました')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '不具合報告を更新できませんでした')
+    } finally {
+      setBugSavingId(null)
+    }
+  }
 
   const loadPetLevelRegressions = useCallback(async () => {
     setPetLevelAuditLoading(true)
@@ -1506,6 +1560,9 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
           <TabsTrigger value="users" className="text-xs py-1.5">Users</TabsTrigger>
           <TabsTrigger value="actions" className="text-xs py-1.5">Actions</TabsTrigger>
           <TabsTrigger value="audit" className="text-xs py-1.5">Audit</TabsTrigger>
+          <TabsTrigger value="bug-reports" className="text-xs py-1.5" onClick={loadBugReports}>
+            <Bug className="size-3 mr-1" />バグ報告
+          </TabsTrigger>
           <TabsTrigger value="missions" className="text-xs py-1.5">Mission</TabsTrigger>
           <TabsTrigger value="gacha" className="text-xs py-1.5" onClick={loadGachaResults}>🎰 ガチャ</TabsTrigger>
           <TabsTrigger value="emergency" className="text-xs py-1.5" onClick={async () => {
@@ -2204,6 +2261,71 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
               })}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="bug-reports" className="flex flex-col gap-3 mt-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold flex items-center gap-2">
+                <Bug className="size-4 text-primary" />バグ報告
+              </p>
+              <p className="text-[11px] text-muted-foreground">回答を保存するとユーザーの通知へ届きます</p>
+            </div>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={loadBugReports} disabled={bugReportsLoading}>
+              <RefreshCw className={`size-3 mr-1 ${bugReportsLoading ? 'animate-spin' : ''}`} />更新
+            </Button>
+          </div>
+
+          {!bugReportsLoading && bugReports.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+              バグ報告はありません
+            </p>
+          )}
+
+          {bugReports.map(row => (
+            <Card key={row.id} className="border-border bg-card p-3 flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold break-words">{row.subject}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {row.displayName} · {new Date(row.createdAt).toLocaleString('ja-JP')}
+                  </p>
+                </div>
+                <select
+                  className="h-8 shrink-0 rounded-md border border-input bg-background px-2 text-xs"
+                  value={bugStatusDrafts[row.id] ?? row.status}
+                  onChange={event => setBugStatusDrafts(current => ({
+                    ...current,
+                    [row.id]: event.target.value as BugReportRow['status'],
+                  }))}
+                >
+                  <option value="open">未対応</option>
+                  <option value="in_progress">対応中</option>
+                  <option value="resolved">対応済み</option>
+                </select>
+              </div>
+
+              <p className="whitespace-pre-wrap break-words rounded-md bg-secondary/50 p-3 text-sm">{row.message}</p>
+
+              <div className="text-[11px] text-muted-foreground break-all">
+                <p>送信元: {row.source === 'daifugo' ? 'INMU大富豪' : 'INMU PORTAL'}</p>
+                {row.challengeCompensated && <p className="font-semibold text-emerald-500">チャレンジ回数を1回補填済み</p>}
+                {row.pageUrl && <p>ページ: {row.pageUrl}</p>}
+                {row.userAgent && <p>環境: {row.userAgent}</p>}
+              </div>
+
+              <Textarea
+                value={bugReplyDrafts[row.id] ?? ''}
+                onChange={event => setBugReplyDrafts(current => ({ ...current, [row.id]: event.target.value }))}
+                placeholder="ユーザーへの回答"
+                rows={4}
+                maxLength={2000}
+              />
+              <Button onClick={() => saveBugReport(row)} disabled={bugSavingId === row.id} className="min-h-10">
+                {bugSavingId === row.id ? <Loader2 className="size-4 animate-spin" /> : '保存して回答'}
+              </Button>
+            </Card>
+          ))}
         </TabsContent>
 
         {/* ── 購入申請 tab ── */}

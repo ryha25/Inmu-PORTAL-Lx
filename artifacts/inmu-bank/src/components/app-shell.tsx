@@ -2,6 +2,7 @@ import { Logo } from '@/components/logo'
 import { LangToggle } from '@/components/lang-toggle'
 import { AdSlot, canRenderAdSlot } from '@/components/ad-slot'
 import { signOut } from '@/lib/auth-client'
+import { BugReportButton } from '@/components/bug-report-button'
 import { useI18n } from '@/lib/i18n/context'
 import type { TranslationKey } from '@/lib/i18n/dict'
 import { cn } from '@/lib/utils'
@@ -129,6 +130,8 @@ export function AppShell({
           )}
         </main>
       </div>
+
+      <BugReportButton />
 
       {/* ── Mobile scrollable bottom tab bar ── */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/98 backdrop-blur-md lg:hidden">
