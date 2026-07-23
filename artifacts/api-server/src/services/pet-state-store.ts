@@ -16,6 +16,7 @@ const DEFAULT_STATS = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affectio
 const EMPTY_ACTIONS = { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "play-ball": 0, "play-toy": 0, pet: 0 };
 const EMPTY_COOLDOWNS = { feed: 0, play: 0 };
 const SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID = "shikoiruka";
+const DAIFUGO_TEST_ACCOUNT_NAME = "ガチャテスト";
 // 2026-07-21 04:00 JST = 2026-07-20 19:00:00 UTC
 const SHIKOIRUKA_DISTRIBUTION_START_UTC = new Date("2026-07-20T19:00:00Z");
 // 2026-07-31 23:59:59 JST = 2026-07-31 14:59:59 UTC
@@ -294,6 +295,40 @@ export async function ensureShikoirukaDistributionForUser(userId: string): Promi
   );
   if (inserted.rowCount) {
     await initializePetCharacterState(userId, SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID);
+  }
+  return Boolean(inserted.rowCount);
+}
+
+function normalizeTestAccountName(value: unknown): string {
+  return String(value ?? "").replace(/[\s\u3000]+/g, "").toLowerCase();
+}
+
+export async function ensureDaifugoTestDistributionForUser(userId: string): Promise<boolean> {
+  const account = await pool.query(
+    `SELECT u.name, p."displayName"
+     FROM "user" AS u
+     LEFT JOIN profile AS p ON p."userId" = u.id
+     WHERE u.id = $1
+     LIMIT 1`,
+    [userId],
+  );
+  const row = account.rows[0];
+  const targetName = normalizeTestAccountName(DAIFUGO_TEST_ACCOUNT_NAME);
+  const isTestAccount =
+    normalizeTestAccountName(row?.name) === targetName ||
+    normalizeTestAccountName(row?.displayName) === targetName;
+  if (!isTestAccount) return false;
+
+  await ensurePetStateTable();
+  const inserted = await pool.query(
+    `INSERT INTO "userPetCharacters" ("userId", "characterId")
+     VALUES ($1, 'daifugo')
+     ON CONFLICT ("userId", "characterId") DO NOTHING
+     RETURNING "characterId"`,
+    [userId],
+  );
+  if (inserted.rowCount) {
+    await initializePetCharacterState(userId, "daifugo");
   }
   return Boolean(inserted.rowCount);
 }

@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
-import { ensurePetStateTable, ensureShikoirukaDistributionForUser, PET_CHARACTER_NAMES, preserveAndRestorePetLevelProgress } from "../services/pet-state-store";
+import {
+  ensureDaifugoTestDistributionForUser,
+  ensurePetStateTable,
+  ensureShikoirukaDistributionForUser,
+  PET_CHARACTER_NAMES,
+  preserveAndRestorePetLevelProgress,
+} from "../services/pet-state-store";
 import { ensurePetCommerceTables } from "./pet-commerce";
 import { getSkillLockStatus, recordDailyPetSkillUse } from "../services/pet-skills";
 
@@ -65,6 +71,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
     await ensurePetStateTable();
     await ensurePetCommerceTables();
     const shikoirukaGranted = await ensureShikoirukaDistributionForUser(req.userId!);
+    await ensureDaifugoTestDistributionForUser(req.userId!);
     await preserveAndRestorePetLevelProgress(req.userId!);
     const [stateResult, ownershipResult, claimsResult] = await Promise.all([
       pool.query(`SELECT state, "updatedAt" FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]),
