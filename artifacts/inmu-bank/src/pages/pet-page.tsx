@@ -351,7 +351,9 @@ function PetRoom({
   return (
     <section className="relative h-[570px] overflow-hidden rounded-lg border border-fuchsia-400/25 bg-[#080611] shadow-[0_0_46px_rgba(168,85,247,.16)] sm:h-[650px]">
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#100b20_0%,#171026_55%,#0b0811_100%)]" />
-      <div className="absolute inset-x-[7%] top-0 h-[61%] border-x border-violet-300/5 opacity-80 [background-image:linear-gradient(rgba(255,255,255,.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.02)_1px,transparent_1px)] [background-size:42px_42px]" />
+      {roomTheme !== 'royal' && (
+        <div className="absolute inset-x-[7%] top-0 h-[61%] border-x border-violet-300/5 opacity-80 [background-image:linear-gradient(rgba(255,255,255,.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.02)_1px,transparent_1px)] [background-size:42px_42px]" />
+      )}
       <div className="absolute bottom-[39%] left-0 top-0 w-[8%] bg-gradient-to-r from-black/55 to-violet-950/10 [clip-path:polygon(0_0,100%_7%,100%_100%,0_100%)]" />
       <div className="absolute bottom-[39%] right-0 top-0 w-[8%] bg-gradient-to-l from-black/55 to-violet-950/10 [clip-path:polygon(0_7%,100%_0,100%_100%,0_100%)]" />
       <div className="absolute inset-x-0 bottom-[38.5%] h-2 border-y border-violet-300/10 bg-[#23142d] shadow-[0_2px_9px_rgba(0,0,0,.7)]" />
@@ -360,12 +362,14 @@ function PetRoom({
         <div className="absolute inset-x-[18%] bottom-0 top-[8%] rounded-[50%] border border-fuchsia-400/15 bg-[radial-gradient(ellipse,rgba(126,34,206,.24),rgba(30,18,40,.45)_48%,transparent_70%)] shadow-[inset_0_0_28px_rgba(192,38,211,.08)]" />
       </div>
 
-      <div className="absolute left-4 top-28 h-40 w-28 overflow-hidden rounded-t-[48px] border-2 border-violet-300/15 bg-[#060917] shadow-[inset_0_0_24px_rgba(56,189,248,.1),8px_8px_18px_rgba(0,0,0,.35)] sm:left-8 sm:w-36">
-        <div className="absolute inset-x-0 top-1/2 h-px bg-violet-300/15" />
-        <div className="absolute inset-y-0 left-1/2 w-px bg-violet-300/15" />
-        <div className="absolute bottom-3 left-3 h-9 w-1 bg-fuchsia-400/40 shadow-[12px_-15px_0_rgba(34,211,238,.35),25px_4px_0_rgba(251,191,36,.35),42px_-24px_0_rgba(217,70,239,.3),58px_-3px_0_rgba(96,165,250,.35),74px_-18px_0_rgba(244,114,182,.3)]" />
-        <div className="absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-violet-300/10 to-transparent" />
-      </div>
+      {roomTheme !== 'royal' && (
+        <div className="absolute left-4 top-28 h-40 w-28 overflow-hidden rounded-t-[48px] border-2 border-violet-300/15 bg-[#060917] shadow-[inset_0_0_24px_rgba(56,189,248,.1),8px_8px_18px_rgba(0,0,0,.35)] sm:left-8 sm:w-36">
+          <div className="absolute inset-x-0 top-1/2 h-px bg-violet-300/15" />
+          <div className="absolute inset-y-0 left-1/2 w-px bg-violet-300/15" />
+          <div className="absolute bottom-3 left-3 h-9 w-1 bg-fuchsia-400/40 shadow-[12px_-15px_0_rgba(34,211,238,.35),25px_4px_0_rgba(251,191,36,.35),42px_-24px_0_rgba(217,70,239,.3),58px_-3px_0_rgba(96,165,250,.35),74px_-18px_0_rgba(244,114,182,.3)]" />
+          <div className="absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-violet-300/10 to-transparent" />
+        </div>
+      )}
 
       <div className="absolute left-1/2 top-0 h-16 w-px -translate-x-1/2 bg-violet-200/20" />
       <div className="absolute left-1/2 top-14 h-5 w-24 -translate-x-1/2 rounded-[50%] bg-amber-100/80 shadow-[0_10px_40px_15px_rgba(251,191,36,.17),0_3px_4px_rgba(0,0,0,.6)]" />
