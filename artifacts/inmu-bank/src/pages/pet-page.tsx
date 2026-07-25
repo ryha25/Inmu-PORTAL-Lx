@@ -1059,36 +1059,44 @@ function DaifugoAcquisitionDialog({
       </div>
 
       {/* 大富豪キャラクター */}
-      {phase >= 1 && (
-        <div
-          key="char"
-          className="daifugo-char-reveal relative z-10"
-          style={{ marginBottom: phase >= 2 ? '120px' : '0', transition: 'margin-bottom .6s ease' }}
-        >
-          <img
-            src="/inmu-pet-daifugo-acq.png"
-            alt="大富豪"
-            className={`w-72 drop-shadow-[0_22px_60px_rgba(218,160,0,.75)] ${phase >= 2 ? 'daifugo-char-zoom' : ''}`}
-          />
-        </div>
-      )}
+      <div
+        className="relative z-10"
+        style={{
+          opacity: phase >= 1 ? 1 : 0,
+          transform: `scale(${phase >= 1 ? 1 : .5}) translateY(${phase >= 1 ? 0 : 42}px)`,
+          marginBottom: phase >= 2 ? '120px' : '0',
+          transition: 'opacity 1.5s cubic-bezier(.16,.84,.26,1), transform 1.5s cubic-bezier(.16,.84,.26,1), margin-bottom .6s ease',
+        }}
+      >
+        <img
+          src="/inmu-pet-daifugo-acq.png"
+          alt="大富豪"
+          className={`w-72 drop-shadow-[0_22px_60px_rgba(218,160,0,.75)] ${phase >= 2 ? 'daifugo-char-zoom' : ''}`}
+        />
+      </div>
 
       {/* タイトル＆ボタン */}
-      {phase >= 2 && (
-        <div key="title" className="daifugo-title-in absolute inset-x-5 bottom-10 z-20 text-center">
-          <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-amber-400">Challenge Clear</p>
-          <h1 className="daifugo-title-glow mt-1 text-5xl font-black text-white">大富豪獲得！</h1>
-          <p className="mt-2 text-xs font-bold text-amber-100/75">チャレンジモード Lv.100 クリア報酬</p>
-          <Button
-            type="button"
-            disabled={busy}
-            onClick={isPreview ? onClose : onClaim}
-            className="daifugo-btn-in mt-7 h-12 rounded-full bg-amber-400 px-10 text-base font-black text-black shadow-[0_0_32px_rgba(251,191,36,.7)] hover:bg-amber-300 disabled:opacity-60"
-          >
-            {isPreview ? '閉じる' : busy ? '受取中...' : '育成する'}
-          </Button>
-        </div>
-      )}
+      <div
+        className="absolute inset-x-5 bottom-10 z-20 text-center"
+        style={{
+          opacity: phase >= 2 ? 1 : 0,
+          transform: phase >= 2 ? 'translateY(0)' : 'translateY(24px)',
+          transition: 'opacity .75s cubic-bezier(.16,.84,.26,1), transform .75s cubic-bezier(.16,.84,.26,1)',
+          pointerEvents: phase >= 2 ? 'auto' : 'none',
+        }}
+      >
+        <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-amber-400">Challenge Clear</p>
+        <h1 className="daifugo-title-glow mt-1 text-5xl font-black text-white">大富豪獲得！</h1>
+        <p className="mt-2 text-xs font-bold text-amber-100/75">チャレンジモード Lv.100 クリア報酬</p>
+        <Button
+          type="button"
+          disabled={busy}
+          onClick={isPreview ? onClose : onClaim}
+          className="mt-7 h-12 rounded-full bg-amber-400 px-10 text-base font-black text-black shadow-[0_0_32px_rgba(251,191,36,.7)] hover:bg-amber-300 disabled:opacity-60"
+        >
+          {isPreview ? '閉じる' : busy ? '受取中...' : '育成する'}
+        </Button>
+      </div>
     </div>
   )
 }
