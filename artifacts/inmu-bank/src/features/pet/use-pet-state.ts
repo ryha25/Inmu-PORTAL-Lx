@@ -1165,6 +1165,9 @@ export function usePetState() {
     if (config.category === 'feed' && getActionCooldownRemaining(action, currentEffective.lastCareAt[petId], actionNow) > 0) return null
     if (config.category !== 'pet' && getCareCooldownRemaining(config.category, currentEffective.cooldownUntil[petId], actionNow) > 0) return null
     if (action === 'feed-premium' && getPremiumFoodState(currentEffective.premiumFood, actionNow).totalAvailable <= 0) return null
+    // 大富豪限定制限: 普通ごはん・毛糸・ボールは拒否
+    if (petId === 'daifugo' && action === 'feed-basic') return null
+    if (petId === 'daifugo' && (action === 'play-yarn' || action === 'play-ball')) return null
     recordShikoirukaSkillLockIfNeeded(currentEffective)
 
     const previousPetting = currentEffective.petting[petId]
@@ -1207,6 +1210,9 @@ export function usePetState() {
       if (currentConfig.category !== 'pet' && getCareCooldownRemaining(currentConfig.category, materialized.cooldownUntil[currentPetId], actionNow) > 0) return current
       const premiumState = getPremiumFoodState(materialized.premiumFood, actionNow)
       if (action === 'feed-premium' && premiumState.totalAvailable <= 0) return current
+      // 大富豪限定制限: 普通ごはん・毛糸・ボールは拒否
+      if (currentPetId === 'daifugo' && action === 'feed-basic') return current
+      if (currentPetId === 'daifugo' && (action === 'play-yarn' || action === 'play-ball')) return current
 
       const previous = materialized.petting[currentPetId]
       const savedExpression = materialized.expressions[currentPetId]
@@ -1216,9 +1222,13 @@ export function usePetState() {
       const overpetted = stillAngry || triggeredAnger
       const postDebuffActive = (materialized.walks.postDepressionUntil[currentPetId] ?? 0) > actionNow && (materialized.walks.depressionUntil[currentPetId] ?? 0) <= actionNow
       const affectionDelta = overpetted ? -3 : getModifiedAffection(currentConfig.affection, postDebuffActive)
+      // 大富豪は高級ごはんでも普通ごはんと同じ満腹回復量
+      const effectiveFullness = currentPetId === 'daifugo' && action === 'feed-premium'
+        ? PET_CARE_CONFIG['feed-basic'].fullness
+        : currentConfig.fullness
       const nextStats = addExp({
         ...currentStats,
-        fullness: clamp(currentStats.fullness + currentConfig.fullness),
+        fullness: clamp(currentStats.fullness + effectiveFullness),
         sleepiness: clamp(currentStats.sleepiness + currentConfig.sleepiness),
         affection: clamp(currentStats.affection + affectionDelta),
       }, overpetted ? 0 : getModifiedExp(currentConfig.exp, currentStats.affection, postDebuffActive), currentPetId)
@@ -1371,6 +1381,8 @@ export function usePetState() {
     if (currentWalks.petDaily[petId] === getJstDateKey(walkNow)) return { ok: false, reason: 'pet_daily_limit' }
     if (item === 'takuya_sunglasses' && currentEffective.items.takuyaSunglasses <= 0) return { ok: false, reason: 'no_item' }
     if (item === 'cat_headband' && currentEffective.items.catHeadband <= 0) return { ok: false, reason: 'no_item' }
+    // 大富豪は愛情度50以上でないと散歩しない
+    if (petId === 'daifugo' && currentEffective.pets[petId].affection < 50) return { ok: false, reason: 'low_affection' }
     recordShikoirukaSkillLockIfNeeded(currentEffective)
     const special = petId === 'takuya' && item === 'cat_headband' && Math.random() < PET_WALK_TAKUYA_CAT_EVENT_CHANCE
     const sessionId = `walk-${petId}-${walkNow}-${Math.random().toString(36).slice(2, 8)}`
@@ -1380,6 +1392,8 @@ export function usePetState() {
       const walks = sanitizeWalks(materialized.walks, walkNow)
       const materializedDailyLimit = PET_WALK_DAILY_LIMIT + (isPetSkillActive(materialized, 'whip') ? PET_WALK_WHIP_DAILY_BONUS : 0)
       if (materialized.sleepStartedAt[currentPetId] > 0 || walks.active[currentPetId] || walks.dailyCount >= materializedDailyLimit || walks.petDaily[currentPetId] === getJstDateKey(walkNow)) return current
+      // 大富豪は愛情度50以上でないと散歩しない
+      if (currentPetId === 'daifugo' && materialized.pets[currentPetId].affection < 50) return current
       const items = { ...materialized.items }
       if (item === 'takuya_sunglasses') {
         if (items.takuyaSunglasses <= 0) return current

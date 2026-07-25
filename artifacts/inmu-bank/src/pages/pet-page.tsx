@@ -570,8 +570,10 @@ const CARE_CHOICES: Record<PetCareCategory, Array<{ id: PetCareAction; label: st
   ],
 }
 
-function CareChoiceDialog({ kind, premiumFood, actionCooldowns, onClose, onChoose }: { kind: PetCareCategory | null; premiumFood: PremiumFoodState; actionCooldowns: Partial<Record<PetCareAction, number>>; onClose: () => void; onChoose: (action: PetCareAction) => void }) {
+function CareChoiceDialog({ kind, premiumFood, actionCooldowns, petId, onClose, onChoose }: { kind: PetCareCategory | null; premiumFood: PremiumFoodState; actionCooldowns: Partial<Record<PetCareAction, number>>; petId: string; onClose: () => void; onChoose: (action: PetCareAction) => void }) {
   if (!kind) return null
+  const isDaifugo = petId === 'daifugo'
+  const DAIFUGO_BLOCKED: PetCareAction[] = ['feed-basic', 'play-yarn', 'play-ball']
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
       <DialogContent className="mx-4 max-w-sm border-violet-300/25 bg-[#0b0712]">
@@ -586,11 +588,15 @@ function CareChoiceDialog({ kind, premiumFood, actionCooldowns, onClose, onChoos
           {CARE_CHOICES[kind].map(choice => {
             const Icon = kind === 'feed' ? Utensils : Gamepad2
             const cooldown = actionCooldowns[choice.id] ?? 0
-            const unavailable = cooldown > 0 || (choice.id === 'feed-premium' && premiumFood.totalAvailable <= 0)
+            const blockedForDaifugo = isDaifugo && DAIFUGO_BLOCKED.includes(choice.id)
+            const unavailable = cooldown > 0 || (choice.id === 'feed-premium' && premiumFood.totalAvailable <= 0) || blockedForDaifugo
+            const detailText = isDaifugo && choice.id === 'feed-premium'
+              ? '満腹度 +20 / 愛情度 +10 / EXP +30'
+              : choice.detail
             return (
               <button key={choice.id} type="button" disabled={unavailable} onClick={() => onChoose(choice.id)} className="flex items-center gap-3 rounded-lg border border-violet-300/20 bg-violet-400/5 p-3 text-left transition hover:border-fuchsia-300/45 hover:bg-fuchsia-400/10 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-40">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fuchsia-400/10 text-fuchsia-200"><Icon className="size-5" /></span>
-                <span className="min-w-0"><span className="block font-bold text-white">{choice.label}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{choice.detail}</span>{cooldown > 0 && <span className="mt-1 block font-mono text-[9px] text-cyan-200">{formatCooldown(cooldown)}</span>}{choice.id === 'feed-premium' && <span className="mt-1 block text-[9px] text-amber-200/75">無料分を先に消費し、その後に所持分を使用します</span>}</span>
+                <span className="min-w-0"><span className="block font-bold text-white">{choice.label}</span><span className="mt-1 block text-[10px] leading-relaxed text-muted-foreground">{detailText}</span>{cooldown > 0 && <span className="mt-1 block font-mono text-[9px] text-cyan-200">{formatCooldown(cooldown)}</span>}{blockedForDaifugo && <span className="mt-1 block text-[9px] text-amber-300/80">大富豪はこれを受け付けない</span>}{choice.id === 'feed-premium' && !blockedForDaifugo && <span className="mt-1 block text-[9px] text-amber-200/75">無料分を先に消費し、その後に所持分を使用します</span>}</span>
               </button>
             )
           })}
@@ -1972,6 +1978,7 @@ export function PetPage() {
         daily_limit: '本日の散歩回数は上限です',
         pet_daily_limit: 'このキャラクターは本日すでに散歩済みです',
         no_item: '使用するアイテムを所持していません',
+        low_affection: '愛情度が足りません（50以上必要）',
       }[result.reason] ?? '散歩を開始できません')
       return
     }
@@ -2162,7 +2169,7 @@ export function PetPage() {
           </div>
         )}
       </div>
-      {hasOwnedPet && <CareChoiceDialog kind={careMenu} premiumFood={premiumFood} actionCooldowns={actionCooldowns} onClose={() => setCareMenu(null)} onChoose={handleCare} />}
+      {hasOwnedPet && <CareChoiceDialog kind={careMenu} premiumFood={premiumFood} actionCooldowns={actionCooldowns} petId={displayedPetId} onClose={() => setCareMenu(null)} onChoose={handleCare} />}
       {hasOwnedPet && <WalkChoiceDialog open={walkMenuOpen} walks={walks} dailyLimit={walkDailyLimit} items={items} petId={displayedPetId} onClose={() => setWalkMenuOpen(false)} onChoose={handleStartWalk} />}
       <ShikoirukaUnlockDialog open={shikoirukaUnlockOpen} onClose={() => setShikoirukaUnlockOpen(false)} />
       <WalkResultDialog result={walkResult} onClose={closeWalkResult} />
