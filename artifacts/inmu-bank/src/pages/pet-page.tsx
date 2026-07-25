@@ -197,8 +197,8 @@ const PET_ROOM_CSS = `
     100% { opacity: 0; transform: scale(2.8); }
   }
   @keyframes daifugo-char-reveal {
-    0% { opacity: 0; transform: scale(.5) translateY(42px); filter: blur(18px); }
-    100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+    0% { opacity: 0; transform: scale(.5) translateY(42px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
   }
   @keyframes daifugo-char-zoom {
     0% { transform: scale(1); }
