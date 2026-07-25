@@ -807,7 +807,9 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
       Object.assign(items, giftInventory.items)
       premiumFood = giftInventory.premiumFood
     }
-    const skillGiftRoll = rollShikoirukaSkillGiftAfterCare({ skillActiveCharacterIds, activePetIds }, skillGiftProgress, affectionGifts, now)
+    const skillGiftRoll = petId === 'shikoiruka'
+      ? rollShikoirukaSkillGiftAfterCare({ skillActiveCharacterIds, activePetIds }, skillGiftProgress, affectionGifts, now)
+      : { progress: skillGiftProgress, gifts: affectionGifts, gift: null }
     skillGiftProgress = skillGiftRoll.progress
     affectionGifts = skillGiftRoll.gifts
     if (skillGiftRoll.gift) {
@@ -1187,7 +1189,7 @@ export function usePetState() {
           : config.category === 'feed'
             ? { expression: 'happy', motion: 'feed', message: 'fed' }
             : { expression: 'happy', motion: 'play', message: 'played' }
-    if (result.message !== 'overpetted') {
+    if (result.message !== 'overpetted' && petId === 'daifugo') {
       const careAction = action === 'pet' ? 'pet' : config.category
       recordDaifugoSkillRewardIfNeeded(currentEffective, careAction, `care:${actionNow}:${petId}:${action}`)
     }
@@ -1240,7 +1242,9 @@ export function usePetState() {
           items = giftInventory.items
           premiumFood = giftInventory.premiumFood
         }
-        const skillGiftRoll = rollShikoirukaSkillGiftAfterCare(materialized, skillGiftProgress, affectionGifts, actionNow)
+        const skillGiftRoll = currentPetId === 'shikoiruka'
+          ? rollShikoirukaSkillGiftAfterCare(materialized, skillGiftProgress, affectionGifts, actionNow)
+          : { progress: skillGiftProgress, gifts: affectionGifts, gift: null }
         skillGiftProgress = skillGiftRoll.progress
         affectionGifts = skillGiftRoll.gifts
         if (skillGiftRoll.gift) {
