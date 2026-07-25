@@ -1050,8 +1050,8 @@ function DaifugoAcquisitionDialog({
           style={{ marginBottom: phase >= 2 ? '120px' : '0', transition: 'margin-bottom .6s ease' }}
         >
           <img
-            src={pet.image}
-            alt={pet.name}
+            src="/inmu-pet-daifugo-acq.png"
+            alt="大富豪"
             className={`w-72 drop-shadow-[0_22px_60px_rgba(218,160,0,.75)] ${phase >= 2 ? 'daifugo-char-zoom' : ''}`}
           />
         </div>
