@@ -219,7 +219,7 @@ const PET_ROOM_CSS = `
   .daifugo-light-burst { animation: daifugo-light-burst 3s ease-out forwards; }
   .daifugo-char-reveal { animation: daifugo-char-reveal 1.5s cubic-bezier(.16,.84,.26,1) forwards; }
   .daifugo-char-zoom { animation: daifugo-char-zoom 2.4s ease-in-out infinite alternate; }
-  .daifugo-title-in { animation: daifugo-title-in .75s cubic-bezier(.16,.84,.26,1) forwards; }
+  .daifugo-title-in { animation: daifugo-title-in .75s cubic-bezier(.16,.84,.26,1) both; }
   .daifugo-title-glow { animation: daifugo-title-glow 2.8s ease-in-out infinite; }
   .daifugo-btn-in { animation: daifugo-btn-in .52s ease-out .4s both; }
   @media (prefers-reduced-motion: reduce) {
