@@ -237,7 +237,9 @@ const SYSTEM_SETTING_PRESETS: Record<string, string[]> = {
 }
 
 const SYSTEM_SETTING_TYPE: Record<string, 'number' | 'boolean' | 'date' | 'text' | 'json'> = {
-  event_mode_enabled: 'boolean',
+  maintenance_mode:    'boolean',
+  maintenance_message: 'text',
+  event_mode_enabled:  'boolean',
   event_start_date:   'date',
   event_end_date:     'date',
   pet_gacha_event_name: 'text',
@@ -1098,6 +1100,10 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [editingSettingKey, setEditingSettingKey] = useState<string | null>(null)
   const [settingEditValue, setSettingEditValue] = useState('')
   const [settingSaving, setSettingSaving] = useState(false)
+  // ── メンテナンスモード ──
+  const [editingMaintenanceMsg, setEditingMaintenanceMsg] = useState(false)
+  const [maintenanceMsgDraft, setMaintenanceMsgDraft] = useState('')
+  const [maintenanceSaving, setMaintenanceSaving] = useState(false)
   const [calcInmuPrice, setCalcInmuPrice] = useState<number | null>(null)
   const [calcPriceLoading, setCalcPriceLoading] = useState(false)
   const [calcTargetUsd, setCalcTargetUsd] = useState('20')
@@ -2504,6 +2510,89 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
               <RefreshCw className={`size-3 mr-1 ${settingsLoading ? 'animate-spin' : ''}`} />更新
             </Button>
           </div>
+
+          {/* ── メンテナンスモード専用カード ── */}
+          {(() => {
+            const modeSetting = systemSettings.find(s => s.key === 'maintenance_mode')
+            const msgSetting  = systemSettings.find(s => s.key === 'maintenance_message')
+            const isOn = modeSetting?.value === 'true'
+
+            async function toggleMaintenance() {
+              setMaintenanceSaving(true)
+              try {
+                await api('/admin/system-settings/maintenance_mode', 'PUT', { value: isOn ? 'false' : 'true' })
+                await loadSystemSettings()
+              } catch { toast.error('保存に失敗しました') } finally { setMaintenanceSaving(false) }
+            }
+
+            async function saveMessage() {
+              setMaintenanceSaving(true)
+              try {
+                await api('/admin/system-settings/maintenance_message', 'PUT', { value: maintenanceMsgDraft })
+                await loadSystemSettings()
+                setEditingMaintenanceMsg(false)
+                toast.success('メッセージを保存しました')
+              } catch { toast.error('保存に失敗しました') } finally { setMaintenanceSaving(false) }
+            }
+
+            return (
+              <Card className={`p-4 flex flex-col gap-3 border-2 ${isOn ? 'border-amber-500/60 bg-amber-500/5' : 'border-border/50'}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`size-2.5 rounded-full ${isOn ? 'bg-amber-400 animate-pulse' : 'bg-muted-foreground/40'}`} />
+                    <p className="text-sm font-bold">メンテナンスモード</p>
+                    {isOn && <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded px-1.5 py-0.5">ON</span>}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={isOn ? 'destructive' : 'default'}
+                    className={`h-9 px-4 font-bold text-sm ${isOn ? '' : 'bg-amber-500 hover:bg-amber-600 text-white'}`}
+                    onClick={toggleMaintenance}
+                    disabled={maintenanceSaving || systemSettings.length === 0}
+                  >
+                    {maintenanceSaving ? <RefreshCw className="size-3.5 animate-spin mr-1.5" /> : null}
+                    {isOn ? '解除する' : 'ONにする'}
+                  </Button>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] text-muted-foreground">表示メッセージ</p>
+                    {!editingMaintenanceMsg && (
+                      <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2"
+                        onClick={() => { setMaintenanceMsgDraft(msgSetting?.value ?? ''); setEditingMaintenanceMsg(true) }}>
+                        変更
+                      </Button>
+                    )}
+                  </div>
+                  {editingMaintenanceMsg ? (
+                    <div className="flex flex-col gap-2">
+                      <textarea
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                        rows={3}
+                        value={maintenanceMsgDraft}
+                        onChange={e => setMaintenanceMsgDraft(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" className="flex-1 h-8 text-xs" onClick={saveMessage} disabled={maintenanceSaving}>保存</Button>
+                        <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => setEditingMaintenanceMsg(false)}>キャンセル</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-foreground/80 bg-secondary/30 rounded px-2.5 py-2 whitespace-pre-wrap">
+                      {msgSetting?.value ?? '—'}
+                    </p>
+                  )}
+                </div>
+
+                {isOn && (
+                  <p className="text-[11px] text-amber-400/80 bg-amber-400/5 border border-amber-400/20 rounded px-2 py-1.5">
+                    ⚠️ 現在ユーザーにはメンテナンス画面が表示されています。管理者はそのままアクセス可能です。
+                  </p>
+                )}
+              </Card>
+            )
+          })()}
 
           <div className="rounded-lg border border-border/50 bg-secondary/10 p-3">
             <p className="text-[11px] text-muted-foreground">

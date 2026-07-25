@@ -17,6 +17,7 @@ import { AdminLoginPage } from "@/pages/admin-login-page";
 import { AdminProfilePage } from "@/pages/admin-profile-page";
 import { AdminRankingPage } from "@/pages/admin-ranking-page";
 import { DevLoginPage } from "@/pages/dev-login-page";
+import { MaintenanceOverlay } from "@/components/maintenance-overlay";
 
 const queryClient = new QueryClient();
 
@@ -68,6 +69,7 @@ function App() {
             <Router />
           </WouterRouter>
           <Toaster richColors />
+          <MaintenanceOverlay />
         </I18nProvider>
       </TooltipProvider>
     </QueryClientProvider>

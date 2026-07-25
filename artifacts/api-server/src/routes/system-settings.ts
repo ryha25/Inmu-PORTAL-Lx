@@ -7,6 +7,8 @@ import { requireAdmin } from "../middlewares/session";
 const router = Router();
 
 const DEFAULTS: Record<string, { value: string; description: string }> = {
+  maintenance_mode:            { value: "false",   description: "メンテナンスモード（ON/OFF）" },
+  maintenance_message:         { value: "現在メンテナンス中です。しばらくお待ちください。", description: "メンテナンス中に表示するメッセージ" },
   normal_daily_purchase_limit: { value: "300000",  description: "通常日の1日申請上限（INMU）" },
   event_daily_purchase_limit:  { value: "500000",  description: "イベント日の1日申請上限（INMU）" },
   event_mode_enabled:          { value: "false",   description: "イベント申請モード（ON/OFF）" },
@@ -69,6 +71,18 @@ const PUBLIC_PRICE_KEYS = [
   "reward_whip_lv30_inmu",
   "reward_daifugo_lv20_inmu",
 ] as const;
+
+router.get("/maintenance", async (_req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(systemSettingsTable);
+    const map = new Map(rows.map((row) => [row.key, row.value]));
+    const maintenance = (map.get("maintenance_mode") ?? DEFAULTS.maintenance_mode.value) === "true";
+    const message = map.get("maintenance_message") ?? DEFAULTS.maintenance_message.value;
+    res.json({ maintenance, message });
+  } catch {
+    res.json({ maintenance: false, message: "" });
+  }
+});
 
 router.get("/admin/system-settings", requireAdmin, async (_req, res): Promise<void> => {
   try {
