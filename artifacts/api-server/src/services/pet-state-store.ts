@@ -354,7 +354,7 @@ export async function getDaifugoRewardStatus(userId: string) {
   const highestClearedLevel = Math.min(100, Math.max(0, Number(progress.rows[0]?.highestClearedLevel ?? 0)));
   return {
     highestClearedLevel,
-    eligible: highestClearedLevel >= 100,
+    eligible: highestClearedLevel >= 1,
     claimed: ownership.rows.length > 0,
   };
 }
@@ -375,7 +375,7 @@ export async function claimDaifugoReward(userId: string) {
       [userId],
     );
     const highestClearedLevel = Math.min(100, Math.max(0, Number(progress.rows[0]?.highestClearedLevel ?? 0)));
-    if (highestClearedLevel < 100) {
+    if (highestClearedLevel < 1) {
       await client.query("ROLLBACK");
       return { ok: false as const, reason: "not_eligible" as const, highestClearedLevel };
     }

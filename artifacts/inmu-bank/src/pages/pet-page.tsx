@@ -180,8 +180,50 @@ const PET_ROOM_CSS = `
   .shikoiruka-unlock-approach { animation: shikoiruka-unlock-approach 4.4s cubic-bezier(.16,.86,.25,1) both, shikoiruka-unlock-float 2.8s ease-in-out 4.4s infinite; }
   .shikoiruka-unlock-ring { animation: shikoiruka-unlock-ring 1.55s ease-out 3.95s forwards; }
   .shikoiruka-unlock-text { opacity: 0; transform: translateY(14px); animation: shikoiruka-unlock-text .72s ease-out 4.3s forwards; }
+  @keyframes daifugo-card-fly {
+    0% { transform: translateX(0) scale(.07); opacity: 0; }
+    7% { opacity: 1; }
+    80% { opacity: .9; }
+    100% { transform: translateX(370px) scale(4); opacity: 0; }
+  }
+  @keyframes daifugo-card-tilt {
+    0% { transform: rotateZ(0); }
+    100% { transform: rotateZ(var(--card-spin, 20deg)); }
+  }
+  @keyframes daifugo-light-burst {
+    0% { opacity: 0; transform: scale(.3); }
+    16% { opacity: 1; transform: scale(1.08); }
+    60% { opacity: .75; }
+    100% { opacity: 0; transform: scale(2.8); }
+  }
+  @keyframes daifugo-char-reveal {
+    0% { opacity: 0; transform: scale(.5) translateY(42px); filter: blur(18px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+  }
+  @keyframes daifugo-char-zoom {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.16); }
+  }
+  @keyframes daifugo-title-in {
+    0% { opacity: 0; transform: translateY(24px) scale(.87); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes daifugo-title-glow {
+    0%, 100% { text-shadow: 0 0 28px rgba(251,191,36,.95), 0 0 56px rgba(251,191,36,.48); }
+    50% { text-shadow: 0 0 48px rgba(251,191,36,1), 0 0 100px rgba(251,191,36,.7), 0 4px 10px rgba(255,255,255,.65); }
+  }
+  @keyframes daifugo-btn-in {
+    from { opacity: 0; transform: translateY(13px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .daifugo-light-burst { animation: daifugo-light-burst 3s ease-out forwards; }
+  .daifugo-char-reveal { animation: daifugo-char-reveal 1.5s cubic-bezier(.16,.84,.26,1) forwards; }
+  .daifugo-char-zoom { animation: daifugo-char-zoom 2.4s ease-in-out infinite alternate; }
+  .daifugo-title-in { animation: daifugo-title-in .75s cubic-bezier(.16,.84,.26,1) forwards; }
+  .daifugo-title-glow { animation: daifugo-title-glow 2.8s ease-in-out infinite; }
+  .daifugo-btn-in { animation: daifugo-btn-in .52s ease-out .4s both; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-water-swim-stroke, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-water-swim-stroke, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text, .daifugo-light-burst, .daifugo-char-reveal, .daifugo-char-zoom, .daifugo-title-in, .daifugo-title-glow, .daifugo-btn-in { animation: none; }
   }
 `
 
@@ -930,6 +972,111 @@ function DaifugoRewardCard({
   )
 }
 
+const DAIFUGO_ACQ_CARDS = [
+  { angle: 0,   spin: 22,  delay: 0.04, suit: '♠', face: 'A' },
+  { angle: 30,  spin: -16, delay: 0.17, suit: '♥', face: 'K' },
+  { angle: 60,  spin: 38,  delay: 0.07, suit: '♦', face: 'Q' },
+  { angle: 90,  spin: -24, delay: 0.22, suit: '♣', face: 'J' },
+  { angle: 120, spin: 19,  delay: 0.11, suit: '♠', face: 'K' },
+  { angle: 150, spin: -32, delay: 0.02, suit: '♥', face: 'A' },
+  { angle: 180, spin: 28,  delay: 0.19, suit: '♦', face: '10' },
+  { angle: 210, spin: -13, delay: 0.08, suit: '♣', face: 'A' },
+  { angle: 240, spin: 24,  delay: 0.14, suit: '♠', face: 'Q' },
+  { angle: 270, spin: -36, delay: 0.00, suit: '♥', face: 'J' },
+  { angle: 300, spin: 14,  delay: 0.26, suit: '♦', face: 'K' },
+  { angle: 330, spin: -21, delay: 0.09, suit: '♣', face: 'A' },
+] as const
+
+function DaifugoAcquisitionDialog({
+  open,
+  isPreview = false,
+  busy,
+  onClaim,
+  onClose,
+}: {
+  open: boolean
+  isPreview?: boolean
+  busy: boolean
+  onClaim: () => void
+  onClose: () => void
+}) {
+  const [phase, setPhase] = useState<0 | 1 | 2>(0)
+  const pet = PET_BY_ID.daifugo
+
+  useEffect(() => {
+    if (!open) { setPhase(0); return }
+    setPhase(0)
+    const t1 = setTimeout(() => setPhase(1), 2400)
+    const t2 = setTimeout(() => setPhase(2), 5100)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [open])
+
+  if (!open || !pet) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-[#06030d]">
+      {/* 奥からの光 */}
+      <div className="daifugo-light-burst pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(255,228,90,1)_0%,rgba(255,170,20,0.88)_26%,rgba(210,90,0,0.38)_56%,transparent_76%)] blur-[28px]" />
+      </div>
+
+      {/* 飛んでくるトランプ */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        {DAIFUGO_ACQ_CARDS.map((card, i) => {
+          const isRed = card.suit === '♥' || card.suit === '♦'
+          return (
+            <div key={i} className="absolute" style={{ transform: `rotate(${card.angle}deg)` }}>
+              <div
+                className={`flex h-[76px] w-[52px] flex-col items-center justify-between rounded-[5px] border border-gray-200 bg-white px-[5px] py-[5px] shadow-[0_6px_24px_rgba(0,0,0,.65)] ${isRed ? 'text-red-600' : 'text-gray-900'}`}
+                style={{
+                  animation: `daifugo-card-fly 1.6s cubic-bezier(.24,.6,.38,1) ${card.delay}s both, daifugo-card-tilt 1.6s ease-out ${card.delay}s both`,
+                  ['--card-spin' as string]: `${card.spin}deg`,
+                } as React.CSSProperties}
+              >
+                <span className="self-start text-[9px] font-black leading-none">{card.face}<br />{card.suit}</span>
+                <span className="text-[22px] leading-none">{card.suit}</span>
+                <span className="self-end rotate-180 text-[9px] font-black leading-none">{card.face}<br />{card.suit}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 大富豪キャラクター */}
+      {phase >= 1 && (
+        <div
+          key="char"
+          className="daifugo-char-reveal relative z-10"
+          style={{ marginBottom: phase >= 2 ? '120px' : '0', transition: 'margin-bottom .6s ease' }}
+        >
+          <img
+            src={pet.image}
+            alt={pet.name}
+            className={`w-72 drop-shadow-[0_22px_60px_rgba(218,160,0,.75)] ${phase >= 2 ? 'daifugo-char-zoom' : ''}`}
+          />
+        </div>
+      )}
+
+      {/* タイトル＆ボタン */}
+      {phase >= 2 && (
+        <div key="title" className="daifugo-title-in absolute inset-x-5 bottom-10 z-20 text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-amber-400">Challenge Clear</p>
+          <h1 className="daifugo-title-glow mt-1 text-5xl font-black text-white">大富豪獲得！</h1>
+          <p className="mt-2 text-xs font-bold text-amber-100/75">チャレンジモード Lv.100 クリア報酬</p>
+          <Button
+            type="button"
+            disabled={busy}
+            onClick={isPreview ? onClose : onClaim}
+            className="daifugo-btn-in mt-7 h-12 rounded-full bg-amber-400 px-10 text-base font-black text-black shadow-[0_0_32px_rgba(251,191,36,.7)] hover:bg-amber-300 disabled:opacity-60"
+          >
+            {isPreview ? '閉じる' : busy ? '受取中...' : '育成する'}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const PET_REWARD_STATUS_LABEL: Record<PetRewardRequest['status'], string> = {
   pending: '申請中',
   rejected: '却下',
@@ -1377,6 +1524,8 @@ export function PetPage() {
   const [rewardRequestBusy, setRewardRequestBusy] = useState<string | null>(null)
   const [daifugoReward, setDaifugoReward] = useState<DaifugoRewardStatus | null>(null)
   const [daifugoClaimBusy, setDaifugoClaimBusy] = useState(false)
+  const [daifugoAnimOpen, setDaifugoAnimOpen] = useState(false)
+  const daifugoAnimIsPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('daifugo-preview')
   const levelRewardSyncRef = useRef(new Set<string>())
   const walkPointGrantRef = useRef(new Set<string>())
   const daifugoWalkSkillRef = useRef<Set<string> | null>(null)
@@ -1736,6 +1885,12 @@ export function PetPage() {
     }
   }, [selectedPetId])
 
+  // プレビューパラメータ検出
+  useEffect(() => {
+    if (daifugoAnimIsPreview) setDaifugoAnimOpen(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function claimDaifugoCharacter() {
     if (!daifugoReward?.eligible || daifugoClaimBusy) return
     setDaifugoClaimBusy(true)
@@ -1746,6 +1901,7 @@ export function PetPage() {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error ?? '大富豪の受取に失敗しました')
+      setDaifugoAnimOpen(false)
       setDaifugoReward(current => current ? { ...current, claimed: true } : current)
       setOwnedPetIds(current => current?.includes('daifugo') ? current : [...(current ?? []), 'daifugo'])
       selectPet('daifugo')
@@ -2102,7 +2258,7 @@ export function PetPage() {
 
         {!isHydrated && <p className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100">育成データを同期しています…</p>}
         {syncError && <p className="rounded-md border border-rose-300/25 bg-rose-300/10 px-3 py-2 text-xs text-rose-100">{syncError} 一時データを表示しています。</p>}
-        {daifugoReward && <div className="mb-3"><DaifugoRewardCard status={daifugoReward} busy={daifugoClaimBusy} onClaim={claimDaifugoCharacter} /></div>}
+        {daifugoReward && <div className="mb-3"><DaifugoRewardCard status={daifugoReward} busy={daifugoClaimBusy} onClaim={() => setDaifugoAnimOpen(true)} /></div>}
 
         {ownedPetIds === null ? (
           <div className="flex min-h-64 items-center justify-center rounded-lg border border-violet-300/15 bg-black/25 text-sm text-muted-foreground">所持キャラクターを読み込んでいます…</div>
@@ -2173,6 +2329,13 @@ export function PetPage() {
       {hasOwnedPet && <WalkChoiceDialog open={walkMenuOpen} walks={walks} dailyLimit={walkDailyLimit} items={items} petId={displayedPetId} onClose={() => setWalkMenuOpen(false)} onChoose={handleStartWalk} />}
       <ShikoirukaUnlockDialog open={shikoirukaUnlockOpen} onClose={() => setShikoirukaUnlockOpen(false)} />
       <WalkResultDialog result={walkResult} onClose={closeWalkResult} />
+      <DaifugoAcquisitionDialog
+        open={daifugoAnimOpen}
+        isPreview={daifugoAnimIsPreview}
+        busy={daifugoClaimBusy}
+        onClaim={claimDaifugoCharacter}
+        onClose={() => setDaifugoAnimOpen(false)}
+      />
     </AppShell>
   )
 }
