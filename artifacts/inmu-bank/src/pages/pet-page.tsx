@@ -19,7 +19,7 @@ import { toast } from 'sonner'
 import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, type PetId } from '@/features/pet/pet-data'
 import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, PET_WALK_DAILY_LIMIT, PET_WALK_WHIP_DAILY_BONUS, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState, type PetWalkItem, type PetWalkResult, type PetWalkState } from '@/features/pet/use-pet-state'
 import {
-  BookOpen, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
+  BookOpen, ChevronDown, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
   Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
   CupSoda,
 } from 'lucide-react'
@@ -383,6 +383,7 @@ function PetRoom({
   onPet: () => void
   onWalk: () => void
 }) {
+  const [collapsed, setCollapsed] = useState(false)
   const isWaterSwimmer = petId === 'shikoiruka'
   const activeWalkTransform = walkMotion.active
     ? isWaterSwimmer
@@ -566,35 +567,50 @@ function PetRoom({
         </div>}
       </div>
 
-      <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-violet-300/25 bg-[#090611]/92 p-2 shadow-[0_-10px_30px_rgba(0,0,0,.38)] backdrop-blur-md sm:inset-x-4">
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
-          <StatusBar label="満腹度" value={stats.fullness} display={`${stats.fullness}`} icon={<Utensils className="size-4 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
-          <StatusBar label="眠気" value={stats.sleepiness} display={`${stats.sleepiness}`} icon={<Moon className="size-4 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
-          <StatusBar label="愛情度" value={stats.affection} display={`${stats.affection}`} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
+      <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-violet-300/25 bg-[#090611]/92 shadow-[0_-10px_30px_rgba(0,0,0,.38)] backdrop-blur-md sm:inset-x-4">
+        {/* 折り畳みトグル */}
+        <button
+          type="button"
+          onClick={() => setCollapsed(c => !c)}
+          className="flex w-full items-center justify-center py-1.5 text-violet-300/60 hover:text-violet-200 active:scale-95"
+          aria-label={collapsed ? 'パネルを開く' : 'パネルを閉じる'}
+        >
+          <ChevronDown className={cn('size-4 transition-transform duration-300', collapsed && 'rotate-180')} />
+        </button>
+
+        {/* 折り畳みコンテンツ */}
+        <div className={cn('overflow-hidden transition-all duration-300', collapsed ? 'max-h-0' : 'max-h-96')}>
+          <div className="px-2 pb-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+              <StatusBar label="満腹度" value={stats.fullness} display={`${stats.fullness}`} icon={<Utensils className="size-4 text-pink-300" />} color="linear-gradient(90deg,#fb7185,#f472b6)" />
+              <StatusBar label="眠気" value={stats.sleepiness} display={`${stats.sleepiness}`} icon={<Moon className="size-4 text-cyan-300" />} color="linear-gradient(90deg,#38bdf8,#6366f1)" />
+              <StatusBar label="愛情度" value={stats.affection} display={`${stats.affection}`} icon={<Heart className="size-4 fill-fuchsia-400 text-fuchsia-400" />} color="linear-gradient(90deg,#e879f9,#c084fc)" />
+            </div>
+            <div className="mt-1 flex min-h-3 items-center justify-end">
+              <p className="break-words text-right text-[9px] text-cyan-200" role="status">
+                {isSleeping ? 'すやすや眠っています' : isFull ? '満腹なのでご飯をあげられません' : message}
+              </p>
+            </div>
+            <div className="mt-1 grid grid-cols-2 gap-1.5">
+              {ROOM_ACTIONS.map(action => {
+                const Icon = action.icon
+                const remaining = cooldownRemaining[action.id]
+                const disabled = isWalking || isSleeping || (action.id === 'feed' && isFull) || remaining > 0
+                return (
+                  <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-11 flex-col gap-0.5 rounded-md bg-black/35 px-1 text-[11px] transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
+                    <span className="flex items-center gap-1.5"><Icon className="size-4" /><span className="font-bold">{action.label}</span></span>
+                    {remaining > 0 && <span className="font-mono text-[8px] leading-none opacity-80">{formatCooldown(remaining)}</span>}
+                  </Button>
+                )
+              })}
+            </div>
+            <Button type="button" variant="outline" disabled={isWalking || isSleeping} onClick={onWalk} className="mt-1.5 h-10 w-full gap-1.5 rounded-md border-cyan-300/35 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-40">
+              <PawPrint className="size-4" />
+              <span className="font-bold">{isWalking ? '散歩中' : '散歩'}</span>
+              {isWalking && <span className="font-mono text-[10px]">{formatWalkRemaining(walkRemaining)}</span>}
+            </Button>
+          </div>
         </div>
-        <div className="mt-1 flex min-h-3 items-center justify-end">
-          <p className="break-words text-right text-[9px] text-cyan-200" role="status">
-            {isSleeping ? 'すやすや眠っています' : isFull ? '満腹なのでご飯をあげられません' : message}
-          </p>
-        </div>
-        <div className="mt-1 grid grid-cols-2 gap-1.5">
-          {ROOM_ACTIONS.map(action => {
-            const Icon = action.icon
-            const remaining = cooldownRemaining[action.id]
-            const disabled = isWalking || isSleeping || (action.id === 'feed' && isFull) || remaining > 0
-            return (
-              <Button key={action.id} type="button" variant="outline" disabled={disabled} onClick={() => onAction(action.id)} className={cn('h-11 flex-col gap-0.5 rounded-md bg-black/35 px-1 text-[11px] transition-all duration-100 active:scale-[.93] active:brightness-125', action.tone)}>
-                <span className="flex items-center gap-1.5"><Icon className="size-4" /><span className="font-bold">{action.label}</span></span>
-                {remaining > 0 && <span className="font-mono text-[8px] leading-none opacity-80">{formatCooldown(remaining)}</span>}
-              </Button>
-            )
-          })}
-        </div>
-        <Button type="button" variant="outline" disabled={isWalking || isSleeping} onClick={onWalk} className="mt-1.5 h-10 w-full gap-1.5 rounded-md border-cyan-300/35 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-40">
-          <PawPrint className="size-4" />
-          <span className="font-bold">{isWalking ? '散歩中' : '散歩'}</span>
-          {isWalking && <span className="font-mono text-[10px]">{formatWalkRemaining(walkRemaining)}</span>}
-        </Button>
       </div>
     </section>
   )
