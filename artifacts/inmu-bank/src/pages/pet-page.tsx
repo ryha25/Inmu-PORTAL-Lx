@@ -552,7 +552,7 @@ function PetRoom({
       <div
         className={cn(
           'absolute inset-x-0 bottom-[148px] z-10 flex items-end justify-center',
-          isYajusenpaiEvolved ? 'h-[58%]' : 'h-[50%]',
+          isYajusenpaiEvolved ? 'h-[68%]' : 'h-[50%]',
         )}
         data-pet-stage
         data-pet-id={petId}
