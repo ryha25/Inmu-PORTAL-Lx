@@ -168,10 +168,10 @@ const YAJUSENPAI_PET_DEFINITIONS: readonly PetDefinition[] = UPCOMING_PET_DEFINI
     ? ['お前、なかなかやるじゃねぇか。', 'まずうちさぁ、屋上あんだけど。', 'いいよ、来いよ。']
     : ['こっち見てんじゃないわよ。', '退屈なんだけど。', '少しは楽しませてよ。']
   const roomPresentation = {
-    'yajusenpai-male-base': { width: 'clamp(345px, 78%, 430px)', offsetY: '2%' },
-    'yajusenpai-male-evolved': { width: 'clamp(410px, 100%, 570px)', offsetY: '7%' },
-    'yajusenpai-female-base': { width: 'clamp(355px, 80%, 440px)', offsetY: '11%' },
-    'yajusenpai-female-evolved': { width: 'clamp(410px, 100%, 570px)', offsetY: '7%' },
+    'yajusenpai-male-base': { width: 'clamp(410px, 100%, 540px)', offsetY: '12%' },
+    'yajusenpai-male-evolved': { width: 'clamp(410px, 100%, 570px)', offsetY: '12%' },
+    'yajusenpai-female-base': { width: 'clamp(410px, 100%, 540px)', offsetY: '22%' },
+    'yajusenpai-female-evolved': { width: 'clamp(410px, 100%, 570px)', offsetY: '12%' },
   }[source.id]
   return {
     id: source.id,

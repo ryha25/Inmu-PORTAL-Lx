@@ -432,6 +432,7 @@ function PetRoom({
       ? 'dark'
       : null
   const isYajusenpaiEvolved = evolvedAura !== null
+  const isYajusenpai = petId.startsWith('yajusenpai-')
   const activeWalkTransform = walkMotion.active
     ? isWaterSwimmer
       ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + (walkMotion.bob * .12) + 'px, 0) scaleX(' + walkMotion.facing + ')'
@@ -548,7 +549,7 @@ function PetRoom({
       <div
         className={cn(
           'absolute inset-x-0 bottom-[148px] z-10 flex items-end justify-center',
-          isYajusenpaiEvolved ? 'h-[72%]' : 'h-[50%]',
+          isYajusenpaiEvolved ? 'h-[72%]' : isYajusenpai ? 'h-[68%]' : 'h-[50%]',
         )}
         data-pet-stage
         data-pet-id={petId}
