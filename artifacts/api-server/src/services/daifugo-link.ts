@@ -106,8 +106,8 @@ export async function getDaifugoMaxChallengeLevel(userId: string): Promise<numbe
 export async function getDaifugoEventCount(userId: string, eventType: DaifugoEventType, since?: Date): Promise<number> {
   await ensureDaifugoLinkTables();
   const eventFilter =
-    eventType === "play"            ? `AND "eventType" IN ('play', 'win')` :
-    eventType === "win"             ? `AND "eventType" = 'win'` :
+    eventType === "play"            ? `AND "eventType" IN ('play', 'win', 'challenge_play', 'challenge_win')` :
+    eventType === "win"             ? `AND "eventType" IN ('win', 'challenge_win')` :
     eventType === "challenge_play"  ? `AND "eventType" IN ('challenge_play', 'challenge_win')` :
                                       `AND "eventType" = 'challenge_win'`;
   const sinceFilter = since ? `AND "createdAt" >= $3` : "";
