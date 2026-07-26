@@ -129,13 +129,12 @@ const PET_ROOM_CSS = `
     100% { opacity: 1; transform: translateY(0); }
   }
   @keyframes pet-element-aura {
-    0%, 100% { opacity: .48; transform: scale(.92); filter: blur(8px) brightness(.9); }
-    50% { opacity: .84; transform: scale(1.06); filter: blur(5px) brightness(1.18); }
+    0%, 100% { opacity: .54; transform: translateY(2px) scale(1.015); }
+    50% { opacity: .9; transform: translateY(-3px) scale(1.045); }
   }
   @keyframes pet-element-ray {
-    0% { opacity: .25; transform: rotate(0deg) scale(.9); }
-    50% { opacity: .58; }
-    100% { opacity: .25; transform: rotate(360deg) scale(.9); }
+    0%, 100% { opacity: .25; transform: translateY(5px) scale(1.02, .99); filter: blur(2px); }
+    50% { opacity: .68; transform: translateY(-9px) scale(1.075, 1.045); filter: blur(4px); }
   }
   @keyframes pet-idle-float {
     0%, 100% { transform: translate3d(-4px, 0, 0) rotate(-.35deg); }
@@ -436,6 +435,7 @@ function PetRoom({
     : petId === 'yajusenpai-female-evolved'
       ? 'dark'
       : null
+  const isYajusenpaiEvolved = evolvedAura !== null
   const activeWalkTransform = walkMotion.active
     ? isWaterSwimmer
       ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + (walkMotion.bob * .12) + 'px, 0) scaleX(' + walkMotion.facing + ')'
@@ -550,7 +550,10 @@ function PetRoom({
         </>
       )}
       <div
-        className="absolute inset-x-0 bottom-[148px] z-10 flex h-[50%] items-end justify-center"
+        className={cn(
+          'absolute inset-x-0 bottom-[148px] z-10 flex items-end justify-center',
+          isYajusenpaiEvolved ? 'h-[58%]' : 'h-[50%]',
+        )}
         data-pet-stage
         data-pet-id={petId}
         data-pose={isSleeping ? 'sleeping' : reactionMotion ?? (walkMotion.moving ? 'walking' : 'idle')}
@@ -599,19 +602,45 @@ function PetRoom({
           data-walking={walkMotion.active || undefined}
         >
           {evolvedAura && (
-            <div className="pointer-events-none absolute inset-[-9%] z-0" aria-hidden="true">
-              <div className={cn(
-                'pet-element-aura absolute inset-[8%] animate-[pet-element-aura_3.4s_ease-in-out_infinite] rounded-[42%]',
-                evolvedAura === 'light'
-                  ? 'bg-[radial-gradient(ellipse,rgba(255,255,255,.9)_0%,rgba(253,224,71,.48)_34%,rgba(245,158,11,.18)_58%,transparent_74%)] shadow-[0_0_42px_rgba(253,224,71,.7)]'
-                  : 'bg-[radial-gradient(ellipse,rgba(76,29,149,.82)_0%,rgba(88,28,135,.58)_36%,rgba(15,3,30,.65)_58%,transparent_76%)] shadow-[0_0_48px_rgba(147,51,234,.72)]',
-              )} />
-              <div className={cn(
-                'pet-element-ray absolute inset-[2%] animate-[pet-element-ray_12s_linear_infinite] opacity-50',
-                evolvedAura === 'light'
-                  ? 'bg-[conic-gradient(from_0deg,transparent_0_8%,rgba(255,248,190,.7)_10%,transparent_13_27%,rgba(253,224,71,.55)_30%,transparent_34_55%,rgba(255,255,255,.62)_58%,transparent_62_100%)]'
-                  : 'bg-[conic-gradient(from_0deg,transparent_0_12%,rgba(126,34,206,.65)_15%,transparent_19_38%,rgba(30,5,55,.9)_42%,transparent_47_69%,rgba(168,85,247,.55)_73%,transparent_78_100%)]',
-              )} />
+            <div
+              className="pointer-events-none absolute inset-0 z-0"
+              style={{ translate: roomOffsetY ? `0 ${roomOffsetY}` : undefined }}
+              aria-hidden="true"
+            >
+              <div
+                className="pet-element-aura absolute inset-0 animate-[pet-element-aura_2.3s_ease-in-out_infinite]"
+                style={{
+                  backgroundColor: evolvedAura === 'light' ? '#fff6a3' : '#581c87',
+                  filter: evolvedAura === 'light'
+                    ? 'drop-shadow(0 0 3px #ffffff) drop-shadow(0 -5px 7px #fde047) drop-shadow(0 -12px 12px #f59e0b)'
+                    : 'drop-shadow(0 0 3px #c084fc) drop-shadow(0 -6px 8px #7e22ce) drop-shadow(0 -13px 13px #18002e)',
+                  maskImage: `url("${image}")`,
+                  WebkitMaskImage: `url("${image}")`,
+                  maskPosition: 'center bottom',
+                  WebkitMaskPosition: 'center bottom',
+                  maskRepeat: 'no-repeat',
+                  WebkitMaskRepeat: 'no-repeat',
+                  maskSize: 'contain',
+                  WebkitMaskSize: 'contain',
+                }}
+              />
+              <div
+                className="pet-element-ray absolute inset-0 animate-[pet-element-ray_1.7s_ease-in-out_infinite]"
+                style={{
+                  backgroundColor: evolvedAura === 'light' ? '#facc15' : '#2e064f',
+                  filter: evolvedAura === 'light'
+                    ? 'drop-shadow(0 -9px 6px #fef08a) drop-shadow(0 -19px 10px #f59e0b)'
+                    : 'drop-shadow(0 -9px 7px #9333ea) drop-shadow(0 -20px 11px #090011)',
+                  maskImage: `url("${image}")`,
+                  WebkitMaskImage: `url("${image}")`,
+                  maskPosition: 'center bottom',
+                  WebkitMaskPosition: 'center bottom',
+                  maskRepeat: 'no-repeat',
+                  WebkitMaskRepeat: 'no-repeat',
+                  maskSize: 'contain',
+                  WebkitMaskSize: 'contain',
+                }}
+              />
             </div>
           )}
           <div
