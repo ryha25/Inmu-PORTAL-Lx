@@ -29,7 +29,21 @@ const ROOM_ACTIONS: Array<{ id: PetCareCategory; label: string; icon: ElementTyp
   { id: 'play', label: '遊ぶ', icon: Gamepad2, tone: 'border-amber-300/50 text-amber-200 shadow-[0_0_18px_rgba(252,211,77,.12)]' },
 ]
 
-const USER_VISIBLE_PET_IDS = new Set<PetId>(['nyarushian', 'takuya', 'leon', 'chinge', 'tdn', 'whip', 'shikoiruka', 'daifugo', 'inmu-festival'])
+const USER_VISIBLE_PET_IDS = new Set<PetId>([
+  'nyarushian',
+  'takuya',
+  'leon',
+  'chinge',
+  'tdn',
+  'whip',
+  'shikoiruka',
+  'daifugo',
+  'inmu-festival',
+  'yajusenpai-male-base',
+  'yajusenpai-male-evolved',
+  'yajusenpai-female-base',
+  'yajusenpai-female-evolved',
+])
 const SHIKOIRUKA_UNLOCK_SEEN_KEY_PREFIX = 'inmu-portal:pet:shikoiruka-unlock-seen:v4:'
 
 const shikoirukaUnlockPreloadCache = new Map<string, Promise<void>>()
@@ -92,6 +106,26 @@ const PET_ROOM_CSS = `
   @keyframes pet-room-speaker {
     0% { transform: scale(.65); opacity: .65; }
     100% { transform: scale(1.65); opacity: 0; }
+  }
+  @keyframes pet-evolution-origin {
+    0%, 28% { opacity: 1; transform: scale(1); filter: brightness(1); }
+    58% { opacity: 1; transform: scale(1.12); filter: brightness(4) saturate(.3); }
+    72%, 100% { opacity: 0; transform: scale(1.28); filter: brightness(7); }
+  }
+  @keyframes pet-evolution-ring {
+    0% { opacity: 0; transform: scale(.35) rotate(0); }
+    22% { opacity: .9; }
+    72% { opacity: .75; transform: scale(1.12) rotate(220deg); }
+    100% { opacity: 0; transform: scale(1.5) rotate(300deg); }
+  }
+  @keyframes pet-evolution-reveal {
+    0%, 66% { opacity: 0; transform: scale(.72) translateY(22px); filter: brightness(4) blur(4px); }
+    78% { opacity: 1; transform: scale(1.06) translateY(0); filter: brightness(1.8) blur(0); }
+    100% { opacity: 1; transform: scale(1) translateY(0); filter: brightness(1) blur(0); }
+  }
+  @keyframes pet-evolution-copy {
+    0%, 72% { opacity: 0; transform: translateY(12px); }
+    100% { opacity: 1; transform: translateY(0); }
   }
   @keyframes pet-idle-float {
     0%, 100% { transform: translate3d(-4px, 0, 0) rotate(-.35deg); }
@@ -366,7 +400,7 @@ function PetRoom({
   name: string
   image: string
   roomWidth: string
-  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water' | 'royal'
+  roomTheme: PetDefinition['roomTheme']
   roomImage: string
   expression: PetExpression
   stats: PetStats
@@ -769,6 +803,86 @@ function CharacterInfo({ pet, stats, maxLevel }: { pet: PetDefinition; stats: Pe
   )
 }
 
+function EvolutionPanel({
+  pet,
+  stats,
+  points,
+  busy,
+  onEvolve,
+}: {
+  pet: PetDefinition
+  stats: PetStats
+  points: number
+  busy: boolean
+  onEvolve: () => void
+}) {
+  const evolution = pet.evolution
+  if (!evolution || evolution.stage !== 'base') return null
+  const requiredLevel = evolution.requiredLevel ?? 30
+  const pointCost = evolution.pointCost ?? 100_000
+  const canEvolve = stats.level >= requiredLevel && points >= pointCost
+  return (
+    <section className="rounded-lg border border-amber-300/30 bg-[linear-gradient(135deg,rgba(245,158,11,.13),rgba(13,9,22,.96))] p-3">
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-amber-300/35 bg-amber-300/10">
+          <Crown className="size-5 text-amber-200" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-black text-white">★4へ進化</h3>
+          <p className="mt-0.5 text-xs text-amber-100/70">Lv.{requiredLevel} + {pointCost.toLocaleString('ja-JP')}ポイント</p>
+        </div>
+        <Button
+          type="button"
+          disabled={!canEvolve || busy}
+          onClick={onEvolve}
+          className="min-h-10 shrink-0 border border-amber-200/45 bg-amber-400 text-black hover:bg-amber-300 disabled:opacity-45"
+        >
+          {busy ? '進化中…' : '進化'}
+        </Button>
+      </div>
+      {stats.level < requiredLevel && <p className="mt-2 text-[10px] text-amber-100/60">Lv.{requiredLevel}到達後に進化できます。</p>}
+      {stats.level >= requiredLevel && points < pointCost && <p className="mt-2 text-[10px] text-rose-200">ポイントが不足しています。</p>}
+    </section>
+  )
+}
+
+function EvolutionDialog({
+  result,
+  onClose,
+}: {
+  result: { from: PetId; to: PetId } | null
+  onClose: () => void
+}) {
+  if (!result) return null
+  const source = PET_BY_ID[result.from]
+  const target = PET_BY_ID[result.to]
+  if (!source || !target) return null
+  return (
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent className="overflow-hidden border-amber-200/40 bg-black p-0 text-white shadow-[0_0_70px_rgba(251,191,36,.32)] sm:max-w-[430px] [&>button]:hidden">
+        <div className="relative min-h-[620px] overflow-hidden bg-cover bg-center" style={{ backgroundImage: `url(${target.roomImage})` }}>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_43%,rgba(255,236,164,.28),rgba(0,0,0,.2)_52%,rgba(0,0,0,.86))]" />
+          <div className="absolute inset-x-0 top-10 z-10 text-center">
+            <p className="text-xs font-bold tracking-[0.28em] text-amber-200">EVOLUTION</p>
+            <h2 className="mt-2 text-2xl font-black text-white">進化開始</h2>
+          </div>
+          <div className="absolute inset-x-0 top-32 flex h-[330px] items-center justify-center">
+            <span className="absolute size-64 animate-[pet-evolution-ring_2.8s_ease-out_forwards] rounded-full border-2 border-amber-200/80 shadow-[0_0_45px_rgba(251,191,36,.65),inset_0_0_35px_rgba(251,191,36,.4)]" />
+            <img src={source.image} alt={source.name} className="absolute max-h-[300px] max-w-[78%] animate-[pet-evolution-origin_2.8s_ease-in-out_forwards] object-contain drop-shadow-[0_20px_30px_rgba(0,0,0,.7)]" />
+            <img src={target.image} alt={target.name} className="absolute max-h-[320px] max-w-[82%] animate-[pet-evolution-reveal_3.6s_ease-out_forwards] object-contain drop-shadow-[0_20px_32px_rgba(0,0,0,.75)]" />
+          </div>
+          <div className="absolute inset-x-5 bottom-5 z-20 animate-[pet-evolution-copy_3.9s_ease-out_forwards] rounded-lg border border-amber-200/35 bg-black/75 p-4 text-center backdrop-blur-sm">
+            <p className="text-xs font-bold tracking-[0.18em] text-amber-200">★4 EVOLVED</p>
+            <p className="mt-1 text-xl font-black">{target.name}</p>
+            <p className="mt-1 text-xs text-white/65">Lv.31へ進化しました</p>
+            <Button type="button" onClick={onClose} className="mt-3 min-h-11 w-full bg-amber-400 font-black text-black hover:bg-amber-300">育成部屋へ</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function SkillPanel({ pet }: { pet: PetDefinition }) {
   return (
     <section className="rounded-lg border border-cyan-300/20 bg-[linear-gradient(145deg,rgba(8,30,40,.7),rgba(13,9,22,.96))] p-4">
@@ -883,6 +997,10 @@ const PET_DISPLAY_NAMES: Record<PetId, string> = {
   shikoiruka: 'シコイルカ',
   daifugo: '大富豪',
   'inmu-festival': 'INMUくん（810祭りVer.）',
+  'yajusenpai-male-base': '野獣先輩♂',
+  'yajusenpai-male-evolved': '野獣先輩♂（進化）',
+  'yajusenpai-female-base': '野獣先輩♀',
+  'yajusenpai-female-evolved': '野獣先輩♀（進化）',
 }
 
 function formatRewardInmu(amount: number) {
@@ -1187,7 +1305,9 @@ function SkillActivationGrid({
     const [previewId, setPreviewId] = useState<PetId | null>(null)
     const activePets = skillActiveCharacterIds.map(id => PET_BY_ID[id]).filter(Boolean)
     const previewPet = previewId ? PET_BY_ID[previewId] : null
-    const owned = ownedPetIds.map(id => PET_BY_ID[id]).filter(pet => Boolean(pet) && !skillActiveCharacterIds.includes(pet.id))
+    const owned = ownedPetIds
+      .map(id => PET_BY_ID[id])
+      .filter(pet => Boolean(pet) && pet.skill.enabled !== false && !skillActiveCharacterIds.includes(pet.id))
 
     function closePicker() {
       setPickerOpen(false)
@@ -1348,7 +1468,7 @@ function LevelRewardEffectGrid({
     const [confirmUnlockOpen, setConfirmUnlockOpen] = useState(false)
     const owned = ownedPetIds
       .map(id => PET_BY_ID[id])
-      .filter((candidate): candidate is PetDefinition => Boolean(candidate) && !activePets.some(active => active.id === candidate.id))
+      .filter((candidate): candidate is PetDefinition => Boolean(candidate) && candidate.levelRewards.length > 0 && !activePets.some(active => active.id === candidate.id))
     const nextUnlockPrice = unlockedSlots === 1 ? slotPrices.slot2 : slotPrices.slot3
 
     return (
@@ -1549,6 +1669,8 @@ export function PetPage() {
   const [daifugoReward, setDaifugoReward] = useState<DaifugoRewardStatus | null>(null)
   const [daifugoClaimBusy, setDaifugoClaimBusy] = useState(false)
   const [daifugoAnimOpen, setDaifugoAnimOpen] = useState(false)
+  const [evolutionBusy, setEvolutionBusy] = useState(false)
+  const [evolutionResult, setEvolutionResult] = useState<{ from: PetId; to: PetId } | null>(null)
   const daifugoAnimIsPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('daifugo-preview')
   const levelRewardSyncRef = useRef(new Set<string>())
   const walkPointGrantRef = useRef(new Set<string>())
@@ -1848,13 +1970,14 @@ export function PetPage() {
   }, [affectionGifts])
 
   useEffect(() => {
-    const preloadUrls = new Set(PET_DEFINITIONS.flatMap(candidate => [
+    if (!ownedPetIds) return
+    const preloadUrls = new Set(ownedPetIds.map(id => PET_BY_ID[id]).filter(Boolean).flatMap(candidate => [
       ...Object.values(candidate.expressions),
       ...candidate.walk.frames,
       candidate.roomImage,
     ]).filter((url): url is string => Boolean(url)))
     preloadUrls.forEach(url => { const image = new Image(); image.src = url })
-  }, [])
+  }, [ownedPetIds])
 
   useEffect(() => {
     if (ownedPetIds && ownedPetIds.length > 0 && !ownedPetIds.includes(selectedPetId)) selectPet(ownedPetIds[0])
@@ -1877,7 +2000,7 @@ export function PetPage() {
           .filter((id): id is PetId => Boolean(PET_BY_ID[id as PetId]) && USER_VISIBLE_PET_IDS.has(id as PetId))
           .filter((id, index, list) => list.indexOf(id) === index)
         setOwnedPetIds(owned)
-        const seenKey = SHIKOIRUKA_UNLOCK_SEEN_KEY_PREFIX + (profile?.userId ?? '')
+        const seenKey = SHIKOIRUKA_UNLOCK_SEEN_KEY_PREFIX + (profile?.solWallet ?? profile?.displayName ?? '')
         if ((data.shikoirukaNewlyDistributed === true || owned.includes('shikoiruka')) && localStorage.getItem(seenKey) !== '1') {
           await preloadShikoirukaUnlockAssets()
           if (cancelled) return
@@ -2068,6 +2191,41 @@ export function PetPage() {
     const remaining = getCareCooldownRemaining(category, cooldownUntil, Date.now())
     if (remaining > 0) { setMessage(formatCooldown(remaining)); return }
     setCareMenu(category)
+  }
+
+  async function evolveDisplayedPet() {
+    const evolution = pet.evolution
+    if (!evolution || evolution.stage !== 'base' || evolutionBusy) return
+    setEvolutionBusy(true)
+    try {
+      await Promise.all([
+        preloadImage(pet.image),
+        preloadImage(PET_BY_ID[evolution.counterpartId]?.image ?? ''),
+        preloadImage(PET_BY_ID[evolution.counterpartId]?.roomImage ?? ''),
+      ])
+      const response = await fetch('/api/pet/evolve', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: pet.id }),
+      })
+      const data = await response.json().catch(() => ({})) as {
+        error?: string
+        toCharacterId?: PetId
+        remainingPoints?: number
+      }
+      if (!response.ok) throw new Error(data.error ?? '進化に失敗しました')
+      const targetId = data.toCharacterId ?? evolution.counterpartId
+      setBalances(current => ({
+        ...current,
+        points: Number.isFinite(Number(data.remainingPoints)) ? Number(data.remainingPoints) : current.points,
+      }))
+      setEvolutionResult({ from: pet.id, to: targetId })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '進化に失敗しました')
+    } finally {
+      setEvolutionBusy(false)
+    }
   }
 
   function handleCare(action: PetCareAction) {
@@ -2304,7 +2462,13 @@ export function PetPage() {
         ) : (
           <div className="flex flex-col gap-3">
             <main className="flex min-w-0 flex-col gap-3">
-              <CharacterInfo pet={pet} stats={selectedStats} maxLevel={maxLevel} />
+              <CharacterInfo pet={pet} stats={selectedStats} maxLevel={pet.maxLevel} />
+              <EvolutionPanel pet={pet} stats={selectedStats} points={balances.points} busy={evolutionBusy} onEvolve={evolveDisplayedPet} />
+              {pet.experienceMode === 'evolved-training-only' && (
+                <p className="rounded-md border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-xs text-amber-100/75">
+                  進化後は通常のお世話では経験値を獲得できません。特訓・クエスト追加後に育成できます。
+                </p>
+              )}
               <AdSlot slotId="pet-top" variant="banner" />
               <PetRoom
                 petId={pet.id}
@@ -2335,7 +2499,7 @@ export function PetPage() {
                 <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
               </div>
               <SkillPanel pet={pet} />
-              <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={maxLevel} disabled={isSleeping || isWalking || walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate} onUse={handleUseSleepTea} />
+              <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={pet.maxLevel} disabled={pet.experienceMode === 'evolved-training-only' || isSleeping || isWalking || walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate} onUse={handleUseSleepTea} />
               <AdSlot slotId="pet-items-rewards" variant="banner" />
               <RewardsPanel
                 pet={pet}
@@ -2359,6 +2523,13 @@ export function PetPage() {
         busy={daifugoClaimBusy}
         onClaim={claimDaifugoCharacter}
         onClose={() => setDaifugoAnimOpen(false)}
+      />
+      <EvolutionDialog
+        result={evolutionResult}
+        onClose={() => {
+          setEvolutionResult(null)
+          window.location.reload()
+        }}
       />
     </AppShell>
   )

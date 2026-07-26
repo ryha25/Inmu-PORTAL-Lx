@@ -381,8 +381,8 @@ function getInventorySnapshot(save: PetSaveData): PetInventorySnapshot {
 }
 
 function sameInventorySnapshot(a: PetInventorySnapshot | null | undefined, b: PetInventorySnapshot | null | undefined) {
-  return Boolean(a && b)
-    && a.sleepTea === b.sleepTea
+  if (!a || !b) return false
+  return a.sleepTea === b.sleepTea
     && a.premiumInventory === b.premiumInventory
     && a.takuyaSunglasses === b.takuyaSunglasses
     && a.catHeadband === b.catHeadband
@@ -489,6 +489,7 @@ function loadSave(source?: unknown): PetSaveData {
 }
 
 function addExp(stats: PetStats, amount: number, petId: PetId): PetStats {
+  if (PET_BY_ID[petId].experienceMode === 'evolved-training-only') return stats
   const maxLevel = PET_BY_ID[petId].maxLevel
   if (stats.level >= maxLevel) return { ...stats, level: maxLevel, exp: 0 }
   let level = stats.level
@@ -826,7 +827,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
         exp,
         sleepiness,
         ...reward,
-        pointsGrantStatus: reward.rewardType === 'points' ? 'pending' : undefined,
+        pointsGrantStatus: reward.rewardType === 'points' ? 'pending' as const : undefined,
         seen: false,
       },
     ].slice(-8)
@@ -1324,6 +1325,7 @@ export function usePetState() {
   function useSleepTea(amount: number) {
     const requested = Math.min(3, Math.max(1, Math.floor(amount)))
     const petId = effectiveSave.selectedPetId
+    if (PET_BY_ID[petId].experienceMode === 'evolved-training-only') return 0
     if ((effectiveSave.sleepStartedAt[petId] ?? 0) > 0) return 0
     if (effectiveSave.walks.active[petId]) return 0
     if (effectiveSave.walks.sleepTeaBlockedDate[petId] === getJstDateKey()) return 0
@@ -1334,6 +1336,7 @@ export function usePetState() {
     setSave(current => {
       const materialized = materializeSaveAt(current, Date.now())
       const currentPetId = materialized.selectedPetId
+      if (PET_BY_ID[currentPetId].experienceMode === 'evolved-training-only') return current
       if ((materialized.sleepStartedAt[currentPetId] ?? 0) > 0) return current
       if (materialized.walks.active[currentPetId]) return current
       if (materialized.walks.sleepTeaBlockedDate[currentPetId] === getJstDateKey()) return current

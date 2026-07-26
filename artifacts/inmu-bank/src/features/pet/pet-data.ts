@@ -84,8 +84,9 @@ import tdnRoomImage from '@assets/inmu-pet-room-tdn-v1.jpg'
 import whipRoomImage from '@assets/inmu-pet-room-whip-v1.jpg'
 import shikoirukaRoomImage from '@assets/inmu-pet-room-shikoiruka-v1.png'
 import daifugoRoomImage from '@assets/inmu-pet-room-daifugo-v2.png'
+import { UPCOMING_PET_DEFINITIONS, type UpcomingPetId } from './upcoming-pet-data'
 
-export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'chinge' | 'tdn' | 'whip' | 'shikoiruka' | 'daifugo' | 'inmu-festival'
+export type PetId = 'nyarushian' | 'takuya' | 'leon' | 'chinge' | 'tdn' | 'whip' | 'shikoiruka' | 'daifugo' | 'inmu-festival' | UpcomingPetId
 export type PetExpression = 'default' | 'blink' | 'happy' | 'sleepy' | 'hungry' | 'petted' | 'affectionate' | 'annoyed' | 'angry'
 
 export type PetDefinition = {
@@ -126,8 +127,15 @@ export type PetDefinition = {
     angry: number
   }
   roomWidth: string
-  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water' | 'royal'
+  roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water' | 'royal' | 'modern' | 'neon'
   roomImage: string
+  experienceMode?: 'standard' | 'evolved-training-only'
+  evolution?: {
+    stage: 'base' | 'evolved'
+    counterpartId: PetId
+    requiredLevel?: number
+    pointCost?: number
+  }
   costume?: {
     id: 'festival-810'
     label: string
@@ -136,6 +144,7 @@ export type PetDefinition = {
     name: string
     effect: string
     notes: readonly string[]
+    enabled?: boolean
   }
   levelRewards: readonly {
     level: number
@@ -146,6 +155,71 @@ export type PetDefinition = {
     rebateBonus?: number
   }[]
 }
+
+const YAJUSENPAI_PET_DEFINITIONS: readonly PetDefinition[] = UPCOMING_PET_DEFINITIONS.map(source => {
+  const evolved = source.evolutionStage === 'evolved'
+  const male = source.gender === 'male'
+  const counterpartId = (
+    'evolvesTo' in source.evolution ? source.evolution.evolvesTo : source.evolution.evolvesFrom
+  ) as PetId
+  const baseDialogues = male
+    ? ['お前、なかなかやるじゃねぇか。', 'まずうちさぁ、屋上あんだけど。', 'いいよ、来いよ。']
+    : ['こっち見てんじゃないわよ。', '退屈なんだけど。', '少しは楽しませてよ。']
+  return {
+    id: source.id,
+    name: source.name,
+    rarity: source.rarity,
+    maxLevel: source.maxLevel,
+    image: source.image,
+    expressions: {
+      default: source.expressions.default,
+      blink: source.expressions.blink,
+      happy: source.expressions.happy,
+      sleepy: source.expressions.sleepy,
+      hungry: source.expressions.hungry,
+      petted: source.expressions.petted,
+      affectionate: source.expressions.petted,
+      annoyed: source.expressions.annoyed,
+      angry: source.expressions.angry,
+    },
+    sleepImage: source.expressions.sleep,
+    walk: { enabled: false, frames: [source.image, source.image], distancePercent: 10, tickMs: 620 },
+    messages: { overpetted: male ? '触りすぎだゾ。' : 'しつこいわね。' },
+    dialogues: {
+      idle: baseDialogues,
+      walking: baseDialogues,
+      care: male ? ['ありがとナス！', 'いいゾ～これ。'] : ['まあ悪くないわ。', '少しは気が利くじゃない。'],
+      feed: male ? ['うまいゾ。', 'ありがとナス！'] : ['いただくわ。', '悪くない味ね。'],
+      play: male ? ['やりますねぇ！', 'いいゾ～これ。'] : ['本気で来なさいよ。', '少しは遊べるじゃない。'],
+      pet: male ? ['いいゾ～これ。', 'ありがとナス！'] : ['特別に許してあげる。', 'そこなら悪くないわ。'],
+      happy: male ? ['やりますねぇ！'] : ['ふふ、当然ね。'],
+      angry: male ? ['おい、待てい。'] : ['いい加減にしなさい。'],
+      sleeping: male ? ['じゃけん寝ましょうね。'] : ['静かにして。'],
+      sleepy: male ? ['眠いゾ…。'] : ['少し休むわ。'],
+      hungry: male ? ['腹減ったなぁ。'] : ['食事はまだ？'],
+      affectionate: male ? ['お前のことが好きだったんだよ！'] : ['あんたなら側にいてもいいわ。'],
+    },
+    reactionDurations: { feed: 4000, play: 4400, pet: 3800, angry: 4700 },
+    roomWidth: evolved ? 'clamp(235px, 52%, 350px)' : 'clamp(220px, 48%, 325px)',
+    roomTheme: male ? 'modern' : 'neon',
+    roomImage: source.roomImage,
+    experienceMode: evolved ? 'evolved-training-only' : 'standard',
+    evolution: {
+      stage: source.evolutionStage,
+      counterpartId,
+      ...('requiredLevel' in source.evolution
+        ? { requiredLevel: source.evolution.requiredLevel, pointCost: source.evolution.pointCost }
+        : {}),
+    },
+    skill: {
+      name: '未設定',
+      effect: '固有スキルは後日追加予定です。',
+      notes: ['テスト実装では発動しません'],
+      enabled: false,
+    },
+    levelRewards: [],
+  }
+})
 
 export const PET_DEFINITIONS: readonly PetDefinition[] = [
   {
@@ -535,6 +609,7 @@ export const PET_DEFINITIONS: readonly PetDefinition[] = [
       { level: 15, label: '30,000 INMU', detail: '購入申請還元率 +5%（全対象）', delivery: '申請式（承認後送金）', inmuAmount: 30_000, rebateBonus: 5 },
     ],
   },
+  ...YAJUSENPAI_PET_DEFINITIONS,
 ]
 
 export const PET_BY_ID = Object.fromEntries(

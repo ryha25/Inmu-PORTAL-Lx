@@ -10,6 +10,10 @@ export const PET_CHARACTER_NAMES: Record<string, string> = {
   daifugo: "大富豪",
   whip: "ホイップ",
   "inmu-festival": "INMUくん（810祭りVer.）",
+  "yajusenpai-male-base": "野獣先輩♂",
+  "yajusenpai-male-evolved": "野獣先輩♂（進化）",
+  "yajusenpai-female-base": "野獣先輩♀",
+  "yajusenpai-female-evolved": "野獣先輩♀（進化）",
 };
 
 const DEFAULT_STATS = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affection: 50 };
@@ -17,6 +21,12 @@ const EMPTY_ACTIONS = { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "pla
 const EMPTY_COOLDOWNS = { feed: 0, play: 0 };
 const SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID = "shikoiruka";
 const DAIFUGO_TEST_ACCOUNT_NAME = "ガチャテスト";
+const YAJUSENPAI_TEST_BASE_IDS = ["yajusenpai-male-base", "yajusenpai-female-base"] as const;
+const YAJUSENPAI_EVOLUTION_MAP = {
+  "yajusenpai-male-base": "yajusenpai-male-evolved",
+  "yajusenpai-female-base": "yajusenpai-female-evolved",
+} as const;
+const YAJUSENPAI_EVOLUTION_POINT_COST = 100_000;
 // 2026-07-21 04:00 JST = 2026-07-20 19:00:00 UTC
 const SHIKOIRUKA_DISTRIBUTION_START_UTC = new Date("2026-07-20T19:00:00Z");
 // 2026-07-31 23:59:59 JST = 2026-07-31 14:59:59 UTC
@@ -230,7 +240,11 @@ export async function preserveAndRestorePetLevelProgress(userId: string) {
   }
 }
 
-export async function initializePetCharacterState(userId: string, characterId: string) {
+export async function initializePetCharacterState(
+  userId: string,
+  characterId: string,
+  options: { minimumLevel?: number; skillEnabled?: boolean } = {},
+) {
   await ensurePetStateTable();
   const client = await pool.connect();
   try {
@@ -255,16 +269,25 @@ export async function initializePetCharacterState(userId: string, characterId: s
 
     // Character grants must be idempotent. Re-granting an owned character must
     // never reset its level, EXP, care state, or the user's active selections.
+    const minimumLevel = Math.max(1, Math.floor(Number(options.minimumLevel) || 1));
     if (!state.pets?.[characterId] || typeof state.pets[characterId] !== "object") {
-      state.pets = { ...(state.pets ?? {}), [characterId]: { ...DEFAULT_STATS } };
+      state.pets = { ...(state.pets ?? {}), [characterId]: { ...DEFAULT_STATS, level: minimumLevel } };
       state.lastCareAt = { ...(state.lastCareAt ?? {}), [characterId]: { ...EMPTY_ACTIONS } };
       state.cooldownUntil = { ...(state.cooldownUntil ?? {}), [characterId]: { ...EMPTY_COOLDOWNS } };
       state.expressions = { ...(state.expressions ?? {}), [characterId]: { kind: "default", until: 0 } };
       state.petting = { ...(state.petting ?? {}), [characterId]: { count: 0, lastAt: 0 } };
       state.sleepStartedAt = { ...(state.sleepStartedAt ?? {}), [characterId]: 0 };
       state.progress = { ...(state.progress ?? {}), [characterId]: { fullnessAt: now, sleepinessAt: now } };
+    } else if (Number(state.pets[characterId].level ?? 1) < minimumLevel) {
+      state.pets = {
+        ...(state.pets ?? {}),
+        [characterId]: { ...state.pets[characterId], level: minimumLevel, exp: 0 },
+      };
     }
-    state.skillState = { ...(state.skillState ?? {}), [characterId]: state.skillState?.[characterId] ?? true };
+    state.skillState = {
+      ...(state.skillState ?? {}),
+      [characterId]: state.skillState?.[characterId] ?? (options.skillEnabled !== false),
+    };
     state.version = Math.max(7, Number(state.version) || 0);
 
     await client.query(`
@@ -272,6 +295,15 @@ export async function initializePetCharacterState(userId: string, characterId: s
       VALUES ($1, $2::jsonb, $3)
       ON CONFLICT ("userId") DO UPDATE SET state = EXCLUDED.state, "clientUpdatedAt" = EXCLUDED."clientUpdatedAt", "updatedAt" = NOW()
     `, [userId, JSON.stringify(state), now]);
+    await client.query(
+      `INSERT INTO "petLevelProgressBackups" ("userId", "characterId", level, exp)
+       VALUES ($1, $2, $3, 0)
+       ON CONFLICT ("userId", "characterId") DO UPDATE SET
+         level = GREATEST("petLevelProgressBackups".level, EXCLUDED.level),
+         exp = CASE WHEN EXCLUDED.level > "petLevelProgressBackups".level THEN 0 ELSE "petLevelProgressBackups".exp END,
+         "updatedAt" = NOW()`,
+      [userId, characterId, minimumLevel],
+    );
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -303,7 +335,7 @@ function normalizeTestAccountName(value: unknown): string {
   return String(value ?? "").replace(/[\s\u3000]+/g, "").toLowerCase();
 }
 
-export async function ensureDaifugoTestDistributionForUser(userId: string): Promise<boolean> {
+export async function isPetFeatureTestAccount(userId: string): Promise<boolean> {
   const account = await pool.query(
     `SELECT u.name, p."displayName"
      FROM "user" AS u
@@ -317,6 +349,11 @@ export async function ensureDaifugoTestDistributionForUser(userId: string): Prom
   const isTestAccount =
     normalizeTestAccountName(row?.name) === targetName ||
     normalizeTestAccountName(row?.displayName) === targetName;
+  return isTestAccount;
+}
+
+export async function ensureDaifugoTestDistributionForUser(userId: string): Promise<boolean> {
+  const isTestAccount = await isPetFeatureTestAccount(userId);
   if (!isTestAccount) return false;
 
   await ensurePetStateTable();
@@ -331,6 +368,189 @@ export async function ensureDaifugoTestDistributionForUser(userId: string): Prom
     await initializePetCharacterState(userId, "daifugo");
   }
   return Boolean(inserted.rowCount);
+}
+
+export async function ensureYajusenpaiTestDistributionForUser(userId: string): Promise<boolean> {
+  if (!await isPetFeatureTestAccount(userId)) return false;
+  await ensurePetStateTable();
+  const ownership = await pool.query(
+    `SELECT "characterId" FROM "userPetCharacters"
+     WHERE "userId" = $1
+       AND "characterId" IN ('yajusenpai-male-base', 'yajusenpai-male-evolved', 'yajusenpai-female-base', 'yajusenpai-female-evolved')`,
+    [userId],
+  );
+  const ownedIds = new Set(ownership.rows.map(row => String(row.characterId)));
+  let granted = false;
+  for (const characterId of YAJUSENPAI_TEST_BASE_IDS) {
+    const evolvedCharacterId = YAJUSENPAI_EVOLUTION_MAP[characterId];
+    if (ownedIds.has(evolvedCharacterId)) continue;
+    const inserted = await pool.query(
+      `INSERT INTO "userPetCharacters" ("userId", "characterId")
+       VALUES ($1, $2)
+       ON CONFLICT ("userId", "characterId") DO NOTHING
+       RETURNING "characterId"`,
+      [userId, characterId],
+    );
+    granted ||= Boolean(inserted.rowCount);
+    ownedIds.add(characterId);
+    await initializePetCharacterState(userId, characterId, { minimumLevel: 30, skillEnabled: false });
+  }
+  return granted;
+}
+
+export async function evolveYajusenpaiForTestUser(userId: string, baseCharacterId: string) {
+  if (!await isPetFeatureTestAccount(userId)) {
+    return { ok: false as const, reason: "not_test_account" as const };
+  }
+  const evolvedCharacterId = YAJUSENPAI_EVOLUTION_MAP[baseCharacterId as keyof typeof YAJUSENPAI_EVOLUTION_MAP];
+  if (!evolvedCharacterId) {
+    return { ok: false as const, reason: "invalid_character" as const };
+  }
+
+  await ensurePetStateTable();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`yajusenpai-evolution:${userId}`]);
+
+    const ownership = await client.query(
+      `SELECT "characterId" FROM "userPetCharacters"
+       WHERE "userId" = $1 AND "characterId" IN ($2, $3)
+       FOR UPDATE`,
+      [userId, baseCharacterId, evolvedCharacterId],
+    );
+    const ownedIds = new Set(ownership.rows.map(row => String(row.characterId)));
+    if (ownedIds.has(evolvedCharacterId)) {
+      const balance = await client.query(
+        `SELECT COALESCE("monthlyPoints", 0) AS balance FROM profile WHERE "userId" = $1 LIMIT 1`,
+        [userId],
+      );
+      await client.query("COMMIT");
+      return {
+        ok: true as const,
+        alreadyEvolved: true,
+        fromCharacterId: baseCharacterId,
+        toCharacterId: evolvedCharacterId,
+        level: 31,
+        remainingPoints: Number(balance.rows[0]?.balance ?? 0),
+      };
+    }
+    if (!ownedIds.has(baseCharacterId)) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "not_owned" as const };
+    }
+
+    const stateResult = await client.query(
+      `SELECT state FROM "userPetStates" WHERE "userId" = $1 FOR UPDATE`,
+      [userId],
+    );
+    const state = stateResult.rows[0]?.state as Record<string, any> | undefined;
+    const baseStats = state?.pets?.[baseCharacterId];
+    if (!state || !baseStats || Math.floor(Number(baseStats.level) || 1) < 30) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "level_too_low" as const };
+    }
+    if (state.walks?.active?.[baseCharacterId]) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "walking" as const };
+    }
+
+    const profileResult = await client.query(
+      `SELECT COALESCE("monthlyPoints", 0) AS balance FROM profile WHERE "userId" = $1 FOR UPDATE`,
+      [userId],
+    );
+    if (!profileResult.rows.length) {
+      await client.query("ROLLBACK");
+      return { ok: false as const, reason: "profile_not_found" as const };
+    }
+    const currentPoints = Number(profileResult.rows[0].balance ?? 0);
+    if (currentPoints < YAJUSENPAI_EVOLUTION_POINT_COST) {
+      await client.query("ROLLBACK");
+      return {
+        ok: false as const,
+        reason: "insufficient_points" as const,
+        requiredPoints: YAJUSENPAI_EVOLUTION_POINT_COST,
+        currentPoints,
+      };
+    }
+
+    const evolvedStats = { ...baseStats, level: 31, exp: 0 };
+    state.pets = { ...(state.pets ?? {}), [evolvedCharacterId]: evolvedStats };
+    const scopedKeys = [
+      "lastCareAt", "cooldownUntil", "expressions", "petting", "sleepStartedAt",
+      "sleepStartValue", "sleepWakeAt", "progress", "lastHungerPenaltyDate",
+    ];
+    for (const key of scopedKeys) {
+      if (state[key] && typeof state[key] === "object" && !Array.isArray(state[key])) {
+        state[key] = { ...state[key], [evolvedCharacterId]: state[key][baseCharacterId] };
+      }
+    }
+    state.selectedPetId = state.selectedPetId === baseCharacterId ? evolvedCharacterId : state.selectedPetId;
+    const replaceId = (value: unknown) => Array.isArray(value)
+      ? [...new Set(value.map(id => id === baseCharacterId ? evolvedCharacterId : id))]
+      : value;
+    state.activePetIds = replaceId(state.activePetIds);
+    state.skillActiveCharacterIds = Array.isArray(state.skillActiveCharacterIds)
+      ? state.skillActiveCharacterIds.filter((id: unknown) => id !== baseCharacterId && id !== evolvedCharacterId)
+      : [];
+    if (state.skillActiveCharacterId === baseCharacterId) state.skillActiveCharacterId = null;
+    state.skillState = { ...(state.skillState ?? {}), [baseCharacterId]: false, [evolvedCharacterId]: false };
+    state.version = Math.max(7, Number(state.version) || 0);
+
+    const now = Date.now();
+    await client.query(
+      `UPDATE profile
+       SET "monthlyPoints" = "monthlyPoints" - $2, "updatedAt" = NOW()
+       WHERE "userId" = $1`,
+      [userId, YAJUSENPAI_EVOLUTION_POINT_COST],
+    );
+    await client.query(
+      `DELETE FROM "userPetCharacters" WHERE "userId" = $1 AND "characterId" = $2`,
+      [userId, baseCharacterId],
+    );
+    await client.query(
+      `INSERT INTO "userPetCharacters" ("userId", "characterId")
+       VALUES ($1, $2)
+       ON CONFLICT ("userId", "characterId") DO NOTHING`,
+      [userId, evolvedCharacterId],
+    );
+    await client.query(
+      `UPDATE "userPetStates"
+       SET state = $2::jsonb, "clientUpdatedAt" = $3, "updatedAt" = NOW()
+       WHERE "userId" = $1`,
+      [userId, JSON.stringify(state), now],
+    );
+    await client.query(
+      `INSERT INTO "petLevelProgressBackups" ("userId", "characterId", level, exp)
+       VALUES ($1, $2, 31, 0)
+       ON CONFLICT ("userId", "characterId") DO UPDATE SET level = 31, exp = 0, "updatedAt" = NOW()`,
+      [userId, evolvedCharacterId],
+    );
+    await client.query(
+      `INSERT INTO points ("userId", amount, type, source, month)
+       VALUES ($1, $2, 'pet_evolution', $3, $4)`,
+      [
+        userId,
+        -YAJUSENPAI_EVOLUTION_POINT_COST,
+        `${PET_CHARACTER_NAMES[baseCharacterId]} 進化`,
+        new Date().toISOString().slice(0, 7),
+      ],
+    );
+    await client.query("COMMIT");
+    return {
+      ok: true as const,
+      alreadyEvolved: false,
+      fromCharacterId: baseCharacterId,
+      toCharacterId: evolvedCharacterId,
+      level: 31,
+      remainingPoints: currentPoints - YAJUSENPAI_EVOLUTION_POINT_COST,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getDaifugoRewardStatus(userId: string) {

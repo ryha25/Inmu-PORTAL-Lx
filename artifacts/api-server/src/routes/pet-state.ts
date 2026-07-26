@@ -5,6 +5,8 @@ import {
   ensureDaifugoTestDistributionForUser,
   ensurePetStateTable,
   ensureShikoirukaDistributionForUser,
+  ensureYajusenpaiTestDistributionForUser,
+  evolveYajusenpaiForTestUser,
   PET_CHARACTER_NAMES,
   preserveAndRestorePetLevelProgress,
 } from "../services/pet-state-store";
@@ -72,6 +74,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
     await ensurePetCommerceTables();
     const shikoirukaGranted = await ensureShikoirukaDistributionForUser(req.userId!);
     await ensureDaifugoTestDistributionForUser(req.userId!);
+    await ensureYajusenpaiTestDistributionForUser(req.userId!);
     await preserveAndRestorePetLevelProgress(req.userId!);
     const [stateResult, ownershipResult, claimsResult] = await Promise.all([
       pool.query(`SELECT state, "updatedAt" FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]),
@@ -93,6 +96,37 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
   } catch (error) {
     console.error("[PetState] load", error);
     res.status(500).json({ error: "INMU PETデータの取得に失敗しました" });
+  }
+});
+
+router.post("/pet/evolve", requireAuth, async (req, res): Promise<void> => {
+  const characterId = String(req.body?.characterId ?? "").trim();
+  try {
+    const result = await evolveYajusenpaiForTestUser(req.userId!, characterId);
+    if (result.ok) {
+      res.json(result);
+      return;
+    }
+    const status =
+      result.reason === "not_test_account" ? 403 :
+      result.reason === "not_owned" ? 404 :
+      result.reason === "walking" ? 409 :
+      result.reason === "insufficient_points" ? 400 :
+      result.reason === "level_too_low" ? 400 :
+      result.reason === "profile_not_found" ? 404 :
+      400;
+    const message =
+      result.reason === "not_test_account" ? "この機能はテストアカウント限定です" :
+      result.reason === "not_owned" ? "進化元のキャラクターを所持していません" :
+      result.reason === "walking" ? "散歩中は進化できません" :
+      result.reason === "insufficient_points" ? "進化に必要なポイントが不足しています" :
+      result.reason === "level_too_low" ? "Lv.30に到達すると進化できます" :
+      result.reason === "profile_not_found" ? "プロフィールが見つかりません" :
+      "進化対象が正しくありません";
+    res.status(status).json({ ...result, error: message });
+  } catch (error) {
+    console.error("[PetState] evolve", error);
+    res.status(500).json({ error: "進化処理に失敗しました" });
   }
 });
 

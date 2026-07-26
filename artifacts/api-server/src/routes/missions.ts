@@ -16,6 +16,7 @@ import {
   ensureDaifugoTestDistributionForUser,
   ensurePetStateTable,
   ensureShikoirukaDistributionForUser,
+  ensureYajusenpaiTestDistributionForUser,
   getDaifugoRewardStatus,
 } from "../services/pet-state-store";
 
@@ -76,6 +77,10 @@ const PET_CHARACTER_NAMES: Record<string, string> = {
   daifugo: "大富豪",
   whip: "ホイップ",
   "inmu-festival": "INMUくん（810祭りVer.）",
+  "yajusenpai-male-base": "野獣先輩♂",
+  "yajusenpai-male-evolved": "野獣先輩♂（進化）",
+  "yajusenpai-female-base": "野獣先輩♀",
+  "yajusenpai-female-evolved": "野獣先輩♀（進化）",
 };
 
 type MissionRewardItemType = "premium_food" | "sleep_tea" | "takuya_sunglasses" | "cat_headband";
@@ -997,6 +1002,7 @@ router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
     await ensureRewardTables();
     const shikoirukaNewlyDistributed = await ensureShikoirukaDistributionForUser(req.userId!);
     await ensureDaifugoTestDistributionForUser(req.userId!);
+    await ensureYajusenpaiTestDistributionForUser(req.userId!);
     const [ownership, daifugoReward] = await Promise.all([
       pool.query(
         `SELECT "characterId", "acquiredAt" FROM "userPetCharacters"
