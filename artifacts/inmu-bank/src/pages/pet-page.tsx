@@ -2,6 +2,7 @@ import type { ElementType, ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { AdSlot } from '@/components/ad-slot'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
@@ -126,6 +127,15 @@ const PET_ROOM_CSS = `
   @keyframes pet-evolution-copy {
     0%, 72% { opacity: 0; transform: translateY(12px); }
     100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pet-element-aura {
+    0%, 100% { opacity: .48; transform: scale(.92); filter: blur(8px) brightness(.9); }
+    50% { opacity: .84; transform: scale(1.06); filter: blur(5px) brightness(1.18); }
+  }
+  @keyframes pet-element-ray {
+    0% { opacity: .25; transform: rotate(0deg) scale(.9); }
+    50% { opacity: .58; }
+    100% { opacity: .25; transform: rotate(360deg) scale(.9); }
   }
   @keyframes pet-idle-float {
     0%, 100% { transform: translate3d(-4px, 0, 0) rotate(-.35deg); }
@@ -257,7 +267,7 @@ const PET_ROOM_CSS = `
   .daifugo-title-glow { animation: daifugo-title-glow 2.8s ease-in-out infinite; }
   .daifugo-btn-in { animation: daifugo-btn-in .52s ease-out .4s both; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-water-swim-stroke, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text, .daifugo-light-burst, .daifugo-char-reveal, .daifugo-char-zoom, .daifugo-title-in, .daifugo-title-glow, .daifugo-btn-in { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-water-swim-stroke, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .pet-element-aura, .pet-element-ray, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text, .daifugo-light-burst, .daifugo-char-reveal, .daifugo-char-zoom, .daifugo-title-in, .daifugo-title-glow, .daifugo-btn-in { animation: none; }
   }
 `
 
@@ -379,6 +389,7 @@ function PetRoom({
   name,
   image,
   roomWidth,
+  roomOffsetY,
   roomTheme,
   roomImage,
   expression,
@@ -400,6 +411,7 @@ function PetRoom({
   name: string
   image: string
   roomWidth: string
+  roomOffsetY?: string
   roomTheme: PetDefinition['roomTheme']
   roomImage: string
   expression: PetExpression
@@ -419,6 +431,11 @@ function PetRoom({
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const isWaterSwimmer = petId === 'shikoiruka'
+  const evolvedAura = petId === 'yajusenpai-male-evolved'
+    ? 'light'
+    : petId === 'yajusenpai-female-evolved'
+      ? 'dark'
+      : null
   const activeWalkTransform = walkMotion.active
     ? isWaterSwimmer
       ? 'translate3d(' + walkMotion.offsetPercent + '%, ' + (walkMotion.bob * .12) + 'px, 0) scaleX(' + walkMotion.facing + ')'
@@ -581,6 +598,22 @@ function PetRoom({
           }}
           data-walking={walkMotion.active || undefined}
         >
+          {evolvedAura && (
+            <div className="pointer-events-none absolute inset-[-9%] z-0" aria-hidden="true">
+              <div className={cn(
+                'pet-element-aura absolute inset-[8%] animate-[pet-element-aura_3.4s_ease-in-out_infinite] rounded-[42%]',
+                evolvedAura === 'light'
+                  ? 'bg-[radial-gradient(ellipse,rgba(255,255,255,.9)_0%,rgba(253,224,71,.48)_34%,rgba(245,158,11,.18)_58%,transparent_74%)] shadow-[0_0_42px_rgba(253,224,71,.7)]'
+                  : 'bg-[radial-gradient(ellipse,rgba(76,29,149,.82)_0%,rgba(88,28,135,.58)_36%,rgba(15,3,30,.65)_58%,transparent_76%)] shadow-[0_0_48px_rgba(147,51,234,.72)]',
+              )} />
+              <div className={cn(
+                'pet-element-ray absolute inset-[2%] animate-[pet-element-ray_12s_linear_infinite] opacity-50',
+                evolvedAura === 'light'
+                  ? 'bg-[conic-gradient(from_0deg,transparent_0_8%,rgba(255,248,190,.7)_10%,transparent_13_27%,rgba(253,224,71,.55)_30%,transparent_34_55%,rgba(255,255,255,.62)_58%,transparent_62_100%)]'
+                  : 'bg-[conic-gradient(from_0deg,transparent_0_12%,rgba(126,34,206,.65)_15%,transparent_19_38%,rgba(30,5,55,.9)_42%,transparent_47_69%,rgba(168,85,247,.55)_73%,transparent_78_100%)]',
+              )} />
+            </div>
+          )}
           <div
             className="absolute bottom-1 left-1/2 h-7 w-[72%] -translate-x-1/2 rounded-[50%] bg-black/65 blur-md transition-transform duration-200"
             style={{ transform: 'translateX(-50%) scaleX(' + (isWaterSwimmer ? .96 : walkMotion.moving ? (walkMotion.frame ? .88 : 1.04) : 1) + ')' }}
@@ -594,6 +627,7 @@ function PetRoom({
               alt={name}
               decoding="sync"
               className={cn('relative z-10 max-h-full w-full object-contain drop-shadow-[0_14px_18px_rgba(0,0,0,.55)] transition-[filter,transform] duration-150', expression === 'petted' && 'scale-[.98] brightness-110', isWaterSwimmer && walkMotion.active && 'pet-water-swim-stroke')}
+              style={{ translate: roomOffsetY ? `0 ${roomOffsetY}` : undefined }}
               data-pet-character
               data-expression={expression}
             />
@@ -883,6 +917,61 @@ function EvolutionDialog({
   )
 }
 
+function CombatStatusPanel({ pet, level }: { pet: PetDefinition; level: number }) {
+  const combat = pet.combat
+  if (!combat) return null
+  const start = combat.stats.level31
+  const end = combat.stats.level60
+  const progress = Math.min(1, Math.max(0, (level - start.level) / (end.level - start.level)))
+  const interpolate = (from: number, to: number) => Math.round(from + (to - from) * progress)
+  const current = {
+    hp: interpolate(start.hp, end.hp),
+    attack: interpolate(start.attack, end.attack),
+    defense: interpolate(start.defense, end.defense),
+    sp: 100,
+    attackCooldownSeconds: start.attackCooldownSeconds,
+  }
+  const typeLabel = combat.type === 'power' ? 'パワータイプ' : '連撃・サポートタイプ'
+  return (
+    <Accordion type="single" collapsible className="rounded-lg border border-amber-300/20 bg-[#0d0916] px-3">
+      <AccordionItem value="combat-status" className="border-0">
+        <AccordionTrigger className="py-3 text-sm font-black text-white hover:no-underline">
+          <span className="flex items-center gap-2"><Dumbbell className="size-4 text-amber-300" />戦闘ステータス</span>
+        </AccordionTrigger>
+        <AccordionContent className="pb-3">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2">
+            <span className="text-xs font-bold text-amber-200">{typeLabel}</span>
+            <span className="font-mono text-xs font-black text-cyan-200">Lv.{level}</span>
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {[
+              ['体力', current.hp],
+              ['攻撃力', current.attack],
+              ['防御力', current.defense],
+              ['SP', current.sp],
+              ['攻撃間隔', `${current.attackCooldownSeconds}秒`],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="min-w-0 rounded-md border border-white/10 bg-white/5 px-2 py-2">
+                <p className="text-[9px] text-white/55">{label}</p>
+                <p className="mt-0.5 break-words font-mono text-sm font-black text-white">{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 rounded-md border border-fuchsia-300/15 bg-fuchsia-300/5 px-3 py-2">
+            <p className="text-[9px] font-bold text-fuchsia-200">必殺技 / SP {combat.ultimate.spCost}</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/70">
+              {'fixedDamage' in combat.ultimate
+                ? `敵1体へ${combat.ultimate.fixedDamage}の固定ダメージ（攻撃力・防御力の影響なし）`
+                : `${combat.ultimate.durationSeconds}秒間、自身の攻撃回数2倍・味方全体の攻撃間隔を短縮`}
+            </p>
+          </div>
+          <p className="mt-2 text-[9px] text-white/45">Lv.60時: 体力 {end.hp} / 攻撃力 {end.attack} / 防御力 {end.defense}</p>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  )
+}
+
 function SkillPanel({ pet }: { pet: PetDefinition }) {
   return (
     <section className="rounded-lg border border-cyan-300/20 bg-[linear-gradient(145deg,rgba(8,30,40,.7),rgba(13,9,22,.96))] p-4">
@@ -931,7 +1020,7 @@ function ShikoirukaUnlockDialog({ open, onClose }: { open: boolean; onClose: () 
   )
 }
 
-function ItemPanel({ inventory, level, maxLevel, disabled = false, onUse }: { inventory: number; level: number; maxLevel: number; disabled?: boolean; onUse: (amount: number) => void }) {
+function ItemPanel({ inventory, level, maxLevel, disabled = false, disabledReason, onUse }: { inventory: number; level: number; maxLevel: number; disabled?: boolean; disabledReason?: string; onUse: (amount: number) => void }) {
   const [amount, setAmount] = useState(1)
   const maxUsable = disabled ? 0 : Math.min(3, inventory, Math.max(0, maxLevel - level))
   useEffect(() => setAmount(current => Math.max(1, Math.min(current, Math.max(1, maxUsable)))), [maxUsable])
@@ -944,7 +1033,7 @@ function ItemPanel({ inventory, level, maxLevel, disabled = false, onUse }: { in
       <p className="mt-2 text-xs font-bold text-white">アイスティー（睡眠薬入り）</p>
       <p className="mt-1 text-[10px] leading-relaxed text-sky-100/65">1個につきLv.+1、眠気+33。最大3個まで同時に使用できます。</p>
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
-        {disabled && <p className="col-span-2 text-[11px] font-bold text-cyan-300">眠っている間は使用できません</p>}
+        {disabled && <p className="col-span-2 text-[11px] font-bold text-cyan-300">{disabledReason ?? '現在は利用できません'}</p>}
         <select
           value={Math.min(amount, Math.max(1, maxUsable))}
           onChange={event => setAmount(Number(event.target.value))}
@@ -952,7 +1041,7 @@ function ItemPanel({ inventory, level, maxLevel, disabled = false, onUse }: { in
           className="h-10 rounded-md border border-sky-300/25 bg-black/45 px-3 text-sm text-sky-50 outline-none disabled:opacity-40"
         >
           {[1, 2, 3].filter(value => value <= maxUsable).map(value => <option key={value} value={value}>{value}個使用</option>)}
-          {maxUsable <= 0 && <option value={1}>{level >= maxLevel ? 'レベルMAX' : '所持数0'}</option>}
+          {maxUsable <= 0 && <option value={1}>{disabled ? '利用不可' : level >= maxLevel ? 'レベルMAX' : '所持数0'}</option>}
         </select>
         <Button type="button" disabled={maxUsable <= 0} onClick={() => onUse(amount)} className="h-10 border border-sky-300/35 bg-sky-500/20 text-sky-50 hover:bg-sky-500/30">使う</Button>
       </div>
@@ -2475,6 +2564,7 @@ export function PetPage() {
                 name={pet.name}
                 image={displayImage}
                 roomWidth={pet.roomWidth}
+                roomOffsetY={pet.roomOffsetY}
                 roomTheme={pet.roomTheme}
                 roomImage={pet.roomImage}
                 expression={expression}
@@ -2498,8 +2588,16 @@ export function PetPage() {
                 <SkillActivationButton ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} skillLockStatus={skillLockStatus} />
                 <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
               </div>
+              <CombatStatusPanel pet={pet} level={selectedStats.level} />
               <SkillPanel pet={pet} />
-              <ItemPanel inventory={items.sleepTea} level={selectedStats.level} maxLevel={pet.maxLevel} disabled={pet.experienceMode === 'evolved-training-only' || isSleeping || isWalking || walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate} onUse={handleUseSleepTea} />
+              <ItemPanel
+                inventory={items.sleepTea}
+                level={selectedStats.level}
+                maxLevel={pet.maxLevel}
+                disabled={pet.experienceMode === 'evolved-training-only' || isSleeping || isWalking || walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate}
+                disabledReason={pet.experienceMode === 'evolved-training-only' ? '進化後は利用できません' : undefined}
+                onUse={handleUseSleepTea}
+              />
               <AdSlot slotId="pet-items-rewards" variant="banner" />
               <RewardsPanel
                 pet={pet}

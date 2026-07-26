@@ -127,9 +127,11 @@ export type PetDefinition = {
     angry: number
   }
   roomWidth: string
+  roomOffsetY?: string
   roomTheme: 'cat' | 'dog' | 'lion' | 'festival' | 'water' | 'royal' | 'modern' | 'neon'
   roomImage: string
   experienceMode?: 'standard' | 'evolved-training-only'
+  combat?: NonNullable<(typeof UPCOMING_PET_DEFINITIONS)[number]['combat']>
   evolution?: {
     stage: 'base' | 'evolved'
     counterpartId: PetId
@@ -165,6 +167,12 @@ const YAJUSENPAI_PET_DEFINITIONS: readonly PetDefinition[] = UPCOMING_PET_DEFINI
   const baseDialogues = male
     ? ['お前、なかなかやるじゃねぇか。', 'まずうちさぁ、屋上あんだけど。', 'いいよ、来いよ。']
     : ['こっち見てんじゃないわよ。', '退屈なんだけど。', '少しは楽しませてよ。']
+  const roomPresentation = {
+    'yajusenpai-male-base': { width: 'clamp(345px, 78%, 430px)', offsetY: '2%' },
+    'yajusenpai-male-evolved': { width: 'clamp(390px, 86%, 470px)', offsetY: '10%' },
+    'yajusenpai-female-base': { width: 'clamp(355px, 80%, 440px)', offsetY: '11%' },
+    'yajusenpai-female-evolved': { width: 'clamp(410px, 90%, 490px)', offsetY: '18%' },
+  }[source.id]
   return {
     id: source.id,
     name: source.name,
@@ -200,10 +208,12 @@ const YAJUSENPAI_PET_DEFINITIONS: readonly PetDefinition[] = UPCOMING_PET_DEFINI
       affectionate: male ? ['お前のことが好きだったんだよ！'] : ['あんたなら側にいてもいいわ。'],
     },
     reactionDurations: { feed: 4000, play: 4400, pet: 3800, angry: 4700 },
-    roomWidth: evolved ? 'clamp(235px, 52%, 350px)' : 'clamp(220px, 48%, 325px)',
+    roomWidth: roomPresentation.width,
+    roomOffsetY: roomPresentation.offsetY,
     roomTheme: male ? 'modern' : 'neon',
     roomImage: source.roomImage,
     experienceMode: evolved ? 'evolved-training-only' : 'standard',
+    combat: source.combat ?? undefined,
     evolution: {
       stage: source.evolutionStage,
       counterpartId,
