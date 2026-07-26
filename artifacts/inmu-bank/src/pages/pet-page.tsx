@@ -129,12 +129,8 @@ const PET_ROOM_CSS = `
     100% { opacity: 1; transform: translateY(0); }
   }
   @keyframes pet-element-aura {
-    0%, 100% { opacity: .54; transform: translateY(2px) scale(1.015); }
-    50% { opacity: .9; transform: translateY(-3px) scale(1.045); }
-  }
-  @keyframes pet-element-ray {
-    0%, 100% { opacity: .25; transform: translateY(5px) scale(1.02, .99); filter: blur(2px); }
-    50% { opacity: .68; transform: translateY(-9px) scale(1.075, 1.045); filter: blur(4px); }
+    0%, 100% { opacity: .32; transform: scale(1.008); }
+    50% { opacity: .52; transform: translateY(-2px) scale(1.018); }
   }
   @keyframes pet-idle-float {
     0%, 100% { transform: translate3d(-4px, 0, 0) rotate(-.35deg); }
@@ -266,7 +262,7 @@ const PET_ROOM_CSS = `
   .daifugo-title-glow { animation: daifugo-title-glow 2.8s ease-in-out infinite; }
   .daifugo-btn-in { animation: daifugo-btn-in .52s ease-out .4s both; }
   @media (prefers-reduced-motion: reduce) {
-    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-water-swim-stroke, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .pet-element-aura, .pet-element-ray, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text, .daifugo-light-burst, .daifugo-char-reveal, .daifugo-char-zoom, .daifugo-title-in, .daifugo-title-glow, .daifugo-btn-in { animation: none; }
+    .pet-meter-shine, .pet-neon-sign, .pet-character-motion, .pet-water-swim-stroke, .pet-react-feed, .pet-react-play, .pet-react-pet, .pet-react-angry, .pet-sleeping-motion, .pet-zzz, .pet-speech-bubble, .pet-room-enter, .pet-room-drift, .pet-room-sway, .pet-room-fire, .pet-room-water-flow, .pet-water-bubble, .pet-room-speaker, .pet-element-aura, .shikoiruka-unlock-approach, .shikoiruka-unlock-ring, .shikoiruka-unlock-text, .daifugo-light-burst, .daifugo-char-reveal, .daifugo-char-zoom, .daifugo-title-in, .daifugo-title-glow, .daifugo-btn-in { animation: none; }
   }
 `
 
@@ -552,7 +548,7 @@ function PetRoom({
       <div
         className={cn(
           'absolute inset-x-0 bottom-[148px] z-10 flex items-end justify-center',
-          isYajusenpaiEvolved ? 'h-[68%]' : 'h-[50%]',
+          isYajusenpaiEvolved ? 'h-[72%]' : 'h-[50%]',
         )}
         data-pet-stage
         data-pet-id={petId}
@@ -612,25 +608,9 @@ function PetRoom({
                 style={{
                   backgroundColor: evolvedAura === 'light' ? '#fff6a3' : '#581c87',
                   filter: evolvedAura === 'light'
-                    ? 'drop-shadow(0 0 3px #ffffff) drop-shadow(0 -5px 7px #fde047) drop-shadow(0 -12px 12px #f59e0b)'
-                    : 'drop-shadow(0 0 3px #c084fc) drop-shadow(0 -6px 8px #7e22ce) drop-shadow(0 -13px 13px #18002e)',
-                  maskImage: `url("${image}")`,
-                  WebkitMaskImage: `url("${image}")`,
-                  maskPosition: 'center bottom',
-                  WebkitMaskPosition: 'center bottom',
-                  maskRepeat: 'no-repeat',
-                  WebkitMaskRepeat: 'no-repeat',
-                  maskSize: 'contain',
-                  WebkitMaskSize: 'contain',
-                }}
-              />
-              <div
-                className="pet-element-ray absolute inset-0 animate-[pet-element-ray_1.7s_ease-in-out_infinite]"
-                style={{
-                  backgroundColor: evolvedAura === 'light' ? '#facc15' : '#2e064f',
-                  filter: evolvedAura === 'light'
-                    ? 'drop-shadow(0 -9px 6px #fef08a) drop-shadow(0 -19px 10px #f59e0b)'
-                    : 'drop-shadow(0 -9px 7px #9333ea) drop-shadow(0 -20px 11px #090011)',
+                    ? 'drop-shadow(0 0 2px #ffffff) drop-shadow(0 0 6px #fde047) drop-shadow(0 -4px 9px #f59e0b)'
+                    : 'drop-shadow(0 0 2px #e9d5ff) drop-shadow(0 0 6px #7e22ce) drop-shadow(0 -4px 9px #18002e)',
+                  mixBlendMode: 'screen',
                   maskImage: `url("${image}")`,
                   WebkitMaskImage: `url("${image}")`,
                   maskPosition: 'center bottom',

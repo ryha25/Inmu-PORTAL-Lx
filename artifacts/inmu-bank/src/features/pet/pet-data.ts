@@ -169,9 +169,9 @@ const YAJUSENPAI_PET_DEFINITIONS: readonly PetDefinition[] = UPCOMING_PET_DEFINI
     : ['こっち見てんじゃないわよ。', '退屈なんだけど。', '少しは楽しませてよ。']
   const roomPresentation = {
     'yajusenpai-male-base': { width: 'clamp(345px, 78%, 430px)', offsetY: '2%' },
-    'yajusenpai-male-evolved': { width: 'clamp(360px, 88%, 510px)', offsetY: '0%' },
+    'yajusenpai-male-evolved': { width: 'clamp(410px, 100%, 570px)', offsetY: '7%' },
     'yajusenpai-female-base': { width: 'clamp(355px, 80%, 440px)', offsetY: '11%' },
-    'yajusenpai-female-evolved': { width: 'clamp(380px, 92%, 530px)', offsetY: '0%' },
+    'yajusenpai-female-evolved': { width: 'clamp(410px, 100%, 570px)', offsetY: '7%' },
   }[source.id]
   return {
     id: source.id,
