@@ -76,11 +76,9 @@ export const PET_SLEEP_RECOVERY_PER_10_SEC = 1
 export const PET_SLEEP_RECOVERY_PER_SEC = PET_SLEEP_RECOVERY_PER_10_SEC / 10
 export const PET_EARLY_NAP_CHECK_MS = 60 * 1000
 
-// 入眠開始時の眠気(startValue)から、ランダムに「ここまで回復したら起きる」しきい値を決める。
-// 0に近ければぐっすり眠り、startValueに近ければすぐ目が覚める。
-function rollSleepWakeThreshold(startValue: number): number {
-  if (startValue <= 0) return 0
-  return Math.random() * startValue
+// 入眠したら必ず眠気0まで眠り切る（途中覚醒なし）。
+function rollSleepWakeThreshold(_startValue: number): number {
+  return 0
 }
 export const PET_EARLY_NAP_MIN_SLEEPINESS = 45
 export const PET_FULLNESS_DECAY_MS = 12 * 60 * 1000
