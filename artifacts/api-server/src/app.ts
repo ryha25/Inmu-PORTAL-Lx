@@ -100,15 +100,19 @@ let initialized = false;
 export async function initializeApplication(): Promise<void> {
   if (initialized) return;
 
-  const [{ sessionMiddleware }, { default: router }, authModule] =
+  const [{ sessionMiddleware }, { default: router }, authModule, petStateModule] =
     await Promise.all([
       import("./middlewares/session"),
       import("./routes"),
       import("./routes/auth"),
+      import("./services/pet-state-store"),
     ]);
 
   app.use(sessionMiddleware);
   app.use("/api", router);
+  void petStateModule.ensurePetStateTable().catch((err) => {
+    logger.error({ err }, "PET state initialization and reward audit failed");
+  });
   scheduleInactiveUserCleanup(authModule.deleteInactiveUsers);
   initialized = true;
 }
