@@ -2,7 +2,6 @@ import { Router } from "express";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../middlewares/session";
 import {
-  ensureDaifugoTestDistributionForUser,
   ensurePetStateTable,
   ensureShikoirukaDistributionForUser,
   ensureYajusenpaiTestDistributionForUser,
@@ -73,7 +72,6 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
     await ensurePetStateTable();
     await ensurePetCommerceTables();
     const shikoirukaGranted = await ensureShikoirukaDistributionForUser(req.userId!);
-    await ensureDaifugoTestDistributionForUser(req.userId!);
     await ensureYajusenpaiTestDistributionForUser(req.userId!);
     await preserveAndRestorePetLevelProgress(req.userId!);
     const [stateResult, ownershipResult, claimsResult] = await Promise.all([

@@ -13,7 +13,6 @@ import {
 import { eq, and, sql, gte } from "drizzle-orm";
 import {
   claimDaifugoReward,
-  ensureDaifugoTestDistributionForUser,
   ensurePetStateTable,
   ensureShikoirukaDistributionForUser,
   ensureYajusenpaiTestDistributionForUser,
@@ -1001,7 +1000,6 @@ router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensureRewardTables();
     const shikoirukaNewlyDistributed = await ensureShikoirukaDistributionForUser(req.userId!);
-    await ensureDaifugoTestDistributionForUser(req.userId!);
     await ensureYajusenpaiTestDistributionForUser(req.userId!);
     const [ownership, daifugoReward] = await Promise.all([
       pool.query(

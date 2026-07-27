@@ -20,6 +20,9 @@ const DEFAULT_STATS = { level: 1, exp: 0, fullness: 50, sleepiness: 20, affectio
 const EMPTY_ACTIONS = { "feed-basic": 0, "feed-premium": 0, "play-yarn": 0, "play-ball": 0, "play-toy": 0, pet: 0 };
 const EMPTY_COOLDOWNS = { feed: 0, play: 0 };
 const SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID = "shikoiruka";
+const DAIFUGO_CHARACTER_ID = "daifugo";
+const DAIFUGO_REQUIRED_CHALLENGE_LEVEL = 100;
+const DAIFUGO_REVOCATION_REASON = "challenge_level_100_not_cleared";
 const DAIFUGO_TEST_ACCOUNT_NAME = "ガチャテスト";
 const YAJUSENPAI_TEST_BASE_IDS = ["yajusenpai-male-base", "yajusenpai-female-base"] as const;
 const YAJUSENPAI_EVOLUTION_MAP = {
@@ -140,11 +143,169 @@ export function ensurePetStateTable(): Promise<void> {
       WHERE EXISTS (SELECT 1 FROM inserted)
         AND jsonb_typeof(ups.state->'pets') = 'object'
     `);
+    await reconcileDaifugoOwnership();
   }).catch(error => {
     tablePromise = null;
     throw error;
   });
   return tablePromise;
+}
+
+function removeCharacterFromPetState(
+  rawState: unknown,
+  characterId: string,
+  fallbackCharacterId: string | null,
+): Record<string, unknown> | null {
+  if (!rawState || typeof rawState !== "object" || Array.isArray(rawState)) return null;
+
+  const stripCharacter = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      return value
+        .filter(item => String(item) !== characterId)
+        .map(stripCharacter);
+    }
+    if (!value || typeof value !== "object") return value;
+
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => key !== characterId)
+        .map(([key, nestedValue]) => [key, stripCharacter(nestedValue)]),
+    );
+  };
+
+  const cleaned = stripCharacter(rawState) as Record<string, unknown>;
+  if (cleaned.selectedPetId === characterId) {
+    if (fallbackCharacterId) cleaned.selectedPetId = fallbackCharacterId;
+    else delete cleaned.selectedPetId;
+  }
+  if (cleaned.skillActiveCharacterId === characterId) {
+    cleaned.skillActiveCharacterId = null;
+  }
+  return cleaned;
+}
+
+async function reconcileDaifugoOwnership(): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["daifugo-ownership-reconciliation"]);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "petOwnershipRevocationAudit" (
+        id BIGSERIAL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "characterId" TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        "ownershipSnapshot" JSONB NOT NULL,
+        "stateSnapshot" JSONB,
+        "revokedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    const tables = await client.query(
+      `SELECT
+         to_regclass('public.inmu_game_users') IS NOT NULL AS "hasGameUsers",
+         to_regclass('public.inmu_challenge_progress') IS NOT NULL AS "hasChallengeProgress"`,
+    );
+    if (!tables.rows[0]?.hasGameUsers || !tables.rows[0]?.hasChallengeProgress) {
+      await client.query("COMMIT");
+      console.warn("[Daifugo] ownership reconciliation skipped because challenge progress tables are unavailable");
+      return;
+    }
+
+    const ownership = await client.query(`
+      SELECT
+        owned.id,
+        owned."userId",
+        owned."sourceMissionId",
+        owned."acquiredAt",
+        states.state,
+        ARRAY(
+          SELECT other."characterId"
+          FROM "userPetCharacters" AS other
+          WHERE other."userId" = owned."userId"
+            AND other."characterId" <> $1
+          ORDER BY other."acquiredAt" ASC
+        ) AS "otherCharacterIds",
+        EXISTS (
+          SELECT 1
+          FROM inmu_game_users AS game_user
+          JOIN inmu_challenge_progress AS progress
+            ON progress.game_user_id = game_user.id
+          WHERE game_user.portal_user_id = owned."userId"
+            AND COALESCE(progress.highest_cleared_level, 0) >= $2
+            AND $2 = ANY(COALESCE(progress.cleared_levels, '{}'::integer[]))
+        ) AS "hasClearedLevel100"
+      FROM "userPetCharacters" AS owned
+      LEFT JOIN "userPetStates" AS states ON states."userId" = owned."userId"
+      WHERE owned."characterId" = $1
+      FOR UPDATE OF owned
+    `, [DAIFUGO_CHARACTER_ID, DAIFUGO_REQUIRED_CHALLENGE_LEVEL]);
+
+    const invalidOwners = ownership.rows.filter((row: { hasClearedLevel100?: boolean }) => !row.hasClearedLevel100);
+    for (const owner of invalidOwners) {
+      const ownershipSnapshot = {
+        id: owner.id,
+        userId: owner.userId,
+        characterId: DAIFUGO_CHARACTER_ID,
+        sourceMissionId: owner.sourceMissionId,
+        acquiredAt: owner.acquiredAt,
+      };
+      await client.query(
+        `INSERT INTO "petOwnershipRevocationAudit"
+           ("userId", "characterId", reason, "ownershipSnapshot", "stateSnapshot")
+         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)`,
+        [
+          owner.userId,
+          DAIFUGO_CHARACTER_ID,
+          DAIFUGO_REVOCATION_REASON,
+          JSON.stringify(ownershipSnapshot),
+          owner.state == null ? null : JSON.stringify(owner.state),
+        ],
+      );
+
+      if (owner.state != null) {
+        const fallbackCharacterId = Array.isArray(owner.otherCharacterIds)
+          ? String(owner.otherCharacterIds[0] ?? "") || null
+          : null;
+        const cleanedState = removeCharacterFromPetState(
+          owner.state,
+          DAIFUGO_CHARACTER_ID,
+          fallbackCharacterId,
+        );
+        if (cleanedState) {
+          await client.query(
+            `UPDATE "userPetStates"
+             SET state = $2::jsonb,
+                 "clientUpdatedAt" = GREATEST("clientUpdatedAt", $3),
+                 "updatedAt" = NOW()
+             WHERE "userId" = $1`,
+            [owner.userId, JSON.stringify(cleanedState), Date.now()],
+          );
+        }
+      }
+
+      await client.query(
+        `DELETE FROM "petLevelProgressBackups"
+         WHERE "userId" = $1 AND "characterId" = $2`,
+        [owner.userId, DAIFUGO_CHARACTER_ID],
+      );
+      await client.query(
+        `DELETE FROM "userPetCharacters"
+         WHERE id = $1 AND "userId" = $2 AND "characterId" = $3`,
+        [owner.id, owner.userId, DAIFUGO_CHARACTER_ID],
+      );
+    }
+
+    await client.query("COMMIT");
+    console.info(
+      `[Daifugo] ownership reconciliation checked=${ownership.rows.length} valid=${ownership.rows.length - invalidOwners.length} revoked=${invalidOwners.length}`,
+    );
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function readProgress(value: unknown): { level: number; exp: number } {
@@ -352,24 +513,6 @@ export async function isPetFeatureTestAccount(userId: string): Promise<boolean> 
   return isTestAccount;
 }
 
-export async function ensureDaifugoTestDistributionForUser(userId: string): Promise<boolean> {
-  const isTestAccount = await isPetFeatureTestAccount(userId);
-  if (!isTestAccount) return false;
-
-  await ensurePetStateTable();
-  const inserted = await pool.query(
-    `INSERT INTO "userPetCharacters" ("userId", "characterId")
-     VALUES ($1, 'daifugo')
-     ON CONFLICT ("userId", "characterId") DO NOTHING
-     RETURNING "characterId"`,
-    [userId],
-  );
-  if (inserted.rowCount) {
-    await initializePetCharacterState(userId, "daifugo");
-  }
-  return Boolean(inserted.rowCount);
-}
-
 export async function ensureYajusenpaiTestDistributionForUser(userId: string): Promise<boolean> {
   if (!await isPetFeatureTestAccount(userId)) return false;
   await ensurePetStateTable();
@@ -379,7 +522,7 @@ export async function ensureYajusenpaiTestDistributionForUser(userId: string): P
        AND "characterId" IN ('yajusenpai-male-base', 'yajusenpai-male-evolved', 'yajusenpai-female-base', 'yajusenpai-female-evolved')`,
     [userId],
   );
-  const ownedIds = new Set(ownership.rows.map(row => String(row.characterId)));
+  const ownedIds = new Set(ownership.rows.map((row: { characterId: unknown }) => String(row.characterId)));
   let granted = false;
   for (const characterId of YAJUSENPAI_TEST_BASE_IDS) {
     const evolvedCharacterId = YAJUSENPAI_EVOLUTION_MAP[characterId];
@@ -419,7 +562,7 @@ export async function evolveYajusenpaiForTestUser(userId: string, baseCharacterI
        FOR UPDATE`,
       [userId, baseCharacterId, evolvedCharacterId],
     );
-    const ownedIds = new Set(ownership.rows.map(row => String(row.characterId)));
+    const ownedIds = new Set(ownership.rows.map((row: { characterId: unknown }) => String(row.characterId)));
     if (ownedIds.has(evolvedCharacterId)) {
       const balance = await client.query(
         `SELECT COALESCE("monthlyPoints", 0) AS balance FROM profile WHERE "userId" = $1 LIMIT 1`,
@@ -557,12 +700,16 @@ export async function getDaifugoRewardStatus(userId: string) {
   await ensurePetStateTable();
   const [progress, ownership] = await Promise.all([
     pool.query(
-      `SELECT COALESCE(p.highest_cleared_level, 0)::int AS "highestClearedLevel"
+      `SELECT
+         COALESCE(MAX(COALESCE(p.highest_cleared_level, 0)), 0)::int AS "highestClearedLevel",
+         COALESCE(BOOL_OR(
+           COALESCE(p.highest_cleared_level, 0) >= $2
+           AND $2 = ANY(COALESCE(p.cleared_levels, '{}'::integer[]))
+         ), false) AS "hasClearedLevel100"
        FROM inmu_game_users u
        LEFT JOIN inmu_challenge_progress p ON p.game_user_id = u.id
-       WHERE u.portal_user_id = $1
-       LIMIT 1`,
-      [userId],
+       WHERE u.portal_user_id = $1`,
+      [userId, DAIFUGO_REQUIRED_CHALLENGE_LEVEL],
     ).catch(() => ({ rows: [] })),
     pool.query(
       `SELECT 1 FROM "userPetCharacters"
@@ -572,9 +719,10 @@ export async function getDaifugoRewardStatus(userId: string) {
     ),
   ]);
   const highestClearedLevel = Math.min(100, Math.max(0, Number(progress.rows[0]?.highestClearedLevel ?? 0)));
+  const hasClearedLevel100 = progress.rows[0]?.hasClearedLevel100 === true;
   return {
     highestClearedLevel,
-    eligible: highestClearedLevel >= 1,
+    eligible: hasClearedLevel100,
     claimed: ownership.rows.length > 0,
   };
 }
@@ -587,15 +735,20 @@ export async function claimDaifugoReward(userId: string) {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`daifugo-pet:${userId}`]);
     const progress = await client.query(
-      `SELECT COALESCE(p.highest_cleared_level, 0)::int AS "highestClearedLevel"
+      `SELECT
+         COALESCE(MAX(COALESCE(p.highest_cleared_level, 0)), 0)::int AS "highestClearedLevel",
+         COALESCE(BOOL_OR(
+           COALESCE(p.highest_cleared_level, 0) >= $2
+           AND $2 = ANY(COALESCE(p.cleared_levels, '{}'::integer[]))
+         ), false) AS "hasClearedLevel100"
        FROM inmu_game_users u
        LEFT JOIN inmu_challenge_progress p ON p.game_user_id = u.id
-       WHERE u.portal_user_id = $1
-       LIMIT 1`,
-      [userId],
+       WHERE u.portal_user_id = $1`,
+      [userId, DAIFUGO_REQUIRED_CHALLENGE_LEVEL],
     );
     const highestClearedLevel = Math.min(100, Math.max(0, Number(progress.rows[0]?.highestClearedLevel ?? 0)));
-    if (highestClearedLevel < 1) {
+    const hasClearedLevel100 = progress.rows[0]?.hasClearedLevel100 === true;
+    if (!hasClearedLevel100) {
       await client.query("ROLLBACK");
       return { ok: false as const, reason: "not_eligible" as const, highestClearedLevel };
     }

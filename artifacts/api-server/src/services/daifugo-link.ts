@@ -97,7 +97,7 @@ export async function getDaifugoMaxChallengeLevel(userId: string): Promise<numbe
   await ensureDaifugoLinkTables();
   const { rows } = await pool.query(
     `SELECT COALESCE(MAX("challengeLevel"), 0)::int AS lv FROM "portalGameEvents"
-     WHERE "userId" = $1 AND game = $2 AND "eventType" IN ('challenge_play', 'challenge_win') AND "challengeLevel" IS NOT NULL`,
+     WHERE "userId" = $1 AND game = $2 AND "eventType" = 'challenge_win' AND "challengeLevel" IS NOT NULL`,
     [userId, DAIFUGO_GAME_ID],
   );
   return Number(rows[0]?.lv ?? 0);
