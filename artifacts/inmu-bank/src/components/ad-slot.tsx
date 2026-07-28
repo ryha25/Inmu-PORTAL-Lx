@@ -38,36 +38,15 @@ const NINJA_ADMAX_PC_RAIL_SRCS = [
 
 const BANNER_AD_SLOT_IDS = new Set([
   'dashboard-balance-bonus',
-  'dashboard-stats-scan',
   'transaction-controls-history-a',
   'mission-summary-daily',
-  'mission-daily-achievement',
-  'mission-achievement-event',
   'gacha-paid-banner-break',
-  'gacha-paid-banner-bottom',
   'gacha-points-banner-break',
-  'gacha-points-banner-bottom',
   'pet-top',
-  'pet-walk-select',
-  'pet-items-rewards',
-  'ranking-top',
-  'ranking-composite-list-top',
-  'ranking-monthly-list-top',
   'achievements-ranking-break',
-  'profile-achievements-ranking',
-  'profile-ranking-info',
-  'profile-info-wallet',
 ])
 
-const RAIL_AD_SLOT_IDS = new Set([
-  'dashboard-rail',
-  'history-rail',
-  'points-rail',
-  'gacha-rail',
-  'pet-rail',
-  'ranking-rail',
-  'achievements-rail',
-])
+const RAIL_AD_SLOT_IDS = new Set<string>()
 
 function pickStableScriptSrc(slotId: string, sources: string[]) {
   const hash = Array.from(slotId).reduce((sum, char) => sum + char.charCodeAt(0), 0)
@@ -145,7 +124,7 @@ export function AdSlot({ slotId, variant = 'banner', className }: AdSlotProps) {
       className={cn(
         'overflow-visible rounded-lg border border-border/70 bg-card/55 text-muted-foreground shadow-sm',
         variant === 'banner'
-          ? 'mx-auto h-[64px] min-h-[64px] w-full min-w-[320px] max-w-[360px] shrink-0'
+          ? 'mx-auto my-6 h-[64px] min-h-[64px] w-full min-w-[320px] max-w-[360px] shrink-0'
           : 'h-[250px] min-h-[250px] w-[300px] max-w-full shrink-0',
         className,
       )}

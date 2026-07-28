@@ -77,7 +77,7 @@ export function TransactionTable({ rows, showTypeFilter = true, filename = 'inmu
           CSV出力
         </Button>
       </div>
-      <AdSlot slotId="transaction-controls-history-a" variant="banner" />
+      {filtered.length > 0 && <AdSlot slotId="transaction-controls-history-a" variant="banner" />}
       <Card className="border-border bg-card">
         {filtered.length === 0 ? (
           <p className="px-4 py-12 text-center text-sm text-muted-foreground">データがありません</p>

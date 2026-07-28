@@ -5,6 +5,29 @@ import { and, eq, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
 
 const router = Router();
+const PUBLIC_UPDATE_TYPE = "public_update_20260728";
+const PUBLIC_UPDATE_TITLE = "INMU PORTALを更新しました";
+const PUBLIC_UPDATE_MESSAGE =
+  "ログイン前のサービス紹介、よくある質問、お知らせを充実させ、各画面の広告配置を見直しました。";
+
+async function ensurePublicUpdateNotification(userId: string) {
+  const existing = await db
+    .select({ id: notificationsTable.id })
+    .from(notificationsTable)
+    .where(and(
+      eq(notificationsTable.userId, userId),
+      eq(notificationsTable.type, PUBLIC_UPDATE_TYPE),
+    ))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  await db.insert(notificationsTable).values({
+    userId,
+    type: PUBLIC_UPDATE_TYPE,
+    title: PUBLIC_UPDATE_TITLE,
+    message: PUBLIC_UPDATE_MESSAGE,
+  });
+}
 
 function normalizeCorruptedNotification<T extends { type: string; title: string; message: string | null }>(notification: T): T {
   const combined = `${notification.title} ${notification.message ?? ""}`;
@@ -37,6 +60,7 @@ function normalizeCorruptedNotification<T extends { type: string; title: string;
 router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
+    await ensurePublicUpdateNotification(userId);
     const rows = await db
       .select()
       .from(notificationsTable)

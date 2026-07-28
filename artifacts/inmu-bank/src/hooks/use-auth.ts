@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
 
-type Profile = { role: string; displayName: string; solWallet: string | null }
+type Profile = { userId?: string; role: string; displayName: string; solWallet: string | null }
 
 export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null)

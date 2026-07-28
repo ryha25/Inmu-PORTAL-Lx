@@ -1204,7 +1204,7 @@ export function GachaPage() {
       <PageBg>
         <div style={{display:'flex',flexDirection:'column',minHeight:'100%',paddingBottom:'max(20px,env(safe-area-inset-bottom))'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode} disabled={paidBusy}/>
-          <div style={{margin:'8px 12px 0'}}>
+          <div style={{margin:'24px 12px'}}>
             <AdSlot slotId="gacha-paid-banner-break" variant="banner" />
           </div>
           <div style={{margin:'6px 12px 0'}}><GachaBannerCarousel mode="paid" config={gachaConfig}/></div>
@@ -1266,7 +1266,7 @@ export function GachaPage() {
       <PageBg>
         <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflowY:'auto',overflowX:'hidden'}}>
           <GachaModeTabs mode={gachaMode} onChange={setGachaMode}/>
-          <div style={{margin:'0 12px 8px'}}>
+          <div style={{margin:'24px 12px'}}>
             <AdSlot slotId="gacha-points-banner-break" variant="banner" />
           </div>
           <div style={{margin:'6px 12px 10px'}}><GachaBannerCarousel mode="points" config={gachaConfig}/></div>

@@ -173,7 +173,9 @@ export function AchievementsPage() {
         <div className="py-10 text-center text-muted-foreground mb-4">{t('loading')}</div>
       )}
 
-      <AdSlot slotId="achievements-ranking-break" variant="banner" className="mb-4" />
+      {(compositeRows.length > 0 || inmuRows.length > 0 || pointsRows.length > 0 || monthlyVolumeRows.length > 0) && (
+        <AdSlot slotId="achievements-ranking-break" variant="banner" />
+      )}
 
       {/* ── ランキング ── */}
       <div className="flex items-center gap-2 mb-3">

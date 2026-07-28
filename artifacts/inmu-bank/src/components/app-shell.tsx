@@ -1,6 +1,5 @@
 import { Logo } from '@/components/logo'
 import { LangToggle } from '@/components/lang-toggle'
-import { AdSlot, canRenderAdSlot } from '@/components/ad-slot'
 import { signOut } from '@/lib/auth-client'
 import { BugReportButton } from '@/components/bug-report-button'
 import { useI18n } from '@/lib/i18n/context'
@@ -46,13 +45,6 @@ export function AppShell({
 
   const isActive = (href: string) =>
     href === '/' ? location === '/' : location.startsWith(href)
-  const pageAdKey = location === '/'
-    ? 'dashboard'
-    : location.replace(/^\/+/, '').replace(/[^a-z0-9-]+/gi, '-') || 'dashboard'
-  const showAds = !isAdmin
-  const railAdSlotId = `${pageAdKey}-rail`
-  const showRailAd = showAds && canRenderAdSlot(railAdSlotId, 'rail')
-
   return (
     <div className="min-h-dvh">
       {/* ── Desktop sidebar (lg+) ── */}
@@ -119,15 +111,10 @@ export function AppShell({
         </header>
 
         {/* Page content — bottom padding for tab bar */}
-        <main className="mx-auto flex w-full max-w-6xl gap-5 px-4 pb-28 pt-5 lg:px-8 lg:pb-10">
+        <main className="mx-auto flex w-full max-w-6xl px-4 pb-28 pt-5 lg:px-8 lg:pb-10">
           <div className="mx-auto min-w-0 flex-1 lg:max-w-4xl">
             {children}
           </div>
-          {showRailAd && (
-            <div className="sticky top-[4.75rem] hidden h-fit w-[300px] shrink-0 xl:block">
-              <AdSlot slotId={railAdSlotId} variant="rail" />
-            </div>
-          )}
         </main>
       </div>
 

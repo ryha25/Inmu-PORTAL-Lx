@@ -17,6 +17,8 @@ import { AdminLoginPage } from "@/pages/admin-login-page";
 import { AdminProfilePage } from "@/pages/admin-profile-page";
 import { AdminRankingPage } from "@/pages/admin-ranking-page";
 import { DevLoginPage } from "@/pages/dev-login-page";
+import { PublicLegalPage } from "@/pages/public-legal-page";
+import { NotFoundPage } from "@/pages/not-found-page";
 import { MaintenanceOverlay } from "@/components/maintenance-overlay";
 
 const queryClient = new QueryClient();
@@ -53,8 +55,14 @@ function Router() {
       <Route path="/sign-up">
         <AuthForm mode="sign-up" />
       </Route>
+      <Route path="/terms">
+        <PublicLegalPage type="terms" />
+      </Route>
+      <Route path="/privacy">
+        <PublicLegalPage type="privacy" />
+      </Route>
       <Route>
-        <Redirect to="/" />
+        <NotFoundPage />
       </Route>
     </Switch>
   );

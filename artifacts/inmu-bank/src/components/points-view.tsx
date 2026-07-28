@@ -444,7 +444,9 @@ export function PointsView({ data, onRefresh }: { data: PointsData; onRefresh: (
         </div>
       </div>
 
-      <AdSlot slotId="mission-summary-daily" variant="banner" />
+      {(dailyMissions.length > 0 || weeklyMissions.length > 0) && (
+        <AdSlot slotId="mission-summary-daily" variant="banner" />
+      )}
 
       {/* ── デイリーミッション ── */}
       <Card className="border-border bg-card overflow-hidden">
