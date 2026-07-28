@@ -1,7 +1,5 @@
-import { Fragment } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { AdSlot } from '@/components/ad-slot'
 import { useI18n } from '@/lib/i18n/context'
 import { formatDate } from '@/lib/format'
 import { toast } from 'sonner'
@@ -59,18 +57,15 @@ export function NotificationView({ notifications, onRefresh }: { notifications: 
       <div className="flex justify-end">
         <Button variant="outline" onClick={handleMarkAllRead} className="min-h-9">{t('mark_all_read')}</Button>
       </div>
-      <AdSlot slotId="notifications-list-top" variant="banner" />
       {notifications.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">{t('no_notifications')}</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {notifications.map((rawNotification, index) => {
+          {notifications.map((rawNotification) => {
             const n = safeNotificationText(rawNotification)
             const invite = n.type === 'game_invite' ? parseGameInviteMessage(n.message) : { text: n.message, joinUrl: null as string | null }
             return (
-              <Fragment key={n.id}>
-                {index === 1 && <AdSlot slotId="notifications-list-mid" variant="banner" />}
-                <Card className={cn('border-border bg-card p-3', !n.isRead && 'border-primary/30 bg-primary/5')}>
+              <Card key={n.id} className={cn('border-border bg-card p-3', !n.isRead && 'border-primary/30 bg-primary/5')}>
                   <div className="flex items-start gap-3">
                     <Bell className={cn('size-4 shrink-0 mt-0.5', !n.isRead ? 'text-primary' : 'text-muted-foreground')} />
                     <div className="min-w-0 flex-1">
@@ -92,8 +87,7 @@ export function NotificationView({ notifications, onRefresh }: { notifications: 
                     </div>
                     {!n.isRead && <span className="flex size-2 shrink-0 rounded-full bg-primary" />}
                   </div>
-                </Card>
-              </Fragment>
+              </Card>
             )
           })}
         </div>

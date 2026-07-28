@@ -23,7 +23,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LangToggle } from '@/components/lang-toggle'
-import { AdSlot } from '@/components/ad-slot'
 import { useI18n } from '@/lib/i18n/context'
 
 type FeatureItem = {
@@ -133,8 +132,6 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             </div>
           </div>
 
-          <AdSlot slotId="guest-hero-auth-break" variant="banner" />
-
           <Card className="w-full max-w-sm border-primary/25 bg-card/95 text-left shadow-xl">
             <CardHeader className="pb-2 pt-4">
               <CardTitle className="text-base">{mode === 'sign-up' ? '新規登録' : 'ログイン'}</CardTitle>
@@ -199,10 +196,6 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
             </CardContent>
           </Card>
         </div>
-      </section>
-
-      <section className="px-5 pb-7">
-        <AdSlot slotId="guest-auth-break" variant="banner" />
       </section>
 
       <section className="px-5 pb-12">

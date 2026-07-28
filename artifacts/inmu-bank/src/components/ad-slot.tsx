@@ -37,13 +37,9 @@ const NINJA_ADMAX_PC_RAIL_SRCS = [
 ]
 
 const BANNER_AD_SLOT_IDS = new Set([
-  'guest-hero-auth-break',
-  'guest-auth-break',
   'dashboard-balance-bonus',
   'dashboard-stats-scan',
   'transaction-controls-history-a',
-  'purchase-request-capacity-rebate',
-  'purchase-request-rebate-amount',
   'mission-summary-daily',
   'mission-daily-achievement',
   'mission-achievement-event',
@@ -51,20 +47,26 @@ const BANNER_AD_SLOT_IDS = new Set([
   'gacha-paid-banner-bottom',
   'gacha-points-banner-break',
   'gacha-points-banner-bottom',
-  'gacha-result-bottom',
   'pet-top',
-  'pet-empty-owned',
   'pet-walk-select',
   'pet-items-rewards',
   'ranking-top',
   'ranking-composite-list-top',
   'ranking-monthly-list-top',
   'achievements-ranking-break',
-  'notifications-list-top',
-  'notifications-list-mid',
   'profile-achievements-ranking',
   'profile-ranking-info',
   'profile-info-wallet',
+])
+
+const RAIL_AD_SLOT_IDS = new Set([
+  'dashboard-rail',
+  'history-rail',
+  'points-rail',
+  'gacha-rail',
+  'pet-rail',
+  'ranking-rail',
+  'achievements-rail',
 ])
 
 function pickStableScriptSrc(slotId: string, sources: string[]) {
@@ -73,7 +75,10 @@ function pickStableScriptSrc(slotId: string, sources: string[]) {
 }
 
 function getAdScriptSrc(slotId: string, variant: AdSlotVariant) {
-  if (variant === 'rail') return pickStableScriptSrc(slotId, NINJA_ADMAX_PC_RAIL_SRCS)
+  if (variant === 'rail') {
+    if (!RAIL_AD_SLOT_IDS.has(slotId)) return null
+    return pickStableScriptSrc(slotId, NINJA_ADMAX_PC_RAIL_SRCS)
+  }
   if (variant !== 'banner') return null
   if (!BANNER_AD_SLOT_IDS.has(slotId)) return null
   return pickStableScriptSrc(slotId, NINJA_ADMAX_MOBILE_SRCS)

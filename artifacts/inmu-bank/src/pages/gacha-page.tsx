@@ -1994,9 +1994,6 @@ export function GachaPage() {
               }}>
                 {result.tdnReroll ? (tdnRerollBusy ? '処理中…' : 'もう一度引く') : '\u30ac\u30c1\u30e3\u753b\u9762\u3078\u623b\u308b'}
               </button>
-              <div style={{width:'100%',maxWidth:360,position:'relative',zIndex:45,pointerEvents:'auto'}}>
-                <AdSlot slotId="gacha-result-bottom" variant="banner" />
-              </div>
             </div>
           )}
 
@@ -2077,9 +2074,6 @@ export function GachaPage() {
                 boxShadow:result.tdnReroll?'0 0 20px rgba(34,211,238,.25)':undefined,
                 opacity:tdnRerollBusy ? .7 : 1,
               }}>{result.tdnReroll ? (tdnRerollBusy ? '処理中…' : 'もう一度引く') : 'もどる'}</button>
-              <div style={{width:'100%',maxWidth:360,position:'relative',zIndex:4,alignSelf:'center'}}>
-                <AdSlot slotId="gacha-result-bottom" variant="banner" />
-              </div>
             </div>
           )}
 

@@ -1030,9 +1030,10 @@ function ShikoirukaUnlockDialog({ open, onClose }: { open: boolean; onClose: () 
   )
 }
 
-function ItemPanel({ inventory, level, maxLevel, disabled = false, disabledReason, onUse }: { inventory: number; level: number; maxLevel: number; disabled?: boolean; disabledReason?: string; onUse: (amount: number) => void }) {
+function ItemPanel({ inventory, level, maxLevel, sleepiness, disabled = false, disabledReason, onUse }: { inventory: number; level: number; maxLevel: number; sleepiness: number; disabled?: boolean; disabledReason?: string; onUse: (amount: number) => void }) {
   const [amount, setAmount] = useState(1)
-  const maxUsable = disabled ? 0 : Math.min(3, inventory, Math.max(0, maxLevel - level))
+  const maxBySleepiness = Math.max(0, Math.floor((100 - sleepiness) / 33))
+  const maxUsable = disabled ? 0 : Math.min(3, inventory, Math.max(0, maxLevel - level), maxBySleepiness)
   useEffect(() => setAmount(current => Math.max(1, Math.min(current, Math.max(1, maxUsable)))), [maxUsable])
   return (
     <section className="rounded-lg border border-sky-300/20 bg-[linear-gradient(145deg,rgba(8,28,42,.82),rgba(12,8,22,.97))] p-4">
@@ -1051,7 +1052,7 @@ function ItemPanel({ inventory, level, maxLevel, disabled = false, disabledReaso
           className="h-10 rounded-md border border-sky-300/25 bg-black/45 px-3 text-sm text-sky-50 outline-none disabled:opacity-40"
         >
           {[1, 2, 3].filter(value => value <= maxUsable).map(value => <option key={value} value={value}>{value}個使用</option>)}
-          {maxUsable <= 0 && <option value={1}>{disabled ? '利用不可' : level >= maxLevel ? 'レベルMAX' : '所持数0'}</option>}
+          {maxUsable <= 0 && <option value={1}>{disabled ? '利用不可' : level >= maxLevel ? 'レベルMAX' : inventory <= 0 ? '所持数0' : '眠気上限'}</option>}
         </select>
         <Button type="button" disabled={maxUsable <= 0} onClick={() => onUse(amount)} className="h-10 border border-sky-300/35 bg-sky-500/20 text-sky-50 hover:bg-sky-500/30">使う</Button>
       </div>
@@ -2553,7 +2554,6 @@ export function PetPage() {
               </p>
               {ownershipError && <p className="mt-3 text-xs text-rose-300">所持情報を取得できませんでした。画面を再読み込みしてください。</p>}
             </section>
-            <AdSlot slotId="pet-empty-owned" variant="banner" />
             <div className="grid grid-cols-2 gap-2">
               <LevelRewardEffectButton activePets={[]} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />
             </div>
@@ -2604,8 +2604,19 @@ export function PetPage() {
                 inventory={items.sleepTea}
                 level={selectedStats.level}
                 maxLevel={pet.maxLevel}
+                sleepiness={selectedStats.sleepiness}
                 disabled={pet.experienceMode === 'evolved-training-only' || isSleeping || isWalking || walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate}
-                disabledReason={pet.experienceMode === 'evolved-training-only' ? '進化後は利用できません' : undefined}
+                disabledReason={
+                  pet.experienceMode === 'evolved-training-only'
+                    ? '進化後は利用できません'
+                    : isSleeping
+                      ? '睡眠中は利用できません'
+                      : isWalking
+                        ? '散歩中は利用できません'
+                        : walks.sleepTeaBlockedDate[displayedPetId] === walks.dailyDate
+                          ? '本日はこのキャラクターに利用できません'
+                          : undefined
+                }
                 onUse={handleUseSleepTea}
               />
               <AdSlot slotId="pet-items-rewards" variant="banner" />
