@@ -177,4 +177,30 @@ router.patch("/admin/bug-reports/:id", requireAdmin, async (req, res): Promise<v
   }
 });
 
+router.delete("/admin/bug-reports/:id", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "報告IDが正しくありません" });
+    return;
+  }
+
+  try {
+    await ensureBugReportsTable();
+    const deleted = await pool.query(
+      `DELETE FROM "bugReports"
+       WHERE id = $1 AND status = 'resolved'
+       RETURNING id`,
+      [id],
+    );
+    if (deleted.rowCount === 0) {
+      res.status(409).json({ error: "対応済みの報告だけ削除できます" });
+      return;
+    }
+    res.json({ ok: true, id });
+  } catch (error) {
+    console.error("[BugReports] admin delete error:", error);
+    res.status(500).json({ error: "不具合報告を削除できませんでした" });
+  }
+});
+
 export default router;

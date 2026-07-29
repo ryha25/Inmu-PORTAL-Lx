@@ -654,6 +654,7 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
   const [bugReplyDrafts, setBugReplyDrafts] = useState<Record<number, string>>({})
   const [bugStatusDrafts, setBugStatusDrafts] = useState<Record<number, BugReportRow['status']>>({})
   const [bugSavingId, setBugSavingId] = useState<number | null>(null)
+  const [bugDeletingId, setBugDeletingId] = useState<number | null>(null)
 
   const loadBugReports = useCallback(async () => {
     setBugReportsLoading(true)
@@ -683,6 +684,35 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
       toast.error(error instanceof Error ? error.message : '不具合報告を更新できませんでした')
     } finally {
       setBugSavingId(null)
+    }
+  }
+
+  async function deleteBugReport(row: BugReportRow) {
+    if (row.status !== 'resolved') {
+      toast.error('対応済みの報告だけ削除できます')
+      return
+    }
+    if (!window.confirm(`対応済みの報告「${row.subject}」を削除しますか？`)) return
+
+    setBugDeletingId(row.id)
+    try {
+      await api(`/admin/bug-reports/${row.id}`, 'DELETE')
+      setBugReports(current => current.filter(item => item.id !== row.id))
+      setBugReplyDrafts(current => {
+        const next = { ...current }
+        delete next[row.id]
+        return next
+      })
+      setBugStatusDrafts(current => {
+        const next = { ...current }
+        delete next[row.id]
+        return next
+      })
+      toast.success('対応済みの報告を削除しました')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '不具合報告を削除できませんでした')
+    } finally {
+      setBugDeletingId(null)
     }
   }
 
@@ -2327,9 +2357,25 @@ export function AdminPanel({ users, onRefresh }: { users: UserRow[]; onRefresh: 
                 rows={4}
                 maxLength={2000}
               />
-              <Button onClick={() => saveBugReport(row)} disabled={bugSavingId === row.id} className="min-h-10">
-                {bugSavingId === row.id ? <Loader2 className="size-4 animate-spin" /> : '保存して回答'}
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => saveBugReport(row)} disabled={bugSavingId === row.id || bugDeletingId === row.id} className="min-h-10 flex-1">
+                  {bugSavingId === row.id ? <Loader2 className="size-4 animate-spin" /> : '保存して回答'}
+                </Button>
+                {row.status === 'resolved' && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    title="対応済みの報告を削除"
+                    aria-label="対応済みの報告を削除"
+                    onClick={() => deleteBugReport(row)}
+                    disabled={bugSavingId === row.id || bugDeletingId === row.id}
+                    className="size-10 shrink-0"
+                  >
+                    {bugDeletingId === row.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                  </Button>
+                )}
+              </div>
             </Card>
           ))}
         </TabsContent>
