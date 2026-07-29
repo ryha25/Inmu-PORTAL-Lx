@@ -1,4 +1,4 @@
-import type { ElementType, ReactNode } from 'react'
+import type { ElementType, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppShell } from '@/components/app-shell'
 import { AdSlot } from '@/components/ad-slot'
@@ -21,7 +21,7 @@ import { PET_BY_ID, PET_DEFINITIONS, type PetDefinition, type PetExpression, typ
 import { getActionCooldownRemaining, getCareCooldownRemaining, getRequiredPetExp, PET_CARE_CONFIG, PET_WALK_DAILY_LIMIT, PET_WALK_WHIP_DAILY_BONUS, usePetState, type PetCareAction, type PetCareCategory, type PetStats, type PremiumFoodState, type PetWalkItem, type PetWalkResult, type PetWalkState } from '@/features/pet/use-pet-state'
 import {
   BookOpen, ChevronDown, CircleDollarSign, Coins, Crown, Dumbbell, Gamepad2, Gem,
-  Gift, Glasses, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
+  Gift, Glasses, GripVertical, Hand, Heart, Leaf, LockKeyhole, Moon, PawPrint, Sparkles, Utensils,
   CupSoda,
 } from 'lucide-react'
 
@@ -1711,31 +1711,135 @@ function CharacterSelectStrip({
   pets,
   displayedPetId,
   onSelect,
+  onReorder,
 }: {
   pets: PetDefinition[]
   displayedPetId: PetId
   onSelect: (id: PetId) => void
+  onReorder: (ids: PetId[]) => void
 }) {
+  const stripRef = useRef<HTMLDivElement>(null)
+  const holdTimerRef = useRef<number | null>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    petId: PetId
+    startX: number
+    startY: number
+    element: HTMLButtonElement
+    dragging: boolean
+  } | null>(null)
+  const suppressClickRef = useRef(false)
+  const [draggingId, setDraggingId] = useState<PetId | null>(null)
+
+  const clearHoldTimer = useCallback(() => {
+    if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current)
+    holdTimerRef.current = null
+  }, [])
+
+  useEffect(() => () => clearHoldTimer(), [clearHoldTimer])
+
+  const beginHold = useCallback((event: ReactPointerEvent<HTMLButtonElement>, petId: PetId) => {
+    if (event.button !== 0) return
+    clearHoldTimer()
+    dragRef.current = {
+      pointerId: event.pointerId,
+      petId,
+      startX: event.clientX,
+      startY: event.clientY,
+      element: event.currentTarget,
+      dragging: false,
+    }
+    holdTimerRef.current = window.setTimeout(() => {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      drag.dragging = true
+      suppressClickRef.current = true
+      setDraggingId(drag.petId)
+      drag.element.setPointerCapture(drag.pointerId)
+      navigator.vibrate?.(18)
+    }, 420)
+  }, [clearHoldTimer])
+
+  const moveHeldPet = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    if (!drag.dragging) {
+      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
+        clearHoldTimer()
+        dragRef.current = null
+      }
+      return
+    }
+
+    event.preventDefault()
+    const strip = stripRef.current
+    if (strip) {
+      const bounds = strip.getBoundingClientRect()
+      if (event.clientX < bounds.left + 36) strip.scrollBy({ left: -18 })
+      if (event.clientX > bounds.right - 36) strip.scrollBy({ left: 18 })
+    }
+
+    const hovered = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-pet-id]')
+    const targetId = hovered?.dataset.petId as PetId | undefined
+    if (!targetId || targetId === drag.petId || !pets.some(pet => pet.id === targetId)) return
+    const orderedIds = pets.map(pet => pet.id)
+    const sourceIndex = orderedIds.indexOf(drag.petId)
+    const targetIndex = orderedIds.indexOf(targetId)
+    if (sourceIndex < 0 || targetIndex < 0) return
+    orderedIds.splice(targetIndex, 0, orderedIds.splice(sourceIndex, 1)[0])
+    onReorder(orderedIds)
+  }, [clearHoldTimer, onReorder, pets])
+
+  const endHold = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current
+    clearHoldTimer()
+    if (!drag || drag.pointerId !== event.pointerId) return
+    if (drag.dragging) {
+      event.preventDefault()
+      if (drag.element.hasPointerCapture(drag.pointerId)) drag.element.releasePointerCapture(drag.pointerId)
+      setDraggingId(null)
+      window.setTimeout(() => { suppressClickRef.current = false }, 0)
+    }
+    dragRef.current = null
+  }, [clearHoldTimer])
+
   if (pets.length === 0) return null
   return (
     <section className="rounded-lg border border-violet-300/20 bg-[#0d0916] p-2.5">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-200">育成キャラクター選択</p>
-      <div className="flex gap-2 overflow-x-auto pb-0.5">
+      <div ref={stripRef} className="flex touch-pan-y gap-2 overflow-x-auto pb-0.5">
         {pets.map(candidate => {
           const isSelected = candidate.id === displayedPetId
+          const isDragging = candidate.id === draggingId
           return (
             <button
               key={candidate.id}
               type="button"
-              onClick={() => onSelect(candidate.id)}
+              data-pet-id={candidate.id}
+              aria-label={`${candidate.name}: tap to select, hold to reorder`}
+              onPointerDown={event => beginHold(event, candidate.id)}
+              onPointerMove={moveHeldPet}
+              onPointerUp={endHold}
+              onPointerCancel={endHold}
+              onClick={event => {
+                if (suppressClickRef.current) {
+                  event.preventDefault()
+                  return
+                }
+                onSelect(candidate.id)
+              }}
               className={cn(
-                'flex size-16 shrink-0 items-end justify-center overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_50%_65%,rgba(168,85,247,.18),transparent_67%)] transition-colors',
+                'relative flex size-16 shrink-0 cursor-grab select-none items-end justify-center overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_50%_65%,rgba(168,85,247,.18),transparent_67%)] transition-[border-color,box-shadow,opacity,transform]',
                 isSelected ? 'border-fuchsia-300/70 shadow-[0_0_0_2px_rgba(232,121,249,.25)]' : 'border-violet-300/15 hover:border-violet-300/40',
+                isDragging && 'z-10 scale-105 cursor-grabbing opacity-75 shadow-[0_0_18px_rgba(232,121,249,.45)]',
               )}
             >
+              <span className="pointer-events-none absolute right-0.5 top-0.5 z-10 rounded bg-black/55 p-0.5 text-violet-100/75">
+                <GripVertical className="size-3" />
+              </span>
               {candidate.roomTheme === 'festival'
                 ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
-                : <img src={candidate.image} alt={candidate.name} className="max-h-full max-w-full object-contain" />}
+                : <img src={candidate.image} alt={candidate.name} draggable={false} className="pointer-events-none max-h-full max-w-full object-contain" />}
             </button>
           )
         })}
@@ -1746,7 +1850,7 @@ function CharacterSelectStrip({
 
 export function PetPage() {
   const { profile, unread } = useAuth()
-  const { selectedPetId, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, isWalking, walkRemaining, walks, affectionGifts, depressionMessage, selectPet, setActivePetIds, care, setExpression, useSleepTea, startWalk, markWalkResultSeen, markWalkPointsGranted, markAffectionGiftPointsGranted, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds, skillLockStatus, refreshSkillLockStatus } = usePetState()
+  const { selectedPetId, petOrder, activePetIds, petStats, cooldownUntil, lastCareAt, expressionState, premiumFood, items, isSleeping, isWalking, walkRemaining, walks, affectionGifts, depressionMessage, selectPet, setPetOrder, setActivePetIds, care, setExpression, useSleepTea, startWalk, markWalkResultSeen, markWalkPointsGranted, markAffectionGiftPointsGranted, maxLevel, isHydrated, syncError, skillActiveCharacterIds, setSkillActiveCharacterIds, skillLockStatus, refreshSkillLockStatus } = usePetState()
   const [message, setMessage] = useState('')
   const [now, setNow] = useState(Date.now)
   const [isBlinking, setIsBlinking] = useState(false)
@@ -1881,7 +1985,11 @@ export function PetPage() {
     affection: 50,
   }
   const activePets = activePetIds.map(id => PET_BY_ID[id]).filter(Boolean)
-  const ownedPets = (ownedPetIds ?? []).map(id => PET_BY_ID[id]).filter(Boolean)
+  const orderedOwnedPetIds = [
+    ...petOrder.filter(id => (ownedPetIds ?? []).includes(id)),
+    ...(ownedPetIds ?? []).filter(id => !petOrder.includes(id)),
+  ]
+  const ownedPets = orderedOwnedPetIds.map(id => PET_BY_ID[id]).filter(Boolean)
   const hasOwnedPet = (ownedPetIds?.length ?? 0) > 0
 
   useEffect(() => {
@@ -2593,7 +2701,7 @@ export function PetPage() {
                 onWalk={() => setWalkMenuOpen(true)}
               />
               <AdSlot slotId="pet-walk-select" variant="banner" />
-              <CharacterSelectStrip pets={ownedPets} displayedPetId={displayedPetId} onSelect={handleSelect} />
+              <CharacterSelectStrip pets={ownedPets} displayedPetId={displayedPetId} onSelect={handleSelect} onReorder={setPetOrder} />
               <div className="grid grid-cols-2 gap-2">
                 <SkillActivationButton ownedPetIds={ownedPetIds ?? []} skillActiveCharacterIds={skillActiveCharacterIds} petStats={petStats} onSetSkillCharacter={handleSetSkillCharacter} onUnsetSkillCharacter={handleUnsetSkillCharacter} skillLockStatus={skillLockStatus} />
                 <LevelRewardEffectButton activePets={activePets} unlockedSlots={unlockedSlots} petStats={petStats} ownedPetIds={ownedPetIds ?? []} slotBusy={slotBusy} slotPrices={slotPrices} onAdd={handleAddRewardSlot} onRemove={handleRemoveSlot} onUnlock={unlockNextSlot} />

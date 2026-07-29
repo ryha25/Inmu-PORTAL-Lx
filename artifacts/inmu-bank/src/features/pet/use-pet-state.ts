@@ -143,6 +143,7 @@ type PetInventorySnapshot = { sleepTea: number; premiumInventory: number; takuya
 type PetSaveData = {
   version: 5 | 6 | 7 | 8
   selectedPetId: PetId
+  petOrder: PetId[]
   activePetIds: PetId[]
   pets: Record<PetId, PetStats>
   lastCareAt: Record<PetId, PetActionTimes>
@@ -216,6 +217,12 @@ function sanitizeActionTimes(value: Record<string, number> | undefined): PetActi
 function sanitizePetIdList(value: unknown): PetId[] {
   return Array.isArray(value)
     ? value.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id as PetId]) && list.indexOf(id) === index).slice(0, 3)
+    : []
+}
+
+function sanitizePetOrder(value: unknown): PetId[] {
+  return Array.isArray(value)
+    ? value.filter((id, index, list): id is PetId => Boolean(PET_BY_ID[id as PetId]) && list.indexOf(id) === index)
     : []
 }
 
@@ -391,6 +398,7 @@ function createDefaultSave(): PetSaveData {
   return {
     version: 8,
     selectedPetId: PET_DEFINITIONS[0].id,
+    petOrder: PET_DEFINITIONS.map(pet => pet.id),
     activePetIds: [],
     pets: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...DEFAULT_STATS }])) as Record<PetId, PetStats>,
     lastCareAt: Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, { ...EMPTY_ACTION_TIMES }])) as Record<PetId, PetActionTimes>,
@@ -420,12 +428,14 @@ function loadSave(source?: unknown): PetSaveData {
       ? source
       : JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '')) as LegacySaveData
     const validSelection = PET_DEFINITIONS.some(pet => pet.id === parsed.selectedPetId)
+    const savedPetOrder = sanitizePetOrder(parsed.petOrder)
     const activePetIds = sanitizePetIdList(parsed.activePetIds)
     const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(parsed.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
     const lastCareAt = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeActionTimes(parsed.lastCareAt?.[pet.id])])) as Record<PetId, PetActionTimes>
     return {
       version: 8,
       selectedPetId: validSelection ? parsed.selectedPetId! : fallback.selectedPetId,
+      petOrder: savedPetOrder.length > 0 ? savedPetOrder : fallback.petOrder,
       activePetIds,
       pets,
       lastCareAt,
@@ -666,6 +676,11 @@ function rollAffectionGiftAfterCare(
 
 function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
   const selectedPetId = PET_BY_ID[save.selectedPetId] ? save.selectedPetId : PET_DEFINITIONS[0].id
+  const savedPetOrder = sanitizePetOrder(save.petOrder)
+  const petOrder = [
+    ...savedPetOrder,
+    ...PET_DEFINITIONS.map(pet => pet.id).filter(id => !savedPetOrder.includes(id)),
+  ]
   const activePetIds = sanitizePetIdList(save.activePetIds)
   const skillActiveCharacterIds = sanitizePetIdList(save.skillActiveCharacterIds)
   const pets = Object.fromEntries(PET_DEFINITIONS.map(pet => [pet.id, sanitizeStats(save.pets?.[pet.id], pet.id)])) as Record<PetId, PetStats>
@@ -834,6 +849,7 @@ function materializeSaveAt(save: PetSaveData, now: number): PetSaveData {
   return {
     ...save,
     selectedPetId,
+    petOrder,
     activePetIds,
     pets,
     lastCareAt,
@@ -879,6 +895,7 @@ export function usePetState() {
   const now = Date.now()
   const effectiveSave = materializeSaveAt(save, now)
   const selectedPetId = effectiveSave.selectedPetId
+  const petOrder = sanitizePetOrder(effectiveSave.petOrder)
   const selectedStats = effectiveSave.pets[selectedPetId] ?? DEFAULT_STATS
   const isSleeping = (effectiveSave.sleepStartedAt[selectedPetId] ?? 0) > 0
   const activePetIds = sanitizePetIdList(effectiveSave.activePetIds)
@@ -1069,6 +1086,24 @@ export function usePetState() {
 
   function selectPet(selectedPetId: PetId) {
     setSave(current => ({ ...current, selectedPetId }))
+  }
+
+  function setPetOrder(nextPetOrder: PetId[] | ((current: PetId[]) => PetId[])) {
+    setSave(current => {
+      const currentOrder = sanitizePetOrder(current.petOrder)
+      const requestedOrder = typeof nextPetOrder === 'function'
+        ? nextPetOrder(currentOrder)
+        : nextPetOrder
+      const normalizedOrder = sanitizePetOrder(requestedOrder)
+      const remainingOrder = currentOrder.filter(id => !normalizedOrder.includes(id))
+      const missingIds = PET_DEFINITIONS
+        .map(pet => pet.id)
+        .filter(id => !normalizedOrder.includes(id) && !remainingOrder.includes(id))
+      return {
+        ...current,
+        petOrder: [...normalizedOrder, ...remainingOrder, ...missingIds],
+      }
+    })
   }
 
   function setActivePetIds(nextActivePetIds: PetId[] | ((current: PetId[]) => PetId[])) {
@@ -1481,6 +1516,7 @@ export function usePetState() {
 
   return {
     selectedPetId,
+    petOrder,
     activePetIds,
     selectedStats,
     petStats: effectiveSave.pets,
@@ -1499,6 +1535,7 @@ export function usePetState() {
     postDepressionUntil,
     depressionMessage,
     selectPet,
+    setPetOrder,
     setActivePetIds,
     care,
     setExpression,
