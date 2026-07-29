@@ -74,6 +74,7 @@ const content = {
     ] as Feature[],
     noticesTitle: 'お知らせ',
     notices: [
+      { date: '2026/07/29', title: 'INMU PETのキャラクター選択を改善しました', detail: '育成キャラクター選択で、キャラクターを長押しして好きな順番に並べ替えられるようになりました。' },
       { date: '2026/07/28', title: 'ログインページのサービス紹介を更新しました', detail: '初めて訪れた方にも内容が伝わるよう、各ゲームや主要機能の説明、FAQを充実させました。' },
       { date: '2026/07/25', title: '不具合報告機能を追加しました', detail: '各画面から不具合を報告できる窓口を追加し、運営側で確認しやすくしました。' },
       { date: '2026/07/21', title: 'INMU大富豪との連携を開始しました', detail: 'INMU PORTALのアカウントからINMU大富豪へ移動し、対応ミッションを楽しめるようになりました。' },
@@ -141,6 +142,7 @@ const content = {
     ] as Feature[],
     noticesTitle: 'Updates',
     notices: [
+      { date: '2026/07/29', title: 'Improved character selection in INMU PET', detail: 'You can now press and hold a character in the selection list and drag it into your preferred order.' },
       { date: '2026/07/28', title: 'Expanded our public service guide', detail: 'We added clearer introductions to our games, main features, and frequently asked questions.' },
       { date: '2026/07/25', title: 'Added bug reporting', detail: 'Users can now send bug reports from the service for review by the operations team.' },
       { date: '2026/07/21', title: 'Started INMU Daifugo integration', detail: 'You can launch INMU Daifugo from your PORTAL account and complete supported missions.' },

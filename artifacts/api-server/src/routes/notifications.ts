@@ -9,24 +9,35 @@ const PUBLIC_UPDATE_TYPE = "public_update_20260728";
 const PUBLIC_UPDATE_TITLE = "INMU PORTALを更新しました";
 const PUBLIC_UPDATE_MESSAGE =
   "ログイン前のサービス紹介、よくある質問、お知らせを充実させ、各画面の広告配置を見直しました。";
+const PET_ORDER_UPDATE_TYPE = "public_update_pet_order_20260729";
+const PET_ORDER_UPDATE_TITLE = "INMU PETを更新しました";
+const PET_ORDER_UPDATE_MESSAGE =
+  "育成キャラクター選択で、キャラクターを長押しして好きな順番に並べ替えられるようになりました。変更した順番は保存されます。";
 
-async function ensurePublicUpdateNotification(userId: string) {
-  const existing = await db
-    .select({ id: notificationsTable.id })
-    .from(notificationsTable)
-    .where(and(
-      eq(notificationsTable.userId, userId),
-      eq(notificationsTable.type, PUBLIC_UPDATE_TYPE),
-    ))
-    .limit(1);
-  if (existing.length > 0) return;
+const PUBLIC_UPDATES = [
+  { type: PUBLIC_UPDATE_TYPE, title: PUBLIC_UPDATE_TITLE, message: PUBLIC_UPDATE_MESSAGE },
+  { type: PET_ORDER_UPDATE_TYPE, title: PET_ORDER_UPDATE_TITLE, message: PET_ORDER_UPDATE_MESSAGE },
+] as const;
 
-  await db.insert(notificationsTable).values({
-    userId,
-    type: PUBLIC_UPDATE_TYPE,
-    title: PUBLIC_UPDATE_TITLE,
-    message: PUBLIC_UPDATE_MESSAGE,
-  });
+async function ensurePublicUpdateNotifications(userId: string) {
+  for (const update of PUBLIC_UPDATES) {
+    const existing = await db
+      .select({ id: notificationsTable.id })
+      .from(notificationsTable)
+      .where(and(
+        eq(notificationsTable.userId, userId),
+        eq(notificationsTable.type, update.type),
+      ))
+      .limit(1);
+    if (existing.length > 0) continue;
+
+    await db.insert(notificationsTable).values({
+      userId,
+      type: update.type,
+      title: update.title,
+      message: update.message,
+    });
+  }
 }
 
 function normalizeCorruptedNotification<T extends { type: string; title: string; message: string | null }>(notification: T): T {
@@ -60,7 +71,7 @@ function normalizeCorruptedNotification<T extends { type: string; title: string;
 router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   try {
-    await ensurePublicUpdateNotification(userId);
+    await ensurePublicUpdateNotifications(userId);
     const rows = await db
       .select()
       .from(notificationsTable)
