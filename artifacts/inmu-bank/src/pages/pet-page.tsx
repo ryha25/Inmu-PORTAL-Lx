@@ -1730,6 +1730,14 @@ function CharacterSelectStrip({
   } | null>(null)
   const suppressClickRef = useRef(false)
   const [draggingId, setDraggingId] = useState<PetId | null>(null)
+  const [dragPreview, setDragPreview] = useState<{
+    x: number
+    y: number
+    offsetX: number
+    offsetY: number
+    width: number
+    height: number
+  } | null>(null)
   const [orderedIds, setOrderedIds] = useState<PetId[]>(() => pets.map(pet => pet.id))
   const orderRef = useRef<PetId[]>(orderedIds)
 
@@ -1760,29 +1768,40 @@ function CharacterSelectStrip({
       element: event.currentTarget,
       dragging: false,
     }
+    event.currentTarget.setPointerCapture(event.pointerId)
     holdTimerRef.current = window.setTimeout(() => {
       const drag = dragRef.current
       if (!drag || drag.pointerId !== event.pointerId) return
+      const bounds = drag.element.getBoundingClientRect()
       drag.dragging = true
       suppressClickRef.current = true
       setDraggingId(drag.petId)
-      drag.element.setPointerCapture(drag.pointerId)
+      setDragPreview({
+        x: drag.startX,
+        y: drag.startY,
+        offsetX: drag.startX - bounds.left,
+        offsetY: drag.startY - bounds.top,
+        width: bounds.width,
+        height: bounds.height,
+      })
       navigator.vibrate?.(18)
-    }, 300)
+    }, 180)
   }, [clearHoldTimer])
 
   const moveHeldPet = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     if (!drag.dragging) {
-      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
+      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 16) {
         clearHoldTimer()
+        if (drag.element.hasPointerCapture(drag.pointerId)) drag.element.releasePointerCapture(drag.pointerId)
         dragRef.current = null
       }
       return
     }
 
     event.preventDefault()
+    setDragPreview(current => current ? { ...current, x: event.clientX, y: event.clientY } : current)
     const strip = stripRef.current
     if (strip) {
       const bounds = strip.getBoundingClientRect()
@@ -1794,13 +1813,28 @@ function CharacterSelectStrip({
       }
     }
 
-    const hovered = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-pet-id]')
-    const targetId = hovered?.dataset.petId as PetId | undefined
-    if (!targetId || targetId === drag.petId || !pets.some(pet => pet.id === targetId)) return
+    const candidates = Array.from(strip?.querySelectorAll<HTMLElement>('[data-pet-id]') ?? [])
+      .filter(element => element.dataset.petId !== drag.petId)
+    const nearest = candidates.reduce<HTMLElement | null>((closest, element) => {
+      if (!closest) return element
+      const center = element.getBoundingClientRect().left + element.getBoundingClientRect().width / 2
+      const closestBounds = closest.getBoundingClientRect()
+      const closestCenter = closestBounds.left + closestBounds.width / 2
+      return Math.abs(event.clientX - center) < Math.abs(event.clientX - closestCenter) ? element : closest
+    }, null)
+    if (!nearest) return
+    const targetId = nearest.dataset.petId as PetId | undefined
+    if (!targetId || !pets.some(pet => pet.id === targetId)) return
     const nextOrder = [...orderRef.current]
     const sourceIndex = nextOrder.indexOf(drag.petId)
     const targetIndex = nextOrder.indexOf(targetId)
     if (sourceIndex < 0 || targetIndex < 0) return
+    const targetBounds = nearest.getBoundingClientRect()
+    const targetCenter = targetBounds.left + targetBounds.width / 2
+    if (
+      (sourceIndex < targetIndex && event.clientX < targetCenter) ||
+      (sourceIndex > targetIndex && event.clientX > targetCenter)
+    ) return
     nextOrder.splice(targetIndex, 0, nextOrder.splice(sourceIndex, 1)[0])
     orderRef.current = nextOrder
     setOrderedIds(nextOrder)
@@ -1812,11 +1846,12 @@ function CharacterSelectStrip({
     if (!drag || drag.pointerId !== event.pointerId) return
     if (drag.dragging) {
       event.preventDefault()
-      if (drag.element.hasPointerCapture(drag.pointerId)) drag.element.releasePointerCapture(drag.pointerId)
       setDraggingId(null)
+      setDragPreview(null)
       onReorder(orderRef.current)
       window.setTimeout(() => { suppressClickRef.current = false }, 0)
     }
+    if (drag.element.hasPointerCapture(drag.pointerId)) drag.element.releasePointerCapture(drag.pointerId)
     dragRef.current = null
   }, [clearHoldTimer, onReorder])
 
@@ -1855,7 +1890,7 @@ function CharacterSelectStrip({
               className={cn(
                 'relative flex size-16 shrink-0 cursor-grab select-none items-end justify-center overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_50%_65%,rgba(168,85,247,.18),transparent_67%)] transition-[border-color,box-shadow,opacity,transform] duration-150',
                 isSelected ? 'border-fuchsia-300/70 shadow-[0_0_0_2px_rgba(232,121,249,.25)]' : 'border-violet-300/15 hover:border-violet-300/40',
-                isDragging && 'z-10 scale-105 cursor-grabbing opacity-75 shadow-[0_0_18px_rgba(232,121,249,.45)]',
+                isDragging && 'cursor-grabbing opacity-20',
               )}
             >
               <span className="pointer-events-none absolute right-0.5 top-0.5 z-10 rounded bg-black/55 p-0.5 text-violet-100/75">
@@ -1868,6 +1903,26 @@ function CharacterSelectStrip({
           )
         })}
       </div>
+      {draggingId && dragPreview && (() => {
+        const draggedPet = pets.find(pet => pet.id === draggingId)
+        if (!draggedPet) return null
+        return (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none fixed z-[100] flex items-end justify-center overflow-hidden rounded-lg border border-fuchsia-300/80 bg-[#151022] opacity-95 shadow-[0_8px_28px_rgba(0,0,0,.55),0_0_20px_rgba(232,121,249,.5)]"
+            style={{
+              left: dragPreview.x - dragPreview.offsetX,
+              top: dragPreview.y - dragPreview.offsetY,
+              width: dragPreview.width,
+              height: dragPreview.height,
+            }}
+          >
+            {draggedPet.roomTheme === 'festival'
+              ? <FestivalCharacter image={draggedPet.image} expression="default" name={draggedPet.name} className="h-full w-full" />
+              : <img src={draggedPet.image} alt="" draggable={false} className="pointer-events-none max-h-full max-w-full object-contain" />}
+          </div>
+        )
+      })()}
     </section>
   )
 }
