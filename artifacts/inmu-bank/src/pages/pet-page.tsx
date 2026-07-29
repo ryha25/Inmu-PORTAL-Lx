@@ -1725,7 +1725,8 @@ function CharacterSelectStrip({
     petId: PetId
     startX: number
     startY: number
-    element: HTMLButtonElement
+    element: HTMLElement
+    captureElement: HTMLButtonElement
     dragging: boolean
   } | null>(null)
   const suppressClickRef = useRef(false)
@@ -1759,13 +1760,16 @@ function CharacterSelectStrip({
 
   const beginHold = useCallback((event: ReactPointerEvent<HTMLButtonElement>, petId: PetId) => {
     if (event.button !== 0) return
+    const element = event.currentTarget.closest<HTMLElement>('[data-pet-id]')
+    if (!element) return
     clearHoldTimer()
     dragRef.current = {
       pointerId: event.pointerId,
       petId,
       startX: event.clientX,
       startY: event.clientY,
-      element: event.currentTarget,
+      element,
+      captureElement: event.currentTarget,
       dragging: false,
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -1785,7 +1789,7 @@ function CharacterSelectStrip({
         height: bounds.height,
       })
       navigator.vibrate?.(18)
-    }, 180)
+    }, 120)
   }, [clearHoldTimer])
 
   const moveHeldPet = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -1794,7 +1798,7 @@ function CharacterSelectStrip({
     if (!drag.dragging) {
       if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 16) {
         clearHoldTimer()
-        if (drag.element.hasPointerCapture(drag.pointerId)) drag.element.releasePointerCapture(drag.pointerId)
+        if (drag.captureElement.hasPointerCapture(drag.pointerId)) drag.captureElement.releasePointerCapture(drag.pointerId)
         dragRef.current = null
       }
       return
@@ -1851,7 +1855,7 @@ function CharacterSelectStrip({
       onReorder(orderRef.current)
       window.setTimeout(() => { suppressClickRef.current = false }, 0)
     }
-    if (drag.element.hasPointerCapture(drag.pointerId)) drag.element.releasePointerCapture(drag.pointerId)
+    if (drag.captureElement.hasPointerCapture(drag.pointerId)) drag.captureElement.releasePointerCapture(drag.pointerId)
     dragRef.current = null
   }, [clearHoldTimer, onReorder])
 
@@ -1866,40 +1870,49 @@ function CharacterSelectStrip({
   return (
     <section className="rounded-lg border border-violet-300/20 bg-[#0d0916] p-2.5">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-200">育成キャラクター選択</p>
-      <div ref={stripRef} className="flex touch-pan-y gap-2 overflow-x-auto pb-0.5">
+      <div ref={stripRef} className="flex touch-auto gap-2 overflow-x-auto pb-0.5">
         {orderedPets.map(candidate => {
           const isSelected = candidate.id === displayedPetId
           const isDragging = candidate.id === draggingId
           return (
-            <button
+            <div
               key={candidate.id}
-              type="button"
               data-pet-id={candidate.id}
-              aria-label={`${candidate.name}: tap to select, hold to reorder`}
-              onPointerDown={event => beginHold(event, candidate.id)}
-              onPointerMove={moveHeldPet}
-              onPointerUp={endHold}
-              onPointerCancel={endHold}
-              onClick={event => {
-                if (suppressClickRef.current) {
-                  event.preventDefault()
-                  return
-                }
-                onSelect(candidate.id)
-              }}
               className={cn(
-                'relative flex size-16 shrink-0 cursor-grab select-none items-end justify-center overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_50%_65%,rgba(168,85,247,.18),transparent_67%)] transition-[border-color,box-shadow,opacity,transform] duration-150',
+                'relative flex size-16 shrink-0 select-none items-end justify-center overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_50%_65%,rgba(168,85,247,.18),transparent_67%)] transition-[border-color,box-shadow,opacity,transform] duration-150',
                 isSelected ? 'border-fuchsia-300/70 shadow-[0_0_0_2px_rgba(232,121,249,.25)]' : 'border-violet-300/15 hover:border-violet-300/40',
                 isDragging && 'cursor-grabbing opacity-20',
               )}
             >
-              <span className="pointer-events-none absolute right-0.5 top-0.5 z-10 rounded bg-black/55 p-0.5 text-violet-100/75">
+              <button
+                type="button"
+                aria-label={`${candidate.name}を選択`}
+                className="absolute inset-0 z-0 flex items-end justify-center"
+                onClick={event => {
+                  if (suppressClickRef.current) {
+                    event.preventDefault()
+                    return
+                  }
+                  onSelect(candidate.id)
+                }}
+              >
+                {candidate.roomTheme === 'festival'
+                  ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
+                  : <img src={candidate.image} alt={candidate.name} draggable={false} className="pointer-events-none max-h-full max-w-full object-contain" />}
+              </button>
+              <button
+                type="button"
+                aria-label={`${candidate.name}の順番を変更`}
+                className="absolute right-0 top-0 z-10 flex size-6 touch-none cursor-grab items-center justify-center rounded-bl-md bg-black/60 text-violet-100/80 active:cursor-grabbing active:bg-fuchsia-950/90"
+                onPointerDown={event => beginHold(event, candidate.id)}
+                onPointerMove={moveHeldPet}
+                onPointerUp={endHold}
+                onPointerCancel={endHold}
+                onClick={event => event.preventDefault()}
+              >
                 <GripVertical className="size-3" />
-              </span>
-              {candidate.roomTheme === 'festival'
-                ? <FestivalCharacter image={candidate.image} expression="default" name={candidate.name} className="h-full w-full" />
-                : <img src={candidate.image} alt={candidate.name} draggable={false} className="pointer-events-none max-h-full max-w-full object-contain" />}
-            </button>
+              </button>
+            </div>
           )
         })}
       </div>
