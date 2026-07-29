@@ -1730,6 +1730,8 @@ function CharacterSelectStrip({
   } | null>(null)
   const suppressClickRef = useRef(false)
   const [draggingId, setDraggingId] = useState<PetId | null>(null)
+  const [orderedIds, setOrderedIds] = useState<PetId[]>(() => pets.map(pet => pet.id))
+  const orderRef = useRef<PetId[]>(orderedIds)
 
   const clearHoldTimer = useCallback(() => {
     if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current)
@@ -1737,6 +1739,15 @@ function CharacterSelectStrip({
   }, [])
 
   useEffect(() => () => clearHoldTimer(), [clearHoldTimer])
+  useEffect(() => {
+    if (dragRef.current?.dragging) return
+    const nextOrder = pets.map(pet => pet.id)
+    setOrderedIds(current => {
+      if (current.length === nextOrder.length && current.every((id, index) => id === nextOrder[index])) return current
+      orderRef.current = nextOrder
+      return nextOrder
+    })
+  }, [pets])
 
   const beginHold = useCallback((event: ReactPointerEvent<HTMLButtonElement>, petId: PetId) => {
     if (event.button !== 0) return
@@ -1757,7 +1768,7 @@ function CharacterSelectStrip({
       setDraggingId(drag.petId)
       drag.element.setPointerCapture(drag.pointerId)
       navigator.vibrate?.(18)
-    }, 420)
+    }, 300)
   }, [clearHoldTimer])
 
   const moveHeldPet = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -1775,20 +1786,25 @@ function CharacterSelectStrip({
     const strip = stripRef.current
     if (strip) {
       const bounds = strip.getBoundingClientRect()
-      if (event.clientX < bounds.left + 36) strip.scrollBy({ left: -18 })
-      if (event.clientX > bounds.right - 36) strip.scrollBy({ left: 18 })
+      const edgeSize = 48
+      if (event.clientX < bounds.left + edgeSize) {
+        strip.scrollLeft -= Math.max(4, Math.ceil((bounds.left + edgeSize - event.clientX) / 3))
+      } else if (event.clientX > bounds.right - edgeSize) {
+        strip.scrollLeft += Math.max(4, Math.ceil((event.clientX - (bounds.right - edgeSize)) / 3))
+      }
     }
 
     const hovered = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-pet-id]')
     const targetId = hovered?.dataset.petId as PetId | undefined
     if (!targetId || targetId === drag.petId || !pets.some(pet => pet.id === targetId)) return
-    const orderedIds = pets.map(pet => pet.id)
-    const sourceIndex = orderedIds.indexOf(drag.petId)
-    const targetIndex = orderedIds.indexOf(targetId)
+    const nextOrder = [...orderRef.current]
+    const sourceIndex = nextOrder.indexOf(drag.petId)
+    const targetIndex = nextOrder.indexOf(targetId)
     if (sourceIndex < 0 || targetIndex < 0) return
-    orderedIds.splice(targetIndex, 0, orderedIds.splice(sourceIndex, 1)[0])
-    onReorder(orderedIds)
-  }, [clearHoldTimer, onReorder, pets])
+    nextOrder.splice(targetIndex, 0, nextOrder.splice(sourceIndex, 1)[0])
+    orderRef.current = nextOrder
+    setOrderedIds(nextOrder)
+  }, [clearHoldTimer, pets])
 
   const endHold = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current
@@ -1798,17 +1814,25 @@ function CharacterSelectStrip({
       event.preventDefault()
       if (drag.element.hasPointerCapture(drag.pointerId)) drag.element.releasePointerCapture(drag.pointerId)
       setDraggingId(null)
+      onReorder(orderRef.current)
       window.setTimeout(() => { suppressClickRef.current = false }, 0)
     }
     dragRef.current = null
-  }, [clearHoldTimer])
+  }, [clearHoldTimer, onReorder])
 
   if (pets.length === 0) return null
+  const visibleIds = [
+    ...orderedIds.filter(id => pets.some(pet => pet.id === id)),
+    ...pets.map(pet => pet.id).filter(id => !orderedIds.includes(id)),
+  ]
+  const orderedPets = visibleIds
+    .map(id => pets.find(pet => pet.id === id))
+    .filter((pet): pet is PetDefinition => Boolean(pet))
   return (
     <section className="rounded-lg border border-violet-300/20 bg-[#0d0916] p-2.5">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-200">育成キャラクター選択</p>
       <div ref={stripRef} className="flex touch-pan-y gap-2 overflow-x-auto pb-0.5">
-        {pets.map(candidate => {
+        {orderedPets.map(candidate => {
           const isSelected = candidate.id === displayedPetId
           const isDragging = candidate.id === draggingId
           return (
@@ -1829,7 +1853,7 @@ function CharacterSelectStrip({
                 onSelect(candidate.id)
               }}
               className={cn(
-                'relative flex size-16 shrink-0 cursor-grab select-none items-end justify-center overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_50%_65%,rgba(168,85,247,.18),transparent_67%)] transition-[border-color,box-shadow,opacity,transform]',
+                'relative flex size-16 shrink-0 cursor-grab select-none items-end justify-center overflow-hidden rounded-lg border bg-[radial-gradient(circle_at_50%_65%,rgba(168,85,247,.18),transparent_67%)] transition-[border-color,box-shadow,opacity,transform] duration-150',
                 isSelected ? 'border-fuchsia-300/70 shadow-[0_0_0_2px_rgba(232,121,249,.25)]' : 'border-violet-300/15 hover:border-violet-300/40',
                 isDragging && 'z-10 scale-105 cursor-grabbing opacity-75 shadow-[0_0_18px_rgba(232,121,249,.45)]',
               )}
