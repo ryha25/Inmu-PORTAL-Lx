@@ -56,6 +56,7 @@ const RED = new Set([
   1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
 ]);
 const numbers = Array.from({ length: 37 }, (_, index) => index);
+const chipValues = [1_000, 5_000, 10_000, 25_000, 50_000, 100_000];
 
 function betRules(type: BetType) {
   if (type === "color") return { min: 10_000, max: 100_000, multiplier: 2 };
@@ -71,6 +72,10 @@ function betLabel(type: BetType, value: string) {
 
 function formatPoints(value: number) {
   return `${value.toLocaleString("ja-JP")} pt`;
+}
+
+function fmtChip(value: number) {
+  return value >= 10_000 ? `${value / 10_000}万` : value.toLocaleString("ja-JP");
 }
 
 function colorLabel(color: Play["resultColor"]) {
@@ -289,10 +294,13 @@ export function RoulettePage() {
                 <RouletteWheel3D
                   resultNumber={play.resultNumber}
                   spinning={!animationDone}
+                  dealerImage={dealer?.image}
+                  dealerName={status.dealer.name}
+                  won={play.won}
                   onAnimationComplete={() => setAnimationDone(true)}
                 />
               ) : (
-                <div className="flex min-h-[430px] items-center justify-center bg-[radial-gradient(circle,#31120d_0%,#080709_62%)]">
+                <div className="flex min-h-[430px] items-center justify-center bg-[radial-gradient(circle_at_50%_18%,#a86427_0%,#5d1720_38%,#210b10_100%)]">
                   <motion.div
                     initial={{ rotate: 0, scale: 0.72 }}
                     animate={{ rotate: 1440, scale: 1 }}
@@ -314,43 +322,6 @@ export function RoulettePage() {
                     </span>
                   </motion.div>
                 </div>
-              )}
-
-              {dealer && (
-                <motion.div
-                  initial={{ x: -80, opacity: 0 }}
-                  animate={
-                    !animationDone
-                      ? {
-                          x: [-80, 0, 0, 6, 0],
-                          y: [0, 0, -8, 2, 0],
-                          rotate: [0, 0, -3, 2, 0],
-                          opacity: 1,
-                        }
-                      : { x: 0, y: 0, rotate: 0, opacity: 1 }
-                  }
-                  transition={
-                    !animationDone
-                      ? {
-                          duration: 6.2,
-                          times: [0, 0.18, 0.35, 0.58, 1],
-                          ease: "easeInOut",
-                        }
-                      : { duration: 0.25 }
-                  }
-                  className="pointer-events-none absolute bottom-3 left-2 w-[112px] sm:w-[190px]"
-                >
-                  <img
-                    src={dealer.image}
-                    alt={status.dealer.name}
-                    className="max-h-[230px] w-full object-contain drop-shadow-[0_8px_20px_rgba(0,0,0,.8)]"
-                  />
-                  <div className="rounded bg-black/75 px-2 py-1 text-center text-[10px] font-semibold text-amber-200 sm:text-xs">
-                    本日のディーラー
-                    <br />
-                    {status.dealer.name}
-                  </div>
-                </motion.div>
               )}
 
               {!animationDone && (
@@ -423,35 +394,59 @@ export function RoulettePage() {
           </section>
         ) : (
           <>
-            <Card className="border-amber-300/20 bg-[#0d0b10] p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  {dealer && (
-                    <img
-                      src={dealer.image}
-                      alt=""
-                      className="size-16 object-contain"
-                    />
-                  )}
-                  <div>
-                    <p className="text-xs text-muted-foreground">
+            <section className="overflow-hidden rounded-lg border border-amber-300/25 bg-[#1a090d] shadow-[0_18px_70px_rgba(91,21,31,.28)]">
+              <div className="relative border-b border-amber-300/20">
+                {!lightweight ? (
+                  <RouletteWheel3D
+                    resultNumber={null}
+                    spinning={false}
+                    dealerImage={dealer?.image}
+                    dealerName={status.dealer.name}
+                  />
+                ) : (
+                  <div className="relative flex min-h-[330px] items-end justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_18%,#b27131_0%,#641927_35%,#240b11_100%)]">
+                    <div className="absolute inset-x-[8%] bottom-0 h-36 rounded-[50%_50%_0_0] border-[10px] border-amber-600/70 bg-emerald-950 shadow-[0_-12px_45px_rgba(251,191,36,.2)]" />
+                    {dealer && (
+                      <img
+                        src={dealer.image}
+                        alt={status.dealer.name}
+                        className="relative mb-16 max-h-56 w-40 object-contain drop-shadow-[0_12px_26px_rgba(0,0,0,.75)]"
+                      />
+                    )}
+                  </div>
+                )}
+                <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-end justify-between gap-2">
+                  <div className="rounded border border-amber-300/25 bg-black/75 px-3 py-2 backdrop-blur">
+                    <p className="text-[10px] text-amber-200/70">
                       本日のディーラー
                     </p>
-                    <p className="font-bold text-amber-200">
+                    <p className="text-sm font-bold text-amber-100">
                       {status.dealer.name}
                     </p>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">所持ポイント</p>
-                  <p className="font-mono text-lg font-bold">
-                    {formatPoints(status.points)}
-                  </p>
+                  <div className="rounded border border-amber-300/25 bg-black/75 px-3 py-2 text-right backdrop-blur">
+                    <p className="text-[10px] text-amber-200/70">所持ポイント</p>
+                    <p className="font-mono text-sm font-bold text-amber-100">
+                      {formatPoints(status.points)}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </Card>
 
-            <section className="overflow-hidden rounded-lg border border-amber-300/25 bg-[#08070a] p-2 sm:p-4">
+              <div className="bg-[linear-gradient(180deg,#163829_0%,#0d251c_100%)] p-2 sm:p-4">
+              <div className="mb-3 flex items-center justify-between gap-3 border-b border-amber-200/15 pb-2">
+                <div>
+                  <p className="text-xs font-bold text-amber-100">
+                    ヨーロピアンルーレット
+                  </p>
+                  <p className="text-[10px] text-amber-100/60">
+                    ベットする場所をタップしてください
+                  </p>
+                </div>
+                <span className="rounded-full border border-amber-300/25 bg-black/30 px-2 py-1 text-[10px] text-amber-100/75">
+                  1日1チップ
+                </span>
+              </div>
               <div className="grid grid-cols-[52px_repeat(12,minmax(42px,1fr))] gap-1 overflow-x-auto pb-2">
                 <button
                   type="button"
@@ -534,6 +529,7 @@ export function RoulettePage() {
                   黒 <span className="text-xs">2倍</span>
                 </button>
               </div>
+              </div>
             </section>
 
             <Card className="p-4">
@@ -574,6 +570,45 @@ export function RoulettePage() {
                   />
                 </div>
               </div>
+              {rules && (
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground">
+                    ポイントチップ
+                  </p>
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                    {chipValues
+                      .filter(
+                        (chip) =>
+                          chip >= rules.min &&
+                          chip <= rules.max &&
+                          chip <= (status?.points ?? 0),
+                      )
+                      .map((chip, index) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          disabled={Boolean(placedBet)}
+                          onClick={() => setAmountText(String(chip))}
+                          className={cn(
+                            "flex size-14 shrink-0 flex-col items-center justify-center rounded-full border-4 text-[9px] font-black shadow-[0_5px_14px_rgba(0,0,0,.35)] transition-transform active:scale-95",
+                            index % 3 === 0
+                              ? "border-amber-200 bg-red-800 text-amber-100"
+                              : index % 3 === 1
+                                ? "border-amber-300 bg-emerald-800 text-amber-100"
+                                : "border-amber-200 bg-slate-900 text-amber-100",
+                            amount === chip &&
+                              "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                          )}
+                        >
+                          <span>{fmtChip(chip)}</span>
+                          <span className="text-[7px] font-medium opacity-70">
+                            POINT
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
               <div className="mt-4 flex items-center justify-between rounded bg-secondary/55 px-3 py-2 text-sm">
                 <span className="text-muted-foreground">的中時の払戻予定</span>
                 <span className="font-mono font-bold text-amber-300">
@@ -599,7 +634,7 @@ export function RoulettePage() {
                     <CircleDot
                       className={cn("size-4", submitting && "animate-spin")}
                     />
-                    ベットを確定して回す
+                    ルーレットスタート
                   </Button>
                   <Button
                     variant="outline"

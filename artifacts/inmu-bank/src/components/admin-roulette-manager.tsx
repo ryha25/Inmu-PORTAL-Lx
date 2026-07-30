@@ -244,6 +244,11 @@ export function AdminRouletteManager({ api }: { api: Api }) {
             <RouletteWheel3D
               resultNumber={preview.resultNumber}
               spinning={!previewDone}
+              dealerImage={
+                PET_BY_ID[preview.dealerPetId as PetId]?.image
+              }
+              dealerName={preview.dealerPetName}
+              won={preview.won}
               onAnimationComplete={() => setPreviewDone(true)}
             />
             {!previewDone && (
