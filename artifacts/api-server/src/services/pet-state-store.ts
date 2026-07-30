@@ -70,6 +70,17 @@ export function ensurePetStateTable(): Promise<void> {
         PRIMARY KEY ("userId", "characterId", "actionId")
       )
     `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS "petOwnershipRepairAudit" (
+        id BIGSERIAL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "characterId" TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+        "repairedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("userId", "characterId", reason)
+      )
+    `),
   ]).then(async () => {
     await pool.query(`ALTER TABLE "userPetStates" ADD COLUMN IF NOT EXISTS "clientUpdatedAt" BIGINT NOT NULL DEFAULT 0`);
     await pool.query(`
@@ -490,6 +501,74 @@ export async function ensureShikoirukaDistributionForUser(userId: string): Promi
     await initializePetCharacterState(userId, SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID);
   }
   return Boolean(inserted.rowCount);
+}
+
+export async function restoreMissingGachaPetOwnership(userId: string): Promise<string[]> {
+  await ensurePetStateTable();
+  const historyTable = await pool.query(`SELECT to_regclass('"petGachaHistory"') AS relation`);
+  if (!historyTable.rows[0]?.relation) return [];
+
+  const client = await pool.connect();
+  const restoredCharacterIds: string[] = [];
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`pet-ownership-repair:${userId}`]);
+    const evidence = await client.query(`
+      SELECT
+        prize->>'characterId' AS "characterId",
+        MIN(history."createdAt") AS "firstAcquiredAt",
+        COUNT(*)::int AS "historyCount"
+      FROM "petGachaHistory" history
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(history.results) = 'array' THEN history.results ELSE '[]'::jsonb END
+      ) prize
+      WHERE history."userId" = $1
+        AND prize->>'type' = 'character'
+        AND NULLIF(prize->>'characterId', '') IS NOT NULL
+      GROUP BY prize->>'characterId'
+    `, [userId]);
+
+    for (const row of evidence.rows) {
+      const characterId = String(row.characterId);
+      if (!(characterId in PET_CHARACTER_NAMES)) continue;
+      const inserted = await client.query(`
+        INSERT INTO "userPetCharacters" ("userId", "characterId", "acquiredAt")
+        VALUES ($1, $2, COALESCE($3::timestamp, NOW()))
+        ON CONFLICT ("userId", "characterId") DO NOTHING
+        RETURNING "characterId"
+      `, [userId, characterId, row.firstAcquiredAt ?? null]);
+      if (!inserted.rowCount) continue;
+
+      restoredCharacterIds.push(characterId);
+      await client.query(`
+        INSERT INTO "petOwnershipRepairAudit"
+          ("userId", "characterId", reason, evidence)
+        VALUES ($1, $2, 'missing_ownership_with_gacha_history', $3::jsonb)
+        ON CONFLICT ("userId", "characterId", reason) DO NOTHING
+      `, [
+        userId,
+        characterId,
+        JSON.stringify({
+          firstAcquiredAt: row.firstAcquiredAt ?? null,
+          historyCount: Number(row.historyCount ?? 0),
+        }),
+      ]);
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  for (const characterId of restoredCharacterIds) {
+    await initializePetCharacterState(userId, characterId);
+  }
+  if (restoredCharacterIds.length > 0) {
+    console.warn("[PetOwnership] restored from gacha history", { userId, restoredCharacterIds });
+  }
+  return restoredCharacterIds;
 }
 
 function normalizeTestAccountName(value: unknown): string {

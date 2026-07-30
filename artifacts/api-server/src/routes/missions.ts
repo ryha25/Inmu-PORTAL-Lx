@@ -17,6 +17,7 @@ import {
   ensureShikoirukaDistributionForUser,
   ensureYajusenpaiTestDistributionForUser,
   getDaifugoRewardStatus,
+  restoreMissingGachaPetOwnership,
 } from "../services/pet-state-store";
 
 const INMU_TOKEN_MINT = "4FDtAagigMuFcPp36rbd9bzcYTJgQah2qLMYcYtfpump";
@@ -1000,6 +1001,7 @@ router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
   try {
     await ensureRewardTables();
     const shikoirukaNewlyDistributed = await ensureShikoirukaDistributionForUser(req.userId!);
+    const restoredOwnershipIds = await restoreMissingGachaPetOwnership(req.userId!);
     await ensureYajusenpaiTestDistributionForUser(req.userId!);
     const [ownership, daifugoReward] = await Promise.all([
       pool.query(
@@ -1014,6 +1016,7 @@ router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
       ownedCharacterIds: ownership.rows.map(row => String(row.characterId)),
       characters: Object.entries(PET_CHARACTER_NAMES).map(([id, name]) => ({ id, name })),
       shikoirukaNewlyDistributed,
+      restoredOwnershipIds,
       daifugoReward,
     });
   } catch {

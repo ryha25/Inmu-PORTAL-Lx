@@ -8,6 +8,7 @@ import {
   evolveYajusenpaiForTestUser,
   PET_CHARACTER_NAMES,
   preserveAndRestorePetLevelProgress,
+  restoreMissingGachaPetOwnership,
 } from "../services/pet-state-store";
 import { ensurePetCommerceTables } from "./pet-commerce";
 import { getSkillLockStatus, recordDailyPetSkillUse } from "../services/pet-skills";
@@ -72,6 +73,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
     await ensurePetStateTable();
     await ensurePetCommerceTables();
     const shikoirukaGranted = await ensureShikoirukaDistributionForUser(req.userId!);
+    const restoredOwnershipIds = await restoreMissingGachaPetOwnership(req.userId!);
     await ensureYajusenpaiTestDistributionForUser(req.userId!);
     await preserveAndRestorePetLevelProgress(req.userId!);
     const [stateResult, ownershipResult, claimsResult] = await Promise.all([
@@ -90,6 +92,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
       levelRewardClaims: claimsResult.rows,
       skillLockStatus,
       shikoirukaGranted,
+      restoredOwnershipIds,
     });
   } catch (error) {
     console.error("[PetState] load", error);
