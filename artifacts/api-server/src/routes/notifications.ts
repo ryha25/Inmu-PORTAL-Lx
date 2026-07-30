@@ -13,10 +13,19 @@ const PET_ORDER_UPDATE_TYPE = "public_update_pet_order_20260729";
 const PET_ORDER_UPDATE_TITLE = "INMU PETを更新しました";
 const PET_ORDER_UPDATE_MESSAGE =
   "育成キャラクター選択で、キャラクターを長押しして好きな順番に並べ替えられるようになりました。変更した順番は保存されます。";
+const AUGUST_MYSTERY_UPDATE_TYPE = "public_update_mystery_20260801";
+const AUGUST_MYSTERY_UPDATE_TITLE = "8/1 ？？？機能追加";
+const AUGUST_MYSTERY_UPDATE_MESSAGE =
+  "8月1日に新しい？？？機能を追加予定です。詳細は当日の公開をお待ちください。";
 
 const PUBLIC_UPDATES = [
   { type: PUBLIC_UPDATE_TYPE, title: PUBLIC_UPDATE_TITLE, message: PUBLIC_UPDATE_MESSAGE },
   { type: PET_ORDER_UPDATE_TYPE, title: PET_ORDER_UPDATE_TITLE, message: PET_ORDER_UPDATE_MESSAGE },
+  {
+    type: AUGUST_MYSTERY_UPDATE_TYPE,
+    title: AUGUST_MYSTERY_UPDATE_TITLE,
+    message: AUGUST_MYSTERY_UPDATE_MESSAGE,
+  },
 ] as const;
 
 async function ensurePublicUpdateNotifications(userId: string) {

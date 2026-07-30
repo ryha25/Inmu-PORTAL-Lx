@@ -2,16 +2,17 @@ import { Logo } from '@/components/logo'
 import { LangToggle } from '@/components/lang-toggle'
 import { signOut } from '@/lib/auth-client'
 import { BugReportButton } from '@/components/bug-report-button'
+import { DailyRoulettePrompt } from '@/components/daily-roulette-prompt'
 import { useI18n } from '@/lib/i18n/context'
 import type { TranslationKey } from '@/lib/i18n/dict'
 import { cn } from '@/lib/utils'
 import {
-  Bell, Coins, History, LayoutDashboard,
+  Bell, CircleDot, Coins, History, LayoutDashboard,
   Lock, LogOut, Medal, PawPrint, Sparkles, Star, User as UserIcon,
 } from 'lucide-react'
 import { Link, useLocation } from 'wouter'
 
-type NavItem = { href: string; key: TranslationKey; icon: React.ElementType; locked?: boolean }
+type NavItem = { href: string; key?: TranslationKey; label?: string; icon: React.ElementType; locked?: boolean }
 
 const ALL_NAV: NavItem[] = [
   { href: '/',              key: 'nav_dashboard',     icon: LayoutDashboard },
@@ -19,6 +20,7 @@ const ALL_NAV: NavItem[] = [
   { href: '/points',        key: 'nav_points',        icon: Star },
   { href: '/gacha',         key: 'nav_gacha',         icon: Sparkles },
   { href: '/pet',           key: 'nav_pet',           icon: PawPrint },
+  { href: '/roulette',      label: 'ルーレット',       icon: CircleDot },
   { href: '/achievements',  key: 'nav_achievements',  icon: Medal },
   { href: '/notifications', key: 'nav_notifications', icon: Bell },
   { href: '/profile',       key: 'nav_profile',       icon: UserIcon },
@@ -45,6 +47,7 @@ export function AppShell({
 
   const isActive = (href: string) =>
     href === '/' ? location === '/' : location.startsWith(href)
+  const navLabel = (item: NavItem) => item.label ?? t(item.key!)
   return (
     <div className="min-h-dvh">
       {/* ── Desktop sidebar (lg+) ── */}
@@ -70,7 +73,7 @@ export function AppShell({
                     )}
                   >
                     <Icon className="size-[17px] shrink-0" />
-                    <span>{t(item.key)}</span>
+                    <span>{navLabel(item)}</span>
                     {item.href === '/notifications' && unread > 0 && (
                       <span className="ml-auto flex size-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
                         {unread > 9 ? '9+' : unread}
@@ -119,6 +122,7 @@ export function AppShell({
       </div>
 
       <BugReportButton />
+      <DailyRoulettePrompt />
 
       {/* ── Mobile scrollable bottom tab bar ── */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/98 backdrop-blur-md lg:hidden">
@@ -137,7 +141,7 @@ export function AppShell({
                       <Icon className="size-[20px]" />
                       <span className="absolute -right-1.5 -bottom-1 text-[8px] leading-none">⛓</span>
                     </span>
-                    <span className="leading-none text-center w-full truncate px-1">{t(item.key)}</span>
+                    <span className="leading-none text-center w-full truncate px-1">{navLabel(item)}</span>
                   </div>
                 </li>
               )
@@ -159,7 +163,7 @@ export function AppShell({
                       </span>
                     )}
                   </span>
-                  <span className="leading-none text-center w-full truncate px-1">{t(item.key)}</span>
+                  <span className="leading-none text-center w-full truncate px-1">{navLabel(item)}</span>
                 </Link>
               </li>
             )

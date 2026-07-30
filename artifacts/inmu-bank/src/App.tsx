@@ -20,6 +20,7 @@ import { DevLoginPage } from "@/pages/dev-login-page";
 import { PublicLegalPage } from "@/pages/public-legal-page";
 import { NotFoundPage } from "@/pages/not-found-page";
 import { MaintenanceOverlay } from "@/components/maintenance-overlay";
+import { RoulettePage } from "@/pages/roulette-page";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/points" component={PointsPage} />
       <Route path="/gacha" component={GachaPage} />
       <Route path="/pet" component={PetPage} />
+      <Route path="/roulette" component={RoulettePage} />
       <Route path="/inmu1919" component={AdminPage} />
       <Route path="/inmu1919/profile" component={AdminProfilePage} />
       <Route path="/inmu1919/ranking" component={AdminRankingPage} />

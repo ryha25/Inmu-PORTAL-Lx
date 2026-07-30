@@ -27,6 +27,7 @@ import rewardRequestsRouter from "./reward-requests";
 import petStateRouter from "./pet-state";
 import petCommerceRouter from "./pet-commerce";
 import bugReportsRouter from "./bug-reports";
+import rouletteRouter from "./roulette";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(rewardRequestsRouter);
 router.use(petStateRouter);
 router.use(petCommerceRouter);
 router.use(bugReportsRouter);
+router.use(rouletteRouter);
 
 export default router;
