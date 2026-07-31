@@ -264,7 +264,11 @@ export function RouletteWheel3D({
     renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    mount.replaceChildren(renderer.domElement);
+    const canvas = renderer.domElement;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.display = 'block';
+    mount.replaceChildren(canvas);
 
     scene.add(new THREE.HemisphereLight("#ffd994", "#2a0710", 2.15));
     const warmFill = new THREE.DirectionalLight("#ffd181", 4.8);
@@ -679,7 +683,8 @@ export function RouletteWheel3D({
   return (
     <div
       ref={mountRef}
-      className="h-full min-h-[330px] w-full sm:min-h-[500px]"
+      className="w-full"
+      style={{ height: 'clamp(330px, 55vw, 500px)' }}
       aria-label="高級カジノの3Dルーレット演出"
     />
   );
