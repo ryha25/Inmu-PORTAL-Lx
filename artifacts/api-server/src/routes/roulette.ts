@@ -64,8 +64,13 @@ function ensureRouletteTables(): Promise<void> {
         "balanceBefore" BIGINT NOT NULL,
         "balanceAfter" BIGINT NOT NULL,
         "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE ("userId", "playDate")
+        CONSTRAINT "dailyRoulettePlays_unique_play" UNIQUE ("userId", "playDate", id)
       )
+    `);
+    // 8月1日は2回制限のため旧UNIQUE制約を削除（既に削除済みの場合は無視）
+    await pool.query(`
+      ALTER TABLE "dailyRoulettePlays"
+        DROP CONSTRAINT IF EXISTS "dailyRoulettePlays_userId_playDate_key"
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "rouletteDealerSettings" (
@@ -106,6 +111,10 @@ function jstDateString(date = new Date()): string {
     parts.map((part) => [part.type, part.value]),
   );
   return `${value.year}-${value.month}-${value.day}`;
+}
+
+function dailyPlayLimit(playDate: string): number {
+  return playDate === "2026-08-01" ? 2 : 1;
 }
 
 function nextJstMidnightIso(playDate: string): string {
@@ -218,26 +227,31 @@ router.get("/roulette/status", requireAuth, async (req, res): Promise<void> => {
     await ensureRouletteTables();
     const now = new Date();
     const playDate = jstDateString(now);
-    const [profile, play, dealer] = await Promise.all([
+    const [profile, plays, dealer] = await Promise.all([
       pool.query(`SELECT "monthlyPoints" FROM profile WHERE "userId" = $1`, [
         req.userId!,
       ]),
       pool.query(
-        `SELECT * FROM "dailyRoulettePlays" WHERE "userId" = $1 AND "playDate" = $2::date LIMIT 1`,
+        `SELECT * FROM "dailyRoulettePlays" WHERE "userId" = $1 AND "playDate" = $2::date ORDER BY id DESC`,
         [req.userId!, playDate],
       ),
       getDealerForDate(playDate),
     ]);
+    const limit = dailyPlayLimit(playDate);
+    const playCount = plays.rowCount ?? 0;
+    const hasPlayed = playCount >= limit;
+    const latestPlay = plays.rows[0] ?? null;
     const active = now >= ROULETTE_START_AT;
     res.json({
       active,
       startsAt: ROULETTE_START_AT.toISOString(),
       playDate,
-      hasPlayed: Boolean(play.rowCount),
+      hasPlayed,
+      playsRemaining: Math.max(0, limit - playCount),
       points: Number(profile.rows[0]?.monthlyPoints ?? 0),
       dealer,
-      play: play.rows[0] ? serializePlay(play.rows[0]) : null,
-      nextAvailableAt: play.rows[0] ? nextJstMidnightIso(playDate) : null,
+      play: latestPlay ? serializePlay(latestPlay) : null,
+      nextAvailableAt: hasPlayed ? nextJstMidnightIso(playDate) : null,
     });
   } catch (error) {
     console.error("[Roulette] status error", error);
@@ -294,16 +308,18 @@ router.post("/roulette/play", requireAuth, async (req, res): Promise<void> => {
 
     const playDate = jstDateString();
     const existing = await client.query(
-      `SELECT * FROM "dailyRoulettePlays" WHERE "userId" = $1 AND "playDate" = $2::date LIMIT 1`,
+      `SELECT * FROM "dailyRoulettePlays" WHERE "userId" = $1 AND "playDate" = $2::date ORDER BY id DESC`,
       [req.userId!, playDate],
     );
-    if (existing.rows[0]) {
+    const playCount = existing.rowCount ?? 0;
+    const limit = dailyPlayLimit(playDate);
+    if (playCount >= limit) {
       await client.query("ROLLBACK");
       res
         .status(409)
         .json({
           error: "本日のルーレットは挑戦済みです",
-          play: serializePlay(existing.rows[0]),
+          play: existing.rows[0] ? serializePlay(existing.rows[0]) : null,
         });
       return;
     }
