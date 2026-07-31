@@ -250,7 +250,8 @@ router.get("/roulette/status", requireAuth, async (req, res): Promise<void> => {
       playsRemaining: Math.max(0, limit - playCount),
       points: Number(profile.rows[0]?.monthlyPoints ?? 0),
       dealer,
-      play: latestPlay ? serializePlay(latestPlay) : null,
+      // まだ引ける回数が残っている場合は結果を返さない（UI側が結果画面でロックされないように）
+      play: hasPlayed && latestPlay ? serializePlay(latestPlay) : null,
       nextAvailableAt: hasPlayed ? nextJstMidnightIso(playDate) : null,
     });
   } catch (error) {
