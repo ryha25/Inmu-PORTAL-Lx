@@ -255,7 +255,8 @@ export function RouletteWheel3D({
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      powerPreference: "high-performance",
+      powerPreference: "default",
+      alpha: false,
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -487,9 +488,9 @@ export function RouletteWheel3D({
     const resultPosition = new THREE.Vector3(0, 3.2, 5.2);
 
     function resize() {
-      const width = mount!.clientWidth;
-      const height = mount!.clientHeight;
-      if (!width || !height) return;
+      const rect = mount!.getBoundingClientRect();
+      const width = rect.width || mount!.offsetWidth || 390;
+      const height = rect.height || mount!.offsetHeight || 330;
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.fov = camera.aspect < 0.85 ? 51 : 42;
@@ -497,7 +498,8 @@ export function RouletteWheel3D({
     }
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(mount);
-    resize();
+    // 初回はレイアウト確定後に実行
+    requestAnimationFrame(resize);
 
     function frame(now: number) {
       const elapsed = now - startTime;
