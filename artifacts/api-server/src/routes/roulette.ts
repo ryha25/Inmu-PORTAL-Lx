@@ -189,10 +189,14 @@ async function getDealerForDate(
 }
 
 function serializePlay(row: RouletteRow) {
+  // PostgreSQL DATE型はpgドライバによってDateオブジェクトで返ることがある
+  const playDate = typeof row.playDate === 'string'
+    ? row.playDate.slice(0, 10)
+    : (row.playDate as unknown as Date).toISOString().slice(0, 10);
   return {
     id: String(row.id),
     executionId: row.executionId,
-    playDate: row.playDate,
+    playDate,
     dealerPetId: row.dealerPetId,
     dealerPetName: PET_CHARACTER_NAMES[row.dealerPetId] ?? row.dealerPetId,
     betType: row.betType,
@@ -205,7 +209,7 @@ function serializePlay(row: RouletteRow) {
     balanceBefore: Number(row.balanceBefore),
     balanceAfter: Number(row.balanceAfter),
     createdAt: new Date(row.createdAt).toISOString(),
-    nextAvailableAt: nextJstMidnightIso(row.playDate),
+    nextAvailableAt: nextJstMidnightIso(playDate),
   };
 }
 

@@ -102,8 +102,15 @@ export function RoulettePage() {
   const [selected, setSelected] = useState<{
     betType: BetType;
     betValue: string;
-  } | null>(null);
-  const [amountText, setAmountText] = useState("");
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem("inmu-roulette-selection");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [amountText, setAmountText] = useState(() =>
+    localStorage.getItem("inmu-roulette-amount") ?? ""
+  );
   const [placedBet, setPlacedBet] = useState<Bet | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [play, setPlay] = useState<Play | null>(null);
@@ -123,6 +130,9 @@ export function RoulettePage() {
       if (data.play) {
         setPlay(data.play);
         setAnimationDone(true);
+        // 既にプレイ済みなら選択を消去
+        localStorage.removeItem("inmu-roulette-selection");
+        localStorage.removeItem("inmu-roulette-amount");
       }
     }
     if (historyResponse.ok)
@@ -151,6 +161,7 @@ export function RoulettePage() {
   function chooseBet(betType: BetType, betValue: string) {
     const next = { betType, betValue };
     setSelected(next);
+    localStorage.setItem("inmu-roulette-selection", JSON.stringify(next));
     if (placedBet) setPlacedBet({ ...placedBet, ...next });
   }
 
@@ -177,6 +188,8 @@ export function RoulettePage() {
         error?: string;
       };
       if (data.play) {
+        localStorage.removeItem("inmu-roulette-selection");
+        localStorage.removeItem("inmu-roulette-amount");
         setPlay(data.play);
         setStatus((current) =>
           current
@@ -563,7 +576,7 @@ export function RoulettePage() {
                     min={rules?.min}
                     max={rules?.max}
                     value={amountText}
-                    onChange={(event) => setAmountText(event.target.value)}
+                    onChange={(event) => { setAmountText(event.target.value); localStorage.setItem("inmu-roulette-amount", event.target.value); }}
                     placeholder={rules ? String(rules.min) : "場所を選択"}
                     disabled={!selected || Boolean(placedBet)}
                     className="mt-1"
@@ -588,7 +601,7 @@ export function RoulettePage() {
                           key={chip}
                           type="button"
                           disabled={Boolean(placedBet)}
-                          onClick={() => setAmountText(String(chip))}
+                          onClick={() => { setAmountText(String(chip)); localStorage.setItem("inmu-roulette-amount", String(chip)); }}
                           className={cn(
                             "flex size-14 shrink-0 flex-col items-center justify-center rounded-full border-4 text-[9px] font-black shadow-[0_5px_14px_rgba(0,0,0,.35)] transition-transform active:scale-95",
                             index % 3 === 0
