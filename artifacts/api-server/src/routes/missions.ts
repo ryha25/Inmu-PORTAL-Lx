@@ -59,7 +59,7 @@ async function fetchInmuBalance(wallet: string): Promise<number> {
 
 import { requireAuth, requireAdmin } from "../middlewares/session";
 import { initializePetCharacterState } from "../services/pet-state-store";
-import { hasActivePetSkill } from "../services/pet-skills";
+import { hasActivePetSkill, hasYajusenpaiRewardMultiplier } from "../services/pet-skills";
 import { getLifetimeEarnedPoints } from "../services/lifetime-points";
 import { getDaifugoEventCount, getDaifugoMaxChallengeLevel } from "../services/daifugo-link";
 
@@ -938,8 +938,13 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       }
     }
 
-    const pointMultiplier = mission.points > 0 && await hasActivePetSkill(userId, "nyarushian") ? 2 : 1;
+    const hasNyarushianMultiplier = mission.points > 0 && await hasActivePetSkill(userId, "nyarushian");
+    const hasYajusenpaiMultiplier = await hasYajusenpaiRewardMultiplier(userId);
+    const pointMultiplier = (hasNyarushianMultiplier ? 2 : 1) * (hasYajusenpaiMultiplier ? 2 : 1);
     const awardedPoints = mission.points * pointMultiplier;
+    const awardedItemAmount = extraReward?.rewardItemAmount
+      ? extraReward.rewardItemAmount * (hasYajusenpaiMultiplier ? 2 : 1)
+      : 0;
 
     if (awardedPoints > 0) {
       const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -964,17 +969,23 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       }
     }
 
-    if (extraReward?.rewardItemType && extraReward.rewardItemAmount > 0) {
-      await grantMissionRewardItem(userId, extraReward.rewardItemType, extraReward.rewardItemAmount).catch(error => {
+    if (extraReward?.rewardItemType && awardedItemAmount > 0) {
+      await grantMissionRewardItem(userId, extraReward.rewardItemType, awardedItemAmount).catch(error => {
         console.error("[Missions] grant reward item", error);
       });
     }
 
     const rewardParts: string[] = [];
-    if (awardedPoints > 0) rewardParts.push(`${awardedPoints.toLocaleString()}ポイント${pointMultiplier > 1 ? "（幸運の肉球 ×2）" : ""}`);
+    const pointBonusLabels = [
+      hasNyarushianMultiplier ? "幸運の肉球 ×2" : null,
+      hasYajusenpaiMultiplier ? "毎月10日の獲得ボーナス ×2" : null,
+    ].filter((label): label is string => Boolean(label));
+    if (awardedPoints > 0) {
+      rewardParts.push(`${awardedPoints.toLocaleString()}ポイント${pointBonusLabels.length ? `（${pointBonusLabels.join("・")}）` : ""}`);
+    }
     if (extraReward?.characterId) rewardParts.push(PET_CHARACTER_NAMES[extraReward.characterId] ?? extraReward.characterId);
-    if (extraReward?.rewardItemType && extraReward.rewardItemAmount > 0) {
-      rewardParts.push(`${REWARD_ITEM_NAMES[extraReward.rewardItemType]} ×${extraReward.rewardItemAmount}`);
+    if (extraReward?.rewardItemType && awardedItemAmount > 0) {
+      rewardParts.push(`${REWARD_ITEM_NAMES[extraReward.rewardItemType]} ×${awardedItemAmount}`);
     }
 
     await db.insert(notificationsTable).values({
@@ -989,7 +1000,7 @@ router.post("/missions/:id/claim", requireAuth, async (req, res): Promise<void> 
       characterId: extraReward?.characterId ?? null,
       characterName: extraReward?.characterId ? (PET_CHARACTER_NAMES[extraReward.characterId] ?? extraReward.characterId) : null,
       rewardItemType: extraReward?.rewardItemType ?? null,
-      rewardItemAmount: extraReward?.rewardItemAmount ?? 0,
+      rewardItemAmount: awardedItemAmount,
       rewardItemName: extraReward?.rewardItemType ? REWARD_ITEM_NAMES[extraReward.rewardItemType] : null,
     });
   } catch {

@@ -2171,10 +2171,12 @@ export function PetPage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resultId: result.id, amount: result.rewardAmount }),
-      }).then(response => {
+      }).then(async response => {
         if (response.ok) {
-          markWalkPointsGranted(result.id)
-          setBalances(current => ({ ...current, points: current.points + result.rewardAmount }))
+          const data = await response.json().catch(() => ({})) as { granted?: boolean; grantedAmount?: number }
+          const grantedAmount = Number.isFinite(data.grantedAmount) ? Number(data.grantedAmount) : result.rewardAmount
+          markWalkPointsGranted(result.id, grantedAmount)
+          if (data.granted) setBalances(current => ({ ...current, points: current.points + grantedAmount }))
         }
       }).catch(() => {
         walkPointGrantRef.current.delete(result.id)
@@ -2237,10 +2239,12 @@ export function PetPage() {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ giftId: gift.id, amount: gift.rewardAmount }),
-      }).then(response => {
+      }).then(async response => {
         if (response.ok) {
-          markAffectionGiftPointsGranted(gift.id)
-          setBalances(current => ({ ...current, points: current.points + gift.rewardAmount }))
+          const data = await response.json().catch(() => ({})) as { granted?: boolean; grantedAmount?: number }
+          const grantedAmount = Number.isFinite(data.grantedAmount) ? Number(data.grantedAmount) : gift.rewardAmount
+          markAffectionGiftPointsGranted(gift.id, grantedAmount)
+          if (data.granted) setBalances(current => ({ ...current, points: current.points + grantedAmount }))
         }
       }).catch(() => {
         affectionGiftPointGrantRef.current.delete(gift.id)

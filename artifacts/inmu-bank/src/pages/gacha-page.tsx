@@ -50,6 +50,13 @@ type GachaRuntimeConfig = {
   endsAt:string|null
   serverTime:string
   modes:Record<'points'|'paid',{ banners:string[]; rates:GachaRateRow[] }>
+  pricing?:{
+    pointSingle:number
+    pointMulti:number
+    paidSingle:number
+    paidEleven:number
+    yajusenpaiDiscountActive:boolean
+  }
 }
 
 /* ─── capsule color configs (image 5 reference) ─── */
@@ -874,6 +881,9 @@ export function GachaPage() {
   const [rateModalOpen,setRateModalOpen] = useState(false)
   const [paidSinglePrice,setPaidSinglePrice] = useState(10000)
   const [paidElevenPrice,setPaidElevenPrice] = useState(100000)
+  const [pointSinglePrice,setPointSinglePrice] = useState(1000)
+  const [pointMultiPrice,setPointMultiPrice] = useState(10000)
+  const [yajusenpaiDiscountActive,setYajusenpaiDiscountActive] = useState(false)
   const [gachaConfig,setGachaConfig] = useState<GachaRuntimeConfig|null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null)
   const drawRequestLock = useRef(false)
@@ -896,6 +906,13 @@ export function GachaPage() {
       if(!r.ok)return
       const d=await r.json() as GachaRuntimeConfig
       setGachaConfig(d)
+      if(d.pricing){
+        setPointSinglePrice(d.pricing.pointSingle)
+        setPointMultiPrice(d.pricing.pointMulti)
+        setPaidSinglePrice(d.pricing.paidSingle)
+        setPaidElevenPrice(d.pricing.paidEleven)
+        setYajusenpaiDiscountActive(d.pricing.yajusenpaiDiscountActive)
+      }
     }catch{/**/}
   },[])
   useEffect(()=>{void loadGachaConfig()},[loadGachaConfig])
@@ -907,19 +924,6 @@ export function GachaPage() {
     const timeout = window.setTimeout(()=>{void loadGachaConfig()}, Math.min(delay + 500, 2_147_483_647))
     return ()=>window.clearTimeout(timeout)
   },[gachaConfig,loadGachaConfig])
-
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const r=await fetch('/api/pet-prices',{credentials:'include'})
-        if(r.ok){
-          const d=await r.json() as {gacha_paid_single_inmu?:number;gacha_paid_eleven_inmu?:number}
-          if(Number.isFinite(d.gacha_paid_single_inmu))setPaidSinglePrice(Number(d.gacha_paid_single_inmu))
-          if(Number.isFinite(d.gacha_paid_eleven_inmu))setPaidElevenPrice(Number(d.gacha_paid_eleven_inmu))
-        }
-      }catch{/**/}
-    })()
-  },[])
 
   const loadPts = useCallback(async()=>{
     try{
@@ -1014,7 +1018,7 @@ export function GachaPage() {
 
   async function spin(type:'single'|'multi'){
     if(phase!=='idle')return
-    const cost=type==='multi'?10000:1000
+    const cost=type==='multi'?pointMultiPrice:pointSinglePrice
     if(pts<cost){toast.error(`ポイント不足（必要: ${cost.toLocaleString()}pt）`);return}
     if(!beginDrawRequest())return
     try{
@@ -1243,6 +1247,7 @@ export function GachaPage() {
           <div style={{padding:'10px 14px'}}>
             <p style={{textAlign:'center',fontSize:9,color:'rgba(255,255,255,.45)',margin:'0 0 8px'}}>※価格により必要INMU数が変動する場合があります(最大値は1連1万INMU/11連10万INMU)</p>
             {paidStatus&&<p style={{textAlign:'center',fontSize:11,color:'#8ee7ff',margin:'0 0 8px'}}>{paidStatus}</p>}
+            {yajusenpaiDiscountActive&&<p style={{textAlign:'center',fontSize:11,fontWeight:800,color:'#d8b4fe',margin:'0 0 8px'}}>野獣先輩♀の固有スキル適用中：ガチャ価格半額</p>}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
               <OrnateButton gold enabled={!paidBusy&&!drawRequestBusy} onClick={()=>spinPaid('single')} label={paidBusy||drawRequestBusy?'処理中…':'1連ガチャ'} price={`${paidSinglePrice.toLocaleString()} INMU`}/>
               <OrnateButton gold={false} enabled={!paidBusy&&!drawRequestBusy} onClick={()=>spinPaid('eleven')} label={paidBusy||drawRequestBusy?'処理中…':'11連ガチャ'} price={`${paidElevenPrice.toLocaleString()} INMU`}/>
@@ -1292,8 +1297,9 @@ export function GachaPage() {
               </div>
             </button>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <OrnateButton gold enabled={pts>=1000&&!ptsLoading&&!drawRequestBusy} onClick={()=>spin('single')} label={drawRequestBusy?'処理中…':'1連ガチャ'} price="1,000 pt"/>
-              <OrnateButton gold={false} enabled={pts>=10000&&!ptsLoading&&!drawRequestBusy} onClick={()=>spin('multi')} label={drawRequestBusy?'処理中…':'10連ガチャ'} price="10,000 pt"/>
+              {yajusenpaiDiscountActive&&<p style={{gridColumn:'1 / -1',textAlign:'center',fontSize:11,fontWeight:800,color:'#d8b4fe',margin:0}}>野獣先輩♀の固有スキル適用中：ガチャ価格半額</p>}
+              <OrnateButton gold enabled={pts>=pointSinglePrice&&!ptsLoading&&!drawRequestBusy} onClick={()=>spin('single')} label={drawRequestBusy?'処理中…':'1連ガチャ'} price={`${pointSinglePrice.toLocaleString()} pt`}/>
+              <OrnateButton gold={false} enabled={pts>=pointMultiPrice&&!ptsLoading&&!drawRequestBusy} onClick={()=>spin('multi')} label={drawRequestBusy?'処理中…':'10連ガチャ'} price={`${pointMultiPrice.toLocaleString()} pt`}/>
             </div>
             <PointsPanel pts={pts} loading={ptsLoading}/>
             <div style={{marginTop:7,background:'linear-gradient(135deg,rgba(12,6,2,.92),rgba(6,3,16,.92))',border:'1px solid rgba(184,134,11,.4)',borderRadius:10,backdropFilter:'blur(8px)'}}>

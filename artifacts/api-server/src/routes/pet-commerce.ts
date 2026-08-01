@@ -3,7 +3,7 @@ import { pool } from "@workspace/db";
 import { randomUUID } from "crypto";
 import { requireAdmin, requireAuth } from "../middlewares/session";
 import { fetchInmuBalance } from "./solana";
-import { hasActivePetSkill, getFreeGachaState } from "../services/pet-skills";
+import { hasActivePetSkill, getFreeGachaState, hasYajusenpaiGachaDiscount } from "../services/pet-skills";
 import { getSystemSettingNumber } from "../services/system-settings-store";
 
 const router = Router();
@@ -793,10 +793,25 @@ router.get("/admin/pet-gacha/history", requireAdmin, async (_req, res): Promise<
   }
 });
 
-router.get("/pet-gacha/config", requireAuth, async (_req, res): Promise<void> => {
+router.get("/pet-gacha/config", requireAuth, async (req, res): Promise<void> => {
   try {
-    const config = await getGachaEventConfig();
-    res.json(config);
+    const [config, paidSingle, paidEleven, discountActive] = await Promise.all([
+      getGachaEventConfig(),
+      getSystemSettingNumber("gacha_paid_single_inmu", 10_000),
+      getSystemSettingNumber("gacha_paid_eleven_inmu", 100_000),
+      hasYajusenpaiGachaDiscount(req.userId!),
+    ]);
+    const divisor = discountActive ? 2 : 1;
+    res.json({
+      ...config,
+      pricing: {
+        pointSingle: Math.ceil(1_000 / divisor),
+        pointMulti: Math.ceil(10_000 / divisor),
+        paidSingle: Math.ceil(paidSingle / divisor),
+        paidEleven: Math.ceil(paidEleven / divisor),
+        yajusenpaiDiscountActive: discountActive,
+      },
+    });
   } catch (error) {
     console.error("[PetCommerce] gacha config", error);
     res.status(500).json({ error: error instanceof Error ? error.message : "ガチャ設定の取得に失敗しました" });
@@ -849,7 +864,8 @@ router.get("/pet-commerce/inmu-balance", requireAuth, async (req, res): Promise<
 router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> => {
   const pullType: PullType = req.body?.pullType === "multi" ? "multi" : "single";
   const count = pullType === "multi" ? 10 : 1;
-  const costPoints = pullType === "multi" ? 10_000 : 1_000;
+  const baseCostPoints = pullType === "multi" ? 10_000 : 1_000;
+  const costPoints = await hasYajusenpaiGachaDiscount(req.userId!) ? Math.ceil(baseCostPoints / 2) : baseCostPoints;
   const client = await pool.connect();
   try {
     await ensurePetCommerceTables();
@@ -893,9 +909,10 @@ router.post("/pet-gacha/points", requireAuth, async (req, res): Promise<void> =>
 router.post("/pet-gacha/paid", requireAuth, async (req, res): Promise<void> => {
   const pullType: PullType = req.body?.pullType === "eleven" ? "eleven" : "single";
   const count = pullType === "eleven" ? 11 : 1;
-  const costInmu = pullType === "eleven"
+  const baseCostInmu = pullType === "eleven"
     ? await getSystemSettingNumber("gacha_paid_eleven_inmu", 100_000)
     : await getSystemSettingNumber("gacha_paid_single_inmu", 10_000);
+  const costInmu = await hasYajusenpaiGachaDiscount(req.userId!) ? Math.ceil(baseCostInmu / 2) : baseCostInmu;
   const txId = String(req.body?.txId ?? "").trim();
   const client = await pool.connect();
   try {

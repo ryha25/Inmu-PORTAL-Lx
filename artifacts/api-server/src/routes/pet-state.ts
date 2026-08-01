@@ -6,12 +6,13 @@ import {
   ensureShikoirukaDistributionForUser,
   ensureYajusenpaiTestDistributionForUser,
   evolveYajusenpaiForTestUser,
+  isPetFeatureTestAccount,
   PET_CHARACTER_NAMES,
   preserveAndRestorePetLevelProgress,
   restoreMissingGachaPetOwnership,
 } from "../services/pet-state-store";
 import { ensurePetCommerceTables } from "./pet-commerce";
-import { getSkillLockStatus, recordDailyPetSkillUse } from "../services/pet-skills";
+import { getSkillLockStatus, hasYajusenpaiRewardMultiplier, recordDailyPetSkillUse } from "../services/pet-skills";
 
 const router = Router();
 
@@ -83,6 +84,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
     ]);
     const activeSkillIds = extractSkillActiveIds(stateResult.rows[0]?.state ?? null);
     const skillLockStatus = activeSkillIds.length ? await getSkillLockStatus(req.userId!, activeSkillIds) : {};
+    const petFeatureTestAccount = await isPetFeatureTestAccount(req.userId!);
     res.json({
       hasState: stateResult.rows.length > 0,
       state: stateResult.rows[0]?.state ?? null,
@@ -93,6 +95,7 @@ router.get("/pet/state", requireAuth, async (req, res): Promise<void> => {
       skillLockStatus,
       shikoirukaGranted,
       restoredOwnershipIds,
+      petFeatureTestAccount,
     });
   } catch (error) {
     console.error("[PetState] load", error);
@@ -170,6 +173,7 @@ router.post("/pet/skill-use", requireAuth, async (req, res): Promise<void> => {
     let pointsGranted = 0;
     let remainingBalance: number | undefined;
     if (characterId === "daifugo") {
+      const skillRewardAmount = await hasYajusenpaiRewardMultiplier(req.userId!) ? 1_000 : 500;
       const actionId = String(req.body?.actionId ?? "").trim();
       const careAction = String(req.body?.careAction ?? "").trim();
       if (!/^[a-z0-9:_-]{8,120}$/i.test(actionId) || !["feed", "play", "pet", "walk"].includes(careAction)) {
@@ -181,24 +185,24 @@ router.post("/pet/skill-use", requireAuth, async (req, res): Promise<void> => {
         await client.query("BEGIN");
         const inserted = await client.query(
           `INSERT INTO "petSkillPointGrants" ("userId", "characterId", "actionId", "careAction", amount)
-           VALUES ($1, 'daifugo', $2, $3, 500)
+           VALUES ($1, 'daifugo', $2, $3, $4)
            ON CONFLICT ("userId", "characterId", "actionId") DO NOTHING
            RETURNING amount`,
-          [req.userId!, actionId, careAction],
+          [req.userId!, actionId, careAction, skillRewardAmount],
         );
         if (inserted.rowCount) {
           const month = new Date().toISOString().slice(0, 7);
           await client.query(
-            `UPDATE profile SET "monthlyPoints" = "monthlyPoints" + 500, "updatedAt" = NOW()
+            `UPDATE profile SET "monthlyPoints" = "monthlyPoints" + $2, "updatedAt" = NOW()
              WHERE "userId" = $1`,
-            [req.userId!],
+            [req.userId!, skillRewardAmount],
           );
           await client.query(
             `INSERT INTO points ("userId", amount, type, source, month)
-             VALUES ($1, 500, 'pet_skill_reward', '大富豪「億万長者」', $2)`,
-            [req.userId!, month],
+             VALUES ($1, $2, 'pet_skill_reward', '大富豪「億万長者」', $3)`,
+            [req.userId!, skillRewardAmount, month],
           );
-          pointsGranted = 500;
+          pointsGranted = skillRewardAmount;
         }
         const balance = await client.query(
           `SELECT COALESCE("monthlyPoints", 0) AS balance FROM profile WHERE "userId" = $1 LIMIT 1`,
@@ -231,6 +235,7 @@ router.post("/pet/walk/point-grant", requireAuth, async (req, res): Promise<void
   }
   const client = await pool.connect();
   try {
+    const grantedAmount = amount * (await hasYajusenpaiRewardMultiplier(req.userId!) ? 2 : 1);
     await ensurePetStateTable();
     await client.query(`
       CREATE TABLE IF NOT EXISTS "petWalkPointGrants" (
@@ -245,16 +250,22 @@ router.post("/pet/walk/point-grant", requireAuth, async (req, res): Promise<void
       `INSERT INTO "petWalkPointGrants" ("resultId","userId",amount)
        VALUES ($1,$2,$3)
        ON CONFLICT ("resultId") DO NOTHING
-       RETURNING "resultId"`,
-      [resultId, req.userId!, amount],
+       RETURNING amount`,
+      [resultId, req.userId!, grantedAmount],
     );
     if (inserted.rowCount) {
       const month = new Date().toISOString().slice(0, 7);
-      await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [amount, req.userId!]);
-      await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_walk_reward','INMU PET散歩報酬',$3)`, [req.userId!, amount, month]);
+      await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [grantedAmount, req.userId!]);
+      await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_walk_reward','INMU PET散歩報酬',$3)`, [req.userId!, grantedAmount, month]);
     }
+    const storedGrant = inserted.rowCount
+      ? inserted.rows[0]
+      : (await client.query(
+          `SELECT amount FROM "petWalkPointGrants" WHERE "resultId"=$1 AND "userId"=$2 LIMIT 1`,
+          [resultId, req.userId!],
+        )).rows[0];
     await client.query("COMMIT");
-    res.json({ ok: true, granted: Boolean(inserted.rowCount) });
+    res.json({ ok: true, granted: Boolean(inserted.rowCount), grantedAmount: Number(storedGrant?.amount ?? 0) });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetState] walk point grant", error);
@@ -273,6 +284,7 @@ router.post("/pet/affection-gift/point-grant", requireAuth, async (req, res): Pr
   }
   const client = await pool.connect();
   try {
+    const grantedAmount = amount * (await hasYajusenpaiRewardMultiplier(req.userId!) ? 2 : 1);
     await ensurePetStateTable();
     await client.query(`
       CREATE TABLE IF NOT EXISTS "petAffectionPointGrants" (
@@ -287,16 +299,22 @@ router.post("/pet/affection-gift/point-grant", requireAuth, async (req, res): Pr
       `INSERT INTO "petAffectionPointGrants" ("giftId","userId",amount)
        VALUES ($1,$2,$3)
        ON CONFLICT ("giftId") DO NOTHING
-       RETURNING "giftId"`,
-      [giftId, req.userId!, amount],
+       RETURNING amount`,
+      [giftId, req.userId!, grantedAmount],
     );
     if (inserted.rowCount) {
       const month = new Date().toISOString().slice(0, 7);
-      await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [amount, req.userId!]);
-      await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_affection_gift','INMU PET affection gift',$3)`, [req.userId!, amount, month]);
+      await client.query(`UPDATE profile SET "monthlyPoints"="monthlyPoints"+$1,"updatedAt"=NOW() WHERE "userId"=$2`, [grantedAmount, req.userId!]);
+      await client.query(`INSERT INTO points ("userId",amount,type,source,month) VALUES ($1,$2,'pet_affection_gift','INMU PET affection gift',$3)`, [req.userId!, grantedAmount, month]);
     }
+    const storedGrant = inserted.rowCount
+      ? inserted.rows[0]
+      : (await client.query(
+          `SELECT amount FROM "petAffectionPointGrants" WHERE "giftId"=$1 AND "userId"=$2 LIMIT 1`,
+          [giftId, req.userId!],
+        )).rows[0];
     await client.query("COMMIT");
-    res.json({ ok: true, granted: Boolean(inserted.rowCount) });
+    res.json({ ok: true, granted: Boolean(inserted.rowCount), grantedAmount: Number(storedGrant?.amount ?? 0) });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("[PetState] affection gift point grant", error);

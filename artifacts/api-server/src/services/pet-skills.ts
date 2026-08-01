@@ -1,5 +1,5 @@
 import { pool } from "@workspace/db";
-import { ensurePetStateTable } from "./pet-state-store";
+import { ensurePetStateTable, isPetFeatureTestAccount } from "./pet-state-store";
 
 const TDN_REROLL_DAILY_LIMIT = 3;
 const DAILY_SKILL_USE_TABLE = `"petDailySkillUses"`;
@@ -85,6 +85,29 @@ export async function hasActivePetSkill(userId: string, characterId: string, min
     console.error("[PetSkills] lookup failed", { userId, characterId, error });
     return false;
   }
+}
+
+function isJstDay10(): boolean {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDate() === 10;
+}
+
+async function canUseYajusenpaiPreviewSkill(userId: string): Promise<boolean> {
+  return isJstDay10() || await isPetFeatureTestAccount(userId);
+}
+
+async function hasAnyActivePetSkill(userId: string, characterIds: readonly string[]): Promise<boolean> {
+  const results = await Promise.all(characterIds.map(characterId => hasActivePetSkill(userId, characterId)));
+  return results.some(Boolean);
+}
+
+export async function hasYajusenpaiRewardMultiplier(userId: string): Promise<boolean> {
+  if (!await canUseYajusenpaiPreviewSkill(userId)) return false;
+  return hasAnyActivePetSkill(userId, ["yajusenpai-male-base", "yajusenpai-male-evolved"]);
+}
+
+export async function hasYajusenpaiGachaDiscount(userId: string): Promise<boolean> {
+  if (!await canUseYajusenpaiPreviewSkill(userId)) return false;
+  return hasAnyActivePetSkill(userId, ["yajusenpai-female-base", "yajusenpai-female-evolved"]);
 }
 
 // ── 無料ガチャの本日の状態 ──

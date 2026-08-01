@@ -253,7 +253,14 @@ const YAJUSENPAI_PET_DEFINITIONS: readonly PetDefinition[] = UPCOMING_PET_DEFINI
     },
     skill: {
       ...plannedSkill,
-      enabled: false,
+      effect: male
+        ? '毎月10日は、ミッションやPETのお世話で獲得するアイテムとポイントが2倍になります。進化後もこの効果を引き継ぎます。'
+        : '毎月10日は、ポイントガチャとINMUガチャの消費額が半分になります。進化後もこの効果を引き継ぎます。',
+      notes: [
+        'ガチャテストでは動作確認のため日付に関係なく利用できます。',
+        ...(evolved ? ['進化後に追加される戦闘・特訓効果は現在未適用です。'] : []),
+      ],
+      enabled: true,
     },
     levelRewards: plannedLevelRewards,
   }
