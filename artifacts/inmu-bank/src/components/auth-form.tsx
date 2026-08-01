@@ -74,6 +74,7 @@ const content = {
     ] as Feature[],
     noticesTitle: 'お知らせ',
     notices: [
+      { date: '2026/08/02', title: 'INMU PETの眠気バランスを調整しました', detail: '眠気の上昇と睡眠中の回復速度を見直し、PET画面を閉じている間も眠気が回復するよう改善しました。' },
       { date: '2026/08/01', title: '8/1 ？？？機能追加', detail: '8月1日に新しい？？？機能を追加予定です。詳細は当日の公開をお待ちください。' },
       { date: '2026/07/29', title: 'INMU PETのキャラクター選択を改善しました', detail: '育成キャラクター選択で、キャラクターを長押しして好きな順番に並べ替えられるようになりました。' },
       { date: '2026/07/28', title: 'ログインページのサービス紹介を更新しました', detail: '初めて訪れた方にも内容が伝わるよう、各ゲームや主要機能の説明、FAQを充実させました。' },
@@ -143,6 +144,7 @@ const content = {
     ] as Feature[],
     noticesTitle: 'Updates',
     notices: [
+      { date: '2026/08/02', title: 'Adjusted INMU PET sleepiness balance', detail: 'We adjusted sleepiness gain and recovery speed. Sleepiness now also recovers while the INMU PET screen is closed.' },
       { date: '2026/08/01', title: '8/1 New ??? feature', detail: 'A new mystery feature is scheduled for August 1. More details will be revealed when it goes live.' },
       { date: '2026/07/29', title: 'Improved character selection in INMU PET', detail: 'You can now press and hold a character in the selection list and drag it into your preferred order.' },
       { date: '2026/07/28', title: 'Expanded our public service guide', detail: 'We added clearer introductions to our games, main features, and frequently asked questions.' },

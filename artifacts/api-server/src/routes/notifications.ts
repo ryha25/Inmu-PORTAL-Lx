@@ -17,6 +17,10 @@ const AUGUST_MYSTERY_UPDATE_TYPE = "public_update_mystery_20260801";
 const AUGUST_MYSTERY_UPDATE_TITLE = "8/1 ？？？機能追加";
 const AUGUST_MYSTERY_UPDATE_MESSAGE =
   "8月1日に新しい？？？機能を追加予定です。詳細は当日の公開をお待ちください。";
+const PET_SLEEP_UPDATE_TYPE = "public_update_pet_sleep_20260802";
+const PET_SLEEP_UPDATE_TITLE = "INMU PETの眠気バランスを調整しました";
+const PET_SLEEP_UPDATE_MESSAGE =
+  "眠気の上昇と睡眠中の回復速度を見直し、PET画面を閉じている間も眠気が回復するよう改善しました。";
 
 const PUBLIC_UPDATES = [
   { type: PUBLIC_UPDATE_TYPE, title: PUBLIC_UPDATE_TITLE, message: PUBLIC_UPDATE_MESSAGE },
@@ -25,6 +29,11 @@ const PUBLIC_UPDATES = [
     type: AUGUST_MYSTERY_UPDATE_TYPE,
     title: AUGUST_MYSTERY_UPDATE_TITLE,
     message: AUGUST_MYSTERY_UPDATE_MESSAGE,
+  },
+  {
+    type: PET_SLEEP_UPDATE_TYPE,
+    title: PET_SLEEP_UPDATE_TITLE,
+    message: PET_SLEEP_UPDATE_MESSAGE,
   },
 ] as const;
 
