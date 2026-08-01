@@ -161,6 +161,36 @@ export type PetDefinition = {
 const YAJUSENPAI_PET_DEFINITIONS: readonly PetDefinition[] = UPCOMING_PET_DEFINITIONS.map(source => {
   const evolved = source.evolutionStage === 'evolved'
   const male = source.gender === 'male'
+  const plannedSkill = male
+    ? {
+        name: '毎月10日の獲得ボーナス',
+        effect: evolved
+          ? '毎月10日は獲得アイテム・獲得ポイントが2倍。戦闘・特訓時の経験値も常時2倍。'
+          : '毎月10日は獲得アイテム・獲得ポイントが2倍。',
+        notes: evolved
+          ? ['10日のボーナスと、戦闘・特訓経験値2倍は別々に適用されます。', '現在は表示確認用です。効果は正式公開時に有効化されます。']
+          : ['毎月10日のみ適用される予定です。', '現在は表示確認用です。効果は正式公開時に有効化されます。'],
+      }
+    : {
+        name: '毎月10日のガチャ割引',
+        effect: evolved
+          ? '毎月10日はガチャのポイント・INMU消費が半減。戦闘時は味方キャラクターの攻撃速度が常時2倍。'
+          : '毎月10日はガチャのポイント・INMU消費が半減。',
+        notes: evolved
+          ? ['10日の割引と、戦闘時の味方攻撃速度2倍は別々に適用されます。', '現在は表示確認用です。効果は正式公開時に有効化されます。']
+          : ['毎月10日のみ適用される予定です。', '現在は表示確認用です。効果は正式公開時に有効化されます。'],
+      }
+  const plannedLevelRewards: PetDefinition['levelRewards'] = evolved
+    ? [
+        { level: 40, label: '報酬獲得率 +5%', detail: '今後追加予定のゲリラクエスト・レイドバトルで獲得報酬が増加します。' },
+        { level: 50, label: '30,000 INMU', detail: '正式公開時に受取方法が有効になります。' },
+        { level: 60, label: '報酬獲得率 +5%', detail: '今後追加予定のゲリラクエスト・レイドバトルで獲得報酬が増加します。' },
+      ]
+    : [
+        { level: 10, label: '購入申請還元率 +5%' },
+        { level: 20, label: '30,000 INMU', detail: '正式公開時に受取方法が有効になります。' },
+        { level: 30, label: '購入申請還元率 +5%' },
+      ]
   const counterpartId = (
     'evolvesTo' in source.evolution ? source.evolution.evolvesTo : source.evolution.evolvesFrom
   ) as PetId
@@ -222,12 +252,10 @@ const YAJUSENPAI_PET_DEFINITIONS: readonly PetDefinition[] = UPCOMING_PET_DEFINI
         : {}),
     },
     skill: {
-      name: '未設定',
-      effect: '固有スキルは後日追加予定です。',
-      notes: ['テスト実装では発動しません'],
+      ...plannedSkill,
       enabled: false,
     },
-    levelRewards: [],
+    levelRewards: plannedLevelRewards,
   }
 })
 
