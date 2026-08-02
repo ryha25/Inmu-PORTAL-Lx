@@ -4,6 +4,7 @@ export type BattlePhase = 'ready' | 'playing' | 'paused' | 'won' | 'lost' | 'tim
 
 export type BattleSettings = {
   petId: BattlePetId
+  partyPetIds: BattlePetId[]
   petLevel: number
   petHp: number
   petAtk: number

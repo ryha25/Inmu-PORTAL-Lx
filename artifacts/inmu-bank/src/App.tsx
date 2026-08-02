@@ -50,11 +50,12 @@ function Router() {
       <Route path="/inmu1919" component={AdminPage} />
       <Route path="/inmu1919/profile" component={AdminProfilePage} />
       <Route path="/inmu1919/ranking" component={AdminRankingPage} />
-      <Route path="/inmu1919/battle-test">
-        <Suspense fallback={<div className="grid min-h-dvh place-items-center text-sm text-muted-foreground">3Dバトルテストを読み込み中...</div>}>
+      <Route path="/inmu1919/quests">
+        <Suspense fallback={<div className="grid min-h-dvh place-items-center text-sm text-muted-foreground">クエストを読み込み中...</div>}>
           <AdminBattleTestPage />
         </Suspense>
       </Route>
+      <Route path="/inmu1919/battle-test"><Redirect to="/inmu1919/quests" /></Route>
       <Route path="/inmu1919-login" component={AdminLoginPage} />
       <Route path="/admin"><Redirect to="/" /></Route>
       <Route path="/admin/profile"><Redirect to="/" /></Route>

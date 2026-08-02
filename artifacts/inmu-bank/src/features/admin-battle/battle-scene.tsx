@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Html, Preload } from '@react-three/drei'
+import { Html, Preload, useTexture } from '@react-three/drei'
 import { forwardRef, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { BattleHud } from './battle-hud'
@@ -56,7 +56,7 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
       <Canvas
         dpr={isMobile ? [1, 1.35] : [1, 1.75]}
         gl={{ antialias: !isMobile, powerPreference: 'high-performance' }}
-        camera={{ fov: 70, near: 0.1, far: 100, position: [0, 1.65, 9] }}
+        camera={{ fov: 58, near: 0.1, far: 100, position: [0, 3.4, 15.5] }}
         onPointerDown={(event) => {
           if (!isMobile && event.nativeEvent.button === 0) {
             event.currentTarget.requestPointerLock?.()
@@ -70,7 +70,11 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
             register={register}
             onSnapshot={setSnapshot}
             onAttackVisual={() => setAttackPulse((value) => value + 1)}
-            onUltimateVisual={(kind) => setUltimatePulse({ id: Date.now(), kind })}
+            onUltimateVisual={(kind) => {
+              const id = Date.now()
+              setUltimatePulse({ id, kind })
+              window.setTimeout(() => setUltimatePulse(current => current?.id === id ? null : current), 900)
+            }}
             onPlayerHit={() => setHitPulse((value) => value + 1)}
             onFinish={onFinish}
           />
@@ -78,8 +82,8 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
         </Suspense>
       </Canvas>
       <BattleHud snapshot={snapshot} onPause={() => actions.current?.togglePause()} onAbort={() => actions.current?.abort()} />
-      <div key={attackPulse} className="pointer-events-none absolute bottom-[8%] right-[16%] z-20 h-36 w-16 origin-bottom rotate-[-28deg] animate-[battle-swipe_.22s_ease-out] rounded-full bg-gradient-to-t from-amber-900/80 via-amber-300/80 to-white/70 blur-[1px]" />
-      {ultimatePulse && <div key={ultimatePulse.id} className={`pointer-events-none absolute inset-0 z-[19] animate-[battle-ultimate_.8s_ease-out] ${ultimatePulse.kind === 'male' ? 'bg-amber-300/45' : 'bg-fuchsia-500/35'}`} />}
+      <div key={attackPulse} className="pointer-events-none absolute bottom-[22%] left-1/2 z-20 size-32 -translate-x-1/2 animate-[battle-swipe_.22s_ease-out] rounded-full border-4 border-amber-200/80 bg-amber-300/15 blur-[1px]" />
+      {ultimatePulse && <><div key={ultimatePulse.id} className={`pointer-events-none absolute inset-0 z-[19] animate-[battle-ultimate_.8s_ease-out] ${ultimatePulse.kind === 'male' ? 'bg-amber-300/45' : 'bg-fuchsia-500/35'}`} /><div className="pointer-events-none absolute inset-x-0 top-[28%] z-30 animate-[battle-cutin_.9s_ease-out_forwards] border-y border-white/50 bg-black/80 py-4 text-center text-2xl font-black text-white">{PET_DEFINITIONS[settings.petId].ultimateName}</div></>}
       {hitPulse > 0 && <div key={hitPulse} className="pointer-events-none absolute inset-0 z-[18] animate-[battle-hit_.35s_ease-out] border-[14px] border-red-600/70" />}
       {isMobile && (
         <MobileControls
@@ -90,7 +94,7 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
           onDodge={() => actions.current?.dodge()}
         />
       )}
-      <style>{`@keyframes battle-swipe { from { opacity: 0; transform: rotate(-28deg) translate(80px,80px) scale(.6); } 45% { opacity: .9; } to { opacity: 0; transform: rotate(-60deg) translate(-80px,-80px) scale(1.15); } } @keyframes battle-ultimate { from { opacity: 0; } 35% { opacity: 1; } to { opacity: 0; } } @keyframes battle-hit { from { opacity: 1; } to { opacity: 0; } }`}</style>
+      <style>{`@keyframes battle-swipe { from { opacity: 0; transform: translateX(-50%) scale(.6); } 45% { opacity: .9; } to { opacity: 0; transform: translateX(-50%) scale(1.25); } } @keyframes battle-ultimate { from { opacity: 0; } 35% { opacity: 1; } to { opacity: 0; } } @keyframes battle-cutin { from { opacity: 0; transform: translateX(-12%); } 25%,70% { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(12%); } } @keyframes battle-hit { from { opacity: 1; } to { opacity: 0; } }`}</style>
     </div>
   )
 })
@@ -110,9 +114,10 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
   const pet = PET_DEFINITIONS[settings.petId]
   const startedAt = useRef(Date.now())
   const phase = useRef<'playing' | 'paused' | 'won' | 'lost' | 'timeout' | 'aborted'>('playing')
-  const playerPosition = useRef(new THREE.Vector3(0, 1.65, 9))
+  const playerPosition = useRef(new THREE.Vector3(0, 0, 9))
   const enemyPosition = useRef(new THREE.Vector3(0, 0, 0))
   const enemyGroup = useRef<THREE.Group>(null)
+  const playerGroup = useRef<THREE.Group>(null)
   const playerHp = useRef(settings.petHp)
   const playerSp = useRef(settings.petSp)
   const enemyHp = useRef(settings.enemyHp)
@@ -166,11 +171,12 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
 
   const enemyInAim = useCallback((range: number) => {
     const target = enemyPosition.current.clone().add(new THREE.Vector3(0, 1.35, 0))
-    const toEnemy = target.sub(camera.position)
+    const origin = playerPosition.current.clone().add(new THREE.Vector3(0, 1.2, 0))
+    const toEnemy = target.sub(origin)
     const distance = toEnemy.length()
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
-    return distance <= range && forward.dot(toEnemy.normalize()) > 0.84
-  }, [camera])
+    const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
+    return distance <= range && forward.dot(toEnemy.normalize()) > 0.72
+  }, [])
 
   const attack = useCallback(() => {
     if (phase.current !== 'playing') return
@@ -286,16 +292,23 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
     yaw.current -= mobileLook.current.x * 0.0032
     pitch.current = THREE.MathUtils.clamp(pitch.current - mobileLook.current.y * 0.0032, -1.25, 1.25)
     mobileLook.current = { x: 0, y: 0 }
-    camera.rotation.order = 'YXZ'
-    camera.rotation.set(pitch.current, yaw.current, 0)
-
     const x = mobileMove.current.x + (keys.current.has('KeyD') ? 1 : 0) - (keys.current.has('KeyA') ? 1 : 0)
     const z = mobileMove.current.y + (keys.current.has('KeyW') ? 1 : 0) - (keys.current.has('KeyS') ? 1 : 0)
     if (x || z) {
       const direction = new THREE.Vector3(x, 0, -z).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
       movePlayer(direction.multiplyScalar(5.2 * dt), playerPosition.current)
     }
-    camera.position.copy(playerPosition.current)
+    if (playerGroup.current) {
+      playerGroup.current.position.copy(playerPosition.current)
+      playerGroup.current.rotation.y = yaw.current
+    }
+    const cameraOffset = new THREE.Vector3(0, 3.6 + pitch.current * 1.2, 6.6)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
+    const desiredCamera = playerPosition.current.clone().add(cameraOffset)
+    camera.position.lerp(desiredCamera, 1 - Math.exp(-9 * dt))
+    const lookTarget = playerPosition.current.clone().add(new THREE.Vector3(0, 1.5 + pitch.current * 0.8, 0))
+    lookTarget.add(new THREE.Vector3(0, 0, -3).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current))
+    camera.lookAt(lookTarget)
 
     updateEnemy(dt, now)
     if (enemyGroup.current) enemyGroup.current.position.copy(enemyPosition.current)
@@ -373,17 +386,30 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
       <ambientLight intensity={1.35} />
       <directionalLight position={[8, 15, 4]} intensity={2.2} color="#fff2c4" />
       <Arena showHitboxes={settings.showHitboxes} />
+      <group ref={playerGroup} position={[0, 0, 9]}>
+        {settings.partyPetIds.map((petId, index) => <PlayerPetAvatar key={petId} petId={petId} index={index} />)}
+      </group>
       <group ref={enemyGroup} position={[0, 0, 0]}>
         <TestMonster warning={enemyAction.current.includes('warning')} showHitboxes={settings.showHitboxes} />
         {popup && popup.kind !== 'player' && <Html position={[0, 3.4, 0]} center><span key={popup.id} className={`font-black drop-shadow ${popup.kind === 'fixed' ? 'text-3xl text-amber-300' : 'text-2xl text-white'}`}>-{popup.amount}</span></Html>}
       </group>
-      {popup?.kind === 'player' && <Html position={[camera.position.x, camera.position.y + 0.45, camera.position.z - 1]} center><span className="text-2xl font-black text-red-400">-{popup.amount}</span></Html>}
+      {popup?.kind === 'player' && <Html position={[playerPosition.current.x, 3.4, playerPosition.current.z]} center><span className="text-2xl font-black text-red-400">-{popup.amount}</span></Html>}
       {coneVisible && <mesh position={[enemyPosition.current.x, 0.035, enemyPosition.current.z]} rotation={[-Math.PI / 2, 0, enemyGroup.current?.rotation.y ?? 0]}>
         <circleGeometry args={[TEST_MONSTER.coneRange, 32, -TEST_MONSTER.coneAngle / 2, TEST_MONSTER.coneAngle]} />
         <meshBasicMaterial color="#ef4444" transparent opacity={0.42} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>}
     </>
   )
+}
+
+function PlayerPetAvatar({ petId, index }: { petId: keyof typeof PET_DEFINITIONS; index: number }) {
+  const pet = PET_DEFINITIONS[petId]
+  const texture = useTexture(pet.image)
+  const positions: [number, number, number][] = [[0, 1.65, 0], [-1.45, 1.35, 1.25], [1.45, 1.35, 1.25]]
+  const scales: [number, number, number][] = [[2.8, 3.7, 1], [2.15, 2.9, 1], [2.15, 2.9, 1]]
+  return <sprite position={positions[index] ?? positions[0]} scale={scales[index] ?? scales[0]}>
+    <spriteMaterial map={texture} transparent alphaTest={0.04} depthWrite={false} />
+  </sprite>
 }
 
 function movePlayer(delta: THREE.Vector3, position: THREE.Vector3) {
