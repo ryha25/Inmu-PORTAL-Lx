@@ -367,6 +367,13 @@ router.put("/pet/state", requireAuth, async (req, res): Promise<void> => {
     // stale localStorage, and duplicate character-grant initialization.
     preservePetLevelProgress(existingState, state as Record<string, any>);
 
+    // This flag is server-owned. A stale tab or cleared browser cache must not
+    // re-arm or clear the one-time acquisition animation.
+    if (existingState && typeof existingState === "object") {
+      (state as Record<string, any>).shikoirukaUnlockPending =
+        Boolean((existingState as Record<string, any>).shikoirukaUnlockPending);
+    }
+
     // Merge consumable item deltas against the current DB state so rewards from
     // missions, gacha, and other server-side paths are not overwritten by autosave.
     let mergedItems: { sleepTea: number; premiumInventory: number; takuyaSunglasses: number; catHeadband: number } | null = null;

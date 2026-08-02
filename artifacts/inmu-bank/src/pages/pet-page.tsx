@@ -2296,6 +2296,7 @@ export function PetPage() {
         const data = await response.json() as {
           ownedCharacterIds?: string[]
           shikoirukaNewlyDistributed?: boolean
+          shikoirukaUnlockPending?: boolean
           daifugoReward?: DaifugoRewardStatus
         }
         if (cancelled) return
@@ -2305,12 +2306,14 @@ export function PetPage() {
           .filter((id, index, list) => list.indexOf(id) === index)
         setOwnedPetIds(owned)
         const seenKey = SHIKOIRUKA_UNLOCK_SEEN_KEY_PREFIX + (profile?.solWallet ?? profile?.displayName ?? '')
-        if ((data.shikoirukaNewlyDistributed === true || owned.includes('shikoiruka')) && localStorage.getItem(seenKey) !== '1') {
+        if (data.shikoirukaUnlockPending === true) {
           await preloadShikoirukaUnlockAssets()
           if (cancelled) return
           localStorage.setItem(seenKey, '1')
           selectPet('shikoiruka')
           setShikoirukaUnlockOpen(true)
+        } else if (localStorage.getItem(seenKey) !== '1') {
+          localStorage.setItem(seenKey, '1')
         }
         setOwnershipError(false)
         if (owned.length > 0) {
@@ -2838,7 +2841,14 @@ export function PetPage() {
       </div>
       {hasOwnedPet && <CareChoiceDialog kind={careMenu} premiumFood={premiumFood} actionCooldowns={actionCooldowns} petId={displayedPetId} onClose={() => setCareMenu(null)} onChoose={handleCare} />}
       {hasOwnedPet && <WalkChoiceDialog open={walkMenuOpen} walks={walks} dailyLimit={walkDailyLimit} items={items} petId={displayedPetId} onClose={() => setWalkMenuOpen(false)} onChoose={handleStartWalk} />}
-      <ShikoirukaUnlockDialog open={shikoirukaUnlockOpen} onClose={() => setShikoirukaUnlockOpen(false)} />
+      <ShikoirukaUnlockDialog open={shikoirukaUnlockOpen} onClose={() => {
+        setShikoirukaUnlockOpen(false)
+        void fetch('/api/pet/characters/shikoiruka/unlock-seen', {
+          method: 'POST',
+          credentials: 'include',
+          keepalive: true,
+        })
+      }} />
       <WalkResultDialog result={walkResult} onClose={closeWalkResult} />
       <DaifugoAcquisitionDialog
         open={daifugoAnimOpen}

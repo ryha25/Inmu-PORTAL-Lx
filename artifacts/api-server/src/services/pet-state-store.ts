@@ -499,6 +499,12 @@ export async function ensureShikoirukaDistributionForUser(userId: string): Promi
   );
   if (inserted.rowCount) {
     await initializePetCharacterState(userId, SHIKOIRUKA_DISTRIBUTION_CHARACTER_ID);
+    await pool.query(`
+      UPDATE "userPetStates"
+      SET state = jsonb_set(state, '{shikoirukaUnlockPending}', 'true'::jsonb, true),
+          "updatedAt" = NOW()
+      WHERE "userId" = $1
+    `, [userId]);
   }
   return Boolean(inserted.rowCount);
 }

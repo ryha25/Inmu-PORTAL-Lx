@@ -1428,51 +1428,32 @@ export function usePetState() {
 
   function useSleepTea(amount: number) {
     const requested = Math.min(3, Math.max(1, Math.floor(amount)))
-    const petId = effectiveSave.selectedPetId
+    const actionNow = Date.now()
+    const current = materializeSaveAt(save, actionNow)
+    const petId = current.selectedPetId
     if (PET_BY_ID[petId].experienceMode === 'evolved-training-only') return 0
-    if ((effectiveSave.sleepStartedAt[petId] ?? 0) > 0) return 0
-    if (effectiveSave.walks.active[petId]) return 0
-    if (effectiveSave.walks.sleepTeaBlockedDate[petId] === getJstDateKey()) return 0
-    const available = Math.max(0, Math.floor(effectiveSave.items?.sleepTea ?? 0))
-    const maxBySleepiness = Math.max(0, Math.floor((100 - effectiveSave.pets[petId].sleepiness) / 33))
-    const used = Math.min(requested, available, Math.max(0, PET_BY_ID[petId].maxLevel - effectiveSave.pets[petId].level), maxBySleepiness)
+    if ((current.sleepStartedAt[petId] ?? 0) > 0) return 0
+    if (current.walks.active[petId]) return 0
+    if (current.walks.sleepTeaBlockedDate[petId] === getJstDateKey()) return 0
+    const stats = current.pets[petId]
+    const available = Math.max(0, Math.floor(current.items?.sleepTea ?? 0))
+    const maxBySleepiness = Math.max(0, Math.floor((100 - stats.sleepiness) / 33))
+    const used = Math.min(requested, available, Math.max(0, PET_BY_ID[petId].maxLevel - stats.level), maxBySleepiness)
     if (used <= 0) return 0
-    setSave(current => {
-      const materialized = materializeSaveAt(current, Date.now())
-      const currentPetId = materialized.selectedPetId
-      if (PET_BY_ID[currentPetId].experienceMode === 'evolved-training-only') return current
-      if ((materialized.sleepStartedAt[currentPetId] ?? 0) > 0) return current
-      if (materialized.walks.active[currentPetId]) return current
-      if (materialized.walks.sleepTeaBlockedDate[currentPetId] === getJstDateKey()) return current
-      const stats = materialized.pets[currentPetId]
-      const currentAvailable = Math.max(0, Math.floor(materialized.items?.sleepTea ?? 0))
-      const currentMaxBySleepiness = Math.max(0, Math.floor((100 - stats.sleepiness) / 33))
-      const applied = Math.min(used, currentAvailable, Math.max(0, PET_BY_ID[currentPetId].maxLevel - stats.level), currentMaxBySleepiness)
-      if (applied <= 0) return current
-      const nextStats = {
-        ...stats,
-        level: stats.level + applied,
-        exp: 0,
-        sleepiness: clamp(stats.sleepiness + 33 * applied),
-      }
-      const actionNow = Date.now()
-      return {
-        ...materialized,
-        pets: { ...materialized.pets, [currentPetId]: nextStats },
-        items: { ...materialized.items, sleepTea: currentAvailable - applied },
-        sleepStartedAt: {
-          ...materialized.sleepStartedAt,
-          [currentPetId]: nextStats.sleepiness >= PET_SLEEP_THRESHOLD ? (materialized.sleepStartedAt[currentPetId] || actionNow) : 0,
-        },
-        sleepStartValue: {
-          ...materialized.sleepStartValue,
-          [currentPetId]: nextStats.sleepiness >= PET_SLEEP_THRESHOLD ? (materialized.sleepStartedAt[currentPetId] ? materialized.sleepStartValue[currentPetId] : nextStats.sleepiness) : 0,
-        },
-        sleepWakeAt: {
-          ...materialized.sleepWakeAt,
-          [currentPetId]: nextStats.sleepiness >= PET_SLEEP_THRESHOLD ? (materialized.sleepStartedAt[currentPetId] ? materialized.sleepWakeAt[currentPetId] : rollSleepWakeThreshold(nextStats.sleepiness)) : 0,
-        },
-      }
+    const nextStats = {
+      ...stats,
+      level: stats.level + used,
+      exp: 0,
+      sleepiness: clamp(stats.sleepiness + 33 * used),
+    }
+    const startsSleeping = nextStats.sleepiness >= PET_SLEEP_THRESHOLD
+    setSave({
+      ...current,
+      pets: { ...current.pets, [petId]: nextStats },
+      items: { ...current.items, sleepTea: available - used },
+      sleepStartedAt: { ...current.sleepStartedAt, [petId]: startsSleeping ? actionNow : 0 },
+      sleepStartValue: { ...current.sleepStartValue, [petId]: startsSleeping ? nextStats.sleepiness : 0 },
+      sleepWakeAt: { ...current.sleepWakeAt, [petId]: startsSleeping ? rollSleepWakeThreshold(nextStats.sleepiness) : 0 },
     })
     return used
   }

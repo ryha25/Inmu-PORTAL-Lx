@@ -1014,23 +1014,41 @@ router.get("/pet/characters", requireAuth, async (req, res): Promise<void> => {
     const shikoirukaNewlyDistributed = await ensureShikoirukaDistributionForUser(req.userId!);
     const restoredOwnershipIds = await restoreMissingGachaPetOwnership(req.userId!);
     await ensureYajusenpaiTestDistributionForUser(req.userId!);
-    const [ownership, daifugoReward] = await Promise.all([
+    const [ownership, daifugoReward, petState] = await Promise.all([
       pool.query(
         `SELECT "characterId", "acquiredAt" FROM "userPetCharacters"
          WHERE "userId" = $1 ORDER BY "acquiredAt" ASC`,
         [req.userId!],
       ),
       getDaifugoRewardStatus(req.userId!),
+      pool.query(`SELECT state FROM "userPetStates" WHERE "userId" = $1`, [req.userId!]),
     ]);
     res.json({
       userId: req.userId!,
       ownedCharacterIds: ownership.rows.map(row => String(row.characterId)),
       characters: Object.entries(PET_CHARACTER_NAMES).map(([id, name]) => ({ id, name })),
       shikoirukaNewlyDistributed,
+      shikoirukaUnlockPending: Boolean(petState.rows[0]?.state?.shikoirukaUnlockPending),
       restoredOwnershipIds,
       daifugoReward,
     });
   } catch {
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/pet/characters/shikoiruka/unlock-seen", requireAuth, async (req, res): Promise<void> => {
+  try {
+    await ensureRewardTables();
+    await pool.query(`
+      UPDATE "userPetStates"
+      SET state = jsonb_set(state, '{shikoirukaUnlockPending}', 'false'::jsonb, true),
+          "updatedAt" = NOW()
+      WHERE "userId" = $1
+    `, [req.userId!]);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("[PetCharacters] mark shikoiruka unlock seen", error);
     res.status(500).json({ error: "Internal error" });
   }
 });
