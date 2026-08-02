@@ -1,12 +1,13 @@
 import { Logo } from '@/components/logo'
 import { cn } from '@/lib/utils'
-import { Shield, User as UserIcon, LogOut, Trophy } from 'lucide-react'
+import { Shield, User as UserIcon, LogOut, Trophy, Swords } from 'lucide-react'
 import { Link, useLocation } from 'wouter'
 import { useEffect, useState } from 'react'
 
 type AdminNavItem = { href: string; label: string; icon: React.ElementType }
 
 const ADMIN_NAV: AdminNavItem[] = [
+  { href: '/inmu1919/battle-test', label: '3Dバトルテスト', icon: Swords },
   { href: '/inmu1919/profile',  label: 'プロフィール', icon: UserIcon },
   { href: '/inmu1919/ranking',  label: 'ランキング',   icon: Trophy },
   { href: '/inmu1919',          label: '管理ツール',   icon: Shield },

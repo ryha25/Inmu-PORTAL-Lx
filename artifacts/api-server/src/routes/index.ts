@@ -28,6 +28,7 @@ import petStateRouter from "./pet-state";
 import petCommerceRouter from "./pet-commerce";
 import bugReportsRouter from "./bug-reports";
 import rouletteRouter from "./roulette";
+import adminBattleTestRouter from "./admin-battle-test";
 
 const router: IRouter = Router();
 
@@ -60,5 +61,6 @@ router.use(petStateRouter);
 router.use(petCommerceRouter);
 router.use(bugReportsRouter);
 router.use(rouletteRouter);
+router.use(adminBattleTestRouter);
 
 export default router;
