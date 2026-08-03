@@ -58,9 +58,25 @@ function rollMany(count: number, guaranteed: boolean): Prize[] {
   return results;
 }
 
-// ── INMU月1回上限 & キャラクター内部処理 ──
-// ・キャラ当選: userPetCharacters に追加し表示は pts100 に変換（ユーザー非表示）
-// ・INMU10k: 当月既に1回当選済みなら pts100 に変換（ユーザー非表示）
+// ── resultsJson 用シリアライザ ──
+function serializePrize(p: Prize, pointMultiplier = 1) {
+  if (p.type === "character") {
+    const cp = p as CharPrize;
+    return { prizeId: cp.id, label: cp.label, type: "character", amount: 0, characterId: cp.characterId, isNewCharacter: true };
+  }
+  const amt = (p as PointsPrize | InmuPrize | FoodPrize).amount ?? 0;
+  return {
+    prizeId: p.id,
+    label: p.type === "points" ? `${(amt * pointMultiplier).toLocaleString()}ポイント` : p.label,
+    type: p.type,
+    amount: p.type === "points" ? amt * pointMultiplier : amt,
+    ...(p.type === "points" ? { baseAmount: amt } : {}),
+  };
+}
+
+// ── INMU月1回上限チェック & キャラクター所持確認 ──
+// ・INMU10k: 当月既に1回当選済みなら pts100 に差し替え（表記との乖離は非表示）
+// ・キャラ: 新規なら所持テーブルに追加して当選表示、重複なら pts100 に変換
 async function processRawPrizes(userId: string, raw: Prize[], month: string): Promise<Prize[]> {
   const { rows } = await pool.query(
     `SELECT COUNT(*) AS cnt FROM "gachaInmuWins"
@@ -82,13 +98,18 @@ async function processRawPrizes(userId: string, raw: Prize[], month: string): Pr
     } else if (prize.type === "character") {
       const cp = prize as CharPrize;
       await ensurePetStateTable();
-      await pool.query(
+      const { rowCount } = await pool.query(
         `INSERT INTO "userPetCharacters" ("userId", "characterId")
          VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [userId, cp.characterId],
       );
-      // ユーザー表示は 100pt として処理（キャラ当選は非表示）
-      effective.push(PTS100);
+      if ((rowCount ?? 0) > 0) {
+        // 新規取得 → ユーザーに当選表示
+        effective.push(prize);
+      } else {
+        // 重複 → pts100 に変換
+        effective.push(PTS100);
+      }
     } else {
       effective.push(prize);
     }
@@ -254,16 +275,7 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
     }
     await db.insert(pointsTable).values(pointsRows);
 
-    const resultsJson = prizeResults.map(p => {
-      const amt = (p as PointsPrize | InmuPrize | FoodPrize).amount ?? 0;
-      return {
-        prizeId: p.id,
-        label: p.type === "points" ? `${(amt * pointMultiplier).toLocaleString()}ポイント` : p.label,
-        type: p.type,
-        amount: p.type === "points" ? amt * pointMultiplier : amt,
-        ...(p.type === "points" ? { baseAmount: amt } : {}),
-      };
-    });
+    const resultsJson = prizeResults.map(p => serializePrize(p, pointMultiplier));
     const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
        VALUES ($1,$2,$3::jsonb,$4,$5,$6,'pending',$7,$8,false) RETURNING id`,
@@ -334,16 +346,7 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
       });
     }
 
-    const resultsJson = prizeResults.map(p => {
-      const amt = (p as PointsPrize | InmuPrize | FoodPrize).amount ?? 0;
-      return {
-        prizeId: p.id,
-        label: p.type === "points" ? `${(amt * pointMultiplier).toLocaleString()}ポイント` : p.label,
-        type: p.type,
-        amount: p.type === "points" ? amt * pointMultiplier : amt,
-        ...(p.type === "points" ? { baseAmount: amt } : {}),
-      };
-    });
+    const resultsJson = prizeResults.map(p => serializePrize(p, pointMultiplier));
     const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
        VALUES ($1,'free',$2::jsonb,$3,$4,$5,'pending',$6,0,true) RETURNING id`,
