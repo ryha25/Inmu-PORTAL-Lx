@@ -10,15 +10,16 @@ const router = Router();
 
 // ── 確率テーブル（合計 10000）──
 // 表示UI側の排出率表記は変更なし。内部確率のみ変更。
-type PointsPrize = { id: string; label: string; type: "points";                     amount: number; weight: number };
-type InmuPrize   = { id: string; label: string; type: "inmu";                       amount: number; weight: number };
-type FoodPrize   = { id: string; label: string; type: "premium_food" | "sleep_tea"; amount: number; weight: number };
-type CharPrize   = { id: string; label: string; type: "character"; characterId: string;             weight: number };
-type Prize = PointsPrize | InmuPrize | FoodPrize | CharPrize;
+type PointsPrize    = { id: string; label: string; type: "points";                     amount: number; weight: number };
+type InmuPrize      = { id: string; label: string; type: "inmu";                       amount: number; weight: number };
+type FoodPrize      = { id: string; label: string; type: "premium_food" | "sleep_tea"; amount: number; weight: number };
+type CharPrize      = { id: string; label: string; type: "character"; characterId: string;             weight: number };
+type CharPoolPrize  = { id: string; label: string; type: "character_pool"; pool: string[];             weight: number };
+type Prize = PointsPrize | InmuPrize | FoodPrize | CharPrize | CharPoolPrize;
 
 const PRIZES: Prize[] = [
   // ポイント（300〜5000は表示確率通り、残り全て100ptへ）
-  { id: "pts100",               label: "100ポイント",                  type: "points",       amount:   100,  weight: 5_323 },
+  { id: "pts100",               label: "100ポイント",                  type: "points",       amount:   100,  weight: 5_353 },
   { id: "pts300",               label: "300ポイント",                  type: "points",       amount:   300,  weight: 3_000 },
   { id: "pts500",               label: "500ポイント",                  type: "points",       amount:   500,  weight:   500 },
   { id: "pts1000",              label: "1,000ポイント",                type: "points",       amount: 1_000,  weight:   300 },
@@ -28,27 +29,34 @@ const PRIZES: Prize[] = [
   // アイテム
   { id: "premium-food",         label: "高級ごはん",                   type: "premium_food", amount: 1,      weight:   514 },
   { id: "sleep-tea",            label: "アイスティー（睡眠薬入り）",   type: "sleep_tea",    amount: 1,      weight:   150 },
-  // 新ガチャキャラ 0.1%×3
-  { id: "character-chinge",     label: "チンゲ",       type: "character", characterId: "chinge",     weight: 10 },
-  { id: "character-tdn",        label: "TDN",          type: "character", characterId: "tdn",        weight: 10 },
-  { id: "character-whip",       label: "ホイップ",     type: "character", characterId: "whip",       weight: 10 },
-  // 旧ガチャキャラ 0.05%×3
-  { id: "character-takuya",     label: "拓也",         type: "character", characterId: "takuya",     weight:  5 },
-  { id: "character-nyarushian", label: "ニャルシアン", type: "character", characterId: "nyarushian", weight:  5 },
-  { id: "character-leon",       label: "レオン",       type: "character", characterId: "leon",       weight:  5 },
-  // 合計 5323+3000+500+300+117+51+514+150+30+15 = 10000
+  // 新ガチャキャラ 0.1%（プールから1体ランダム）
+  { id: "character-new-pool", label: "今回のキャラ", type: "character_pool", pool: ["chinge", "tdn", "whip"],         weight: 10 },
+  // 旧ガチャキャラ 0.05%（プールから1体ランダム）
+  { id: "character-old-pool", label: "旧ガチャキャラ", type: "character_pool", pool: ["takuya", "nyarushian", "leon"], weight:  5 },
+  // 合計 5353+3000+500+300+117+51+514+150+10+5 = 10000
 ];
 
 const PTS100 = PRIZES.find(p => p.id === "pts100") as PointsPrize;
 
 const GUARANTEED_RATE = 1 / 114;
 
-function rollPrize(): Prize {
+function rollPrize(): PointsPrize | InmuPrize | FoodPrize | CharPrize {
   const r = Math.floor(Math.random() * 10000);
   let acc = 0;
   for (const p of PRIZES) {
     acc += p.weight;
-    if (r < acc) return p;
+    if (r < acc) {
+      if (p.type === "character_pool") {
+        const cp = p as CharPoolPrize;
+        const characterId = cp.pool[Math.floor(Math.random() * cp.pool.length)];
+        const labels: Record<string, string> = {
+          chinge: "チンゲ", tdn: "TDN", whip: "ホイップ",
+          takuya: "拓也", nyarushian: "ニャルシアン", leon: "レオン",
+        };
+        return { id: `character-${characterId}`, label: labels[characterId] ?? characterId, type: "character", characterId, weight: 0 };
+      }
+      return p as PointsPrize | InmuPrize | FoodPrize | CharPrize;
+    }
   }
   return PTS100;
 }
