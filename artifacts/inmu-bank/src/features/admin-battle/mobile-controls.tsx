@@ -1,12 +1,13 @@
-import { Shield, Sparkles, Swords } from 'lucide-react'
+import { RefreshCw, Shield, Sparkles, Swords } from 'lucide-react'
 import { useRef, useState } from 'react'
 
-export function MobileControls({ onMove, onLook, onAttack, onUltimate, onDodge }: {
+export function MobileControls({ onMove, onLook, onAttack, onUltimate, onDodge, onSwitch }: {
   onMove: (x: number, y: number) => void
   onLook: (x: number, y: number) => void
   onAttack: () => void
   onUltimate: () => void
   onDodge: () => void
+  onSwitch: () => void
 }) {
   const stickRef = useRef<HTMLDivElement>(null)
   const lookPoint = useRef<{ x: number; y: number } | null>(null)
@@ -44,6 +45,9 @@ export function MobileControls({ onMove, onLook, onAttack, onUltimate, onDodge }
         <ActionButton label="必殺" onClick={onUltimate}><Sparkles className="size-6" /></ActionButton>
         <button type="button" onPointerDown={(e) => { e.stopPropagation(); onAttack() }} className="row-span-2 grid size-20 place-items-center rounded-full border-2 border-amber-300 bg-amber-400/85 text-black shadow-lg"><Swords className="size-8" /><span className="text-[10px] font-bold">攻撃</span></button>
         <ActionButton label="回避" onClick={onDodge}><Shield className="size-6" /></ActionButton>
+      </div>
+      <div className="absolute right-5" style={{ bottom: 'calc(max(22px, env(safe-area-inset-bottom)) + 150px)' }}>
+        <ActionButton label="交代" onClick={onSwitch}><RefreshCw className="size-6" /></ActionButton>
       </div>
     </div>
   )

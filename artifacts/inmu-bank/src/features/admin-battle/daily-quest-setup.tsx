@@ -38,12 +38,12 @@ export function DailyQuestSetup({ settings, onChange, onBack, onStart }: {
 
       <section className="border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Users className="size-5 text-cyan-300" /><h2 className="font-bold">出撃PET編成</h2></div><span className="text-sm tabular-nums text-muted-foreground">{selected.length} / 3</span></div>
-        <p className="mt-2 text-sm text-muted-foreground">管理者テストでは解放スロット数に関係なく最大3体まで選択できます。先頭のPETを操作し、ほかのPETは同行表示されます。</p>
+        <p className="mt-2 text-sm text-muted-foreground">管理者テストでは解放スロット数に関係なく最大3体まで選択できます。先頭のPETで出撃し、控えPETとは戦闘中に交代できます。</p>
         <div className="mt-4 grid grid-cols-3 gap-2">
           {[0, 1, 2].map(index => {
             const pet = selected[index] ? PET_DEFINITIONS[selected[index]] : null
             return <div key={index} className="aspect-[4/5] border border-border bg-background p-2 text-center">
-              {pet ? <><img src={pet.image} alt={pet.name} className="h-[70%] w-full object-contain" /><p className="mt-1 truncate text-xs font-bold">{pet.name}</p><p className="text-[10px] text-muted-foreground">{index === 0 ? '操作PET' : '同行PET'}</p></> : <div className="grid h-full place-items-center text-xs text-muted-foreground">空きスロット</div>}
+              {pet ? <><img src={pet.image} alt={pet.name} className="h-[70%] w-full object-contain" /><p className="mt-1 truncate text-xs font-bold">{pet.name}</p><p className="text-[10px] text-muted-foreground">{index === 0 ? '出撃PET' : '控えPET'}</p></> : <div className="grid h-full place-items-center text-xs text-muted-foreground">空きスロット</div>}
             </div>
           })}
         </div>

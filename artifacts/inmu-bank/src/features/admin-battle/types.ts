@@ -38,6 +38,9 @@ export type BattleSnapshot = {
   dodgeCooldown: number
   ultimateCooldown: number
   femaleBuffSeconds: number
+  activePetId: BattlePetId
+  party: Array<{ petId: BattlePetId; hp: number; maxHp: number; defeated: boolean }>
+  switchCooldown: number
   message: string
 }
 
@@ -63,6 +66,7 @@ export type BattleSceneHandle = {
   attack: () => void
   ultimate: () => void
   dodge: () => void
+  switchPet: () => void
   togglePause: () => void
   setMobileMove: (x: number, y: number) => void
   addMobileLook: (x: number, y: number) => void
