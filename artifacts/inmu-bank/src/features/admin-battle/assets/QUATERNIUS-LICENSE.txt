@@ -1,0 +1,6 @@
+Ultimate Platformer Pack by Quaternius
+Source: https://quaternius.itch.io/ultimate-platformer-pack
+License: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+This project uses Character/glTF/Character.gltf from the pack.
