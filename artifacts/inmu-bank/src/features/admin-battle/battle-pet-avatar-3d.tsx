@@ -36,6 +36,11 @@ export function BattlePetAvatar3D({ petId, moving, action, actionStartedAt, acti
   const bow = useRef<THREE.Group>(null)
   const arrow = useRef<THREE.Group>(null)
   const tail = useRef<THREE.Group>(null)
+  const attackTrail = useRef<THREE.Mesh>(null)
+  const attackTrailMaterial = useRef<THREE.MeshBasicMaterial>(null)
+  const shockwave = useRef<THREE.Mesh>(null)
+  const shockwaveMaterial = useRef<THREE.MeshBasicMaterial>(null)
+  const impactLight = useRef<THREE.PointLight>(null)
   const currentClip = useRef('')
 
   useEffect(() => {
@@ -102,6 +107,19 @@ export function BattlePetAvatar3D({ petId, moving, action, actionStartedAt, acti
       arrow.current.visible = female && avatarAction === 'attack' && progress > 0.32
       arrow.current.position.z = 0.35 + Math.max(0, progress - 0.32) * 8
     }
+    const attacking = avatarAction === 'attack' || avatarAction === 'ultimate'
+    if (attackTrail.current && attackTrailMaterial.current) {
+      attackTrail.current.visible = attacking
+      attackTrail.current.rotation.z = -1.8 + progress * 2.6
+      attackTrail.current.scale.setScalar(0.72 + pulse * (avatarAction === 'ultimate' ? 1.05 : 0.48))
+      attackTrailMaterial.current.opacity = attacking ? pulse * (avatarAction === 'ultimate' ? 0.92 : 0.7) : 0
+    }
+    if (shockwave.current && shockwaveMaterial.current) {
+      shockwave.current.visible = avatarAction === 'ultimate'
+      shockwave.current.scale.setScalar(0.55 + progress * 3.4)
+      shockwaveMaterial.current.opacity = avatarAction === 'ultimate' ? (1 - progress) * 0.78 : 0
+    }
+    if (impactLight.current) impactLight.current.intensity = attacking ? pulse * (avatarAction === 'ultimate' ? 9 : 4) : 0
   })
 
   return (
@@ -120,9 +138,15 @@ export function BattlePetAvatar3D({ petId, moving, action, actionStartedAt, acti
           <pointLight color="#a855f7" intensity={2.2} distance={2.5} />
         </group>
       )}
-      {female && action.current === 'ultimate' && (
-        <pointLight position={[0, 1.5, 0.5]} color="#a855f7" intensity={4} distance={5} />
-      )}
+      <mesh ref={attackTrail} visible={false} position={[0, 1.45, 0.72]} rotation={[0, 0, -1.8]} renderOrder={12}>
+        {female ? <torusGeometry args={[0.88, 0.065, 8, 42, Math.PI * 1.28]} /> : <ringGeometry args={[0.22, 0.48, 48]} />}
+        <meshBasicMaterial ref={attackTrailMaterial} color={female ? '#d8b4fe' : '#fff1a8'} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh ref={shockwave} visible={false} position={[0, 0.08, 0.55]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={11}>
+        <ringGeometry args={[0.42, 0.58, 64]} />
+        <meshBasicMaterial ref={shockwaveMaterial} color={female ? '#c026d3' : '#facc15'} transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <pointLight ref={impactLight} position={[0, 1.45, 0.8]} color={female ? '#c084fc' : '#fde047'} intensity={0} distance={6} />
     </group>
   )
 }

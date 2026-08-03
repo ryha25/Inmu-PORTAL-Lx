@@ -43,7 +43,7 @@ export function MobileControls({ onMove, onLook, onAttack, onUltimate, onDodge, 
       </div>
       <div className="absolute bottom-[max(22px,env(safe-area-inset-bottom))] right-4 z-10 grid grid-cols-2 gap-3">
         <ActionButton label="必殺" onClick={onUltimate}><Sparkles className="size-6" /></ActionButton>
-        <button type="button" onPointerDown={(e) => { e.stopPropagation(); onAttack() }} className="row-span-2 grid size-20 place-items-center rounded-full border-2 border-amber-300 bg-amber-400/85 text-black shadow-lg"><Swords className="size-8" /><span className="text-[10px] font-bold">攻撃</span></button>
+        <button type="button" onPointerDown={(event) => { event.stopPropagation(); onAttack() }} className="row-span-2 grid size-20 place-items-center rounded-full border-2 border-amber-300 bg-amber-400/85 text-black shadow-lg"><Swords className="size-8" /><span className="text-[10px] font-bold">攻撃</span></button>
         <ActionButton label="回避" onClick={onDodge}><Shield className="size-6" /></ActionButton>
       </div>
       <div className="absolute right-5 z-10" style={{ bottom: 'calc(max(22px, env(safe-area-inset-bottom)) + 150px)' }}>
@@ -54,5 +54,5 @@ export function MobileControls({ onMove, onLook, onAttack, onUltimate, onDodge, 
 }
 
 function ActionButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onPointerDown={(e) => { e.stopPropagation(); onClick() }} className="grid size-14 place-items-center rounded-full border border-white/50 bg-black/65 text-white"><span>{children}</span><span className="text-[9px]">{label}</span></button>
+  return <button type="button" onPointerDown={(event) => { event.stopPropagation(); onClick() }} className="grid size-14 place-items-center rounded-full border border-white/50 bg-black/65 text-white"><span>{children}</span><span className="text-[9px]">{label}</span></button>
 }

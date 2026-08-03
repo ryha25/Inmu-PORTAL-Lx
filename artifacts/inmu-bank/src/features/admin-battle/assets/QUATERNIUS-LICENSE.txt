@@ -4,3 +4,9 @@ License: CC0 1.0 Universal
 License URL: https://creativecommons.org/publicdomain/zero/1.0/
 
 This project uses Character/glTF/Character.gltf from the pack.
+
+Additional CC0 environment assets from Poly Haven:
+- Rocky Trail by Amal Kumar
+  https://polyhaven.com/a/rocky_trail
+- Zavelstein HDRI by Andreas Mischok
+  https://polyhaven.com/a/zavelstein

@@ -1,15 +1,19 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Html, Preload, Sky, useTexture } from '@react-three/drei'
+import { ContactShadows, Environment, Html, Preload, useTexture } from '@react-three/drei'
 import { forwardRef, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { BattleHud } from './battle-hud'
 import { BattlePetAvatar3D } from './battle-pet-avatar-3d'
 import { MobileControls } from './mobile-controls'
 import { PET_DEFINITIONS } from './pet-definitions'
-import blueSlimeSprite from '../../../../../attached_assets/battle-blue-slime-v1.png'
 import { TEST_MONSTER } from './monster-data'
 import { rollDamage } from './combat-math'
 import type { BattleResult, BattleSceneHandle, BattleSettings, BattleSnapshot, DamagePopup } from './types'
+import rockyTrailDiffuse from './assets/environment/rocky_trail_diff_1k.jpg'
+import rockyTrailNormal from './assets/environment/rocky_trail_nor_gl_1k.jpg'
+import rockyTrailRoughness from './assets/environment/rocky_trail_rough_1k.jpg'
+import rockyTrailDisplacement from './assets/environment/rocky_trail_disp_1k.jpg'
+import zavelsteinHdri from './assets/environment/zavelstein_1k.hdr?url'
 
 type RuntimeActions = BattleSceneHandle
 type AvatarAction = 'idle' | 'attack' | 'dodge' | 'ultimate' | 'hurt' | 'switch'
@@ -43,7 +47,6 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
       return { petId, hp: maxHp, maxHp, defeated: false }
     }),
   })
-  const [attackPulse, setAttackPulse] = useState(0)
   const [ultimatePulse, setUltimatePulse] = useState<{ id: number; kind: 'male' | 'female' } | null>(null)
   const [hitPulse, setHitPulse] = useState(0)
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
@@ -91,7 +94,7 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
             settings={settings}
             register={register}
             onSnapshot={setSnapshot}
-            onAttackVisual={() => setAttackPulse((value) => value + 1)}
+            onAttackVisual={() => undefined}
             onUltimateVisual={(kind) => {
               const id = Date.now()
               setUltimatePulse({ id, kind })
@@ -104,9 +107,8 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
         </Suspense>
       </Canvas>
       <BattleHud snapshot={snapshot} onPause={() => actions.current?.togglePause()} onAbort={() => actions.current?.abort()} onSwitch={() => actions.current?.switchPet()} />
-      <div key={attackPulse} className="pointer-events-none absolute bottom-[22%] left-1/2 z-20 size-32 -translate-x-1/2 animate-[battle-swipe_.22s_ease-out] rounded-full border-4 border-amber-200/80 bg-amber-300/15 blur-[1px]" />
       {ultimatePulse && <><div key={ultimatePulse.id} className={`pointer-events-none absolute inset-0 z-[19] animate-[battle-ultimate_.8s_ease-out] ${ultimatePulse.kind === 'male' ? 'bg-amber-300/45' : 'bg-fuchsia-500/35'}`} /><div className="pointer-events-none absolute inset-x-0 top-[28%] z-30 animate-[battle-cutin_.9s_ease-out_forwards] border-y border-white/50 bg-black/80 py-4 text-center text-2xl font-black text-white">{PET_DEFINITIONS[snapshot.activePetId].ultimateName}</div></>}
-      {hitPulse > 0 && <div key={hitPulse} className="pointer-events-none absolute inset-0 z-[18] animate-[battle-hit_.35s_ease-out] shadow-[inset_0_0_55px_12px_rgba(220,38,38,.52)]" />}
+      {hitPulse > 0 && <div key={hitPulse} className="pointer-events-none absolute inset-0 z-[18] animate-[battle-hit_.35s_ease-out] shadow-[inset_0_0_28px_4px_rgba(220,38,38,.32)]" />}
       {isMobile && !isPortraitMobile && (
         <MobileControls
           onMove={(x, y) => actions.current?.setMobileMove(x, y)}
@@ -126,7 +128,7 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
           </div>
         </div>
       )}
-      <style>{`@keyframes battle-swipe { from { opacity: 0; transform: translateX(-50%) scale(.6); } 45% { opacity: .9; } to { opacity: 0; transform: translateX(-50%) scale(1.25); } } @keyframes battle-ultimate { from { opacity: 0; } 35% { opacity: 1; } to { opacity: 0; } } @keyframes battle-cutin { from { opacity: 0; transform: translateX(-12%); } 25%,70% { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(12%); } } @keyframes battle-hit { from { opacity: 1; } to { opacity: 0; } }`}</style>
+      <style>{`@keyframes battle-ultimate { from { opacity: 0; } 35% { opacity: 1; } to { opacity: 0; } } @keyframes battle-cutin { from { opacity: 0; transform: translateX(-12%); } 25%,70% { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(12%); } } @keyframes battle-hit { from { opacity: 1; } to { opacity: 0; } }`}</style>
     </div>
   )
 })
@@ -437,6 +439,12 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
     const cameraOffset = new THREE.Vector3(0, 3.45 + pitch.current * 1.1, 7.8)
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
     const desiredCamera = playerPosition.current.clone().add(cameraOffset)
+    const actionElapsed = now - avatarActionStartedAt.current
+    const cameraKick = avatarAction.current === 'ultimate' ? 0.085 : avatarAction.current === 'hurt' ? 0.055 : avatarAction.current === 'attack' ? 0.025 : 0
+    if (cameraKick > 0 && actionElapsed >= 0) {
+      desiredCamera.x += Math.sin(actionElapsed * 58) * cameraKick
+      desiredCamera.y += Math.cos(actionElapsed * 47) * cameraKick * 0.55
+    }
     camera.position.lerp(desiredCamera, 1 - Math.exp(-12 * dt))
     const lookTarget = playerPosition.current.clone().add(new THREE.Vector3(0, 1.45 + pitch.current * 0.72, 0))
     lookTarget.add(new THREE.Vector3(0, 0, -1.25).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current))
@@ -521,12 +529,11 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
   const coneVisible = enemyAction.current === 'cone-warning'
   return (
     <>
-      <color attach="background" args={['#51616b']} />
-      <fog attach="fog" args={['#65747a', 30, 68]} />
-      <hemisphereLight args={['#b8d6e8', '#443827', 1.05]} />
-      <ambientLight intensity={0.42} />
-      <directionalLight position={[8, 15, 4]} intensity={2.1} color="#ffe3a3" castShadow shadow-mapSize={[1024, 1024]} />
-      <Sky distance={90} sunPosition={[8, 8, 4]} inclination={0.5} azimuth={0.24} turbidity={10} rayleigh={2.6} mieCoefficient={0.008} />
+      <fog attach="fog" args={['#59615b', 22, 54]} />
+      <Environment files={zavelsteinHdri} background backgroundBlurriness={0.08} environmentIntensity={0.86} />
+      <hemisphereLight args={['#dbe7dd', '#2d241a', 0.72]} />
+      <ambientLight intensity={0.24} />
+      <directionalLight position={[8, 16, 5]} intensity={2.65} color="#ffe8bb" castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0002} />
       <Arena showHitboxes={settings.showHitboxes} />
       <group ref={playerGroup} position={[0, 0, 9]}>
         <BattlePetAvatar3D
@@ -540,7 +547,7 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
       </group>
       <ContactShadows position={[0, 0.07, 0]} scale={28} opacity={0.32} blur={2.4} far={13} frames={1} />
       <group ref={enemyGroup} position={[0, 0, 0]}>
-        <TestMonster warning={enemyAction.current.includes('warning')} showHitboxes={settings.showHitboxes} />
+        <TestMonster warning={enemyAction.current.includes('warning')} showHitboxes={settings.showHitboxes} hitToken={popup?.kind !== 'player' ? popup?.id : undefined} />
         {popup && popup.kind !== 'player' && <Html position={[0, 3.4, 0]} center><span key={popup.id} className={`font-black drop-shadow ${popup.kind === 'fixed' ? 'text-3xl text-amber-300' : 'text-2xl text-white'}`}>-{popup.amount}</span></Html>}
       </group>
       {popup?.kind === 'player' && <Html position={[playerPosition.current.x, 3.4, playerPosition.current.z]} center><span className="text-2xl font-black text-red-400">-{popup.amount}</span></Html>}
@@ -576,75 +583,47 @@ function moveEntity(delta: THREE.Vector3, position: THREE.Vector3, radius: numbe
 }
 
 function Arena({ showHitboxes }: { showHitboxes: boolean }) {
+  const [diffuse, normal, roughness, displacement] = useTexture([
+    rockyTrailDiffuse,
+    rockyTrailNormal,
+    rockyTrailRoughness,
+    rockyTrailDisplacement,
+  ])
+  useEffect(() => {
+    for (const texture of [diffuse, normal, roughness, displacement]) {
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+      texture.repeat.set(5.5, 5.5)
+      texture.anisotropy = 8
+      texture.needsUpdate = true
+    }
+    diffuse.colorSpace = THREE.SRGBColorSpace
+  }, [diffuse, displacement, normal, roughness])
   const columns = useMemo(() => [[-5, 3], [6, -4]] as const, [])
   const rubble = useMemo(() => [
     [-11.8, -8.6, 0.8, 0.42], [-9.7, -10.8, 0.55, 0.34], [10.8, -9.5, 0.75, 0.38],
     [12.2, 7.6, 0.62, 0.32], [-12.4, 8.8, 0.7, 0.4], [9.8, 11.4, 0.48, 0.3],
     [-7.8, 12.1, 0.58, 0.28], [4.4, -12.6, 0.52, 0.3],
   ] as const, [])
-  const paving = useMemo(() => Array.from({ length: 10 }, (_, index) => ({
-    z: -11.25 + index * 2.5,
-    x: index % 2 === 0 ? -0.18 : 0.2,
-    rotation: (index % 3 - 1) * 0.035,
-  })), [])
-  const floorBlocks = useMemo(() => Array.from({ length: 48 }, (_, index) => {
-    const ring = index < 16 ? 5.2 : index < 32 ? 8.2 : 11
-    const slot = index % 16
-    const angle = slot / 16 * Math.PI * 2 + (ring === 8.2 ? Math.PI / 16 : 0)
-    return {
-      x: Math.sin(angle) * ring,
-      z: Math.cos(angle) * ring,
-      angle: -angle,
-      width: ring === 5.2 ? 2.1 : ring === 8.2 ? 2.85 : 3.2,
-      depth: ring === 5.2 ? 2.3 : 2.55,
-      shade: index % 4,
-    }
-  }), [])
-  const wallBlocks = useMemo(() => {
-    const blocks: Array<{ x: number; y: number; z: number; sx: number; sy: number; sz: number; shade: number }> = []
-    for (const side of [-1, 1]) {
-      for (let row = 0; row < 4; row += 1) {
-        const count = row === 3 ? 4 : 6
-        for (let index = 0; index < count; index += 1) {
-          blocks.push({
-            x: side * (8.1 + index * 1.18), y: 0.42 + row * 0.76, z: -13.25,
-            sx: 1.1, sy: 0.68, sz: 0.85, shade: (row + index) % 3,
-          })
-        }
-      }
-    }
-    return blocks
-  }, [])
   return <>
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow><circleGeometry args={[15, 64]} /><meshStandardMaterial color="#5c513d" roughness={0.96} /></mesh>
-    <mesh position={[0, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow><circleGeometry args={[11.8, 48]} /><meshStandardMaterial color="#746a58" roughness={0.92} /></mesh>
-    <mesh position={[0, 0.026, 0]} rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[11.45, 11.8, 48]} /><meshStandardMaterial color="#b89c62" roughness={0.72} /></mesh>
+    <mesh position={[0, -0.08, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[38, 38, 96, 96]} />
+      <meshStandardMaterial
+        map={diffuse}
+        normalMap={normal}
+        roughnessMap={roughness}
+        displacementMap={displacement}
+        displacementScale={0.34}
+        displacementBias={-0.14}
+        roughness={0.94}
+        metalness={0}
+      />
+    </mesh>
+    <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[14.5, 15.15, 96]} />
+      <meshStandardMaterial color="#201b16" roughness={0.82} metalness={0.08} />
+    </mesh>
 
-    {floorBlocks.map((block, index) => <mesh key={`floor-block-${index}`} position={[block.x, 0.055 + (index % 3) * 0.006, block.z]} rotation={[0, block.angle, 0]} castShadow receiveShadow>
-      <boxGeometry args={[block.width, 0.1, block.depth]} />
-      <meshStandardMaterial color={['#817765', '#756b5b', '#8b806b', '#6c6558'][block.shade]} roughness={0.96} metalness={0.02} />
-    </mesh>)}
-
-    {paving.map((slab, index) => <mesh key={`slab-${index}`} position={[slab.x, 0.055, slab.z]} rotation={[-Math.PI / 2, 0, slab.rotation]} receiveShadow><boxGeometry args={[2.25, 1.7, 0.08]} /><meshStandardMaterial color={index % 2 === 0 ? '#91836b' : '#837762'} roughness={0.9} /></mesh>)}
-
-    <group position={[0, 0, -14.15]}>
-      <mesh position={[-9.8, 1.25, 0]}><boxGeometry args={[7.8, 2.5, 0.85]} /><meshStandardMaterial color="#655b4b" roughness={0.9} /></mesh>
-      <mesh position={[9.8, 1.25, 0]}><boxGeometry args={[7.8, 2.5, 0.85]} /><meshStandardMaterial color="#655b4b" roughness={0.9} /></mesh>
-      <mesh position={[-4.7, 2.25, 0]}><boxGeometry args={[2.4, 4.5, 1.1]} /><meshStandardMaterial color="#766a56" roughness={0.88} /></mesh>
-      <mesh position={[4.7, 2.25, 0]}><boxGeometry args={[2.4, 4.5, 1.1]} /><meshStandardMaterial color="#766a56" roughness={0.88} /></mesh>
-      <mesh position={[0, 4.05, 0]}><boxGeometry args={[7.2, 1.15, 1.05]} /><meshStandardMaterial color="#80735d" roughness={0.86} /></mesh>
-    </group>
-    {wallBlocks.map((block, index) => <mesh key={`wall-block-${index}`} position={[block.x, block.y, block.z]} rotation={[0, (index % 2 ? 0.025 : -0.025), 0]} castShadow receiveShadow>
-      <boxGeometry args={[block.sx, block.sy, block.sz]} />
-      <meshStandardMaterial color={['#756b59', '#655e51', '#827764'][block.shade]} roughness={0.98} />
-    </mesh>)}
-
-    <group position={[0, 0, -11.8]}>
-      {[0, 1, 2, 3].map(step => <mesh key={`gate-step-${step}`} position={[0, 0.12 + step * 0.18, -step * 0.52]} castShadow receiveShadow><boxGeometry args={[7.4 - step * 0.65, 0.22, 1.25]} /><meshStandardMaterial color={step % 2 ? '#766c59' : '#857966'} roughness={0.94} /></mesh>)}
-      <mesh position={[0, 3.05, -1.85]} castShadow><torusGeometry args={[3.1, 0.62, 10, 28, Math.PI]} /><meshStandardMaterial color="#706654" roughness={0.92} /></mesh>
-      <mesh position={[0, 1.35, -1.85]} castShadow><boxGeometry args={[4.85, 2.7, 0.32]} /><meshStandardMaterial color="#201d19" metalness={0.45} roughness={0.75} /></mesh>
-      {Array.from({ length: 8 }, (_, index) => <mesh key={`gate-bar-${index}`} position={[-2.1 + index * 0.6, 1.4, -1.65]} castShadow><boxGeometry args={[0.08, 3.15, 0.08]} /><meshStandardMaterial color="#332b22" metalness={0.75} roughness={0.48} /></mesh>)}
-    </group>
+    <RuinedGate diffuse={diffuse} normal={normal} roughness={roughness} />
 
     {columns.map(([x, z], index) => <group key={`${x}-${z}`} position={[x, 0, z]}>
       <mesh position={[0, 1.35, 0]} castShadow><cylinderGeometry args={[1.2, 1.45, 2.7, 16]} /><meshStandardMaterial color={showHitboxes ? '#22d3ee' : '#6f665b'} wireframe={showHitboxes} roughness={0.88} /></mesh>
@@ -664,47 +643,124 @@ function Arena({ showHitboxes }: { showHitboxes: boolean }) {
       <pointLight position={[0, 1.6, 0]} color="#ffad55" intensity={6} distance={7} />
     </group>)}
 
-    {[-26, -19, 20, 27].map((x, index) => <mesh key={`ridge-${x}`} position={[x, 5.5, -30 - (index % 2) * 5]} rotation={[0, index * 0.45, 0]}><coneGeometry args={[8 + (index % 2) * 2, 13, 7]} /><meshStandardMaterial color="#66706d" roughness={1} /></mesh>)}
+    <DustMotes />
   </>
 }
 
-function TestMonster({ warning, showHitboxes }: { warning: boolean; showHitboxes: boolean }) {
-  const texture = useTexture(blueSlimeSprite)
-  const body = useRef<THREE.Group>(null)
-  const material = useRef<THREE.MeshBasicMaterial>(null)
+function RuinedGate({ diffuse, normal, roughness }: { diffuse: THREE.Texture; normal: THREE.Texture; roughness: THREE.Texture }) {
+  const fragments = useMemo(() => [
+    [-6.2, 0.72, -0.35, 0.9, 1.5, 0.62], [-7.35, 0.55, -0.2, 0.72, 1.05, 0.72],
+    [6.15, 0.82, -0.4, 0.85, 1.65, 0.62], [7.3, 0.48, -0.15, 0.68, 0.9, 0.68],
+  ] as const, [])
+  const StoneMaterial = () => <meshStandardMaterial map={diffuse} normalMap={normal} roughnessMap={roughness} roughness={0.95} color="#8a8172" />
+  return <group position={[0, 0, -12.6]}>
+    {[-1, 1].map((side) => <group key={side} position={[side * 3.25, 0, 0]}>
+      <mesh position={[0, 2.1, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.78, 1.08, 4.2, 18, 5]} />
+        <StoneMaterial />
+      </mesh>
+      <mesh position={[0, 0.22, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[1.3, 1.5, 0.44, 18]} />
+        <StoneMaterial />
+      </mesh>
+      <mesh position={[0, 4.12, 0]} rotation={[0.08, side * 0.06, side * 0.08]} castShadow>
+        <cylinderGeometry args={[0.95, 0.82, 0.52, 18]} />
+        <StoneMaterial />
+      </mesh>
+    </group>)}
+    <mesh position={[0, 4.05, 0]} rotation={[0, 0, Math.PI]} castShadow receiveShadow>
+      <torusGeometry args={[3.25, 0.72, 16, 56, Math.PI]} />
+      <StoneMaterial />
+    </mesh>
+    <mesh position={[0, 1.38, -0.28]} castShadow>
+      <planeGeometry args={[4.9, 2.75]} />
+      <meshStandardMaterial color="#161719" metalness={0.52} roughness={0.7} side={THREE.DoubleSide} />
+    </mesh>
+    {Array.from({ length: 9 }, (_, index) => <mesh key={index} position={[-2.15 + index * 0.54, 1.42, -0.08]} castShadow>
+      <cylinderGeometry args={[0.035, 0.045, 3.05, 8]} />
+      <meshStandardMaterial color="#2b2927" metalness={0.76} roughness={0.42} />
+    </mesh>)}
+    {fragments.map(([x, y, z, radius, height, depth], index) => <mesh key={index} position={[x, y, z]} rotation={[0.08 * (index % 2), index * 0.34, 0.06 * (index - 1)]} scale={[1, 1, depth]} castShadow receiveShadow>
+      <cylinderGeometry args={[radius * 0.82, radius, height, 9, 2]} />
+      <StoneMaterial />
+    </mesh>)}
+  </group>
+}
 
-  useEffect(() => {
-    texture.colorSpace = THREE.SRGBColorSpace
-    texture.anisotropy = 4
-    texture.needsUpdate = true
-  }, [texture])
+function DustMotes() {
+  const points = useRef<THREE.Points>(null)
+  const positions = useMemo(() => {
+    const values = new Float32Array(180 * 3)
+    for (let index = 0; index < 180; index += 1) {
+      values[index * 3] = (Math.random() - 0.5) * 28
+      values[index * 3 + 1] = 0.25 + Math.random() * 5.5
+      values[index * 3 + 2] = (Math.random() - 0.5) * 28
+    }
+    return values
+  }, [])
+  useFrame(({ clock }) => {
+    if (!points.current) return
+    points.current.rotation.y = clock.getElapsedTime() * 0.012
+    points.current.position.y = Math.sin(clock.getElapsedTime() * 0.32) * 0.12
+  })
+  return <points ref={points}>
+    <bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry>
+    <pointsMaterial color="#e9d3a0" size={0.055} transparent opacity={0.42} depthWrite={false} sizeAttenuation />
+  </points>
+}
+
+function TestMonster({ warning, showHitboxes, hitToken }: { warning: boolean; showHitboxes: boolean; hitToken?: number }) {
+  const body = useRef<THREE.Group>(null)
+  const material = useRef<THREE.MeshPhysicalMaterial>(null)
+  const hitAt = useRef(-10)
+  useEffect(() => { if (hitToken) hitAt.current = performance.now() / 1000 }, [hitToken])
 
   useFrame(({ clock }) => {
     if (!body.current || !material.current) return
     const elapsed = clock.getElapsedTime()
-    const breath = Math.sin(elapsed * 2.8)
-    const hop = Math.max(0, Math.sin(elapsed * 4.2))
+    const now = performance.now() / 1000
+    const breath = Math.sin(elapsed * 2.45)
+    const hop = Math.max(0, Math.sin(elapsed * 3.1))
     const warningPulse = warning ? (Math.sin(elapsed * 12) + 1) / 2 : 0
-    body.current.position.y = 1.42 + hop * 0.1
+    const hitProgress = THREE.MathUtils.clamp((now - hitAt.current) / 0.38, 0, 1)
+    const recoil = hitProgress < 1 ? Math.sin(hitProgress * Math.PI) : 0
+    body.current.position.y = 0.08 + hop * 0.09
+    body.current.position.z = -recoil * 0.42
     body.current.scale.set(
-      3.45 * (1 + breath * 0.018 + warningPulse * 0.08),
-      3.45 * (1 - breath * 0.015 - warningPulse * 0.1),
-      1,
+      1 + breath * 0.025 + warningPulse * 0.08 + recoil * 0.12,
+      1 - breath * 0.035 - warningPulse * 0.1 - recoil * 0.18,
+      1 + breath * 0.018 + recoil * 0.08,
     )
-    body.current.rotation.z = Math.sin(elapsed * 3.4) * 0.018
-    material.current.color.set(warning ? '#ffb4b4' : '#ffffff')
+    body.current.rotation.z = Math.sin(elapsed * 2.5) * 0.022 + recoil * 0.12
+    material.current.color.set(warning ? '#7dd3fc' : '#159ee9')
+    material.current.emissive.set(warning ? '#dc2626' : '#024c84')
+    material.current.emissiveIntensity = warning ? 0.55 + warningPulse * 1.1 : 0.2
   })
 
   return <group>
-    <mesh position={[0, 0.055, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <circleGeometry args={[1.35, 32]} />
+    <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <circleGeometry args={[1.55, 48]} />
       <meshBasicMaterial color="#0f172a" transparent opacity={0.34} depthWrite={false} />
     </mesh>
-    <group ref={body} position={[0, 1.42, 0]} scale={[3.45, 3.45, 1]}>
-      <mesh renderOrder={8}>
-        <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial ref={material} map={texture} transparent alphaTest={0.08} side={THREE.DoubleSide} toneMapped={false} />
+    <group ref={body} position={[0, 0.08, 0]}>
+      <mesh position={[0, 1.1, 0]} scale={[1.45, 1.12, 1.25]} castShadow receiveShadow>
+        <sphereGeometry args={[1, 48, 32]} />
+        <meshPhysicalMaterial ref={material} color="#159ee9" roughness={0.18} metalness={0.02} transmission={0.12} thickness={0.8} clearcoat={1} clearcoatRoughness={0.12} emissive="#024c84" emissiveIntensity={0.2} />
       </mesh>
+      <mesh position={[-0.9, 0.35, 0.02]} scale={[0.72, 0.38, 0.72]} castShadow><sphereGeometry args={[1, 32, 20]} /><meshPhysicalMaterial color="#118bd1" roughness={0.22} clearcoat={0.9} /></mesh>
+      <mesh position={[0.9, 0.35, 0.02]} scale={[0.72, 0.38, 0.72]} castShadow><sphereGeometry args={[1, 32, 20]} /><meshPhysicalMaterial color="#118bd1" roughness={0.22} clearcoat={0.9} /></mesh>
+      {[-0.38, 0.38].map((x) => <group key={x} position={[x, 1.35, 1.08]}>
+        <mesh scale={[0.22, 0.3, 0.12]}><sphereGeometry args={[1, 24, 18]} /><meshStandardMaterial color="#eaf8ff" roughness={0.32} /></mesh>
+        <mesh position={[0.025, -0.035, 0.115]} scale={[0.1, 0.15, 0.06]}><sphereGeometry args={[1, 20, 14]} /><meshStandardMaterial color="#07111f" roughness={0.2} /></mesh>
+        <mesh position={[0.055, 0.02, 0.17]} scale={0.035}><sphereGeometry args={[1, 12, 10]} /><meshBasicMaterial color="#ffffff" /></mesh>
+      </group>)}
+      <mesh position={[0, 0.88, 1.18]} rotation={[0, 0, Math.PI * 0.08]} scale={[0.42, 0.24, 0.16]}>
+        <torusGeometry args={[0.52, 0.13, 12, 32, Math.PI]} />
+        <meshStandardMaterial color="#07111f" roughness={0.45} />
+      </mesh>
+      <mesh position={[-0.62, 0.92, 1.12]} rotation={[0, 0, -0.35]}><capsuleGeometry args={[0.035, 0.2, 6, 10]} /><meshBasicMaterial color="#075985" /></mesh>
+      <mesh position={[0.62, 0.92, 1.12]} rotation={[0, 0, 0.35]}><capsuleGeometry args={[0.035, 0.2, 6, 10]} /><meshBasicMaterial color="#075985" /></mesh>
+      <pointLight position={[0, 1.1, 0.5]} color={warning ? '#ef4444' : '#38bdf8'} intensity={warning ? 4 : 1.2} distance={4} />
     </group>
     {showHitboxes && <mesh position={[0, 1.25, 0]}><sphereGeometry args={[1.35, 16, 12]} /><meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.6} /></mesh>}
   </group>
