@@ -9,17 +9,33 @@ import { ensurePetStateTable } from "../services/pet-state-store";
 const router = Router();
 
 // ── 確率テーブル（合計 10000）──
-const PRIZES = [
-  { id: "pts100", label: "100ポイント", type: "points" as const, amount: 100, weight: 4_128 },
-  { id: "pts300", label: "300ポイント", type: "points" as const, amount: 300, weight: 2_752 },
-  { id: "pts500", label: "500ポイント", type: "points" as const, amount: 500, weight: 1_559 },
-  { id: "pts1000", label: "1,000ポイント", type: "points" as const, amount: 1_000, weight: 734 },
-  { id: "pts5000", label: "5,000ポイント", type: "points" as const, amount: 5_000, weight: 200 },
-  { id: "inmu10k", label: "10,000 INMU", type: "inmu" as const, amount: 10_000, weight: 51 },
-  { id: "premium-food", label: "高級ごはん", type: "premium_food" as const, amount: 1, weight: 514 },
-  { id: "sleep-tea", label: "アイスティー（睡眠薬入り）", type: "sleep_tea" as const, amount: 1, weight: 62 },
-] as const;
-type Prize = (typeof PRIZES)[number];
+// 表示UI側の排出率表記は変更なし。内部確率のみ変更。
+type PointsPrize = { id: string; label: string; type: "points";                     amount: number; weight: number };
+type InmuPrize   = { id: string; label: string; type: "inmu";                       amount: number; weight: number };
+type FoodPrize   = { id: string; label: string; type: "premium_food" | "sleep_tea"; amount: number; weight: number };
+type CharPrize   = { id: string; label: string; type: "character"; characterId: string;             weight: number };
+type Prize = PointsPrize | InmuPrize | FoodPrize | CharPrize;
+
+const PRIZES: Prize[] = [
+  // ポイント（他tier分は全て100ptに統合）
+  { id: "pts100",               label: "100ポイント",                  type: "points",       amount: 100,    weight: 9_240 },
+  // INMU（月1回上限は processRawPrizes で処理）
+  { id: "inmu10k",              label: "10,000 INMU",                  type: "inmu",         amount: 10_000, weight:    51 },
+  // アイテム
+  { id: "premium-food",         label: "高級ごはん",                   type: "premium_food", amount: 1,      weight:   514 },
+  { id: "sleep-tea",            label: "アイスティー（睡眠薬入り）",   type: "sleep_tea",    amount: 1,      weight:   150 },
+  // 新ガチャキャラ 0.1%×3
+  { id: "character-chinge",     label: "チンゲ",       type: "character", characterId: "chinge",     weight: 10 },
+  { id: "character-tdn",        label: "TDN",          type: "character", characterId: "tdn",        weight: 10 },
+  { id: "character-whip",       label: "ホイップ",     type: "character", characterId: "whip",       weight: 10 },
+  // 旧ガチャキャラ 0.05%×3
+  { id: "character-takuya",     label: "拓也",         type: "character", characterId: "takuya",     weight:  5 },
+  { id: "character-nyarushian", label: "ニャルシアン", type: "character", characterId: "nyarushian", weight:  5 },
+  { id: "character-leon",       label: "レオン",       type: "character", characterId: "leon",       weight:  5 },
+  // 合計 9240+51+514+150+10+10+10+5+5+5 = 10000
+];
+
+const PTS100 = PRIZES.find(p => p.id === "pts100") as PointsPrize;
 
 const GUARANTEED_RATE = 1 / 114;
 
@@ -30,7 +46,7 @@ function rollPrize(): Prize {
     acc += p.weight;
     if (r < acc) return p;
   }
-  return PRIZES[0];
+  return PTS100;
 }
 
 function rollMany(count: number, guaranteed: boolean): Prize[] {
@@ -40,6 +56,44 @@ function rollMany(count: number, guaranteed: boolean): Prize[] {
     results[results.length - 1] = PRIZES.find(prize => prize.id === "inmu10k")!;
   }
   return results;
+}
+
+// ── INMU月1回上限 & キャラクター内部処理 ──
+// ・キャラ当選: userPetCharacters に追加し表示は pts100 に変換（ユーザー非表示）
+// ・INMU10k: 当月既に1回当選済みなら pts100 に変換（ユーザー非表示）
+async function processRawPrizes(userId: string, raw: Prize[], month: string): Promise<Prize[]> {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM "gachaInmuWins"
+     WHERE "userId" = $1
+       AND to_char("createdAt" AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM') = $2`,
+    [userId, month],
+  );
+  let inmuThisMonth = Number(rows[0]?.cnt ?? 0);
+
+  const effective: Prize[] = [];
+  for (const prize of raw) {
+    if (prize.type === "inmu") {
+      if (inmuThisMonth >= 1) {
+        effective.push(PTS100);
+      } else {
+        inmuThisMonth++;
+        effective.push(prize);
+      }
+    } else if (prize.type === "character") {
+      const cp = prize as CharPrize;
+      await ensurePetStateTable();
+      await pool.query(
+        `INSERT INTO "userPetCharacters" ("userId", "characterId")
+         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [userId, cp.characterId],
+      );
+      // ユーザー表示は 100pt として処理（キャラ当選は非表示）
+      effective.push(PTS100);
+    } else {
+      effective.push(prize);
+    }
+  }
+  return effective;
 }
 
 async function addFreeGachaItem(userId: string, prize: Prize) {
@@ -174,15 +228,16 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const month         = new Date().toISOString().slice(0, 7);
   const wasGuaranteed = Math.random() < GUARANTEED_RATE;
-  const prizeResults  = rollMany(count, wasGuaranteed);
+  const rawResults    = rollMany(count, wasGuaranteed);
+  const prizeResults  = await processRawPrizes(userId, rawResults, month);
   const pointMultiplier = 1; // ニャルシアン効果はガチャポイントの対象外
-  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + p.amount, 0) * pointMultiplier;
+  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) * pointMultiplier;
   const inmuList      = prizeResults.filter(p => p.type === "inmu");
   const hasInmu       = inmuList.length > 0;
   const inmuCount     = inmuList.length;
   const netPoints     = totalPoints - costPoints;
-  const month         = new Date().toISOString().slice(0, 7);
 
   try {
     for (const prize of prizeResults) await addFreeGachaItem(userId, prize);
@@ -199,13 +254,16 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
     }
     await db.insert(pointsTable).values(pointsRows);
 
-    const resultsJson = prizeResults.map(p => ({
-      prizeId: p.id,
-      label: p.type === "points" ? `${(p.amount * pointMultiplier).toLocaleString()}ポイント` : p.label,
-      type: p.type,
-      amount: p.type === "points" ? p.amount * pointMultiplier : p.amount,
-      ...(p.type === "points" ? { baseAmount: p.amount } : {}),
-    }));
+    const resultsJson = prizeResults.map(p => {
+      const amt = (p as PointsPrize | InmuPrize | FoodPrize).amount ?? 0;
+      return {
+        prizeId: p.id,
+        label: p.type === "points" ? `${(amt * pointMultiplier).toLocaleString()}ポイント` : p.label,
+        type: p.type,
+        amount: p.type === "points" ? amt * pointMultiplier : amt,
+        ...(p.type === "points" ? { baseAmount: amt } : {}),
+      };
+    });
     const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
        VALUES ($1,$2,$3::jsonb,$4,$5,$6,'pending',$7,$8,false) RETURNING id`,
@@ -252,14 +310,15 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
     .from(profileTable).where(eq(profileTable.userId, userId)).limit(1);
   if (!profile) { res.status(404).json({ error: "プロフィールが見つかりません" }); return; }
 
+  const month         = new Date().toISOString().slice(0, 7);
   const wasGuaranteed = Math.random() < GUARANTEED_RATE;
-  const prizeResults  = rollMany(1, wasGuaranteed);
+  const rawResults    = rollMany(1, wasGuaranteed);
+  const prizeResults  = await processRawPrizes(userId, rawResults, month);
   const pointMultiplier = 1; // ニャルシアン効果はガチャポイントの対象外
-  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + p.amount, 0) * pointMultiplier;
+  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) * pointMultiplier;
   const inmuList      = prizeResults.filter(p => p.type === "inmu");
   const hasInmu       = inmuList.length > 0;
   const inmuCount     = inmuList.length;
-  const month         = new Date().toISOString().slice(0, 7);
   const currentPoints = Number(profile.monthlyPoints);
 
   try {
@@ -275,13 +334,16 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
       });
     }
 
-    const resultsJson = prizeResults.map(p => ({
-      prizeId: p.id,
-      label: p.type === "points" ? `${(p.amount * pointMultiplier).toLocaleString()}ポイント` : p.label,
-      type: p.type,
-      amount: p.type === "points" ? p.amount * pointMultiplier : p.amount,
-      ...(p.type === "points" ? { baseAmount: p.amount } : {}),
-    }));
+    const resultsJson = prizeResults.map(p => {
+      const amt = (p as PointsPrize | InmuPrize | FoodPrize).amount ?? 0;
+      return {
+        prizeId: p.id,
+        label: p.type === "points" ? `${(amt * pointMultiplier).toLocaleString()}ポイント` : p.label,
+        type: p.type,
+        amount: p.type === "points" ? amt * pointMultiplier : amt,
+        ...(p.type === "points" ? { baseAmount: amt } : {}),
+      };
+    });
     const { rows: spinRows } = await pool.query(
       `INSERT INTO "gachaResults" ("userId","pullType","results","totalPoints","hasInmu","inmuCount","inmuSentStatus","wasGuaranteed","costPoints","isFree")
        VALUES ($1,'free',$2::jsonb,$3,$4,$5,'pending',$6,0,true) RETURNING id`,
