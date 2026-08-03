@@ -76,8 +76,8 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
     <div className="fixed inset-0 z-[100] overflow-hidden bg-black" style={{ touchAction: 'none', overscrollBehavior: 'none' }}>
       <Canvas
         shadows
-        dpr={isMobile ? [1, 1.35] : [1, 1.75]}
-        gl={{ antialias: !isMobile, powerPreference: 'high-performance' }}
+        dpr={isMobile ? [1.25, 1.6] : [1.25, 1.85]}
+        gl={{ antialias: true, powerPreference: 'high-performance' }}
         camera={{ fov: 58, near: 0.1, far: 100, position: [0, 3.4, 15.5] }}
         onPointerDown={(event) => {
           if (!isMobile && event.nativeEvent.button === 0) {
@@ -106,7 +106,7 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
       <BattleHud snapshot={snapshot} onPause={() => actions.current?.togglePause()} onAbort={() => actions.current?.abort()} onSwitch={() => actions.current?.switchPet()} />
       <div key={attackPulse} className="pointer-events-none absolute bottom-[22%] left-1/2 z-20 size-32 -translate-x-1/2 animate-[battle-swipe_.22s_ease-out] rounded-full border-4 border-amber-200/80 bg-amber-300/15 blur-[1px]" />
       {ultimatePulse && <><div key={ultimatePulse.id} className={`pointer-events-none absolute inset-0 z-[19] animate-[battle-ultimate_.8s_ease-out] ${ultimatePulse.kind === 'male' ? 'bg-amber-300/45' : 'bg-fuchsia-500/35'}`} /><div className="pointer-events-none absolute inset-x-0 top-[28%] z-30 animate-[battle-cutin_.9s_ease-out_forwards] border-y border-white/50 bg-black/80 py-4 text-center text-2xl font-black text-white">{PET_DEFINITIONS[snapshot.activePetId].ultimateName}</div></>}
-      {hitPulse > 0 && <div key={hitPulse} className="pointer-events-none absolute inset-0 z-[18] animate-[battle-hit_.35s_ease-out] border-[14px] border-red-600/70" />}
+      {hitPulse > 0 && <div key={hitPulse} className="pointer-events-none absolute inset-0 z-[18] animate-[battle-hit_.35s_ease-out] shadow-[inset_0_0_55px_12px_rgba(220,38,38,.52)]" />}
       {isMobile && !isPortraitMobile && (
         <MobileControls
           onMove={(x, y) => actions.current?.setMobileMove(x, y)}
@@ -521,12 +521,12 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
   const coneVisible = enemyAction.current === 'cone-warning'
   return (
     <>
-      <color attach="background" args={['#8b9ba3']} />
-      <fog attach="fog" args={['#9aa5a6', 24, 52]} />
-      <hemisphereLight args={['#dbe8ee', '#554733', 1.4]} />
-      <ambientLight intensity={0.72} />
-      <directionalLight position={[8, 15, 4]} intensity={2.6} color="#fff0c2" castShadow />
-      <Sky distance={70} sunPosition={[8, 10, 4]} inclination={0.52} azimuth={0.24} turbidity={7} rayleigh={1.8} />
+      <color attach="background" args={['#51616b']} />
+      <fog attach="fog" args={['#65747a', 30, 68]} />
+      <hemisphereLight args={['#b8d6e8', '#443827', 1.05]} />
+      <ambientLight intensity={0.42} />
+      <directionalLight position={[8, 15, 4]} intensity={2.1} color="#ffe3a3" castShadow shadow-mapSize={[1024, 1024]} />
+      <Sky distance={90} sunPosition={[8, 8, 4]} inclination={0.5} azimuth={0.24} turbidity={10} rayleigh={2.6} mieCoefficient={0.008} />
       <Arena showHitboxes={settings.showHitboxes} />
       <group ref={playerGroup} position={[0, 0, 9]}>
         <BattlePetAvatar3D

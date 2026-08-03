@@ -8,15 +8,15 @@ export function BattleHud({ snapshot, onPause, onAbort, onSwitch }: { snapshot: 
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 select-none text-white">
-      <div className="absolute inset-x-3 top-[max(12px,env(safe-area-inset-top))] flex items-start gap-3">
-        <div className="min-w-0 flex-1 bg-black/65 p-2 backdrop-blur-sm">
+      <div className="absolute inset-x-3 top-[max(8px,env(safe-area-inset-top))] flex items-start gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1 border border-white/10 bg-black/55 px-3 py-2 backdrop-blur-md">
           <div className="flex justify-between text-xs"><span>テストモンスター</span><span>{snapshot.enemyHp.toLocaleString()} / {snapshot.enemyMaxHp.toLocaleString()}</span></div>
           <div className="mt-1 h-3 overflow-hidden bg-white/15"><div className="h-full bg-red-500 transition-[width]" style={{ width: `${enemyPct}%` }} /></div>
         </div>
-        <div className="rounded bg-black/65 px-3 py-2 font-mono text-lg tabular-nums">{Math.ceil(snapshot.remainingSeconds)}s</div>
+        <div className="border border-white/10 bg-black/55 px-2.5 py-2 font-mono text-sm tabular-nums backdrop-blur-md sm:text-base">{Math.ceil(snapshot.remainingSeconds)}s</div>
       </div>
 
-      <div className="absolute left-3 top-20 w-48 space-y-2 bg-black/60 p-2 text-xs backdrop-blur-sm">
+      <div className="absolute left-3 top-16 w-40 space-y-1.5 border border-white/10 bg-black/50 p-2 text-[11px] backdrop-blur-md sm:w-48 sm:text-xs">
         <Bar label="HP" value={`${snapshot.playerHp} / ${snapshot.playerMaxHp}`} percent={hpPct} color="bg-emerald-400" />
         <Bar label="SP" value={`${snapshot.playerSp} / ${snapshot.playerMaxSp}`} percent={spPct} color="bg-cyan-400" />
         <div className="flex gap-1 pt-1">
