@@ -43,14 +43,16 @@ export function BattlePetAvatar3D({ petId, moving, action, actionStartedAt, acti
       if (!(object instanceof THREE.Mesh)) return
       object.castShadow = true
       object.receiveShadow = true
-      const materials = Array.isArray(object.material) ? object.material : [object.material]
-      object.material = materials.map((source) => {
+      const materialWasArray = Array.isArray(object.material)
+      const materials = materialWasArray ? object.material : [object.material]
+      const recoloredMaterials = materials.map((source: THREE.Material) => {
         const material = source.clone()
         const color = getMaterialColor(material.name, female)
         if ('color' in material && material.color instanceof THREE.Color && color) material.color.set(color)
         material.needsUpdate = true
         return material
       })
+      object.material = materialWasArray ? recoloredMaterials : recoloredMaterials[0]
     })
   }, [female, model])
 

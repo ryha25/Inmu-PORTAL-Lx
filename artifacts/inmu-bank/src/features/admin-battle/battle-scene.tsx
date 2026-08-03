@@ -434,12 +434,12 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
       playerGroup.current.position.copy(playerPosition.current)
       playerGroup.current.rotation.y = playerFacingYaw.current
     }
-    const cameraOffset = new THREE.Vector3(0, 3.6 + pitch.current * 1.2, 6.6)
+    const cameraOffset = new THREE.Vector3(0, 3.45 + pitch.current * 1.1, 7.8)
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
     const desiredCamera = playerPosition.current.clone().add(cameraOffset)
-    camera.position.lerp(desiredCamera, 1 - Math.exp(-9 * dt))
-    const lookTarget = playerPosition.current.clone().add(new THREE.Vector3(0, 1.5 + pitch.current * 0.8, 0))
-    lookTarget.add(new THREE.Vector3(0, 0, -3).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current))
+    camera.position.lerp(desiredCamera, 1 - Math.exp(-12 * dt))
+    const lookTarget = playerPosition.current.clone().add(new THREE.Vector3(0, 1.45 + pitch.current * 0.72, 0))
+    lookTarget.add(new THREE.Vector3(0, 0, -1.25).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current))
     camera.lookAt(lookTarget)
 
     updateEnemy(dt, now)
