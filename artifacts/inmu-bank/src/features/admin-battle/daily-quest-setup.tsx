@@ -1,6 +1,7 @@
 import { ArrowLeft, Gift, ShieldAlert, Skull, Swords, Users } from 'lucide-react'
 import { PET_DEFINITIONS, settingsForPet } from './pet-definitions'
 import type { BattlePetId, BattleSettings } from './types'
+import slimeImage from '@assets/battle-blue-slime-v1.png'
 
 export function DailyQuestSetup({ settings, onChange, onBack, onStart }: {
   settings: BattleSettings
@@ -27,11 +28,11 @@ export function DailyQuestSetup({ settings, onChange, onBack, onStart }: {
 
       <section className="border border-amber-400/35 bg-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><p className="text-xs font-bold text-amber-300">DAILY QUEST</p><h2 className="mt-1 text-xl font-black">テストモンスター討伐</h2></div>
+          <div><p className="text-xs font-bold text-amber-300">DAILY QUEST</p><h2 className="mt-1 text-xl font-black">ブルースライム討伐</h2></div>
           <span className="border border-amber-400/35 bg-amber-400/10 px-3 py-2 text-sm font-black text-amber-300">推奨 Lv.40</span>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <Info title="敵情報" icon={<Skull className="size-4" />} lines={['テストモンスター x 1', 'HP 50,000 / 前方範囲攻撃', '制限時間 180秒']} />
+          <div className="flex items-center gap-4 border border-border bg-background p-4"><img src={slimeImage} alt="ブルースライム" className="size-20 shrink-0 object-contain" /><Info title="敵情報" icon={<Skull className="size-4" />} lines={['ブルースライム x 1', 'HP 50,000 / 体当たり・前方範囲攻撃', '制限時間 180秒']} plain /></div>
           <Info title="報酬内容" icon={<Gift className="size-4" />} lines={['PET経験値：調整中', 'ポイント：調整中', '育成アイテム抽選：調整中']} />
         </div>
       </section>
@@ -65,6 +66,6 @@ export function DailyQuestSetup({ settings, onChange, onBack, onStart }: {
   )
 }
 
-function Info({ title, icon, lines }: { title: string; icon: React.ReactNode; lines: string[] }) {
-  return <div className="border border-border bg-background p-4"><div className="flex items-center gap-2 text-sm font-bold text-amber-200">{icon}{title}</div><ul className="mt-3 space-y-1 text-sm text-muted-foreground">{lines.map(line => <li key={line}>{line}</li>)}</ul></div>
+function Info({ title, icon, lines, plain = false }: { title: string; icon: React.ReactNode; lines: string[]; plain?: boolean }) {
+  return <div className={plain ? 'min-w-0' : 'border border-border bg-background p-4'}><div className="flex items-center gap-2 text-sm font-bold text-amber-200">{icon}{title}</div><ul className="mt-3 space-y-1 text-sm text-muted-foreground">{lines.map(line => <li key={line}>{line}</li>)}</ul></div>
 }

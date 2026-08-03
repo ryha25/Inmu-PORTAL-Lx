@@ -1,9 +1,9 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Html, Preload, useTexture } from '@react-three/drei'
+import { ContactShadows, Html, Preload, Sky, useTexture } from '@react-three/drei'
 import { forwardRef, Suspense, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import type { MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { BattleHud } from './battle-hud'
+import { BattlePetAvatar3D } from './battle-pet-avatar-3d'
 import { MobileControls } from './mobile-controls'
 import { PET_DEFINITIONS } from './pet-definitions'
 import blueSlimeSprite from '../../../../../attached_assets/battle-blue-slime-v1.png'
@@ -12,7 +12,6 @@ import { rollDamage } from './combat-math'
 import type { BattleResult, BattleSceneHandle, BattleSettings, BattleSnapshot, DamagePopup } from './types'
 
 type RuntimeActions = BattleSceneHandle
-type AvatarFacing = 'forward' | 'backward' | 'left' | 'right'
 type AvatarAction = 'idle' | 'attack' | 'dodge' | 'ultimate' | 'hurt' | 'switch'
 
 const INITIAL_SNAPSHOT: BattleSnapshot = {
@@ -76,6 +75,7 @@ export const BattleScene = forwardRef<BattleSceneHandle, {
   return (
     <div className="fixed inset-0 z-[100] overflow-hidden bg-black" style={{ touchAction: 'none', overscrollBehavior: 'none' }}>
       <Canvas
+        shadows
         dpr={isMobile ? [1, 1.35] : [1, 1.75]}
         gl={{ antialias: !isMobile, powerPreference: 'high-performance' }}
         camera={{ fov: 58, near: 0.1, far: 100, position: [0, 3.4, 15.5] }}
@@ -173,12 +173,15 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
   const invulnerableUntil = useRef(0)
   const ultimateReadyAt = useRef(0)
   const femaleBuffUntil = useRef(0)
-  const avatarFacing = useRef<AvatarFacing>('forward')
   const avatarMoving = useRef(false)
   const avatarAction = useRef<AvatarAction>('idle')
   const avatarActionStartedAt = useRef(0)
   const avatarActionUntil = useRef(0)
   const dodgeDirection = useRef<THREE.Vector3 | null>(null)
+  const moveDirection = useRef(new THREE.Vector3(0, 0, -1))
+  const actionDirection = useRef(new THREE.Vector3(0, 0, -1))
+  const playerFacingYaw = useRef(Math.PI)
+  const attackDriveUntil = useRef(0)
   const switchReadyAt = useRef(0)
   const enemyAction = useRef<'chase' | 'melee-warning' | 'cone-warning' | 'recover'>('chase')
   const enemyActionUntil = useRef(0)
@@ -261,13 +264,22 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
     popupTimer.current = window.setTimeout(() => { setPopup(null); popupTimer.current = null }, 650)
   }, [settings.showDamage])
 
-  const enemyInAim = useCallback((range: number) => {
+  const enemyInDirection = useCallback((range: number, direction: THREE.Vector3) => {
     const target = enemyPosition.current.clone().add(new THREE.Vector3(0, 1.35, 0))
     const origin = playerPosition.current.clone().add(new THREE.Vector3(0, 1.2, 0))
     const toEnemy = target.sub(origin)
     const distance = toEnemy.length()
-    const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
-    return distance <= range && forward.dot(toEnemy.normalize()) > 0.72
+    return distance <= range && direction.clone().normalize().dot(toEnemy.normalize()) > 0.72
+  }, [])
+
+  const readMoveDirection = useCallback((fallbackToAim = true) => {
+    const inputX = mobileMove.current.x + (keys.current.has('KeyD') ? 1 : 0) - (keys.current.has('KeyA') ? 1 : 0)
+    const inputY = mobileMove.current.y + (keys.current.has('KeyW') ? 1 : 0) - (keys.current.has('KeyS') ? 1 : 0)
+    if (Math.abs(inputX) + Math.abs(inputY) > 0.08) {
+      return new THREE.Vector3(inputX, 0, -inputY).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
+    }
+    if (!fallbackToAim && moveDirection.current.lengthSq() > 0.1) return moveDirection.current.clone()
+    return new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
   }, [])
 
   const attack = useCallback(() => {
@@ -279,10 +291,14 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
     const buffed = activePetId.current === 'yajusenpai-female-evolved' && now < femaleBuffUntil.current
     const cooldown = settings.noAttackCooldown ? 0.08 : pet.attackCooldown * (buffed ? 0.5 : 1)
     attackReadyAt.current = now + cooldown
+    const direction = readMoveDirection(true)
+    actionDirection.current.copy(direction)
+    playerFacingYaw.current = Math.atan2(direction.x, direction.z)
+    attackDriveUntil.current = now + 0.2
     metrics.current.normalAttackCount += 1
     beginAvatarAction('attack', 0.42)
     onAttackVisual()
-    if (!enemyInAim(pet.attackRange)) return
+    if (!enemyInDirection(pet.attackRange, direction)) return
     const damage = rollDamage(activeStats.atk * (buffed ? 2 : 1), settings.enemyDef)
     enemyHp.current = Math.max(0, enemyHp.current - damage)
     playerSp.current = Math.min(activeStats.sp, playerSp.current + 5)
@@ -290,7 +306,7 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
     playHitTone(260)
     showPopup(damage, 'enemy')
     if (enemyHp.current <= 0) finish('won')
-  }, [beginAvatarAction, enemyInAim, finish, getActivePet, getActiveStats, onAttackVisual, settings.enemyDef, settings.noAttackCooldown, showPopup])
+  }, [beginAvatarAction, enemyInDirection, finish, getActivePet, getActiveStats, onAttackVisual, readMoveDirection, settings.enemyDef, settings.noAttackCooldown, showPopup])
 
   const ultimate = useCallback(() => {
     if (phase.current !== 'playing') return
@@ -300,10 +316,13 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
     if (!settings.freeUltimate) playerSp.current -= pet.ultimateCost
     ultimateReadyAt.current = now + 1.2
     metrics.current.ultimateCount += 1
+    const direction = readMoveDirection(true)
+    actionDirection.current.copy(direction)
+    playerFacingYaw.current = Math.atan2(direction.x, direction.z)
     beginAvatarAction('ultimate', 0.9)
     onUltimateVisual(activePetId.current === 'yajusenpai-male-evolved' ? 'male' : 'female')
     if (activePetId.current === 'yajusenpai-male-evolved') {
-      if (!enemyInAim(pet.attackRange + 0.5)) return
+      if (!enemyInDirection(pet.attackRange + 0.5, direction)) return
       const damage = 810
       enemyHp.current = Math.max(0, enemyHp.current - damage)
       metrics.current.damageDealt += damage
@@ -313,7 +332,7 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
     } else {
       femaleBuffUntil.current = now + 10
     }
-  }, [beginAvatarAction, enemyInAim, finish, getActivePet, onUltimateVisual, settings.freeUltimate, showPopup])
+  }, [beginAvatarAction, enemyInDirection, finish, getActivePet, onUltimateVisual, readMoveDirection, settings.freeUltimate, showPopup])
 
   const dodge = useCallback(() => {
     if (phase.current !== 'playing') return
@@ -323,11 +342,11 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
     invulnerableUntil.current = now + 0.45
     metrics.current.dodgeCount += 1
     beginAvatarAction('dodge', 0.45)
-    const inputX = mobileMove.current.x + (keys.current.has('KeyD') ? 1 : 0) - (keys.current.has('KeyA') ? 1 : 0)
-    const inputY = mobileMove.current.y + (keys.current.has('KeyW') ? 1 : 0) - (keys.current.has('KeyS') ? 1 : 0)
-    const local = new THREE.Vector3(inputX, 0, inputY ? -inputY : 1).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
-    dodgeDirection.current = local
-  }, [beginAvatarAction])
+    const direction = readMoveDirection(false)
+    actionDirection.current.copy(direction)
+    playerFacingYaw.current = Math.atan2(direction.x, direction.z)
+    dodgeDirection.current = direction
+  }, [beginAvatarAction, readMoveDirection])
 
   const togglePause = useCallback(() => {
     if (finished.current) return
@@ -402,15 +421,18 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
       dodgeDirection.current = null
     }
     if (!dodging && (x || z)) {
-      avatarFacing.current = Math.abs(x) > Math.abs(z)
-        ? x > 0 ? 'right' : 'left'
-        : z > 0 ? 'forward' : 'backward'
       const direction = new THREE.Vector3(x, 0, -z).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
+      moveDirection.current.copy(direction)
+      if (avatarAction.current === 'idle') {
+        const targetYaw = Math.atan2(direction.x, direction.z)
+        playerFacingYaw.current = dampAngle(playerFacingYaw.current, targetYaw, 14, dt)
+      }
       movePlayer(direction.multiplyScalar(5.2 * dt), playerPosition.current)
     }
+    if (now < attackDriveUntil.current) movePlayer(actionDirection.current.clone().multiplyScalar(2.8 * dt), playerPosition.current)
     if (playerGroup.current) {
       playerGroup.current.position.copy(playerPosition.current)
-      playerGroup.current.rotation.y = yaw.current
+      playerGroup.current.rotation.y = playerFacingYaw.current
     }
     const cameraOffset = new THREE.Vector3(0, 3.6 + pitch.current * 1.2, 6.6)
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw.current)
@@ -504,23 +526,25 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
       <hemisphereLight args={['#dbe8ee', '#554733', 1.4]} />
       <ambientLight intensity={0.72} />
       <directionalLight position={[8, 15, 4]} intensity={2.6} color="#fff0c2" castShadow />
+      <Sky distance={70} sunPosition={[8, 10, 4]} inclination={0.52} azimuth={0.24} turbidity={7} rayleigh={1.8} />
       <Arena showHitboxes={settings.showHitboxes} />
       <group ref={playerGroup} position={[0, 0, 9]}>
-        <PlayerPetAvatar
+        <BattlePetAvatar3D
           key={partyIds[activePetIndexState]}
           petId={partyIds[activePetIndexState]}
-          facing={avatarFacing}
           moving={avatarMoving}
           action={avatarAction}
           actionStartedAt={avatarActionStartedAt}
           actionUntil={avatarActionUntil}
         />
       </group>
+      <ContactShadows position={[0, 0.07, 0]} scale={28} opacity={0.32} blur={2.4} far={13} frames={1} />
       <group ref={enemyGroup} position={[0, 0, 0]}>
         <TestMonster warning={enemyAction.current.includes('warning')} showHitboxes={settings.showHitboxes} />
         {popup && popup.kind !== 'player' && <Html position={[0, 3.4, 0]} center><span key={popup.id} className={`font-black drop-shadow ${popup.kind === 'fixed' ? 'text-3xl text-amber-300' : 'text-2xl text-white'}`}>-{popup.amount}</span></Html>}
       </group>
       {popup?.kind === 'player' && <Html position={[playerPosition.current.x, 3.4, playerPosition.current.z]} center><span className="text-2xl font-black text-red-400">-{popup.amount}</span></Html>}
+      {popup && popup.kind !== 'player' && <HitBurst key={popup.id} position={enemyPosition.current} color={popup.kind === 'fixed' ? '#fde047' : '#f8fafc'} />}
       {coneVisible && <mesh position={[enemyPosition.current.x, 0.035, enemyPosition.current.z]} rotation={[-Math.PI / 2, 0, enemyGroup.current?.rotation.y ?? 0]}>
         <circleGeometry args={[TEST_MONSTER.coneRange, 32, -TEST_MONSTER.coneAngle / 2, TEST_MONSTER.coneAngle]} />
         <meshBasicMaterial color="#ef4444" transparent opacity={0.42} side={THREE.DoubleSide} depthWrite={false} />
@@ -529,113 +553,13 @@ function BattleWorld({ battleId, settings, register, onSnapshot, onAttackVisual,
   )
 }
 
-function PlayerPetAvatar({ petId, facing, moving, action, actionStartedAt, actionUntil }: {
-  petId: keyof typeof PET_DEFINITIONS
-  facing: MutableRefObject<AvatarFacing>
-  moving: MutableRefObject<boolean>
-  action: MutableRefObject<AvatarAction>
-  actionStartedAt: MutableRefObject<number>
-  actionUntil: MutableRefObject<number>
-}) {
-  const pet = PET_DEFINITIONS[petId]
-  const textures = useTexture([
-    pet.battleSprites.front,
-    pet.battleSprites.back,
-    ...pet.battleSprites.left,
-    ...pet.battleSprites.right,
-    ...pet.battleSprites.attack,
-    pet.battleSprites.dodge,
-    pet.battleSprites.ultimate,
-  ])
-  const avatar = useRef<THREE.Group>(null)
-  const avatarMesh = useRef<THREE.Mesh>(null)
-  const material = useRef<THREE.MeshBasicMaterial>(null)
-  const basePosition: [number, number, number] = [0, 1.72, 0]
-  const scale: [number, number, number] = [3.65, 3.65, 1]
-
-  useEffect(() => {
-    for (const texture of textures) {
-      texture.colorSpace = THREE.SRGBColorSpace
-      texture.anisotropy = 4
-      texture.needsUpdate = true
-    }
-  }, [textures])
-
-  useFrame(({ clock }) => {
-    if (!avatar.current || !avatarMesh.current || !material.current) return
-    const elapsed = clock.getElapsedTime()
-    const now = performance.now() / 1000
-    const walkFrame = Math.floor(elapsed * 7) % 2
-    const actionDuration = Math.max(0.001, actionUntil.current - actionStartedAt.current)
-    const actionProgress = THREE.MathUtils.clamp((now - actionStartedAt.current) / actionDuration, 0, 1)
-    let texture = facing.current === 'forward'
-      ? textures[1]
-      : facing.current === 'backward'
-        ? textures[0]
-        : facing.current === 'left'
-          ? textures[2 + (moving.current ? walkFrame : 0)]
-          : textures[4 + (moving.current ? walkFrame : 0)]
-    if (action.current === 'attack') texture = textures[actionProgress < 0.48 ? 6 : 7]
-    if (action.current === 'dodge') texture = textures[8]
-    if (action.current === 'ultimate') texture = textures[9]
-    if (material.current.map !== texture) {
-      material.current.map = texture
-      material.current.needsUpdate = true
-    }
-
-    const running = moving.current ? 1 : 0
-    let verticalOffset = Math.abs(Math.sin(elapsed * 10)) * 0.065 * running
-    let forwardOffset = 0
-    let tilt = Math.sin(elapsed * 10) * 0.025 * running
-    let scaleMultiplier = 1 + Math.sin(elapsed * 2.2) * 0.006
-    let opacity = 1
-    if (action.current === 'attack') {
-      forwardOffset = -Math.sin(actionProgress * Math.PI) * 0.42
-      tilt = -Math.sin(actionProgress * Math.PI) * 0.05
-    } else if (action.current === 'dodge') {
-      verticalOffset += Math.sin(actionProgress * Math.PI) * 0.1
-      tilt = Math.sin(actionProgress * Math.PI) * (facing.current === 'left' ? 0.16 : -0.16)
-      scaleMultiplier = 1 - Math.sin(actionProgress * Math.PI) * 0.05
-    } else if (action.current === 'ultimate') {
-      verticalOffset += Math.sin(actionProgress * Math.PI) * 0.08
-      scaleMultiplier = 1 + Math.sin(actionProgress * Math.PI) * 0.07
-    } else if (action.current === 'hurt') {
-      forwardOffset = Math.sin(actionProgress * Math.PI) * 0.3
-      tilt = Math.sin(actionProgress * Math.PI) * 0.13
-    } else if (action.current === 'switch') {
-      opacity = 0.28 + Math.sin(actionProgress * Math.PI) * 0.72
-      scaleMultiplier = 0.9 + actionProgress * 0.1
-    }
-    avatar.current.position.set(
-      basePosition[0],
-      basePosition[1] + verticalOffset,
-      basePosition[2] + forwardOffset,
-    )
-    avatar.current.rotation.z = tilt
-    avatarMesh.current.scale.set(scale[0] * scaleMultiplier, scale[1] * scaleMultiplier, scale[2])
-    material.current.opacity = opacity
-  })
-
-  return (
-    <group ref={avatar} position={basePosition}>
-      <mesh ref={avatarMesh} scale={scale} renderOrder={10}>
-        <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial
-          ref={material}
-          map={textures[1]}
-          transparent
-          alphaTest={0.08}
-          depthWrite
-          side={THREE.DoubleSide}
-          toneMapped={false}
-        />
-      </mesh>
-    </group>
-  )
-}
-
 function movePlayer(delta: THREE.Vector3, position: THREE.Vector3) {
   moveEntity(delta, position, 0.55)
+}
+
+function dampAngle(current: number, target: number, speed: number, delta: number) {
+  const difference = Math.atan2(Math.sin(target - current), Math.cos(target - current))
+  return current + difference * (1 - Math.exp(-speed * delta))
 }
 
 function moveEntity(delta: THREE.Vector3, position: THREE.Vector3, radius: number) {
@@ -663,10 +587,43 @@ function Arena({ showHitboxes }: { showHitboxes: boolean }) {
     x: index % 2 === 0 ? -0.18 : 0.2,
     rotation: (index % 3 - 1) * 0.035,
   })), [])
+  const floorBlocks = useMemo(() => Array.from({ length: 48 }, (_, index) => {
+    const ring = index < 16 ? 5.2 : index < 32 ? 8.2 : 11
+    const slot = index % 16
+    const angle = slot / 16 * Math.PI * 2 + (ring === 8.2 ? Math.PI / 16 : 0)
+    return {
+      x: Math.sin(angle) * ring,
+      z: Math.cos(angle) * ring,
+      angle: -angle,
+      width: ring === 5.2 ? 2.1 : ring === 8.2 ? 2.85 : 3.2,
+      depth: ring === 5.2 ? 2.3 : 2.55,
+      shade: index % 4,
+    }
+  }), [])
+  const wallBlocks = useMemo(() => {
+    const blocks: Array<{ x: number; y: number; z: number; sx: number; sy: number; sz: number; shade: number }> = []
+    for (const side of [-1, 1]) {
+      for (let row = 0; row < 4; row += 1) {
+        const count = row === 3 ? 4 : 6
+        for (let index = 0; index < count; index += 1) {
+          blocks.push({
+            x: side * (8.1 + index * 1.18), y: 0.42 + row * 0.76, z: -13.25,
+            sx: 1.1, sy: 0.68, sz: 0.85, shade: (row + index) % 3,
+          })
+        }
+      }
+    }
+    return blocks
+  }, [])
   return <>
     <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow><circleGeometry args={[15, 64]} /><meshStandardMaterial color="#5c513d" roughness={0.96} /></mesh>
     <mesh position={[0, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow><circleGeometry args={[11.8, 48]} /><meshStandardMaterial color="#746a58" roughness={0.92} /></mesh>
     <mesh position={[0, 0.026, 0]} rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[11.45, 11.8, 48]} /><meshStandardMaterial color="#b89c62" roughness={0.72} /></mesh>
+
+    {floorBlocks.map((block, index) => <mesh key={`floor-block-${index}`} position={[block.x, 0.055 + (index % 3) * 0.006, block.z]} rotation={[0, block.angle, 0]} castShadow receiveShadow>
+      <boxGeometry args={[block.width, 0.1, block.depth]} />
+      <meshStandardMaterial color={['#817765', '#756b5b', '#8b806b', '#6c6558'][block.shade]} roughness={0.96} metalness={0.02} />
+    </mesh>)}
 
     {paving.map((slab, index) => <mesh key={`slab-${index}`} position={[slab.x, 0.055, slab.z]} rotation={[-Math.PI / 2, 0, slab.rotation]} receiveShadow><boxGeometry args={[2.25, 1.7, 0.08]} /><meshStandardMaterial color={index % 2 === 0 ? '#91836b' : '#837762'} roughness={0.9} /></mesh>)}
 
@@ -676,6 +633,17 @@ function Arena({ showHitboxes }: { showHitboxes: boolean }) {
       <mesh position={[-4.7, 2.25, 0]}><boxGeometry args={[2.4, 4.5, 1.1]} /><meshStandardMaterial color="#766a56" roughness={0.88} /></mesh>
       <mesh position={[4.7, 2.25, 0]}><boxGeometry args={[2.4, 4.5, 1.1]} /><meshStandardMaterial color="#766a56" roughness={0.88} /></mesh>
       <mesh position={[0, 4.05, 0]}><boxGeometry args={[7.2, 1.15, 1.05]} /><meshStandardMaterial color="#80735d" roughness={0.86} /></mesh>
+    </group>
+    {wallBlocks.map((block, index) => <mesh key={`wall-block-${index}`} position={[block.x, block.y, block.z]} rotation={[0, (index % 2 ? 0.025 : -0.025), 0]} castShadow receiveShadow>
+      <boxGeometry args={[block.sx, block.sy, block.sz]} />
+      <meshStandardMaterial color={['#756b59', '#655e51', '#827764'][block.shade]} roughness={0.98} />
+    </mesh>)}
+
+    <group position={[0, 0, -11.8]}>
+      {[0, 1, 2, 3].map(step => <mesh key={`gate-step-${step}`} position={[0, 0.12 + step * 0.18, -step * 0.52]} castShadow receiveShadow><boxGeometry args={[7.4 - step * 0.65, 0.22, 1.25]} /><meshStandardMaterial color={step % 2 ? '#766c59' : '#857966'} roughness={0.94} /></mesh>)}
+      <mesh position={[0, 3.05, -1.85]} castShadow><torusGeometry args={[3.1, 0.62, 10, 28, Math.PI]} /><meshStandardMaterial color="#706654" roughness={0.92} /></mesh>
+      <mesh position={[0, 1.35, -1.85]} castShadow><boxGeometry args={[4.85, 2.7, 0.32]} /><meshStandardMaterial color="#201d19" metalness={0.45} roughness={0.75} /></mesh>
+      {Array.from({ length: 8 }, (_, index) => <mesh key={`gate-bar-${index}`} position={[-2.1 + index * 0.6, 1.4, -1.65]} castShadow><boxGeometry args={[0.08, 3.15, 0.08]} /><meshStandardMaterial color="#332b22" metalness={0.75} roughness={0.48} /></mesh>)}
     </group>
 
     {columns.map(([x, z], index) => <group key={`${x}-${z}`} position={[x, 0, z]}>
@@ -739,6 +707,22 @@ function TestMonster({ warning, showHitboxes }: { warning: boolean; showHitboxes
       </mesh>
     </group>
     {showHitboxes && <mesh position={[0, 1.25, 0]}><sphereGeometry args={[1.35, 16, 12]} /><meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.6} /></mesh>}
+  </group>
+}
+
+function HitBurst({ position, color }: { position: THREE.Vector3; color: string }) {
+  const group = useRef<THREE.Group>(null)
+  const material = useRef<THREE.MeshBasicMaterial>(null)
+  const startedAt = useRef(performance.now() / 1000)
+  useFrame(() => {
+    if (!group.current || !material.current) return
+    const progress = THREE.MathUtils.clamp((performance.now() / 1000 - startedAt.current) / 0.42, 0, 1)
+    group.current.scale.setScalar(0.25 + progress * 2.5)
+    group.current.rotation.z = progress * 1.8
+    material.current.opacity = (1 - progress) * 0.9
+  })
+  return <group ref={group} position={[position.x, 1.45, position.z + 0.25]}>
+    <mesh><ringGeometry args={[0.28, 0.42, 8]} /><meshBasicMaterial ref={material} color={color} transparent opacity={0.9} depthWrite={false} side={THREE.DoubleSide} /></mesh>
   </group>
 }
 
