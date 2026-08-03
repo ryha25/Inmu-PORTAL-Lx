@@ -17,8 +17,12 @@ type CharPrize   = { id: string; label: string; type: "character"; characterId: 
 type Prize = PointsPrize | InmuPrize | FoodPrize | CharPrize;
 
 const PRIZES: Prize[] = [
-  // ポイント（他tier分は全て100ptに統合）
-  { id: "pts100",               label: "100ポイント",                  type: "points",       amount: 100,    weight: 9_240 },
+  // ポイント（300〜5000は表示確率通り、残り全て100ptへ）
+  { id: "pts100",               label: "100ポイント",                  type: "points",       amount:   100,  weight: 5_323 },
+  { id: "pts300",               label: "300ポイント",                  type: "points",       amount:   300,  weight: 3_000 },
+  { id: "pts500",               label: "500ポイント",                  type: "points",       amount:   500,  weight:   500 },
+  { id: "pts1000",              label: "1,000ポイント",                type: "points",       amount: 1_000,  weight:   300 },
+  { id: "pts5000",              label: "5,000ポイント",                type: "points",       amount: 5_000,  weight:   117 },
   // INMU（月1回上限は processRawPrizes で処理）
   { id: "inmu10k",              label: "10,000 INMU",                  type: "inmu",         amount: 10_000, weight:    51 },
   // アイテム
@@ -32,7 +36,7 @@ const PRIZES: Prize[] = [
   { id: "character-takuya",     label: "拓也",         type: "character", characterId: "takuya",     weight:  5 },
   { id: "character-nyarushian", label: "ニャルシアン", type: "character", characterId: "nyarushian", weight:  5 },
   { id: "character-leon",       label: "レオン",       type: "character", characterId: "leon",       weight:  5 },
-  // 合計 9240+51+514+150+10+10+10+5+5+5 = 10000
+  // 合計 5323+3000+500+300+117+51+514+150+30+15 = 10000
 ];
 
 const PTS100 = PRIZES.find(p => p.id === "pts100") as PointsPrize;
