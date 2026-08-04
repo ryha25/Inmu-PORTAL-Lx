@@ -13,7 +13,7 @@ const router = Router();
 type PointsPrize    = { id: string; label: string; type: "points";                     amount: number; weight: number };
 type InmuPrize      = { id: string; label: string; type: "inmu";                       amount: number; weight: number };
 type FoodPrize      = { id: string; label: string; type: "premium_food" | "sleep_tea"; amount: number; weight: number };
-type CharPrize      = { id: string; label: string; type: "character"; characterId: string;             weight: number };
+type CharPrize      = { id: string; label: string; type: "character"; characterId: string; weight: number; isDuplicate?: boolean; convertedPoints?: number; convertedSleepTea?: number };
 type CharPoolPrize  = { id: string; label: string; type: "character_pool"; pool: string[];             weight: number };
 type Prize = PointsPrize | InmuPrize | FoodPrize | CharPrize | CharPoolPrize;
 
@@ -36,9 +36,9 @@ const PRIZES: Prize[] = [
   // 合計 5353+3000+500+300+117+51+514+150+10+5 = 10000
 ];
 
-const PTS100    = PRIZES.find(p => p.id === "pts100") as PointsPrize;
-const PTS50000: PointsPrize  = { id: "pts50000", label: "50,000ポイント", type: "points", amount: 50_000, weight: 0 };
-const SLEEP_TEA: FoodPrize   = PRIZES.find(p => p.id === "sleep-tea") as FoodPrize;
+const PTS100 = PRIZES.find(p => p.id === "pts100") as PointsPrize;
+const DUPLICATE_CHARACTER_POINTS    = 50_000;
+const DUPLICATE_CHARACTER_SLEEP_TEA = 3;
 
 const GUARANTEED_RATE = 1 / 114;
 
@@ -76,7 +76,17 @@ function rollMany(count: number, guaranteed: boolean): Prize[] {
 function serializePrize(p: Prize, pointMultiplier = 1) {
   if (p.type === "character") {
     const cp = p as CharPrize;
-    return { prizeId: cp.id, label: cp.label, type: "character", amount: 0, characterId: cp.characterId, isNewCharacter: true };
+    if (cp.isDuplicate) {
+      return {
+        prizeId: cp.id, label: cp.label, type: "character" as const,
+        amount: 1, characterId: cp.characterId,
+        isNewCharacter: false, isDuplicate: true,
+        convertedPoints: (cp.convertedPoints ?? 0) * pointMultiplier,
+        convertedSleepTea: cp.convertedSleepTea ?? 0,
+        baseAmount: cp.convertedPoints ?? 0,
+      };
+    }
+    return { prizeId: cp.id, label: cp.label, type: "character" as const, amount: 1, characterId: cp.characterId, isNewCharacter: true };
   }
   const amt = (p as PointsPrize | InmuPrize | FoodPrize).amount ?? 0;
   return {
@@ -118,14 +128,17 @@ async function processRawPrizes(userId: string, raw: Prize[], month: string): Pr
         [userId, cp.characterId],
       );
       if ((rowCount ?? 0) > 0) {
-        // 新規取得 → ユーザーに当選表示
+        // 新規取得
         effective.push(prize);
       } else {
-        // 重複 → 50,000pt + アイスティー×3
-        effective.push(PTS50000);
-        effective.push(SLEEP_TEA);
-        effective.push(SLEEP_TEA);
-        effective.push(SLEEP_TEA);
+        // 重複 → isDuplicate フラグ付きで1件返し（pet-commerce.ts と同パターン）
+        effective.push({
+          ...cp,
+          isDuplicate: true,
+          convertedPoints: DUPLICATE_CHARACTER_POINTS,
+          convertedSleepTea: DUPLICATE_CHARACTER_SLEEP_TEA,
+          label: `${cp.label}は既に所持しています。${DUPLICATE_CHARACTER_POINTS.toLocaleString()}ポイント＋アイスティー${DUPLICATE_CHARACTER_SLEEP_TEA}個に変換されました。`,
+        });
       }
     } else {
       effective.push(prize);
@@ -135,6 +148,20 @@ async function processRawPrizes(userId: string, raw: Prize[], month: string): Pr
 }
 
 async function addFreeGachaItem(userId: string, prize: Prize) {
+  // 重複キャラ → アイスティーを convertedSleepTea 個付与
+  if (prize.type === "character" && (prize as CharPrize).isDuplicate) {
+    const count = (prize as CharPrize).convertedSleepTea ?? 0;
+    if (count <= 0) return;
+    await ensurePetStateTable();
+    const result = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1`, [userId]);
+    const state = result.rows[0]?.state && typeof result.rows[0].state === "object" ? result.rows[0].state : { version: 5 };
+    const items = state.items && typeof state.items === "object" ? state.items : { sleepTea: 0 };
+    state.items = { ...items, sleepTea: Math.max(0, Number(items.sleepTea ?? 0)) + count };
+    await pool.query(`INSERT INTO "userPetStates" ("userId",state,"clientUpdatedAt") VALUES ($1,$2::jsonb,$3)
+      ON CONFLICT ("userId") DO UPDATE SET state=EXCLUDED.state,"clientUpdatedAt"=EXCLUDED."clientUpdatedAt","updatedAt"=NOW()`,
+      [userId, JSON.stringify(state), Date.now()]);
+    return;
+  }
   if (prize.type !== "premium_food" && prize.type !== "sleep_tea") return;
   await ensurePetStateTable();
   const result = await pool.query(`SELECT state FROM "userPetStates" WHERE "userId"=$1`, [userId]);
@@ -271,7 +298,8 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
   const rawResults       = rollMany(count, rolledGuaranteed);
   const prizeResults     = await processRawPrizes(userId, rawResults, month);
   const pointMultiplier  = 1; // ニャルシアン効果はガチャポイントの対象外
-  const totalPoints      = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) * pointMultiplier;
+  const dupCharPoints    = prizeResults.filter(p => p.type === "character" && (p as CharPrize).isDuplicate).reduce((s, p) => s + ((p as CharPrize).convertedPoints ?? 0), 0);
+  const totalPoints      = (prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) + dupCharPoints) * pointMultiplier;
   const inmuList         = prizeResults.filter(p => p.type === "inmu");
   const hasInmu          = inmuList.length > 0;
   const inmuCount        = inmuList.length;
@@ -346,13 +374,14 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
   const rawResults       = rollMany(1, rolledGuaranteed);
   const prizeResults     = await processRawPrizes(userId, rawResults, month);
   const pointMultiplier  = 1; // ニャルシアン効果はガチャポイントの対象外
-  const totalPoints      = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) * pointMultiplier;
+  const dupCharPoints    = prizeResults.filter(p => p.type === "character" && (p as CharPrize).isDuplicate).reduce((s, p) => s + ((p as CharPrize).convertedPoints ?? 0), 0);
+  const totalPoints      = (prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) + dupCharPoints) * pointMultiplier;
   const inmuList         = prizeResults.filter(p => p.type === "inmu");
   const hasInmu          = inmuList.length > 0;
   const inmuCount        = inmuList.length;
   // 月1回上限でINMUが差し替えられた場合は確定演出も出さない
   const wasGuaranteed    = rolledGuaranteed && hasInmu;
-  const currentPoints = Number(profile.monthlyPoints);
+  const currentPoints    = Number(profile.monthlyPoints);
 
   try {
     for (const prize of prizeResults) await addFreeGachaItem(userId, prize);
