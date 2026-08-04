@@ -2,7 +2,17 @@ import { randomBytes } from "crypto";
 import { pool } from "@workspace/db";
 
 export const DAIFUGO_GAME_ID = "daifugo";
-export const DAIFUGO_PUBLIC_URL = process.env.DAIFUGO_PUBLIC_URL || "https://inmu.replit.app";
+const CURRENT_DAIFUGO_PUBLIC_URL = "https://inmu-daihugo.replit.app";
+
+function resolveDaifugoPublicUrl(): string {
+  const configured = process.env.DAIFUGO_PUBLIC_URL?.trim();
+  if (!configured) {
+    return CURRENT_DAIFUGO_PUBLIC_URL;
+  }
+  return configured.replace(/\/$/, "");
+}
+
+export const DAIFUGO_PUBLIC_URL = resolveDaifugoPublicUrl();
 
 type PortalGameUser = {
   userId: string;

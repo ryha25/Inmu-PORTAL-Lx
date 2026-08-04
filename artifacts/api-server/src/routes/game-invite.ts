@@ -5,11 +5,10 @@ import { db, pool } from "@workspace/db";
 import { userTable, notificationsTable, profileTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/session";
-import { recordDaifugoEvent, verifyDaifugoLink, getDaifugoMaxChallengeLevel } from "../services/daifugo-link";
+import { DAIFUGO_PUBLIC_URL, recordDaifugoEvent, verifyDaifugoLink, getDaifugoMaxChallengeLevel } from "../services/daifugo-link";
 
 const router = Router();
 
-const DAIFUGO_PUBLIC_URL = "https://inmu.replit.app";
 const publicCors = cors({
   origin: DAIFUGO_PUBLIC_URL,
   credentials: true,

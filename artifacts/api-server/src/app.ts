@@ -53,11 +53,12 @@ const explicitOrigins = process.env.ALLOWED_ORIGINS
   : [];
 
 function isOriginAllowed(origin: string): boolean {
-  if (explicitOrigins.length > 0) return explicitOrigins.includes(origin);
   return (
+    explicitOrigins.includes(origin) ||
     /^https:\/\/[a-zA-Z0-9-]+\.replit\.dev$/.test(origin) ||
     /^https:\/\/[a-zA-Z0-9-]+\.repl\.co$/.test(origin) ||
-    origin === "https://inmu.replit.app" ||
+    origin === "https://inmu-daihugo.replit.app" ||
+    origin === "https://inmu-portal-core.replit.app" ||
     origin === "http://localhost:5173" ||
     origin === "http://localhost:3000"
   );
