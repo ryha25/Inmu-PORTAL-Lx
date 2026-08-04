@@ -127,9 +127,9 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'レオン',
   },
   'pts50000': {
-    top:'linear-gradient(135deg,#ffe259,#ffa751 40%,#ff6f00)',
-    bot:'linear-gradient(315deg,#ffe259,#ffa751 40%,#ff6f00)',
-    glow:'rgba(255,200,40,.92)', border:'rgba(255,235,140,.85)', label:'50,000pt',
+    top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'50,000pt',
   },
   'character-chinge': {
     top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
@@ -503,14 +503,13 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
   const height = size*.9
   const isJackpot = prizeId === 'inmu10k'
   const labelSize = Math.max(9, Math.min(28, size*.17))
-  const isCharacter = prizeId.startsWith('character-')
+  const isCharacter = prizeId.startsWith('character-') || prizeId === 'pts50000'
   const shellColor = prizeId==='pts100' ? '#f3f5f7'
     : prizeId==='pts300' ? '#ff4daf'
     : prizeId==='pts500' ? '#a6ed35'
     : prizeId==='pts1000' ? '#2678f3'
     : prizeId==='pts3000' ? '#ff4b3f'
     : prizeId==='pts5000' ? '#a62ee9'
-    : prizeId==='pts50000' ? '#ff9a00'
     : prizeId==='premium-food' ? '#ff922e'
     : prizeId==='sleep-tea' ? '#35cbea'
     : '#f5bd16'
@@ -576,7 +575,7 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
 
 function RateOrb({ id }:{id:string}) {
   const c = CAPSULE[id] ?? CAPSULE.pts300
-  const isCharacter = id.startsWith('character-')
+  const isCharacter = id.startsWith('character-') || id === 'pts50000'
   const shellColor = id==='pts100' ? '#f3f5f7' : id==='pts300' ? '#ff4daf'
     : id==='pts500' ? '#a6ed35' : id==='pts1000' ? '#2678f3'
     : id==='pts3000' ? '#ff4b3f' : id==='pts5000' ? '#a62ee9'
