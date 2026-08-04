@@ -126,6 +126,21 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
     glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'レオン',
   },
+  'character-chinge': {
+    top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'チンゲ',
+  },
+  'character-tdn': {
+    top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'TDN',
+  },
+  'character-whip': {
+    top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
+    glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'ホイップ',
+  },
 }
 
 const BALLS = [
