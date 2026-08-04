@@ -261,16 +261,18 @@ router.post("/gacha/spin", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const month         = new Date().toISOString().slice(0, 7);
-  const wasGuaranteed = Math.random() < GUARANTEED_RATE;
-  const rawResults    = rollMany(count, wasGuaranteed);
-  const prizeResults  = await processRawPrizes(userId, rawResults, month);
-  const pointMultiplier = 1; // ニャルシアン効果はガチャポイントの対象外
-  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) * pointMultiplier;
-  const inmuList      = prizeResults.filter(p => p.type === "inmu");
-  const hasInmu       = inmuList.length > 0;
-  const inmuCount     = inmuList.length;
-  const netPoints     = totalPoints - costPoints;
+  const month            = new Date().toISOString().slice(0, 7);
+  const rolledGuaranteed = Math.random() < GUARANTEED_RATE;
+  const rawResults       = rollMany(count, rolledGuaranteed);
+  const prizeResults     = await processRawPrizes(userId, rawResults, month);
+  const pointMultiplier  = 1; // ニャルシアン効果はガチャポイントの対象外
+  const totalPoints      = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) * pointMultiplier;
+  const inmuList         = prizeResults.filter(p => p.type === "inmu");
+  const hasInmu          = inmuList.length > 0;
+  const inmuCount        = inmuList.length;
+  // 月1回上限でINMUが差し替えられた場合は確定演出も出さない
+  const wasGuaranteed    = rolledGuaranteed && hasInmu;
+  const netPoints        = totalPoints - costPoints;
 
   try {
     for (const prize of prizeResults) await addFreeGachaItem(userId, prize);
@@ -334,15 +336,17 @@ router.post("/gacha/free-spin", requireAuth, async (req, res): Promise<void> => 
     .from(profileTable).where(eq(profileTable.userId, userId)).limit(1);
   if (!profile) { res.status(404).json({ error: "プロフィールが見つかりません" }); return; }
 
-  const month         = new Date().toISOString().slice(0, 7);
-  const wasGuaranteed = Math.random() < GUARANTEED_RATE;
-  const rawResults    = rollMany(1, wasGuaranteed);
-  const prizeResults  = await processRawPrizes(userId, rawResults, month);
-  const pointMultiplier = 1; // ニャルシアン効果はガチャポイントの対象外
-  const totalPoints   = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) * pointMultiplier;
-  const inmuList      = prizeResults.filter(p => p.type === "inmu");
-  const hasInmu       = inmuList.length > 0;
-  const inmuCount     = inmuList.length;
+  const month            = new Date().toISOString().slice(0, 7);
+  const rolledGuaranteed = Math.random() < GUARANTEED_RATE;
+  const rawResults       = rollMany(1, rolledGuaranteed);
+  const prizeResults     = await processRawPrizes(userId, rawResults, month);
+  const pointMultiplier  = 1; // ニャルシアン効果はガチャポイントの対象外
+  const totalPoints      = prizeResults.filter(p => p.type === "points").reduce((s, p) => s + (p as PointsPrize).amount, 0) * pointMultiplier;
+  const inmuList         = prizeResults.filter(p => p.type === "inmu");
+  const hasInmu          = inmuList.length > 0;
+  const inmuCount        = inmuList.length;
+  // 月1回上限でINMUが差し替えられた場合は確定演出も出さない
+  const wasGuaranteed    = rolledGuaranteed && hasInmu;
   const currentPoints = Number(profile.monthlyPoints);
 
   try {
