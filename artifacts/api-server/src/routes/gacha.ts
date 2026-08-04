@@ -36,7 +36,9 @@ const PRIZES: Prize[] = [
   // 合計 5353+3000+500+300+117+51+514+150+10+5 = 10000
 ];
 
-const PTS100 = PRIZES.find(p => p.id === "pts100") as PointsPrize;
+const PTS100    = PRIZES.find(p => p.id === "pts100") as PointsPrize;
+const PTS50000: PointsPrize  = { id: "pts50000", label: "50,000ポイント", type: "points", amount: 50_000, weight: 0 };
+const SLEEP_TEA: FoodPrize   = PRIZES.find(p => p.id === "sleep-tea") as FoodPrize;
 
 const GUARANTEED_RATE = 1 / 114;
 
@@ -119,8 +121,11 @@ async function processRawPrizes(userId: string, raw: Prize[], month: string): Pr
         // 新規取得 → ユーザーに当選表示
         effective.push(prize);
       } else {
-        // 重複 → pts100 に変換
-        effective.push(PTS100);
+        // 重複 → 50,000pt + アイスティー×3
+        effective.push(PTS50000);
+        effective.push(SLEEP_TEA);
+        effective.push(SLEEP_TEA);
+        effective.push(SLEEP_TEA);
       }
     } else {
       effective.push(prize);

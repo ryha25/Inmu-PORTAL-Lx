@@ -126,6 +126,11 @@ const CAPSULE: Record<string,{top:string;bot:string;glow:string;border:string;la
     bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
     glow:'rgba(188,116,255,.95)', border:'rgba(255,255,255,.92)', label:'レオン',
   },
+  'pts50000': {
+    top:'linear-gradient(135deg,#ffe259,#ffa751 40%,#ff6f00)',
+    bot:'linear-gradient(315deg,#ffe259,#ffa751 40%,#ff6f00)',
+    glow:'rgba(255,200,40,.92)', border:'rgba(255,235,140,.85)', label:'50,000pt',
+  },
   'character-chinge': {
     top:'linear-gradient(135deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
     bot:'linear-gradient(315deg,#ff5fa2,#ffdd4a 22%,#6dff9f 43%,#58c7ff 64%,#a66bff 82%,#ff70ce)',
@@ -505,6 +510,7 @@ function PrizeCapsule({ prizeId, size=96, open=false, showLabel=true }:{prizeId:
     : prizeId==='pts1000' ? '#2678f3'
     : prizeId==='pts3000' ? '#ff4b3f'
     : prizeId==='pts5000' ? '#a62ee9'
+    : prizeId==='pts50000' ? '#ff9a00'
     : prizeId==='premium-food' ? '#ff922e'
     : prizeId==='sleep-tea' ? '#35cbea'
     : '#f5bd16'
