@@ -15,6 +15,7 @@ import { ensurePetStateTable } from "../services/pet-state-store";
 import { hasActivePetSkill } from "../services/pet-skills";
 
 const router = Router();
+const PURCHASE_REQUESTS_AVAILABLE = false;
 
 // 申請時点の還元率を保存するカラムを追加（初回のみ）
 pool.query(`
@@ -393,6 +394,11 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
 
 // ── ユーザー: 申請送信 ──
 router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> => {
+  if (!PURCHASE_REQUESTS_AVAILABLE) {
+    res.status(503).json({ error: "現在、購入申請は利用できません。" });
+    return;
+  }
+
   const userId = req.userId!;
   const { amount, txHash, comment } = req.body as { amount?: number | string; txHash?: string; comment?: string };
 

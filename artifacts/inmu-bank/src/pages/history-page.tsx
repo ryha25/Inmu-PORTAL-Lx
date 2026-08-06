@@ -14,6 +14,8 @@ import { formatInmu } from '@/lib/format'
 import { TrendingUp, TrendingDown, ArrowUpDown, ShoppingCart, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
+const PURCHASE_REQUESTS_AVAILABLE = false
+
 type TradeRow = {
   id: number
   type: string
@@ -181,6 +183,11 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
   }, [open, loadPurchaseRequests])
 
   async function submitPurchaseRequest() {
+    if (!PURCHASE_REQUESTS_AVAILABLE) {
+      toast.error('現在、購入申請は利用できません。')
+      return
+    }
+
     const num = Number(prAmount)
     if (!prAmount || isNaN(num) || num <= 0) {
       toast.error('有効な枚数を入力してください')
