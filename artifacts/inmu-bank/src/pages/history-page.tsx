@@ -184,7 +184,7 @@ function PurchaseRequestDialog({ open, onClose }: { open: boolean; onClose: () =
 
   async function submitPurchaseRequest() {
     if (!PURCHASE_REQUESTS_AVAILABLE) {
-      toast.error('現在、購入申請は利用できません。')
+      toast.error('エラー番号: 503')
       return
     }
 

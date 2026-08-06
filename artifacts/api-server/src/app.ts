@@ -1,8 +1,12 @@
-import express, { type Express } from "express";
+import express, { type Express, type RequestHandler } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import { logger } from "./lib/logger";
+import {
+  PORTAL_FUNCTIONS_AVAILABLE,
+  PORTAL_UNAVAILABLE_MESSAGE,
+} from "./config/service-availability";
 
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
@@ -98,6 +102,40 @@ app.get("/api/healthz", (_req, res) =>
 
 let initialized = false;
 
+const serviceAvailabilityMiddleware: RequestHandler = (req, res, next) => {
+  if (PORTAL_FUNCTIONS_AVAILABLE || req.method === "OPTIONS") {
+    next();
+    return;
+  }
+
+  const path = req.path;
+  const isAdminRoute = path.startsWith("/admin/");
+  const isAdminAuthRoute = path.startsWith("/auth/admin-");
+  const isUserAuthRoute =
+    (req.method === "GET" && path === "/auth/session") ||
+    (req.method === "POST" &&
+      (path === "/auth/sign-in" || path === "/auth/sign-out"));
+  const isMaintenanceStatus = req.method === "GET" && path === "/maintenance";
+  const isProfileRead = req.method === "GET" && path === "/profile";
+
+  if (
+    isAdminRoute ||
+    isAdminAuthRoute ||
+    isUserAuthRoute ||
+    isMaintenanceStatus ||
+    isProfileRead
+  ) {
+    next();
+    return;
+  }
+
+  res.setHeader("Retry-After", "3600");
+  res.status(503).json({
+    error: PORTAL_UNAVAILABLE_MESSAGE,
+    errorCode: 503,
+  });
+};
+
 export async function initializeApplication(): Promise<void> {
   if (initialized) return;
 
@@ -110,7 +148,7 @@ export async function initializeApplication(): Promise<void> {
     ]);
 
   app.use(sessionMiddleware);
-  app.use("/api", router);
+  app.use("/api", serviceAvailabilityMiddleware, router);
   void petStateModule.ensurePetStateTable().catch((err) => {
     logger.error({ err }, "PET state initialization and reward audit failed");
   });

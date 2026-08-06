@@ -13,6 +13,7 @@ import { eq, desc, and, or, gte, lt, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/session";
 import { ensurePetStateTable } from "../services/pet-state-store";
 import { hasActivePetSkill } from "../services/pet-skills";
+import { PORTAL_UNAVAILABLE_MESSAGE } from "../config/service-availability";
 
 const router = Router();
 const PURCHASE_REQUESTS_AVAILABLE = false;
@@ -395,7 +396,7 @@ router.get("/purchase-requests", requireAuth, async (req, res): Promise<void> =>
 // ── ユーザー: 申請送信 ──
 router.post("/purchase-requests", requireAuth, async (req, res): Promise<void> => {
   if (!PURCHASE_REQUESTS_AVAILABLE) {
-    res.status(503).json({ error: "現在、購入申請は利用できません。" });
+    res.status(503).json({ error: PORTAL_UNAVAILABLE_MESSAGE, errorCode: 503 });
     return;
   }
 

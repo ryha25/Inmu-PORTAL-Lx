@@ -1,7 +1,7 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { I18nProvider } from "@/lib/i18n/context";
 import { AuthForm } from "@/components/auth-form";
@@ -24,6 +24,31 @@ import { MaintenanceOverlay } from "@/components/maintenance-overlay";
 import { RoulettePage } from "@/pages/roulette-page";
 
 const queryClient = new QueryClient();
+
+function ServiceErrorNotifier() {
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+    let lastNotificationAt = 0;
+
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 503) {
+        const now = Date.now();
+        if (now - lastNotificationAt > 800) {
+          lastNotificationAt = now;
+          toast.error("エラー番号: 503");
+        }
+      }
+      return response;
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
+  return null;
+}
 const AdminBattleTestPage = lazy(() =>
   import("@/pages/admin-battle-test-page").then((module) => ({ default: module.AdminBattleTestPage })),
 );
@@ -89,6 +114,7 @@ function App() {
             <Router />
           </WouterRouter>
           <Toaster richColors />
+          <ServiceErrorNotifier />
           <MaintenanceOverlay />
         </I18nProvider>
       </TooltipProvider>
